@@ -1,6 +1,6 @@
 # Spec: tauan-games
 
-> **Status:** Em revisão
+> **Status:** Aprovado
 > **Versão:** 1.0
 > **Autor:** Marco Menezes
 > **Referências:** `specs/constitution.md`, `specs/memory/product.md`, `specs/foundation/SPEC.md`

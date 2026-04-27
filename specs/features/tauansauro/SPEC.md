@@ -1,6 +1,6 @@
 # Spec: Feature — Tauansauro
 
-> **Status:** Em revisão
+> **Status:** Aprovado
 > **Versão:** 1.0
 > **Autor:** Marco Menezes
 > **Referências:** `specs/SPEC.md`, `specs/constitution.md`, `specs/memory/architecture.md`, `specs/foundation/SPEC.md`
@@ -269,8 +269,12 @@ Nenhum diretório `assets/` é necessário — todos os elementos visuais são d
 
 ---
 
-## Questões Abertas
+## Decisões de Design (Resolvidas)
 
-1. O dinossauro deve ter expressão facial (olhos piscando, reação ao game over)? **Sugestão:** sim, para dar mais personalidade — a decidir no refinamento visual.
-2. Os cactos devem ter variação de cor (verde claro / verde escuro) ou apenas tamanho? **Sugestão:** variação de tamanho apenas — a decidir no refinamento visual.
-3. O pterodáctilo deve ter sombra projetada no chão como indicador visual? **Sugestão:** sim — a decidir no refinamento visual.
+As questões abertas foram resolvidas durante a aprovação da spec:
+
+1. **Expressão facial do dinossauro:** Sim. O Tauansauro terá olhos piscando durante a corrida (a cada 2-3 segundos) e olhos arregalados no momento do game over. Isso dá personalidade ao personagem.
+
+2. **Variação de cor nos cactos:** Apenas variação de tamanho (small/large), cor verde uniforme (#2d5a27). Simplicidade visual mantém o foco no gameplay.
+
+3. **Sombra do pterodáctilo:** Sim. O pterodáctilo projetará uma sombra elíptica no chão que se move junto com ele, servindo como indicador visual da posição aérea e ajudando o jogador a antecipar o obstáculo.

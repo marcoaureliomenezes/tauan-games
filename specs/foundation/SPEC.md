@@ -1,6 +1,6 @@
 # Spec: Foundation — Arquitetura e Qualidade de Jogos
 
-> **Status:** Em revisão
+> **Status:** Aprovado
 > **Versão:** 1.0
 > **Escopo:** Princípios de arquitetura, design e qualidade que governam **toda** a implementação de jogos no tauan-games
 > **Referências:** `specs/constitution.md`
