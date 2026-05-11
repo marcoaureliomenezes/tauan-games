@@ -157,17 +157,16 @@ const _fRightPos = new THREE.Vector3();
 function fireCannon() {
   if (!game.running || game.flags.paused || cannonCooldown > 0) return;
   cannonCooldown = CANNON.RATE;
-  // forward e right NO FRAME LOCAL do jato (não world-X)
   const fwd = firePosition(_fOrig, CANNON.MUZZLE_OFFSET);
   _fRight.set(1, 0, 0).applyQuaternion(jet.quaternion);
-  // Bala esquerda: nariz - right * offset
+  // Muzzle flashes at wing gun positions (visual only)
   _fLeftPos.copy(_fOrig).addScaledVector(_fRight, -CANNON.WING_OFFSET);
-  spawnBullet(_fLeftPos.clone(), fwd, false);
   spawnMuzzleFlash(_fLeftPos);
-  // Bala direita: nariz + right * offset
   _fRightPos.copy(_fOrig).addScaledVector(_fRight, CANNON.WING_OFFSET);
-  spawnBullet(_fRightPos.clone(), fwd, false);
   spawnMuzzleFlash(_fRightPos);
+  // Bullets from centerline so they track the crosshair exactly
+  spawnBullet(_fOrig.clone(), fwd, false);
+  spawnBullet(_fOrig.clone(), fwd, false);
   audio.cannon();
 }
 

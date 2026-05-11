@@ -100,11 +100,85 @@ function createMorro(hDef, scene) {
   return { cx, cz, radius, peakHeight: height, mesh, type };
 }
 
-/** Cria o mundo Rio: oceano + morros + fog bruma marítima. */
+/** Cria a malha urbana do Rio: asfalto, praia e edifícios via InstancedMesh. */
+function createUrbanZone(scene) {
+  // Asphalt city ground
+  const asphalt = new THREE.MeshLambertMaterial({ color: 0x353535 });
+  const cityFloor = new THREE.Mesh(new THREE.PlaneGeometry(1400, 700), asphalt);
+  cityFloor.rotation.x = -Math.PI / 2;
+  cityFloor.position.set(-50, 0.4, 230);
+  cityFloor.receiveShadow = true;
+  scene.add(cityFloor);
+
+  // Beach strip (Copacabana / Ipanema)
+  const beachMat = new THREE.MeshLambertMaterial({ color: 0xf0d98a });
+  const beach = new THREE.Mesh(new THREE.PlaneGeometry(1200, 180), beachMat);
+  beach.rotation.x = -Math.PI / 2;
+  beach.position.set(-50, 0.3, -90);
+  beach.receiveShadow = true;
+  scene.add(beach);
+
+  // Promenade (Avenida Atlântica) — light grey strip between beach and city
+  const promMat = new THREE.MeshLambertMaterial({ color: 0x7a7a7a });
+  const prom = new THREE.Mesh(new THREE.PlaneGeometry(1200, 35), promMat);
+  prom.rotation.x = -Math.PI / 2;
+  prom.position.set(-50, 0.5, -8);
+  scene.add(prom);
+
+  // Collect building positions (skip avenues and morro footprints)
+  const bData = [];
+  const avZs = [0, 150, 290, 430];  // major avenues (bz positions)
+  const avXs = [-180, -50, 90, 230, 360]; // cross avenues
+
+  for (let bx = -300; bx <= 430; bx += 32) {
+    for (let bz = 10; bz <= 530; bz += 27) {
+      // Avenue gaps
+      if (avXs.some(ax => Math.abs(bx - ax) < 15)) continue;
+      if (avZs.some(az => Math.abs(bz - az) < 13)) continue;
+      if (Math.random() < 0.15) continue; // minor streets
+
+      // Skip morro footprints
+      const onMorro = HILL_DEFS.some(([cx, cz, r]) =>
+        Math.hypot(bx - cx, bz - cz) < r + 20,
+      );
+      if (onMorro) continue;
+
+      // Taller buildings downtown (around x=50, z=200)
+      const downtown = Math.max(0, 1 - Math.hypot(bx - 50, bz - 200) / 220);
+      const h = 12 + Math.random() * 65 * (0.3 + downtown * 0.7);
+      const w = 14 + Math.random() * 8;
+      const d = 14 + Math.random() * 8;
+      bData.push({ x: bx, z: bz, h, w, d });
+    }
+  }
+
+  const iGeo = new THREE.BoxGeometry(1, 1, 1);
+  const iMat = new THREE.MeshLambertMaterial();
+  const iMesh = new THREE.InstancedMesh(iGeo, iMat, bData.length);
+  iMesh.castShadow = true;
+
+  const _dummy = new THREE.Object3D();
+  const _col = new THREE.Color();
+  const bColors = [0x9aaab8, 0x7e8f9c, 0xb2a898, 0x6a808e, 0xa09280, 0x8899ab, 0xbdb5a5];
+
+  bData.forEach((b, i) => {
+    _dummy.position.set(b.x, b.h / 2, b.z);
+    _dummy.scale.set(b.w, b.h, b.d);
+    _dummy.updateMatrix();
+    iMesh.setMatrixAt(i, _dummy.matrix);
+    _col.setHex(bColors[Math.floor(Math.random() * bColors.length)]);
+    iMesh.setColorAt(i, _col);
+  });
+  iMesh.instanceMatrix.needsUpdate = true;
+  if (iMesh.instanceColor) iMesh.instanceColor.needsUpdate = true;
+  scene.add(iMesh);
+}
+
+/** Cria o mundo Rio: oceano + morros + cidade + praia + fog bruma marítima. */
 export function createRioWorld(scene, skyRef) {
   _scene = scene;
 
-  // Oceano da Baía de Guanabara / Atlântico (plano simples para o mapa Rio)
+  // Oceano da Baía de Guanabara / Atlântico
   const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1a4f6e });
   const ocean = new THREE.Mesh(
     new THREE.PlaneGeometry(10000, 10000, 1, 1),
@@ -115,8 +189,8 @@ export function createRioWorld(scene, skyRef) {
   ocean.receiveShadow = true;
   scene.add(ocean);
 
-  // Fog: bruma marítima mais densa
-  scene.fog = new THREE.Fog(0x87ceeb, 250, 600);
+  // Fog: bruma marítima
+  scene.fog = new THREE.Fog(0x87ceeb, 300, 700);
 
   // Morros — populam game.islands para compatibilidade
   game.islands.length = 0;
@@ -124,6 +198,9 @@ export function createRioWorld(scene, skyRef) {
     const isl = createMorro(def, scene);
     game.islands.push(isl);
   }
+
+  // Cidade: asfalto + praia + edifícios
+  createUrbanZone(scene);
 }
 
 /** Update frame do Rio (oceano estático — sem animação de ondas neste mapa). */

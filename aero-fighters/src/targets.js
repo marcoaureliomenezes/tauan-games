@@ -284,6 +284,10 @@ export function killTarget(t) {
   game.score += t.score;
   game.kills += 1;
   game.targetsDestroyed += 1;
+  // Award 1 nuclear missile every 5 targets destroyed
+  if (game.targetsDestroyed % 5 === 0) {
+    game.player.nuclearMissiles = (game.player.nuclearMissiles || 0) + 1;
+  }
   scene.remove(t.mesh);
 }
 
