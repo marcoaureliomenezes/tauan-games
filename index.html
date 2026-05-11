@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aero Strike — Tauan Games</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #090e18;
+      color: #fff;
+      font-family: monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+    h1 { font-size: 32px; letter-spacing: 4px; color: #7df; margin-bottom: 8px; }
+    .sub { color: #889; font-size: 13px; margin-bottom: 48px; letter-spacing: 2px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      max-width: 900px;
+      width: 100%;
+    }
+    .card {
+      border: 1px solid #2a3a4a;
+      border-radius: 6px;
+      padding: 28px 24px;
+      background: #0d1520;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .2s, background .2s;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .card:hover { border-color: #5af; background: #111d2e; }
+    .card .engine { font-size: 11px; color: #56a; letter-spacing: 2px; text-transform: uppercase; }
+    .card .name { font-size: 20px; color: #cef; font-weight: bold; }
+    .card .desc { font-size: 12px; color: #778; line-height: 1.6; }
+    .card .badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 10px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .badge.playable { background: #1a3a1a; color: #4f4; border: 1px solid #2a5a2a; }
+    .badge.source { background: #1a1a3a; color: #77f; border: 1px solid #2a2a5a; }
+    footer { margin-top: 48px; color: #445; font-size: 11px; letter-spacing: 1px; }
+  </style>
+</head>
+<body>
+  <h1>AERO STRIKE</h1>
+  <div class="sub">F-35 combat simulator — 4 tech stack versions</div>
+
+  <div class="grid">
+    <a class="card" href="aero-fighters/">
+      <span class="engine">Three.js + WebGL</span>
+      <span class="name">Aero Fighters</span>
+      <span class="desc">The original. 3 maps, 3 weapons, 5 target types, dynamic sky with day/night cycle, minimap.</span>
+      <span class="badge playable">&#9654; PLAY NOW</span>
+    </a>
+
+    <a class="card" href="aero-fighters-babylon/">
+      <span class="engine">Babylon.js 6.x</span>
+      <span class="name">Aero Fighters — Babylon</span>
+      <span class="desc">Full feature parity port. Havok-ready scene graph, native fog API, vertex-colored terrain.</span>
+      <span class="badge playable">&#9654; PLAY NOW</span>
+    </a>
+
+    <a class="card" href="aero-fighters-godot/">
+      <span class="engine">Godot 4.4 + Jolt</span>
+      <span class="name">Aero Fighters — Godot</span>
+      <span class="desc">GDScript implementation with CharacterBody3D flight physics, SurfaceTool terrain, autoload singletons.</span>
+      <span class="badge source">SOURCE — open in Godot 4</span>
+    </a>
+
+    <a class="card" href="aero-fighters-unity/">
+      <span class="engine">Unity 6 + URP</span>
+      <span class="name">Aero Fighters — Unity</span>
+      <span class="desc">C# implementation with kinematic Rigidbody, procedural mesh targets, URP sky shader, WebGL build.</span>
+      <span class="badge source">SOURCE — open in Unity 6</span>
+    </a>
+  </div>
+
+  <footer>marcoaureliomenezes/tauan-games &mdash; Tauan Games 2025</footer>
+</body>
+</html>

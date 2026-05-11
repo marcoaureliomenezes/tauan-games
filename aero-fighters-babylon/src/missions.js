@@ -3,7 +3,8 @@
 //   nextMission, checkMissionComplete, targetCountForMission.
 
 import { game } from './state.js';
-import { TARGET_LAYOUT, MISSION } from './config.js';
+import { MISSION } from './config.js';
+import { getTargetLayout } from './maps/index.js';
 import { spawnTarget, clearTargets } from './targets.js';
 import { clearMissiles, clearPickups, recycleBullet, clearNuclears } from './projectiles.js';
 import { megaExplosion, scheduleDelayed } from './fx.js';
@@ -21,7 +22,7 @@ export function spawnMission(missionNum) {
   clearTargets();
   game.targetsDestroyed = 0;
   const n = targetCountForMission(missionNum);
-  const layout = TARGET_LAYOUT;
+  const layout = getTargetLayout(game.activeMap || 'islands');
   const count = Math.min(n, layout.length);
   for (let i = 0; i < count; i++) {
     const [idx, dx, dz, type] = layout[i];

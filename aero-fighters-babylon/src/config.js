@@ -169,3 +169,35 @@ export const TARGET_LAYOUT = [
   [-1,  500, -900, 'warship'],
   [-1, -300,-1400, 'warship'],
 ];
+
+/** Layout de alvos para o mapa deserto: [mesaIdx, dx, dz, tipo] — mesaIdx=-1 = coordenada absoluta no piso. */
+export const TARGET_LAYOUT_DESERT = [
+  [0,   0,  0, 'base'],
+  [0,  30, -20, 'aaGun'],
+  [1,   0,  0, 'factory'],
+  [2,   0,  0, 'factory'],
+  [2,  25, 10, 'aaGun'],
+  [3,   0,  0, 'aaGun'],
+  [4,   0,  0, 'base'],
+  [4,  20, 20, 'aaGun'],
+  [-1, 200, -100, 'convoy'],
+  [-1,-300,  200, 'convoy'],
+  [5,   0,  0, 'building'],
+  [6,   0,  0, 'aaGun'],
+];
+
+/** Layout de alvos para o mapa Rio de Janeiro: [morroIdx, dx, dz, tipo] — morroIdx=-1 = coordenada absoluta. */
+export const TARGET_LAYOUT_RIO = [
+  [-1, 150,  300, 'warship'],
+  [-1,-100,  400, 'warship'],
+  [-1, 300,  500, 'warship'],
+  [1,   0,   0, 'base'],
+  [0,   0,   0, 'aaGun'],
+  [3,   0,   0, 'base'],
+  [5,  10,  10, 'aaGun'],
+  [5, -10,  15, 'building'],
+  [6,   0,   0, 'factory'],
+  [6,  20, -10, 'aaGun'],
+  [7,   0,   0, 'building'],
+  [7, -15,  10, 'aaGun'],
+];

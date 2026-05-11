@@ -9,6 +9,7 @@ import { audio } from './audio.js';
 import { engine, scene, camera, dirLight, ambLight } from './scene.js';
 import { initSky, updateSky, getSunData, getAmbientData, getSkyColor } from './sky.js';
 import { createIslands, updateWorld } from './world.js';
+import { MAPS } from './maps/index.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { jet, updatePlayer, playerHit, barrelRoll, firePosition, respawnJet } from './player.js';
 import { updateTargets } from './targets.js';
@@ -28,6 +29,35 @@ createCrosshair();
 initMinimap();
 
 game.activeMap = 'islands';
+
+// ─── Seleção de Mapa ──────────────────────────────────────────────────────────
+let _activeMapUpdate = updateWorld;
+
+window.selectMap = function(mapKey) {
+  const el = document.getElementById('map-select');
+  if (el) el.style.display = 'none';
+
+  if (mapKey !== 'islands') {
+    const mapDef = MAPS[mapKey];
+    if (mapDef) {
+      mapDef.create();
+      _activeMapUpdate = mapDef.update;
+    }
+  }
+  game.activeMap = mapKey;
+
+  showOverlay(
+    'AERO STRIKE — Babylon.js',
+    'Missão: destrua todos os alvos militares (bases, fábricas, prédios, comboios).\n\n' +
+    'CONTROLES:\n' +
+    '↑ nariz para BAIXO   ↓ nariz para CIMA   (invertido)\n' +
+    '← → rolar/virar     W acelerar    S frear\n' +
+    'Q/E leme    Espaço/Z canhão    X míssil leve    B míssil pesado    N NUCLEAR    Shift roll    P pausa    M mudo\n\n' +
+    '⚠ EVITE colisão com montanhas e o mar — destruição instantânea\n\n' +
+    'pressione Espaço para iniciar',
+    0,
+  );
+};
 
 // ─── Input ────────────────────────────────────────────────────────────────────
 const input = {
@@ -214,18 +244,6 @@ function updateCamera(dt) {
   );
 }
 
-// ─── Overlay de instrucoes ────────────────────────────────────────────────────
-showOverlay(
-  'AERO FIGHTERS — F-35 LIGHTNING II',
-  'Missao: destrua todos os alvos militares (bases, fabricas, predios, comboios).\n\n' +
-  'CONTROLES:\n' +
-  '↑ nariz para BAIXO   ↓ nariz para CIMA   (invertido)\n' +
-  '← → rolar/virar     W acelerar    S frear\n' +
-  'Q/E leme    Espaco/Z canhao    X missil leve    B missil pesado    N NUCLEAR    Shift roll    P pausa    M mudo\n\n' +
-  'pressione Espaco para iniciar',
-  0,
-);
-
 // ─── Game loop via Babylon Engine ─────────────────────────────────────────────
 let _lastMs = performance.now();
 let _cloudColorTimer = 0;
@@ -251,7 +269,7 @@ engine.runRenderLoop(() => {
     updateTargets(dt, jet.position);
     updatePickups(dt, jet.position);
     updateParticles(dt);
-    updateWorld(dt, jet.position);
+    _activeMapUpdate(dt, jet.position);
 
     checkMissionComplete();
 
@@ -283,7 +301,7 @@ engine.runRenderLoop(() => {
   } else {
     if (game.flags.crashFreezeTime > 0) game.flags.crashFreezeTime -= dt;
     updateParticles(dt);
-    updateWorld(dt, jet.position);
+    _activeMapUpdate(dt, jet.position);
   }
 
   updateCamera(dt);

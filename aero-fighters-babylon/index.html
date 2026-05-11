@@ -62,6 +62,18 @@
     #lives { color: #ff5560; font-size: 18px; }
     #stall-warn { color: #ff4400; font-weight: bold; display: none; animation: blink 0.4s step-start infinite; }
     @keyframes blink { 50% { opacity: 0; } }
+    #map-select {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.85); color: #fff; font-family: monospace; z-index: 30;
+    }
+    #map-select h2 { font-size: 26px; margin-bottom: 28px; letter-spacing: 2px; }
+    #map-select .map-btn {
+      margin: 8px; padding: 14px 44px; font-size: 18px; font-family: monospace;
+      background: rgba(255,255,255,0.08); border: 1px solid #888; color: #fff;
+      cursor: pointer; border-radius: 4px; letter-spacing: 1px;
+    }
+    #map-select .map-btn:hover { background: rgba(255,255,255,0.22); border-color: #fff; }
   </style>
 </head>
 <body>
@@ -80,6 +92,13 @@
     <button id="sound-toggle" type="button">&#128266; SOM</button>
   </div>
   <div id="overlay"></div>
+
+  <div id="map-select">
+    <h2>AERO STRIKE — Babylon.js<br><span style="font-size:14px;opacity:.7">Escolha o mapa</span></h2>
+    <button class="map-btn" onclick="selectMap('islands')">Mar do Sul</button>
+    <button class="map-btn" onclick="selectMap('desert')">Deserto</button>
+    <button class="map-btn" onclick="selectMap('rio')">Rio de Janeiro</button>
+  </div>
 
   <!-- Babylon.js UMD via CDN — expoe global BABYLON -->
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
