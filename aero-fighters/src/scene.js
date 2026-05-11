@@ -8,7 +8,7 @@ import { WORLD } from './config.js';
 export const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(WORLD.SKY_COLOR, WORLD.FOG_NEAR, WORLD.FOG_FAR);
 
-export const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2000);
+export const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 2000);
 camera.position.set(0, 90, 20);
 
 // Detecta ambiente automatizado (Playwright/headless) — desliga shadow map nesses casos
@@ -19,7 +19,7 @@ renderer.setPixelRatio(1);
 renderer.shadowMap.enabled = !HEADLESS;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
+renderer.toneMappingExposure = 1.1;
 
 const RENDER_SCALE = 0.75;
 function applyRendererSize() {

@@ -9,8 +9,8 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
-import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, COLORS } from './config.js';
-import { explosion, spawnMissileSmoke } from './fx.js';
+import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, COLORS } from './config.js';
+import { explosion, spawnMissileSmoke, nuclearExplosion } from './fx.js';
 import { damageTarget } from './targets.js';
 
 // ─── Balas ───────────────────────────────────────────────────────────────────
@@ -218,4 +218,125 @@ export function updatePickups(dt, jetPos) {
 export function clearPickups() {
   for (const p of pickups) if (p.mesh?.parent) scene.remove(p.mesh);
   pickups.length = 0;
+}
+
+// ─── Mísseis nucleares ───────────────────────────────────────────────────────
+const nukes = [];
+
+/** Constrói o mesh do míssil nuclear. */
+function buildNuclearMesh() {
+  const g = new THREE.Group();
+  // Corpo principal
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.20, 2.0, 8),
+    new THREE.MeshLambertMaterial({ color: 0x1a1a22 }),
+  );
+  body.rotation.x = Math.PI / 2;
+  g.add(body);
+  // Nose cone
+  const nose = new THREE.Mesh(
+    new THREE.ConeGeometry(0.18, 0.7, 8),
+    new THREE.MeshLambertMaterial({ color: 0x2a1a1a }),
+  );
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -1.2;
+  g.add(nose);
+  // Faixa verde de aviso
+  const stripe = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.19, 0.19, 0.15, 8),
+    new THREE.MeshBasicMaterial({ color: 0x00cc22 }),
+  );
+  stripe.rotation.x = Math.PI / 2;
+  stripe.position.z = 0.3;
+  g.add(stripe);
+  return g;
+}
+
+/** Lança um míssil nuclear. */
+export function spawnNuclearMissile(orig, target, jetQuat) {
+  if (game.player.nuclearMissiles <= 0) return;
+  game.player.nuclearMissiles--;
+  const mesh = buildNuclearMesh();
+  mesh.position.copy(orig);
+  mesh.quaternion.copy(jetQuat);
+  scene.add(mesh);
+  const vel = new THREE.Vector3(0, 0, -MISSILES_NUCLEAR.INITIAL_SPD).applyQuaternion(jetQuat);
+  nukes.push({ mesh, target, vel, life: MISSILES_NUCLEAR.LIFE });
+  audio.missile();
+}
+
+function applyNuclearShockwave(epicenter) {
+  for (const t of game.targets) {
+    if (t.dead) continue;
+    const dist = epicenter.distanceTo(t.mesh.position);
+    if (dist < MISSILES_NUCLEAR.BLAST_RADIUS) {
+      const dmg = MISSILES_NUCLEAR.DAMAGE * Math.max(0, 1 - dist / MISSILES_NUCLEAR.BLAST_RADIUS);
+      damageTarget(t, dmg);
+    }
+  }
+  // Player damage check
+  const playerPos = new THREE.Vector3(game.player.x, game.player.y, game.player.pz || 0);
+  const pd = epicenter.distanceTo(playerPos);
+  if (pd < MISSILES_NUCLEAR.PLAYER_KILL_RADIUS) {
+    game.player.lives = 0;
+  } else if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS) {
+    game.player.lives = Math.max(0, game.player.lives - 1);
+    game.flags.cameraShake = { intensity: 5.0, duration: 2.0 };
+  }
+}
+
+/** Atualiza mísseis nucleares: homing + impacto + explosão. */
+export function updateNuclears(dt) {
+  for (let i = nukes.length - 1; i >= 0; i--) {
+    const n = nukes[i];
+    n.life -= dt;
+
+    // Homing
+    if (n.target && !n.target.dead) {
+      const dist = n.mesh.position.distanceTo(n.target.mesh.position);
+      const tr = dist < 40 ? MISSILES_NUCLEAR.CLOSE_TURN_RATE : MISSILES_NUCLEAR.TURN_RATE;
+      const desired = n.target.mesh.position.clone().sub(n.mesh.position).normalize().multiplyScalar(MISSILES_NUCLEAR.TRACKING_SPD);
+      n.vel.lerp(desired, tr);
+    } else if (!n.target || n.target.dead) {
+      // Re-target
+      let near = null, nd = Infinity;
+      for (const e of game.targets) {
+        if (e.dead) continue;
+        const d = n.mesh.position.distanceToSquared(e.mesh.position);
+        if (d < nd) { nd = d; near = e; }
+      }
+      n.target = near;
+    }
+
+    n.mesh.position.addScaledVector(n.vel, dt);
+    if (n.vel.lengthSq() > 0.01) {
+      const lookDir = n.mesh.position.clone().add(n.vel);
+      n.mesh.lookAt(lookDir);
+    }
+
+    // Trilha de fumaça
+    if (!n._smokeTimer) n._smokeTimer = 0;
+    n._smokeTimer -= dt;
+    if (n._smokeTimer <= 0) { n._smokeTimer = 0.04; spawnMissileSmoke(n.mesh.position); }
+
+    // Impacto
+    const hitTarget = n.target && !n.target.dead &&
+      n.mesh.position.distanceTo(n.target.mesh.position) < 10;
+    const groundHit = n.mesh.position.y <= 1;
+    const expired = n.life <= 0;
+
+    if (hitTarget || groundHit || expired) {
+      nuclearExplosion(n.mesh.position.clone());
+      applyNuclearShockwave(n.mesh.position.clone());
+      audio.explosion(1.5, n.mesh.position);
+      scene.remove(n.mesh);
+      nukes.splice(i, 1);
+    }
+  }
+}
+
+/** Limpa mísseis nucleares (para restartGame). */
+export function clearNuclears() {
+  for (const n of nukes) if (n.mesh?.parent) scene.remove(n.mesh);
+  nukes.length = 0;
 }

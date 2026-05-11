@@ -153,7 +153,53 @@ function buildJet() {
   return g;
 }
 
+/** Cria meshes visuais de mísseis nas asas e sob fuselagem. */
+function buildWingLoadout(jet) {
+  const lightMat  = new THREE.MeshLambertMaterial({ color: 0x888ea0 });
+  const heavyMat  = new THREE.MeshLambertMaterial({ color: 0x4a4a52 });
+  const nucMat    = new THREE.MeshBasicMaterial({ color: 0x1a3a12 });
+
+  const lightGeom = new THREE.CylinderGeometry(0.06, 0.07, 0.9, 6);
+  lightGeom.rotateX(Math.PI / 2);
+  const heavyGeom = new THREE.CylinderGeometry(0.09, 0.10, 1.2, 6);
+  heavyGeom.rotateX(Math.PI / 2);
+  const nucGeom   = new THREE.CylinderGeometry(0.14, 0.14, 1.5, 6);
+  nucGeom.rotateX(Math.PI / 2);
+
+  const lightMeshes = [];
+  // 2 leves por asa (pylons internos/externos): posições em espaço local do jet
+  const lightPositions = [
+    [-0.9, -0.15, 0.4],
+    [-1.5, -0.12, 0.3],
+    [ 0.9, -0.15, 0.4],
+    [ 1.5, -0.12, 0.3],
+  ];
+  for (const [x, y, z] of lightPositions) {
+    const m = new THREE.Mesh(lightGeom, lightMat);
+    m.position.set(x, y, z);
+    jet.add(m);
+    lightMeshes.push(m);
+  }
+
+  const heavyMeshes = [];
+  const heavyPositions = [[-1.1, -0.18, 0.55], [1.1, -0.18, 0.55]];
+  for (const [x, y, z] of heavyPositions) {
+    const m = new THREE.Mesh(heavyGeom, heavyMat);
+    m.position.set(x, y, z);
+    jet.add(m);
+    heavyMeshes.push(m);
+  }
+
+  const nucMesh = new THREE.Mesh(nucGeom, nucMat);
+  nucMesh.position.set(0, -0.35, 0.5);
+  jet.add(nucMesh);
+
+  jet.userData.wepMeshes = { light: lightMeshes, heavy: heavyMeshes, nuclear: nucMesh };
+}
+
 export const jet = buildJet();
+jet.scale.set(1.4, 1.4, 1.4);
+buildWingLoadout(jet);
 jet.position.set(0, PLAYER.START_HEIGHT, 0);
 scene.add(jet);
 
@@ -252,10 +298,25 @@ export function updatePlayer(dt, input, onCrash) {
   if (jet.userData.navRed)   jet.userData.navRed.visible   = true;
   if (jet.userData.strobe)   jet.userData.strobe.visible   = Math.sin(game.time * Math.PI * 2 * 1.2) > 0.8;
 
-  // CONTRATO: writer de game.player.x/y/pitch — escritos POR ÚLTIMO (após movimento do frame)
+  // Atualizar visibilidade dos mísseis nas asas a cada 30 frames
+  if (!game._wepFrame) game._wepFrame = 0;
+  game._wepFrame++;
+  if (game._wepFrame % 30 === 0) {
+    const wep = jet.userData.wepMeshes;
+    if (wep) {
+      const lCount = game.player.missiles;
+      wep.light.forEach((m, i) => { m.visible = i < Math.ceil(lCount / 25); });
+      const hCount = game.player.heavyMissiles;
+      wep.heavy.forEach((m, i) => { m.visible = i < Math.ceil(hCount / 5); });
+      if (wep.nuclear) wep.nuclear.visible = game.player.nuclearMissiles > 0;
+    }
+  }
+
+  // CONTRATO: writer de game.player.x/y/pitch/pz — escritos POR ÚLTIMO (após movimento do frame)
   // Intencional: refletem posição final do frame; HUD e tests sempre lêem valor corrente.
   game.player.x = jet.position.x;
   game.player.y = jet.position.y;
+  game.player.pz = jet.position.z;
   game.player.pitch = jet.rotation.x;
 }
 

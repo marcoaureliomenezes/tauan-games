@@ -25,8 +25,8 @@ export const CANNON = {
   RATE: 0.08,         // segundos entre tiros (= 12.5 tiros/s)
   BULLET_SPD: 110,    // m/s — tracers rápidos como M61 Vulcan (escala arcade)
   BULLET_LIFE: 2.0,   // segundos antes do despawn
-  WING_OFFSET: 0.65,  // distância de cada cano até centerline (asas do F-35)
-  MUZZLE_OFFSET: 2.2, // distância para frente do nariz onde a bala spawn
+  WING_OFFSET: 0.91,  // distância de cada cano até centerline (asas do F-35) — 0.65 × 1.4 (scale)
+  MUZZLE_OFFSET: 3.08, // distância para frente do nariz onde a bala spawn — 2.2 × 1.4 (scale)
 };
 
 /** Míssil leve (X) — dispara rápido, dano modesto, supply grande */
@@ -51,6 +51,20 @@ export const MISSILES_HEAVY = {
   LIFE: 8.0,
   DAMAGE: 20,
   SEARCH_RANGE: 1500,
+};
+
+/** Míssil nuclear (N) — devastador, supply 3, raio de dano massivo */
+export const MISSILES_NUCLEAR = {
+  MAX: 3,
+  INITIAL_SPD: 60,
+  TRACKING_SPD: 85,
+  TURN_RATE: 0.18,
+  CLOSE_TURN_RATE: 0.38,
+  LIFE: 12.0,
+  DAMAGE: 4000,
+  BLAST_RADIUS: 180,
+  PLAYER_KILL_RADIUS: 80,
+  PLAYER_DAMAGE_RADIUS: 200,
 };
 
 /** Alias mantido para compatibilidade — aponta para light */

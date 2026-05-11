@@ -17,6 +17,7 @@ let _horizColorHex = 0x90c8f0;
 // Objetos de céu noturno — preenchidos em initSky
 let starMat = null;
 let moonMesh = null;
+let moonLight = null;
 let mwMat = null;
 let neb1Mat = null;
 let neb2Mat = null;
@@ -65,7 +66,7 @@ void main() {
 // ─── Paletas por fase do dia ──────────────────────────────────────────────────
 function getSkyPalette(tod) {
   // Fases: noite(0-0.15, 0.85-1.0), amanhecer(0.15-0.3), dia(0.3-0.7), entardecer(0.7-0.85)
-  const night   = { top: new THREE.Color(0x010509), horiz: new THREE.Color(0x020a12), sun: new THREE.Color(0x000000), sunVis: 0.0 };
+  const night   = { top: new THREE.Color(0x060e1e), horiz: new THREE.Color(0x0a1628), sun: new THREE.Color(0x000000), sunVis: 0.0 };
   const dawn    = { top: new THREE.Color(0x1a2a5e), horiz: new THREE.Color(0xff6030), sun: new THREE.Color(0xffd080), sunVis: 1.0 };
   const day     = { top: new THREE.Color(0x1a70e0), horiz: new THREE.Color(0x90c8f0), sun: new THREE.Color(0xfffaaa), sunVis: 1.0 };
   const dusk    = { top: new THREE.Color(0x1a2060), horiz: new THREE.Color(0xe04010), sun: new THREE.Color(0xff9040), sunVis: 1.0 };
@@ -124,19 +125,19 @@ function computeLighting(tod, palette) {
   const isDay   = tod >= 0.32 && tod < 0.68;
 
   let dirInt  = 0;
-  let ambInt  = 0.08;
+  let ambInt  = 0.18;
   if (isDay)   { dirInt = 1.15; ambInt = 0.55; }
   else if (isDawn) {
     const k = (tod - 0.15) / 0.17;
     dirInt = k * 0.8;
-    ambInt = 0.15 + k * 0.4;
+    ambInt = 0.18 + k * 0.37;
   } else if (isDusk) {
     const k = 1.0 - (tod - 0.68) / 0.24;
     dirInt = k * 0.8;
-    ambInt = 0.15 + k * 0.4;
+    ambInt = 0.18 + k * 0.37;
   } else {
     dirInt = 0;
-    ambInt = 0.08;
+    ambInt = 0.18;
   }
 
   _sunIntensity = dirInt;
@@ -212,7 +213,7 @@ function buildMoon(scene) {
   const moonTex = new THREE.CanvasTexture(moonCanvas);
   moonMesh = new THREE.Mesh(
     new THREE.SphereGeometry(55, 16, 16),
-    new THREE.MeshStandardMaterial({ map: moonTex, emissive: 0x332211, emissiveIntensity: 0.15 }),
+    new THREE.MeshBasicMaterial({ map: moonTex }),
   );
   scene.add(moonMesh);
 }
@@ -308,6 +309,10 @@ export function initSky(scene) {
   buildMilkyWay(scene);
   buildNebulae(scene);
 
+  // Luz lunar — começa desligada, intensidade aumenta com nightFactor
+  moonLight = new THREE.DirectionalLight(0x8899cc, 0.0);
+  scene.add(moonLight);
+
   // Sincroniza estado inicial com timeOfDay = 0.35 (dia)
   _applyTimeOfDay(game.timeOfDay || 0.35);
 }
@@ -347,6 +352,10 @@ function _applyTimeOfDay(tod) {
   if (moonMesh) {
     moonMesh.position.copy(sunDir).multiplyScalar(-3500);
     moonMesh.visible = nightFactor > 0.05;
+    if (moonLight) {
+      moonLight.position.copy(moonMesh.position);
+      moonLight.intensity = nightFactor * 0.25;
+    }
   }
 
   if (mwMat)  mwMat.opacity  = nightFactor * 0.5;

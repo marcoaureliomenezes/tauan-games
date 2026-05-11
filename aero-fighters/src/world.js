@@ -142,10 +142,10 @@ function createFoamRing(cx, cz, radius) {
 /** Constrói todas as ilhas e popula game.islands com metadados para colisão. */
 export function createIslands() {
   for (const [cx, cz, r, h] of ISLAND_DEFS) {
-    createIsland(cx, cz, r, h);
+    const mesh = createIsland(cx, cz, r, h);
     createFoamRing(cx, cz, r);
     // CONTRATO: writer de game.islands
-    game.islands.push({ cx, cz, radius: r, peakHeight: h });
+    game.islands.push({ cx, cz, radius: r, peakHeight: h, mesh });
   }
 }
 
@@ -261,4 +261,29 @@ export function updateAmbientFlak(dt, playerPosition, playerQuaternion) {
   const fz = playerPosition.z + _flakFwd.z * (30 + Math.random() * 50) + _flakRight.z * (Math.random() - 0.5) * 60;
   _flakV.set(fx, fy, fz);
   explosion(_flakV, 0.6, COLORS.flakAmbient);
+}
+
+/** Deforma a geometria das ilhas dentro do raio de blast nuclear (cratera). */
+export function deformTerrainNuclear(epicenter, blastRadius) {
+  for (const isl of game.islands) {
+    if (!isl.mesh) continue;
+    const dx = isl.cx - epicenter.x;
+    const dz = isl.cz - epicenter.z;
+    const islDist = Math.sqrt(dx * dx + dz * dz);
+    if (islDist > blastRadius + isl.radius) continue;
+
+    const geo = isl.mesh.geometry;
+    const posAttr = geo.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const wx = isl.cx + posAttr.getX(i);
+      const wz = isl.cz + posAttr.getZ(i);
+      const d = Math.sqrt((wx - epicenter.x) ** 2 + (wz - epicenter.z) ** 2);
+      if (d < blastRadius) {
+        const crater = -(1 - d / blastRadius) * 30;
+        posAttr.setY(i, Math.max(0, posAttr.getY(i) + crater));
+      }
+    }
+    posAttr.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
 }

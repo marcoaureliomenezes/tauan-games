@@ -14,16 +14,18 @@ import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
 import { input, installListeners, onAction } from './input.js';
 import { jet, updatePlayer, playerHit, barrelRoll, firePosition } from './player.js';
 import { updateTargets } from './targets.js';
-import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups } from './projectiles.js';
+import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups, spawnNuclearMissile, updateNuclears } from './projectiles.js';
 import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } from './hud.js';
 import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver } from './missions.js';
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
+import { initMinimap, updateMinimap } from './ui/minimap.js';
 
 // ─── Boot do mundo ───────────────────────────────────────────────────────────
 attachToBody();
 initSky(scene);
 createIslands();
 createCrosshair();
+initMinimap();
 
 // Speed lines decorativos
 const speedLines = [];
@@ -50,14 +52,24 @@ const _worldUp = new THREE.Vector3(0, 1, 0);
 const _camV = new THREE.Vector3();
 
 function updateCamera(dt) {
-  const localOff = _camV.set(0, 4, 14).applyQuaternion(jet.quaternion);
+  const localOff = _camV.set(0, 5.5, 10).applyQuaternion(jet.quaternion);
   camDesired.copy(jet.position).add(localOff);
-  camera.position.lerp(camDesired, 0.07);
+  // Camera shake (nuclear ou outros eventos)
+  if (game.flags.cameraShake) {
+    const s = game.flags.cameraShake;
+    camDesired.x += (Math.random() - 0.5) * s.intensity;
+    camDesired.y += (Math.random() - 0.5) * s.intensity;
+    camDesired.z += (Math.random() - 0.5) * s.intensity * 0.3;
+    s.intensity *= (1 - 8 * dt);
+    s.duration -= dt;
+    if (s.duration <= 0 || s.intensity < 0.05) game.flags.cameraShake = null;
+  }
+  camera.position.lerp(camDesired, 0.09);
   camFwd.set(0, 0, -1).applyQuaternion(jet.quaternion);
   // Alinha look-at paralelo ao forward do jato: ergue o target pela mesma altura
-  // local da câmera (+4) para que a linha cam→target seja paralela ao fwd.
+  // local da câmera (+5.5) para que a linha cam→target seja paralela ao fwd.
   // Resultado: crosshair central coincide com onde balas vão.
-  const jetUpForAim = _camV.set(0, 4, 0).applyQuaternion(jet.quaternion);
+  const jetUpForAim = _camV.set(0, 5.5, 0).applyQuaternion(jet.quaternion);
   camTarget.copy(jet.position).add(jetUpForAim).addScaledVector(camFwd, 30);
   camera.lookAt(camTarget);
 
@@ -133,6 +145,15 @@ function fireHeavyMissile() {
   spawnMissile(_fOrig.clone(), locked, jet.quaternion, 'heavy');
 }
 
+// ─── Disparo de míssil nuclear (N) — devastador, supply 3 ────────────────────
+function fireNuclearMissile() {
+  if (!game.running || game.flags.paused || game.player.nuclearMissiles <= 0) return;
+  const locked = missileLockedTarget();
+  firePosition(_fOrig, 1.5);
+  // Nuclear dispara mesmo sem lock (atinge terreno se não houver alvo)
+  spawnNuclearMissile(_fOrig.clone(), locked, jet.quaternion);
+}
+
 // ─── Listeners de ação ───────────────────────────────────────────────────────
 installListeners();
 
@@ -154,6 +175,7 @@ onAction('start', handleStartOrFire);   // Enter
 onAction('fire', handleStartOrFire);    // Space/Z (inicia se parado, dispara se rodando)
 onAction('missile', () => { audio.init(); fireMissile(); });
 onAction('heavyMissile', () => { audio.init(); fireHeavyMissile(); });
+onAction('nuclearMissile', () => { audio.init(); fireNuclearMissile(); });
 onAction('roll',    () => { audio.init(); barrelRoll(); });
 onAction('pause',   () => {
   audio.init();
@@ -198,6 +220,7 @@ function tick() {
     updatePlayer(dt, input, crashAndDie);
     updateBullets(dt, jet.position, playerHit);
     updateMissiles(dt);
+    updateNuclears(dt);
     updateTargets(dt, jet.position);
     updatePickups(dt, jet.position);
     updateParticles(dt);
@@ -234,6 +257,7 @@ function tick() {
   updateCrosshair(dt, camera, jet.position, jet.quaternion);
   tickOverlayTimer(dt);
   updateHUD();
+  updateMinimap();
   renderer.render(scene, camera);
 }
 
@@ -244,7 +268,7 @@ showOverlay(
   'CONTROLES (estilo simulador):\n' +
   '↑ nariz para BAIXO   ↓ nariz para CIMA   (invertido)\n' +
   '← → rolar/virar     W acelerar    S frear\n' +
-  'Q/E leme    Espaço/Z canhão    X míssil leve    B míssil pesado    Shift roll    P pausa    M mudo\n\n' +
+  'Q/E leme    Espaço/Z canhão    X míssil leve    B míssil pesado    N NUCLEAR    Shift roll    P pausa    M mudo\n\n' +
   '⚠ EVITE colisão com montanhas e o mar — destruição instantânea\n\n' +
   'pressione Espaço para iniciar',
   0,

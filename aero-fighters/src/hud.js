@@ -8,6 +8,7 @@ const livesEl    = document.getElementById('lives');
 const scoreEl    = document.getElementById('score');
 const missilesEl = document.getElementById('missiles');
 const heavyEl    = document.getElementById('heavy-missiles');
+const nuclearEl  = document.getElementById('nuclear-missiles');
 const altEl      = document.getElementById('altitude');
 const targetsEl  = document.getElementById('targets');
 const missionEl  = document.getElementById('mission');
@@ -16,7 +17,7 @@ const speedEl    = document.getElementById('speed');
 const throttleEl = document.getElementById('throttle');
 const stallEl    = document.getElementById('stall-warn');
 
-const _h = { lives:-1, score:-1, msls:-1, hvy:-1, alt:-1, tgt:'', mis:-1, spd:-1, thr:-1, stall:null };
+const _h = { lives:-1, score:-1, msls:-1, hvy:-1, nuk:-1, alt:-1, tgt:'', mis:-1, spd:-1, thr:-1, stall:null };
 
 /** Atualiza HUD lendo de `game.player` e flags. Mudanças só renderizam o que mudou. */
 export function updateHUD() {
@@ -26,6 +27,11 @@ export function updateHUD() {
   if (sc !== _h.score) { scoreEl.textContent = 'SCORE: ' + String(sc).padStart(6, '0'); _h.score = sc; }
   if (game.player.missiles !== _h.msls) { missilesEl.textContent = 'MSLS: ' + game.player.missiles; _h.msls = game.player.missiles; }
   if (heavyEl && game.player.heavyMissiles !== _h.hvy) { heavyEl.textContent = 'HVY: ' + game.player.heavyMissiles; _h.hvy = game.player.heavyMissiles; }
+  if (nuclearEl && game.player.nuclearMissiles !== _h.nuk) {
+    _h.nuk = game.player.nuclearMissiles;
+    nuclearEl.textContent = '☢ NUK: ' + _h.nuk;
+    nuclearEl.style.color = _h.nuk > 0 ? '#00ff44' : '#444444';
+  }
   const alt = Math.max(0, Math.floor(game.player.y * 10));
   if (alt !== _h.alt) { altEl.textContent = 'ALT: ' + alt + 'm'; _h.alt = alt; }
   const tgt = `ALVOS: ${game.targetsDestroyed}/${game.targetsTotal}`;

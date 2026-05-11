@@ -39,6 +39,7 @@ const KEY_ACTIONS = {
   KeyZ:         'fire',
   KeyX:         'missile',
   KeyB:         'heavyMissile',
+  KeyN:         'nuclearMissile',
   ShiftLeft:    'roll',
   ShiftRight:   'roll',
   Enter:        'start',

@@ -53,6 +53,97 @@ for (let i = 0; i < 120; i++) {
   m.visible = false; scene.add(m); smokeTrailPool.push(m);
 }
 
+// ─── Nuclear FX pools (HEADLESS guard) ───────────────────────────────────────
+const HEADLESS_FX = typeof navigator !== 'undefined' && navigator.webdriver === true;
+
+const nucStemPool = [];
+const mushroomPool = [];
+
+if (!HEADLESS_FX) {
+  const nucStemMat = new THREE.MeshBasicMaterial({ color: 0x886655, transparent: true, opacity: 0.8 });
+  for (let i = 0; i < 80; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(2.0, 6, 5), nucStemMat.clone());
+    m.visible = false;
+    scene.add(m);
+    nucStemPool.push({ mesh: m, life: 0, vel: new THREE.Vector3() });
+  }
+
+  const mushroomMat = new THREE.MeshBasicMaterial({ color: 0x998877, transparent: true, opacity: 0.75 });
+  for (let i = 0; i < 60; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(4.0, 8, 6), mushroomMat.clone());
+    m.visible = false;
+    scene.add(m);
+    mushroomPool.push({ mesh: m, life: 0, vel: new THREE.Vector3() });
+  }
+}
+
+function spawnMushroomCap(pos) {
+  for (let i = 0; i < mushroomPool.length; i++) {
+    const p = mushroomPool[i];
+    if (p.life > 0) continue;
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.random() * 70;
+    p.mesh.position.set(pos.x + Math.cos(angle) * r, pos.y + (Math.random() - 0.5) * 20, pos.z + Math.sin(angle) * r);
+    const s = 3 + Math.random() * 5;
+    p.mesh.scale.setScalar(s);
+    p.mesh.material.opacity = 0.75;
+    p.vel.set((Math.cos(angle) * r * 0.05), 1 + Math.random() * 2, (Math.sin(angle) * r * 0.05));
+    p.life = 5.0 + Math.random() * 2;
+    p.mesh.visible = true;
+  }
+}
+
+/** Explosão nuclear com efeitos multi-camada: flash, fireball, stem, mushroom cap, shockwaves. */
+export function nuclearExplosion(pos) {
+  if (HEADLESS_FX) {
+    // Em headless: apenas efeitos leves
+    explosion(pos, 5, COLORS.fireYellow);
+    spawnShockwave(pos, 200, 0xffeeaa);
+    return;
+  }
+
+  // t=0: flash + fireball
+  spawnFlash(pos, 40);
+  explosion(pos, 20);
+  spawnShockwave(pos, 200, 0xffeeaa);
+
+  // t=150ms: stem (partículas subindo)
+  scheduleDelayed(0.15, () => {
+    for (let i = 0; i < nucStemPool.length; i++) {
+      const p = nucStemPool[i];
+      if (p.life > 0) continue;
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.random() * 15;
+      p.mesh.position.set(pos.x + Math.cos(angle) * r, pos.y + Math.random() * 30, pos.z + Math.sin(angle) * r);
+      p.mesh.scale.setScalar(1 + Math.random() * 2.5);
+      p.mesh.material.opacity = 0.75;
+      p.vel.set((Math.random() - 0.5) * 3, 20 + Math.random() * 35, (Math.random() - 0.5) * 3);
+      p.life = 3.0 + Math.random() * 2.5;
+      p.mesh.visible = true;
+    }
+  });
+
+  // t=400ms: mushroom cap
+  scheduleDelayed(0.4, () => {
+    const capPos = new THREE.Vector3(pos.x, pos.y + 200, pos.z);
+    spawnMushroomCap(capPos);
+  });
+
+  // t=600ms: outer shockwave
+  scheduleDelayed(0.6, () => {
+    spawnShockwave(pos, 350, 0xddccaa);
+  });
+
+  // t=800ms–4s: secondary explosions chain
+  for (let i = 0; i < 10; i++) {
+    scheduleDelayed(0.8 + Math.random() * 3.2, () => {
+      const ox = (Math.random() - 0.5) * 300;
+      const oz = (Math.random() - 0.5) * 300;
+      explosion(new THREE.Vector3(pos.x + ox, pos.y, pos.z + oz), 3 + Math.random() * 5);
+    });
+  }
+}
+
 /** Explosão pequena/média. @param {THREE.Vector3} pos @param {number} scale @param {number} color */
 export function explosion(pos, scale = 1, color = COLORS.fireOrange) {
   const pn = Math.floor(22 * scale);
@@ -293,6 +384,27 @@ export function updateParticles(dt) {
     f.mesh.scale.setScalar(1 + (1 - t) * 8);
     f.mat.opacity = Math.max(0, t);
     if (f.life <= 0) { scene.remove(f.mesh); f.mat.dispose(); flashes.splice(i, 1); }
+  }
+  // Nuclear stem update
+  for (const p of nucStemPool) {
+    if (p.life <= 0) continue;
+    p.life -= dt;
+    p.mesh.position.addScaledVector(p.vel, dt);
+    p.vel.y *= 0.98; // decelerate upward
+    if (p.life <= 0) { p.mesh.visible = false; } else {
+      p.mesh.material.opacity = Math.min(0.8, p.life * 0.3);
+    }
+  }
+  // Mushroom cap update
+  for (const p of mushroomPool) {
+    if (p.life <= 0) continue;
+    p.life -= dt;
+    p.mesh.position.addScaledVector(p.vel, dt);
+    const s = p.mesh.scale.x + dt * 0.5;
+    p.mesh.scale.setScalar(Math.min(s, 15));
+    if (p.life <= 0) { p.mesh.visible = false; } else {
+      p.mesh.material.opacity = Math.min(0.75, p.life * 0.15);
+    }
   }
   // Callbacks diferidos (substitui setTimeout)
   for (let i = delayedCallbacks.length - 1; i >= 0; i--) {

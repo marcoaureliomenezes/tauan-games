@@ -18,10 +18,11 @@ function createInitialState() {
     timeOfDay: 0.35,    // ciclo dia/noite: 0.0 (meia-noite) → 1.0 (meia-noite)
     time: 0,            // tempo total de jogo em segundos (para animações)
     player: {
-      x: 0, y: 80, pitch: 0,
+      x: 0, y: 80, pitch: 0, pz: 0,
       dead: false, lives: 3,
       missiles: 100,         // mísseis leves (X)
       heavyMissiles: 10,     // mísseis pesados (B) — dano 5x, supply limitado
+      nuclearMissiles: 3,    // mísseis nucleares (N) — devastadores, supply 3
       speed: 25, throttle: 0.5, stalled: false,
     },
     flags: {
@@ -31,6 +32,7 @@ function createInitialState() {
       invincibility: 0,
       shakeTime: 0,
       crashFreezeTime: 0,
+      cameraShake: null,
     },
   };
 }
