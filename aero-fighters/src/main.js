@@ -8,7 +8,7 @@ import { CANNON } from './config.js';
 import { audio } from './audio.js';
 import { scene, camera, renderer, attachToBody, dirLight, ambLight } from './scene.js';
 import { initSky, updateSky, getSunData, getAmbientData, getSkyColor } from './sky.js';
-import { createIslands, updateWorld, updateAmbientFlak } from './world.js';
+import { ocean, createIslands, updateWorld, updateAmbientFlak } from './world.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
 import { input, installListeners, onAction } from './input.js';
@@ -38,6 +38,9 @@ let _activeMapUpdate = updateWorld; // função de update do mapa atual
 window.selectMap = function(mapKey) {
   const el = document.getElementById('map-select');
   if (el) el.style.display = 'none';
+
+  // Esconde o oceano animado para mapas que não usam o oceano de world.js
+  ocean.visible = (mapKey === 'islands');
 
   if (mapKey !== 'islands') {
     // Para mapas não-ilhas: inicializa o mapa (sobrescreve game.islands)
@@ -269,7 +272,7 @@ function tick() {
     updateNuclears(dt);
     updateTargets(dt, jet.position);
     updatePickups(dt, jet.position);
-    updateParticles(dt);
+    updateParticles(dt, jet.position);
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
     updateSpeedLines();
@@ -289,11 +292,13 @@ function tick() {
     const amb = getAmbientData();
     ambLight.color.setHex(amb.color);
     ambLight.intensity = amb.intensity;
-    scene.fog.color.setHex(getSkyColor());
+    if (game.activeMap === 'islands' || !game.activeMap) {
+      scene.fog.color.setHex(getSkyColor());
+    }
     jet.visible = game.flags.invincibility > 0 ? Math.floor(game.flags.invincibility * 12) % 2 === 0 : true;
   } else {
     if (game.flags.crashFreezeTime > 0) game.flags.crashFreezeTime -= dt;
-    updateParticles(dt);
+    updateParticles(dt, jet.position);
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
     _activeMapUpdate(dt, jet.position);

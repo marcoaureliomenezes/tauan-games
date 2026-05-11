@@ -69,12 +69,13 @@ function createMorro(hDef, scene) {
         colArr[i * 3] = 0.75; colArr[i * 3 + 1] = 0.70; colArr[i * 3 + 2] = 0.65; // cinza urbano
       }
     } else if (type === 'urban') {
-      if (fh > 0.4) {
-        colArr[i * 3] = 0.55; colArr[i * 3 + 1] = 0.45; colArr[i * 3 + 2] = 0.35; // rocha
-      } else if (fh > 0.1) {
-        colArr[i * 3] = 0.80; colArr[i * 3 + 1] = 0.58; colArr[i * 3 + 2] = 0.42; // tijolo favela
+      // Morros de favela: vegetação densa na encosta, rocha no topo, cinza urbano na base
+      if (fh > 0.5) {
+        colArr[i * 3] = 0.48; colArr[i * 3 + 1] = 0.43; colArr[i * 3 + 2] = 0.33; // rocha
+      } else if (fh > 0.08) {
+        colArr[i * 3] = 0.28; colArr[i * 3 + 1] = 0.54; colArr[i * 3 + 2] = 0.20; // mata atlântica
       } else {
-        colArr[i * 3] = 0.75; colArr[i * 3 + 1] = 0.70; colArr[i * 3 + 2] = 0.65;
+        colArr[i * 3] = 0.76; colArr[i * 3 + 1] = 0.71; colArr[i * 3 + 2] = 0.65; // cinza urbano
       }
     } else {
       // forest

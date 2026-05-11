@@ -52,7 +52,12 @@ const oceanBase = new Float32Array(oceanGeom.attributes.position.array);
 
 export const ocean = new THREE.Mesh(
   oceanGeom,
-  new THREE.MeshLambertMaterial({ map: oceanTex }),
+  new THREE.MeshLambertMaterial({
+    map: oceanTex,
+    polygonOffset: true,
+    polygonOffsetFactor: 1.0,
+    polygonOffsetUnits: 1.0,
+  }),
 );
 ocean.position.y = 0;
 ocean.receiveShadow = true;

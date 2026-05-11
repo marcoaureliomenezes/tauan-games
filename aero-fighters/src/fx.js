@@ -410,9 +410,11 @@ export function spawnMissileSmoke(pos) {
   });
 }
 
-/** Atualiza todas as partículas e efeitos. @param {number} dt segundos */
-export function updateParticles(dt) {
-  // Fire balls (additive)
+/** Atualiza todas as partículas e efeitos.
+ * @param {number} dt segundos
+ * @param {THREE.Vector3|null} playerPos posição do jogador para fade de distância */
+export function updateParticles(dt, playerPos = null) {
+  // Fire balls (additive) — fade por distância para evitar ghost de fog+additive
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i]; p.life -= dt;
     p.mesh.position.x += p.vx * dt;
@@ -420,13 +422,16 @@ export function updateParticles(dt) {
     p.mesh.position.z += p.vz * dt;
     p.vy -= 6 * dt;
     const t = p.life / p.max;
-    p.mesh.material.opacity = Math.max(0, t);
+    const dfade = playerPos
+      ? Math.max(0, 1.0 - Math.max(0, p.mesh.position.distanceTo(playerPos) - 400) / 250)
+      : 1.0;
+    p.mesh.material.opacity = Math.max(0, t) * dfade;
     const s = (p.initScale ?? 1) + (1 - t) * (p.growth ?? 1.5);
     p.mesh.scale.setScalar(s);
     if (p.life <= 0) { p.mesh.visible = false; particlePool.push(p.mesh); particles.splice(i, 1); }
   }
 
-  // Colunas de fogo sustentadas (fireGlow) — crescem e depois murcham
+  // Colunas de fogo sustentadas (fireGlow) — crescem e depois murcham; fade por distância
   for (let i = fireGlowItems.length - 1; i >= 0; i--) {
     const g = fireGlowItems[i]; g.life -= dt;
     g.mesh.position.x += g.vx * dt;
@@ -438,11 +443,14 @@ export function updateParticles(dt) {
     const growPhase = t > 0.5 ? (1 - t) * 2 : 1.0;
     const s = g.initScale + growPhase * g.maxScale;
     g.mesh.scale.setScalar(s);
-    g.mesh.material.opacity = Math.max(0, t * 0.9);
+    const dfade = playerPos
+      ? Math.max(0, 1.0 - Math.max(0, g.mesh.position.distanceTo(playerPos) - 400) / 250)
+      : 1.0;
+    g.mesh.material.opacity = Math.max(0, t * 0.9) * dfade;
     if (g.life <= 0) { g.mesh.visible = false; fireGlowPool.push(g.mesh); fireGlowItems.splice(i, 1); }
   }
 
-  // Sparks
+  // Sparks (additive) — fade por distância
   for (let i = sparks.length - 1; i >= 0; i--) {
     const s = sparks[i]; s.life -= dt;
     s.mesh.position.x += s.vx * dt;
@@ -450,7 +458,10 @@ export function updateParticles(dt) {
     s.mesh.position.z += s.vz * dt;
     s.vy -= 18 * dt;
     const t = s.life / s.max;
-    s.mesh.material.opacity = Math.max(0, t);
+    const dfade = playerPos
+      ? Math.max(0, 1.0 - Math.max(0, s.mesh.position.distanceTo(playerPos) - 400) / 250)
+      : 1.0;
+    s.mesh.material.opacity = Math.max(0, t) * dfade;
     if (s.life <= 0) { s.mesh.visible = false; sparksPool.push(s.mesh); sparks.splice(i, 1); }
   }
 

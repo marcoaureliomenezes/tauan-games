@@ -16,6 +16,7 @@ const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === tru
 
 export const renderer = new THREE.WebGLRenderer({ antialias: !HEADLESS, powerPreference: 'high-performance' });
 renderer.setPixelRatio(1);
+renderer.setClearColor(WORLD.SKY_COLOR);
 renderer.shadowMap.enabled = !HEADLESS;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
