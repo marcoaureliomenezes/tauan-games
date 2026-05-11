@@ -2,9 +2,9 @@
   "name": "tauan-games-tests",
   "private": true,
   "scripts": {
-    "test": "playwright test",
-    "test:trex": "playwright test tests/trex/",
-    "test:aero": "playwright test tests/aero-fighters/"
+    "test": "playwright test --config=tests/playwright.config.js",
+    "test:trex": "playwright test tests/trex/ --config=tests/playwright.config.js",
+    "test:aero": "playwright test tests/aero-fighters/ --config=tests/playwright.config.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0"

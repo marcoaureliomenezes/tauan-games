@@ -87,6 +87,9 @@ export const MISSION = {
   NEXT_OVERLAY_MS: 2200,
 };
 
+/** Velocidade do ciclo dia/noite */
+export const DAY_CYCLE_SPEED = 0.003; // ciclo completo em ~5 min de jogo
+
 /** Mundo (oceano, fog, ilhas) */
 export const WORLD = {
   OCEAN_SIZE: 10000,

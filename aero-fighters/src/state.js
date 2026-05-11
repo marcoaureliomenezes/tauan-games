@@ -15,6 +15,8 @@ function createInitialState() {
     targetsTotal: 0,
     targetsDestroyed: 0,
     islands: [],
+    timeOfDay: 0.35,    // ciclo dia/noite: 0.0 (meia-noite) → 1.0 (meia-noite)
+    time: 0,            // tempo total de jogo em segundos (para animações)
     player: {
       x: 0, y: 80, pitch: 0,
       dead: false, lives: 3,
@@ -44,6 +46,8 @@ export function resetState() {
   // copia campos primitivos
   game.running = fresh.running;
   game.score = fresh.score;
+  game.timeOfDay = fresh.timeOfDay;
+  game.time = fresh.time;
   game.kills = fresh.kills;
   game.cycle = fresh.cycle;
   game.targetsTotal = fresh.targetsTotal;

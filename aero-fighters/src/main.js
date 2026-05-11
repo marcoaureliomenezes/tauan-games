@@ -6,7 +6,8 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { CANNON } from './config.js';
 import { audio } from './audio.js';
-import { scene, camera, renderer, attachToBody, dirLight } from './scene.js';
+import { scene, camera, renderer, attachToBody, dirLight, ambLight } from './scene.js';
+import { initSky, updateSky, getSunData, getAmbientData, getSkyColor } from './sky.js';
 import { createIslands, updateWorld, updateAmbientFlak } from './world.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
@@ -20,6 +21,7 @@ import { createCrosshair, updateCrosshair, missileLockedTarget } from './crossha
 
 // ─── Boot do mundo ───────────────────────────────────────────────────────────
 attachToBody();
+initSky(scene);
 createIslands();
 createCrosshair();
 
@@ -75,7 +77,13 @@ function updateCamera(dt) {
   }
 
   // Move o frustum da shadow camera junto com o player (sombras só perto)
-  dirLight.position.set(jet.position.x + 200, jet.position.y + 300, jet.position.z - 150);
+  // Usa direção do sol quando disponível, senão posição fixa
+  const _sunD = getSunData();
+  dirLight.position.set(
+    jet.position.x + _sunD.direction.x * 300,
+    jet.position.y + Math.max(50, _sunD.direction.y * 300),
+    jet.position.z + _sunD.direction.z * 300,
+  );
   dirLight.target.position.set(jet.position.x, 0, jet.position.z);
   dirLight.target.updateMatrixWorld();
 }
@@ -203,6 +211,16 @@ function tick() {
 
     if (game.player.lives <= 0 && !game.flags.missionFailed) gameOver();
     if (game.player.dead && !game.flags.missionFailed) gameOver();
+
+    // Ciclo dia/noite — atualiza shader + luzes + fog
+    updateSky(dt);
+    const sun = getSunData();
+    dirLight.color.setHex(sun.color);
+    dirLight.intensity = sun.intensity;
+    const amb = getAmbientData();
+    ambLight.color.setHex(amb.color);
+    ambLight.intensity = amb.intensity;
+    scene.fog.color.setHex(getSkyColor());
     jet.visible = game.flags.invincibility > 0 ? Math.floor(game.flags.invincibility * 12) % 2 === 0 : true;
   } else {
     if (game.flags.crashFreezeTime > 0) game.flags.crashFreezeTime -= dt;

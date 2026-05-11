@@ -18,9 +18,9 @@ import { checkTerrainCollision } from './world.js';
 function buildJet() {
   const g = new THREE.Group();
   // PBR (MeshStandardMaterial) para o corpo — responde a luz, projeta sombra
-  const grey      = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.6, roughness: 0.45 });
-  const darkGrey  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.7, roughness: 0.4 });
-  const panel     = new THREE.MeshStandardMaterial({ color: COLORS.jetPanel, metalness: 0.5, roughness: 0.55 });
+  const grey      = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.75, roughness: 0.35 });
+  const darkGrey  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.75, roughness: 0.35 });
+  const panel     = new THREE.MeshStandardMaterial({ color: COLORS.jetPanel, metalness: 0.65, roughness: 0.45 });
   const canopy    = new THREE.MeshStandardMaterial({ color: COLORS.jetCanopy, metalness: 0.2, roughness: 0.15 });
   // Vidro do canopy: ainda translúcido (Basic + opacidade)
   const canopyR   = new THREE.MeshBasicMaterial({ color: COLORS.jetCanopyGlass, transparent: true, opacity: 0.85 });
@@ -28,11 +28,11 @@ function buildJet() {
   const exhaustO  = new THREE.MeshBasicMaterial({ color: COLORS.exhaustOrange, transparent: true, opacity: 0.9 });
   const flameY    = new THREE.MeshBasicMaterial({ color: COLORS.flameYellow, transparent: true, opacity: 0.95 });
   // Asas com DoubleSide (BufferGeometry trapezoidal espelha normal por sinal)
-  const wingMat   = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.6, roughness: 0.45, side: THREE.DoubleSide });
-  const wingDark  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.7, roughness: 0.4, side: THREE.DoubleSide });
+  const wingMat   = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide });
+  const wingDark  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide });
 
-  // Nariz facetado
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.4, 5), grey);
+  // Nariz facetado — 8 lados para perfil mais suave
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.4, 8), grey);
   nose.rotation.x = -Math.PI / 2;
   nose.position.set(0, 0, -1.55); g.add(nose);
 
@@ -107,7 +107,7 @@ function buildJet() {
   stabR.position.set(0, 0.05, 0); g.add(stabR);
 
   // Exhaust (referências expostas via userData para afterburner dinâmico)
-  const exhRing = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.30, 0.45, 12), darkGrey);
+  const exhRing = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.30, 0.45, 16), darkGrey);
   exhRing.rotation.x = Math.PI / 2; exhRing.position.set(0, 0, 2.05); g.add(exhRing);
   const exhGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.35, 12), exhaustO);
   exhGlow.rotation.x = Math.PI / 2; exhGlow.position.set(0, 0, 2.1); g.add(exhGlow);
@@ -127,6 +127,29 @@ function buildJet() {
     const pyl = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.6), darkGrey);
     pyl.position.set(sx, -0.08, 0.7); g.add(pyl);
   }
+
+  // Luzes de navegação (MeshBasicMaterial piscante — sem custo de shadow)
+  const navGreenMat = new THREE.MeshBasicMaterial({ color: 0x00ff44 });
+  const navRedMat   = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+  const strobeMatW  = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+  const navGreen = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), navGreenMat);
+  navGreen.position.set(-2.0, 0, 0.4); // wingtip estibordo
+  g.add(navGreen);
+
+  const navRed = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), navRedMat);
+  navRed.position.set(2.0, 0, 0.4); // wingtip bombordo
+  g.add(navRed);
+
+  const strobe = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), strobeMatW);
+  strobe.position.set(0, 0.12, 1.1); // tail
+  g.add(strobe);
+
+  // Guardar referências em jet.userData
+  g.userData.navGreen = navGreen;
+  g.userData.navRed   = navRed;
+  g.userData.strobe   = strobe;
+
   return g;
 }
 
@@ -222,6 +245,12 @@ export function updatePlayer(dt, input, onCrash) {
   const burn = 0.55 + game.player.throttle * 1.05;
   if (jet.userData.exhGlow)  jet.userData.exhGlow.scale.set(burn, burn, burn);
   if (jet.userData.exhFlame) jet.userData.exhFlame.scale.set(burn, burn, burn * (0.9 + Math.random() * 0.2));
+
+  // Luzes de navegação: nav sempre ligadas, strobe pisca a 1.2 Hz
+  game.time = (game.time || 0) + dt;
+  if (jet.userData.navGreen) jet.userData.navGreen.visible = true;
+  if (jet.userData.navRed)   jet.userData.navRed.visible   = true;
+  if (jet.userData.strobe)   jet.userData.strobe.visible   = Math.sin(game.time * Math.PI * 2 * 1.2) > 0.8;
 
   // CONTRATO: writer de game.player.x/y/pitch — escritos POR ÚLTIMO (após movimento do frame)
   // Intencional: refletem posição final do frame; HUD e tests sempre lêem valor corrente.
