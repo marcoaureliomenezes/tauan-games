@@ -15,6 +15,7 @@ function createInitialState() {
     targetsTotal: 0,
     targetsDestroyed: 0,
     islands: [],
+    wingmen: [],           // aliados AI em formação
     timeOfDay: 0.35,    // ciclo dia/noite: 0.0 (meia-noite) → 1.0 (meia-noite)
     time: 0,            // tempo total de jogo em segundos (para animações)
     activeMap: 'islands', // mapa ativo: 'islands' | 'desert' | 'rio'
@@ -64,6 +65,7 @@ export function resetState() {
   game.projectiles.length = 0;
   game.targets.length = 0;
   game.islands.length = 0;
+  game.wingmen.length = 0;
   // player
   Object.assign(game.player, fresh.player);
   // flags

@@ -7,8 +7,8 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
-import { TARGETS, AA, MISSION, TARGET_LAYOUT } from './config.js';
-import { explosion, megaExplosion, spawnShockwave } from './fx.js';
+import { TARGETS, AA, MISSION, TARGET_LAYOUT, WARSHIP, COLORS } from './config.js';
+import { explosion, megaExplosion, spawnShockwave, scheduleDelayed } from './fx.js';
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { spawnBullet, spawnPickup } from './projectiles.js';
 import { islandHeightAt } from './world.js';
@@ -139,11 +139,11 @@ export function makeAAGun() {
   return g;
 }
 
-/** Navio de guerra: casco + superestrutura + torre de canhão + mastro. */
+/** Navio de guerra: casco + superestrutura + torre de canhão + mastro + esteira de água + luzes. */
 export function makeWarship() {
   const g = new THREE.Group();
-  const hullMat  = new THREE.MeshLambertMaterial({ color: 0x3a3f4a });
-  const superMat = new THREE.MeshLambertMaterial({ color: 0x4a5060 });
+  const hullMat  = new THREE.MeshLambertMaterial({ color: 0x4a5260 });
+  const superMat = new THREE.MeshLambertMaterial({ color: 0x606878 });
   const gunMat   = new THREE.MeshLambertMaterial({ color: 0x2a2f38 });
 
   // Hull
@@ -180,6 +180,29 @@ export function makeWarship() {
   const aaBase = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.6, 8), gunMat);
   aaBase.position.set(0, 1.4, 2.0);
   g.add(aaBase);
+
+  // Esteira de água (wake) — atrás do casco
+  const wakeMat = new THREE.MeshBasicMaterial({ color: 0xcce8ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const wake = new THREE.Mesh(new THREE.PlaneGeometry(5, 18), wakeMat);
+  wake.rotation.x = -Math.PI / 2;
+  wake.position.set(0, 0.1, 8);
+  g.add(wake);
+  g.userData.wake = wake;
+
+  // Luzes de navegação: boreste (verde, direita) e bombordo (vermelho, esquerda)
+  const portLight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 6, 4),
+    new THREE.MeshBasicMaterial({ color: 0xff2020 }),
+  );
+  portLight.position.set(-2, 1.5, -3);
+  g.add(portLight);
+
+  const starLight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 6, 4),
+    new THREE.MeshBasicMaterial({ color: 0x20ff60 }),
+  );
+  starLight.position.set(2, 1.5, -3);
+  g.add(starLight);
 
   g.castShadow = true;
   g.receiveShadow = true;
@@ -249,8 +272,8 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
     dropChance: def.dropChance,
     dead: false,
     fireTimer: 1.0 + Math.random() * 2.0,
-    fireInterval: (type === 'aaGun' || type === 'warship') ? AA.BASE_INTERVAL - aaSpeedup : Infinity,
-    range: type === 'warship' ? 800 : AA.RANGE,
+    fireInterval: type === 'warship' ? WARSHIP.INTERVAL : (type === 'aaGun' ? AA.BASE_INTERVAL - aaSpeedup : Infinity),
+    range: type === 'warship' ? WARSHIP.RANGE : AA.RANGE,
     path,
     pathIdx: 0,
   };
@@ -326,6 +349,10 @@ function updateAAGun(t, dt, jetPos) {
 const _wsDir = new THREE.Vector2();
 function updateWarship(t, dt, jetPos) {
   if (!t.path || t.path.length === 0) return;
+  // Animate wake opacity
+  if (t.mesh.userData.wake) {
+    t.mesh.userData.wake.material.opacity = 0.35 + 0.2 * Math.sin((game.time || 0) * 2);
+  }
   // Movimento ao longo de waypoints
   const wp = t.path[t.pathIdx];
   _wsDir.set(wp[0] - t.mesh.position.x, wp[1] - t.mesh.position.z);
@@ -338,17 +365,29 @@ function updateWarship(t, dt, jetPos) {
     t.mesh.position.y = 0.6;
     t.mesh.rotation.y = Math.atan2(_wsDir.x, _wsDir.y);
   }
-  // Disparo contra o player
+  // Disparo contra o player — burst de 2 balas
   const dist2 = t.mesh.position.distanceToSquared(jetPos);
   if (dist2 > t.range * t.range) return;
   t.fireTimer -= dt;
   if (t.fireTimer <= 0) {
-    t.fireTimer = t.fireInterval + Math.random() * 0.6;
-    _aaDir.subVectors(jetPos, t.mesh.position).normalize();
-    _aaOrig.copy(t.mesh.position); _aaOrig.y += 2.2;
+    t.fireTimer = t.fireInterval + Math.random() * 0.4;
+    const fireFrom = t.mesh.position;
+    _aaDir.subVectors(jetPos, fireFrom).normalize();
+    _aaOrig.copy(fireFrom); _aaOrig.y += 2.2;
     _aaOrig.addScaledVector(_aaDir, 2.0);
-    spawnBullet(_aaOrig.clone(), _aaDir, true);
-    audio.aaFire(t.mesh.position);
+    // Primeira bala — imediata
+    spawnBullet(_aaOrig.clone(), _aaDir.clone(), true);
+    explosion(_aaOrig.clone().setY(fireFrom.y + 2.2), 0.25, COLORS.fireOrange);
+    audio.aaFire(fireFrom);
+    // Segunda bala — 0.08s depois com leve jitter
+    const orig2 = _aaOrig.clone();
+    const dir2 = _aaDir.clone();
+    scheduleDelayed(0.08, () => {
+      dir2.x += (Math.random() - 0.5) * 0.08;
+      dir2.z += (Math.random() - 0.5) * 0.08;
+      dir2.normalize();
+      spawnBullet(orig2, dir2, true);
+    });
   }
 }
 

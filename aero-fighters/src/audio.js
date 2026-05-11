@@ -246,6 +246,93 @@ export const audio = {
     osc.start(now); osc.stop(now + 0.14);
   },
 
+  /** Crackle rápido de rádio estático em tempo agendado. */
+  _radioStatic(at) {
+    if (!this.initialized) return;
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf(0.07);
+    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2200;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.14, at + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 0.07);
+    src.connect(f); f.connect(g); g.connect(this.master);
+    src.start(at);
+  },
+
+  /** Chatter de rádio sintetizado — ruído AM modulado, simula voz de piloto. */
+  radioChatter() {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const dur = 0.8 + Math.random() * 1.2;
+
+    // Noise source (telephone vocal range)
+    const noise = ctx.createBufferSource(); noise.buffer = this._noiseBuf(dur + 0.2);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 0.7;
+
+    // AM modulation (simulates speech rhythm at 4-9 Hz)
+    const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 4 + Math.random() * 5;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.5;
+    const carrier = ctx.createGain(); carrier.gain.value = 0.5;
+    lfo.connect(lfoGain); lfoGain.connect(carrier.gain);
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.20, now + 0.04);
+    g.gain.setValueAtTime(0.20, now + dur);
+    g.gain.linearRampToValueAtTime(0, now + dur + 0.05);
+
+    noise.connect(bp); bp.connect(carrier); carrier.connect(g); g.connect(this.master);
+    noise.start(now); noise.stop(now + dur + 0.1);
+    lfo.start(now); lfo.stop(now + dur + 0.1);
+
+    this._radioStatic(now - 0.02 < 0 ? now : now - 0.01);
+    this._radioStatic(now + dur + 0.02);
+  },
+
+  /** Inicia ruído de vento contínuo se necessário. */
+  _startWind() {
+    if (this._windNode) return;
+    const ctx = this.ctx;
+    const noise = ctx.createBufferSource(); noise.buffer = this._noiseBuf(4); noise.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 400;
+    const g = ctx.createGain(); g.gain.value = 0;
+    noise.connect(lp); lp.connect(g); g.connect(this.master);
+    noise.start();
+    this._windNode = noise; this._windGain = g;
+  },
+
+  /** Ajusta volume do vento pela altitude. Chamar a cada frame. */
+  setWindLevel(altitude) {
+    if (!this.initialized || this.muted) return;
+    this._startWind();
+    const vol = Math.max(0, Math.min(0.08, (altitude - 40) / 200));
+    this._windGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.5);
+  },
+
+  /** Boom distante ambiental — explosão ao longe, quase inaudível. */
+  distantExplosion() {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    // Low sine thud
+    const osc = ctx.createOscillator(); osc.type = 'sine';
+    osc.frequency.setValueAtTime(45, now);
+    osc.frequency.exponentialRampToValueAtTime(22, now + 1.8);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.06, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+    osc.connect(og); og.connect(this.master);
+    osc.start(now); osc.stop(now + 2.1);
+    // Rumble noise
+    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf(1.5);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 150; bp.Q.value = 1.2;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.04, now);
+    ng.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+    src.connect(bp); bp.connect(ng); ng.connect(this.master);
+    src.start(now);
+  },
+
   /** @returns {boolean} novo estado de muted */
   toggle() {
     if (!this.initialized) this.init();

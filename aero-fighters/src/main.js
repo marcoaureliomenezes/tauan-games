@@ -20,6 +20,7 @@ import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver } f
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
 import { initMinimap, updateMinimap } from './ui/minimap.js';
 import { MAPS } from './maps/index.js';
+import { spawnWingmen, updateWingmen, clearWingmen } from './wingmen.js';
 
 // ─── Boot do mundo ───────────────────────────────────────────────────────────
 attachToBody();
@@ -33,6 +34,10 @@ initMinimap();
 // Guarda referência aos objetos extras criados pelos mapas alternativos
 // para permitir limpeza ao reiniciar (futuro). Por ora, seleção é uma vez por sessão.
 let _activeMapUpdate = updateWorld; // função de update do mapa atual
+
+// Ambient audio timers
+let _radioTimer = 8 + Math.random() * 12;
+let _boomTimer  = 5 + Math.random() * 10;
 
 /** Chamado pelos botões do #map-select overlay no HTML. */
 window.selectMap = function(mapKey) {
@@ -52,6 +57,9 @@ window.selectMap = function(mapKey) {
   }
   // Atualiza estado
   game.activeMap = mapKey;
+
+  // Aliados em formação — spawna após criar o mapa (game.islands já populado)
+  spawnWingmen(scene, jet);
 
   // Mostra o overlay de instruções (início do jogo)
   showOverlay(
@@ -212,7 +220,11 @@ function handleStartOrFire() {
       return;
     }
     if (game.flags.missionFailed || game.player.dead) {
-      if (game.flags.crashFreezeTime <= 0) restartGame();
+      if (game.flags.crashFreezeTime <= 0) {
+        restartGame();
+        clearWingmen(scene);
+        spawnWingmen(scene, jet);
+      }
       return;
     }
   }
@@ -265,7 +277,8 @@ function tick() {
     if (input.fireHeld) fireCannon();
 
     updatePlayer(dt, input, crashAndDie);
-    updateBullets(dt, jet.position, playerHit);
+    updateWingmen(dt, jet, game.targets);
+    updateBullets(dt, jet.position, playerHit, game.wingmen);
     updateMissiles(dt);
     updateNuclears(dt);
     updateTargets(dt, jet.position);
@@ -276,6 +289,13 @@ function tick() {
     updateSpeedLines();
     _activeMapUpdate(dt, jet.position);
     updateAmbientFlak(dt, jet.position, jet.quaternion);
+
+    // Ambient audio: radio chatter + distant booms
+    _radioTimer -= dt;
+    if (_radioTimer <= 0) { audio.radioChatter(); _radioTimer = 8 + Math.random() * 17; }
+    _boomTimer -= dt;
+    if (_boomTimer <= 0) { audio.distantExplosion(); _boomTimer = 8 + Math.random() * 12; }
+    audio.setWindLevel(game.player.y);
 
     checkMissionComplete();
 

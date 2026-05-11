@@ -94,9 +94,15 @@ export const AA = {
   MAX_SPEEDUP: 0.7,   // limite de aceleração
 };
 
+/** Navios de guerra */
+export const WARSHIP = {
+  RANGE: 1200,        // m — engaja bem antes que o player chegue perto
+  INTERVAL: 1.0,      // s entre rajadas (burst de 2 balas)
+};
+
 /** Estrutura de missões */
 export const MISSION = {
-  WAVE_SIZES: [8, 12, 16],   // missão 1, 2, 3+
+  WAVE_SIZES: [10, 14, 20],  // missão 1, 2, 3+ (era [8,12,16])
   HP_BONUS_PER_CYCLE: 3,
   COMPLETE_DELAY_MS: 2400,
   NEXT_OVERLAY_MS: 2200,
@@ -161,8 +167,14 @@ export const TARGET_LAYOUT = [
   [9,   0,   0, 'building'],
   [6,  30,  10, 'aaGun'],
   [11, 22,  10, 'aaGun'],
-  [-1, -500, -700, 'warship'],
-  [-1,  500, -900, 'warship'],
+  // Fleet — closer ships first (appear in mission 1-2), deeper fleet beyond
+  [-1,  200,  -420, 'warship'],
+  [-1, -320,  -480, 'warship'],
+  [-1,  580,  -540, 'warship'],
+  [-1,  -80,  -600, 'warship'],
+  [-1, -500,  -700, 'warship'],
+  [-1,  500,  -900, 'warship'],
+  [-1,  380, -1100, 'warship'],
   [-1, -300, -1400, 'warship'],
 ];
 
@@ -188,10 +200,13 @@ export const TARGET_LAYOUT_DESERT = [
  * Navios de guerra ficam no oceano (z < -200), AA guns no topo dos morros,
  * alvos terrestres (fábricas, bases) na malha urbana ao nível do chão. */
 export const TARGET_LAYOUT_RIO = [
-  // Navios de guerra no Atlântico (sul da praia)
+  // Navios de guerra no Atlântico (sul da praia) — 6 navios formando frota
   [-1,   80, -280, 'warship'],
   [-1, -200, -340, 'warship'],
   [-1,  320, -250, 'warship'],
+  [-1, -380, -290, 'warship'],
+  [-1,  140, -420, 'warship'],
+  [-1, -100, -500, 'warship'],
   // AA guns nos topos dos morros famosos
   [ 0,    0,    0, 'aaGun'],   // Pão de Açúcar
   [ 1,    0,    0, 'aaGun'],   // Corcovado
