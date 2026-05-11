@@ -101,7 +101,7 @@ const _worldUp = new THREE.Vector3(0, 1, 0);
 const _camV = new THREE.Vector3();
 
 function updateCamera(dt) {
-  const localOff = _camV.set(0, 5.5, 10).applyQuaternion(jet.quaternion);
+  const localOff = _camV.set(0, 3.0, 5).applyQuaternion(jet.quaternion);
   camDesired.copy(jet.position).add(localOff);
   // Camera shake (nuclear ou outros eventos)
   if (game.flags.cameraShake) {
@@ -116,9 +116,8 @@ function updateCamera(dt) {
   camera.position.lerp(camDesired, 0.09);
   camFwd.set(0, 0, -1).applyQuaternion(jet.quaternion);
   // Alinha look-at paralelo ao forward do jato: ergue o target pela mesma altura
-  // local da câmera (+5.5) para que a linha cam→target seja paralela ao fwd.
-  // Resultado: crosshair central coincide com onde balas vão.
-  const jetUpForAim = _camV.set(0, 5.5, 0).applyQuaternion(jet.quaternion);
+  // local da câmera para que a linha cam→target seja paralela ao fwd.
+  const jetUpForAim = _camV.set(0, 3.0, 0).applyQuaternion(jet.quaternion);
   camTarget.copy(jet.position).add(jetUpForAim).addScaledVector(camFwd, 30);
   camera.lookAt(camTarget);
 

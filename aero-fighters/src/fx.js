@@ -104,24 +104,32 @@ if (!HEADLESS_FX) {
 
 // ─── Funções internas ─────────────────────────────────────────────────────────
 
-function spawnMushroomCap(pos) {
-  for (let i = 0; i < mushroomPool.length; i++) {
+// Spawns one band of the mushroom cap using a dedicated pool slice.
+// band 0 = inner core (idx 0-19), band 1 = main ring (idx 20-69), band 2 = outer anvil (idx 70-99)
+function spawnMushroomCap(pos, band) {
+  // [startIdx, endIdx, rMin, rMax, yMin, yMax, vrMin, vrMax, vyMin, vyMax, scMin, scMax, lifeMin, lifeRange]
+  const cfg = [
+    [  0,  20,   0,  35, -15, 15,  0.5,  2.0,  1.0,  3.0,  5, 12,  7,  4],
+    [ 20,  70,  35, 110, -25, 25,  3.0,  8.0,  0.5,  2.0,  6, 15,  8,  4],
+    [ 70, 100, 110, 180, -10, 10,  8.0, 14.0, -1.0,  0.5,  7, 18,  9,  4],
+  ][band];
+  const [si, ei, rMin, rMax, yMin, yMax, vrMin, vrMax, vyMin, vyMax, scMin, scMax, lifeMin, lifeRange] = cfg;
+  for (let i = si; i < ei; i++) {
     const p = mushroomPool[i];
     if (p.life > 0) continue;
     const angle = Math.random() * Math.PI * 2;
-    const r = 20 + Math.random() * 110;  // 20–130 m de raio (era 0–70)
+    const r = rMin + Math.random() * (rMax - rMin);
     p.mesh.position.set(
       pos.x + Math.cos(angle) * r,
-      pos.y + (Math.random() - 0.5) * 40,  // era ±20
+      pos.y + yMin + Math.random() * (yMax - yMin),
       pos.z + Math.sin(angle) * r,
     );
-    const s = 5 + Math.random() * 10;  // era 3+5
-    p.mesh.scale.setScalar(s);
-    p.mesh.material.opacity = 0.85;
-    // velocidade: partículas próximas ao centro sobem mais, bordas se afastam
-    const rise = 0.5 + Math.random() * 2.0;
-    p.vel.set(Math.cos(angle) * r * 0.07, rise, Math.sin(angle) * r * 0.07);
-    p.life = 7.0 + Math.random() * 3.0;  // era 5+2
+    p.mesh.scale.setScalar(scMin + Math.random() * (scMax - scMin));
+    p.mesh.material.opacity = 0.88;
+    const vr = vrMin + Math.random() * (vrMax - vrMin);
+    const vy = vyMin + Math.random() * (vyMax - vyMin);
+    p.vel.set(Math.cos(angle) * vr, vy, Math.sin(angle) * vr);
+    p.life = lifeMin + Math.random() * lifeRange;
     p.mesh.visible = true;
   }
 }
@@ -162,41 +170,44 @@ export function nuclearExplosion(pos) {
     explosion(pos, 18, COLORS.fireOrange);
   });
 
-  // t=150ms: stem (coluna de fumaça/fogo subindo)
-  scheduleDelayed(0.15, () => {
-    for (let i = 0; i < nucStemPool.length; i++) {
-      const p = nucStemPool[i];
-      if (p.life > 0) continue;
-      const angle = Math.random() * Math.PI * 2;
-      const r = Math.random() * 18;
-      p.mesh.position.set(
-        pos.x + Math.cos(angle) * r,
-        pos.y + Math.random() * 40,
-        pos.z + Math.sin(angle) * r,
-      );
-      p.mesh.scale.setScalar(1.2 + Math.random() * 3.0);
-      p.mesh.material.opacity = 0.85;
-      p.vel.set(
-        (Math.random() - 0.5) * 4,
-        25 + Math.random() * 45,  // era 20–35, agora sobe mais rápido
-        (Math.random() - 0.5) * 4,
-      );
-      p.life = 4.0 + Math.random() * 3.0;  // era 3+2.5
-      p.mesh.visible = true;
-    }
-  });
+  // t=150–600ms: stem (coluna subindo) — 4 lotes escalonados de 30 partículas cada
+  for (let batch = 0; batch < 4; batch++) {
+    scheduleDelayed(0.15 + batch * 0.15, () => {
+      const start = batch * 30;
+      for (let i = start; i < start + 30; i++) {
+        const p = nucStemPool[i];
+        if (!p || p.life > 0) continue;
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.random() * 18;
+        p.mesh.position.set(
+          pos.x + Math.cos(angle) * r,
+          pos.y + Math.random() * 40,
+          pos.z + Math.sin(angle) * r,
+        );
+        p.mesh.scale.setScalar(1.2 + Math.random() * 3.0);
+        p.mesh.material.opacity = 0.85;
+        p.vel.set(
+          (Math.random() - 0.5) * 4,
+          25 + Math.random() * 45,
+          (Math.random() - 0.5) * 4,
+        );
+        p.life = 4.0 + Math.random() * 3.0;
+        p.mesh.visible = true;
+      }
+    });
+  }
 
   // t=300ms: anel de shockwave médio + explosão laranja secundária
   scheduleDelayed(0.3, () => {
     explosion(pos, 15, COLORS.fireOrange);
-    spawnShockwave(pos, 480, 0xffeeaa);  // era 200
+    spawnShockwave(pos, 480, 0xffeeaa);
   });
 
-  // t=500ms: mushroom cap sobe bem alto
-  scheduleDelayed(0.5, () => {
-    const capPos = new THREE.Vector3(pos.x, pos.y + 220, pos.z);  // era +200
-    spawnMushroomCap(capPos);
-  });
+  // Mushroom cap — 3 bandas escalonadas: núcleo → anel principal → bigorna externa
+  const capPos = new THREE.Vector3(pos.x, pos.y + 220, pos.z);
+  scheduleDelayed(0.50, () => spawnMushroomCap(capPos, 0)); // inner core
+  scheduleDelayed(0.80, () => spawnMushroomCap(capPos, 1)); // main ring
+  scheduleDelayed(1.20, () => spawnMushroomCap(capPos, 2)); // outer anvil
 
   // t=700ms: anel externo final
   scheduleDelayed(0.7, () => {

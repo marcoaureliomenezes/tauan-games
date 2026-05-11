@@ -21,6 +21,7 @@ function createInitialState() {
     player: {
       x: 0, y: 80, pitch: 0, pz: 0,
       dead: false, lives: 3,
+      hp: 3,                 // pontos de dano dentro da vida atual (3 hits → mayday)
       missiles: 100,         // mísseis leves (X)
       heavyMissiles: 10,     // mísseis pesados (B) — dano 5x, supply limitado
       nuclearMissiles: 3,    // mísseis nucleares (N) — devastadores, supply 3
@@ -34,6 +35,9 @@ function createInitialState() {
       shakeTime: 0,
       crashFreezeTime: 0,
       cameraShake: null,
+      mayday: false,         // avião perdeu controle, caindo
+      maydayTimer: 0,        // segundos restantes antes de ejetar
+      damageSmoke: 0,        // timer de emissão de fumaça de dano
     },
   };
 }

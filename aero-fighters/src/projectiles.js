@@ -32,7 +32,7 @@ export function spawnBullet(orig, dir, isEnemy = false) {
   // Aponta o tracer ao longo da direção de voo (cilindro estende-se atrás da bala)
   mesh.lookAt(orig.x + dir.x * 10, orig.y + dir.y * 10, orig.z + dir.z * 10);
   mesh.visible = true; scene.add(mesh);
-  const spd = isEnemy ? 36 : CANNON.BULLET_SPD;
+  const spd = isEnemy ? 56 : CANNON.BULLET_SPD;
   // CONTRATO: writer de game.projectiles
   game.projectiles.push({
     mesh,
@@ -66,7 +66,9 @@ export function updateBullets(dt, jetPos, onPlayerHit) {
       }
     } else if (game.flags.invincibility <= 0 && game.flags.rollTimer <= 0) {
       const dx = p.mesh.position.x - jx, dy = p.mesh.position.y - jy, dz = p.mesh.position.z - jz;
-      if (dx * dx + dy * dy + dz * dz < 4) { onPlayerHit(); consumed = true; }
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < 4) { onPlayerHit(); consumed = true; }
+      else if (d2 < 64) { audio.closeMiss(); }
     }
     if (consumed || p.life <= 0) { recycleBullet(p); game.projectiles.splice(i, 1); }
   }

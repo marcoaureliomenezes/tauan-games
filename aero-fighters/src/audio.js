@@ -208,6 +208,44 @@ export const audio = {
     src.start(now);
   },
 
+  /** Alarme de mayday sintetizado — padrão hi/lo sawtooth por 8 segundos. */
+  mayday() {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = 750; filt.Q.value = 1.5;
+    let t = 0;
+    for (let i = 0; i < 22; i++) {
+      const freq = (i % 2 === 0) ? 880 : 620;
+      osc.frequency.setValueAtTime(freq, now + t);
+      g.gain.linearRampToValueAtTime(0.20, now + t + 0.04);
+      g.gain.setValueAtTime(0.20, now + t + 0.14);
+      g.gain.linearRampToValueAtTime(0, now + t + 0.22);
+      t += 0.33;
+    }
+    osc.connect(filt); filt.connect(g); g.connect(this.master);
+    osc.start(now); osc.stop(now + 8.5);
+  },
+
+  /** Som de bala inimiga passando próxima — whoosh descendente. */
+  closeMiss() {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(340, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.13);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.13, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    osc.connect(g); g.connect(this.master);
+    osc.start(now); osc.stop(now + 0.14);
+  },
+
   /** @returns {boolean} novo estado de muted */
   toggle() {
     if (!this.initialized) this.init();

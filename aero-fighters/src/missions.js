@@ -64,6 +64,7 @@ export function restartGame() {
   game.targetsDestroyed = 0;
   game.targetsTotal = 0;
   game.player.lives = 3;
+  game.player.hp = 3;
   game.player.missiles = 100;
   game.player.heavyMissiles = 10;
   game.player.dead = false;
@@ -71,6 +72,9 @@ export function restartGame() {
   game.flags.missionCompleteShown = false;
   game.flags.invincibility = 0;
   game.flags.crashFreezeTime = 0;
+  game.flags.mayday = false;
+  game.flags.maydayTimer = 0;
+  game.flags.damageSmoke = 0;
   respawnJet();
   game.running = true;
   hideOverlay();

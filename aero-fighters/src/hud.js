@@ -4,8 +4,9 @@
 
 import { game } from './state.js';
 
-const livesEl    = document.getElementById('lives');
-const scoreEl    = document.getElementById('score');
+const livesEl     = document.getElementById('lives');
+const damageBarEl = document.getElementById('damage-bar');
+const scoreEl     = document.getElementById('score');
 const missilesEl = document.getElementById('missiles');
 const heavyEl    = document.getElementById('heavy-missiles');
 const nuclearEl  = document.getElementById('nuclear-missiles');
@@ -17,12 +18,18 @@ const speedEl    = document.getElementById('speed');
 const throttleEl = document.getElementById('throttle');
 const stallEl    = document.getElementById('stall-warn');
 
-const _h = { lives:-1, score:-1, msls:-1, hvy:-1, nuk:-1, alt:-1, tgt:'', mis:-1, spd:-1, thr:-1, stall:null };
+const _h = { lives:-1, hp:-1, score:-1, msls:-1, hvy:-1, nuk:-1, alt:-1, tgt:'', mis:-1, spd:-1, thr:-1, stall:null };
 
 /** Atualiza HUD lendo de `game.player` e flags. Mudanças só renderizam o que mudou. */
 export function updateHUD() {
   const liv = Math.max(0, game.player.lives);
   if (liv !== _h.lives) { livesEl.textContent = '♥'.repeat(liv) || '-'; _h.lives = liv; }
+  const hp = game.player.hp ?? 3;
+  if (hp !== _h.hp && damageBarEl) {
+    damageBarEl.textContent = '■'.repeat(Math.max(0, hp)) + '□'.repeat(Math.max(0, 3 - hp));
+    damageBarEl.style.color = hp >= 3 ? '#44ff88' : hp === 2 ? '#ffcc44' : '#ff4422';
+    _h.hp = hp;
+  }
   const sc = Math.max(0, Math.floor(game.score));
   if (sc !== _h.score) { scoreEl.textContent = 'SCORE: ' + String(sc).padStart(6, '0'); _h.score = sc; }
   if (game.player.missiles !== _h.msls) { missilesEl.textContent = 'MSLS: ' + game.player.missiles; _h.msls = game.player.missiles; }

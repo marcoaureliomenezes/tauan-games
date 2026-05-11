@@ -11,7 +11,7 @@ import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
 import { PLAYER, ROLL, COLORS } from './config.js';
-import { explosion } from './fx.js';
+import { explosion, spawnMissileSmoke } from './fx.js';
 import { checkTerrainCollision } from './world.js';
 
 // ─── Mesh do F-35 ────────────────────────────────────────────────────────────
@@ -158,41 +158,100 @@ function buildWingLoadout(jet) {
   const lightMat  = new THREE.MeshLambertMaterial({ color: 0x888ea0 });
   const heavyMat  = new THREE.MeshLambertMaterial({ color: 0x4a4a52 });
   const nucMat    = new THREE.MeshBasicMaterial({ color: 0x1a3a12 });
+  const finMat    = new THREE.MeshLambertMaterial({ color: 0x6a6e7a, side: THREE.DoubleSide });
+  const seekerMat = new THREE.MeshBasicMaterial({ color: 0x112233, transparent: true, opacity: 0.92 });
+  const warnMat   = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+  const pylonMat  = new THREE.MeshLambertMaterial({ color: 0x3a3a42 });
 
-  const lightGeom = new THREE.CylinderGeometry(0.06, 0.07, 0.9, 6);
-  lightGeom.rotateX(Math.PI / 2);
-  const heavyGeom = new THREE.CylinderGeometry(0.09, 0.10, 1.2, 6);
-  heavyGeom.rotateX(Math.PI / 2);
-  const nucGeom   = new THREE.CylinderGeometry(0.14, 0.14, 1.5, 6);
-  nucGeom.rotateX(Math.PI / 2);
+  // Adds nosecone + cruciform fins + optional IR seeker dome to a missile body
+  function addDetail(mx, my, mz, halfLen, bodyR, mat, withSeeker) {
+    const nH = halfLen * 0.48;
+    const noseG = new THREE.ConeGeometry(bodyR * 1.05, nH, 6);
+    noseG.rotateX(-Math.PI / 2); // tip → -Z (forward in jet space)
+    const nose = new THREE.Mesh(noseG, mat);
+    nose.position.set(mx, my, mz - halfLen - nH / 2);
+    jet.add(nose);
 
-  const lightMeshes = [];
-  // 2 leves por asa (pylons internos/externos): posições em espaço local do jet
+    if (withSeeker) {
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(bodyR * 0.72, 8, 6), seekerMat);
+      dome.position.set(mx, my, mz - halfLen - nH - bodyR * 0.25);
+      jet.add(dome);
+    }
+
+    // Cruciform fins: horizontal + vertical box pair at tail
+    const fL = halfLen * 0.52;
+    const fS = bodyR * 3.8;
+    const tailZ = mz + halfLen - fL / 2;
+    const hFin = new THREE.Mesh(new THREE.BoxGeometry(fS, 0.024, fL), finMat);
+    hFin.position.set(mx, my, tailZ);
+    jet.add(hFin);
+    const vFin = new THREE.Mesh(new THREE.BoxGeometry(0.024, fS, fL), finMat);
+    vFin.position.set(mx, my, tailZ);
+    jet.add(vFin);
+  }
+
+  // — Light missiles (4): 2 per wing, inner & outer pylon station —
+  const lG = new THREE.CylinderGeometry(0.06, 0.07, 0.9, 6);
+  lG.rotateX(Math.PI / 2);
   const lightPositions = [
     [-0.9, -0.15, 0.4],
     [-1.5, -0.12, 0.3],
     [ 0.9, -0.15, 0.4],
     [ 1.5, -0.12, 0.3],
   ];
-  for (const [x, y, z] of lightPositions) {
-    const m = new THREE.Mesh(lightGeom, lightMat);
-    m.position.set(x, y, z);
+  const lightMeshes = [];
+  for (const [mx, my, mz] of lightPositions) {
+    const m = new THREE.Mesh(lG, lightMat);
+    m.position.set(mx, my, mz);
     jet.add(m);
     lightMeshes.push(m);
+
+    const pyl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.11, 0.05), pylonMat);
+    pyl.position.set(mx, my + 0.08, mz);
+    jet.add(pyl);
+
+    addDetail(mx, my, mz, 0.45, 0.065, lightMat, true);
   }
 
+  // — Heavy missiles (2): mid-wing station —
+  const hG = new THREE.CylinderGeometry(0.09, 0.10, 1.2, 6);
+  hG.rotateX(Math.PI / 2);
   const heavyMeshes = [];
   const heavyPositions = [[-1.1, -0.18, 0.55], [1.1, -0.18, 0.55]];
-  for (const [x, y, z] of heavyPositions) {
-    const m = new THREE.Mesh(heavyGeom, heavyMat);
-    m.position.set(x, y, z);
+  for (const [mx, my, mz] of heavyPositions) {
+    const m = new THREE.Mesh(hG, heavyMat);
+    m.position.set(mx, my, mz);
     jet.add(m);
     heavyMeshes.push(m);
+
+    const pyl = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.06), pylonMat);
+    pyl.position.set(mx, my + 0.09, mz);
+    jet.add(pyl);
+
+    addDetail(mx, my, mz, 0.60, 0.095, heavyMat, false);
   }
 
-  const nucMesh = new THREE.Mesh(nucGeom, nucMat);
-  nucMesh.position.set(0, -0.35, 0.5);
+  // — Nuclear missile (1): centerline belly mount —
+  const nG = new THREE.CylinderGeometry(0.14, 0.14, 1.5, 6);
+  nG.rotateX(Math.PI / 2);
+  const [nmx, nmy, nmz] = [0, -0.35, 0.5];
+  const nucMesh = new THREE.Mesh(nG, nucMat);
+  nucMesh.position.set(nmx, nmy, nmz);
   jet.add(nucMesh);
+
+  // Red warning band
+  const wbG = new THREE.CylinderGeometry(0.156, 0.156, 0.09, 12);
+  wbG.rotateX(Math.PI / 2);
+  const warnBand = new THREE.Mesh(wbG, warnMat);
+  warnBand.position.set(nmx, nmy, nmz - 0.14);
+  jet.add(warnBand);
+
+  // Short fuselage strut
+  const nucPyl = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.10, 0.14), pylonMat);
+  nucPyl.position.set(nmx, nmy + 0.21, nmz);
+  jet.add(nucPyl);
+
+  addDetail(nmx, nmy, nmz, 0.75, 0.14, nucMat, false);
 
   jet.userData.wepMeshes = { light: lightMeshes, heavy: heavyMeshes, nuclear: nucMesh };
 }
@@ -217,6 +276,7 @@ const _lRoll  = new THREE.Vector3(0, 0, 1);
 const _worldUp = new THREE.Vector3(0, 1, 0);
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+const _maydayPos = new THREE.Vector3();
 
 /** Inicia um barrel roll (se cooldown permitir). */
 export function barrelRoll() {
@@ -238,6 +298,28 @@ export function barrelRoll() {
  */
 export function updatePlayer(dt, input, onCrash) {
   if (!game.running || game.flags.paused) return;
+
+  // Mayday: sem controle — cai com wobble e fogo até ejetar
+  if (game.flags.mayday) {
+    game.flags.maydayTimer -= dt;
+    game.flags.damageSmoke -= dt;
+    if (game.flags.damageSmoke <= 0) {
+      game.flags.damageSmoke = 0.06;
+      firePosition(_maydayPos, -2.2);
+      spawnMissileSmoke(_maydayPos);
+      if (Math.random() < 0.4) explosion(_maydayPos.clone(), 0.3, COLORS.fireOrange);
+    }
+    const wobble = Math.sin(game.flags.maydayTimer * 8) * 0.6 + (Math.random() - 0.5) * 0.4;
+    jet.rotateX(wobble * dt);
+    jet.rotateZ((Math.random() - 0.5) * 0.8 * dt);
+    game.player.speed = Math.max(10, game.player.speed - 15 * dt);
+    const fwdM = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
+    jet.position.addScaledVector(fwdM, game.player.speed * dt);
+    jet.position.y -= (PLAYER.GRAVITY * 3.5) * dt;
+    game.player.y = jet.position.y;
+    if (game.flags.maydayTimer <= 0) _ejectAndRespawn(onCrash);
+    return;
+  }
 
   // CONTRATO: writer de game.player.throttle / speed / stalled — atualizados PRIMEIRO
   if (input.throttleUp)   game.player.throttle = Math.min(1.0, game.player.throttle + dt * PLAYER.THROTTLE_UP_RATE);
@@ -285,6 +367,16 @@ export function updatePlayer(dt, input, onCrash) {
   const crash = checkTerrainCollision(jet.position);
   if (crash) { onCrash(crash); return; }
 
+  // Light smoke trail from engine when hull is at 1 HP
+  if (game.player.hp === 1) {
+    game.flags.damageSmoke -= dt;
+    if (game.flags.damageSmoke <= 0) {
+      game.flags.damageSmoke = 0.18;
+      firePosition(_maydayPos, -2.2);
+      spawnMissileSmoke(_maydayPos);
+    }
+  }
+
   audio.setEngineRPM(game.player.speed, game.player.throttle);
 
   // Afterburner: glow + flame escalam com throttle (0.6x parado, 1.6x full)
@@ -320,15 +412,38 @@ export function updatePlayer(dt, input, onCrash) {
   game.player.pitch = jet.rotation.x;
 }
 
-/** Aplica dano (perde 1 vida + invencibilidade temporária). */
-export function playerHit() {
-  if (game.flags.invincibility > 0 || game.flags.rollTimer > 0) return;
-  // CONTRATO: writer de game.player.lives
+function _ejectAndRespawn(onGameOver) {
+  game.flags.mayday = false;
+  game.flags.maydayTimer = 0;
   game.player.lives -= 1;
-  game.flags.invincibility = 1.8;
-  game.flags.shakeTime = 0.35;
-  explosion(jet.position.clone(), 0.7, COLORS.playerHitOrange);
-  audio.explosion(0.4);
+  if (game.player.lives <= 0) {
+    onGameOver('MAYDAY — AERONAVE PERDIDA');
+    return;
+  }
+  game.player.hp = 3;
+  game.flags.invincibility = 3.0;
+  game.flags.shakeTime = 0;
+  respawnJet();
+  audio.explosion(0.5);
+}
+
+/** Aplica dano ao HP; 3 hits por vida antes de entrar em mayday. */
+export function playerHit() {
+  if (game.flags.invincibility > 0 || game.flags.rollTimer > 0 || game.flags.mayday) return;
+  game.player.hp -= 1;
+  if (game.player.hp > 0) {
+    game.flags.invincibility = 1.4;
+    game.flags.shakeTime = 0.45;
+    explosion(jet.position.clone(), 0.7, COLORS.playerHitOrange);
+    audio.explosion(0.4);
+  } else {
+    game.player.hp = 0;
+    game.flags.mayday = true;
+    game.flags.maydayTimer = 5.5;
+    game.flags.invincibility = 0;
+    explosion(jet.position.clone(), 1.6, COLORS.playerHitOrange);
+    audio.mayday();
+  }
 }
 
 /** Reseta o avião para o estado inicial (chamado por restartGame). */
