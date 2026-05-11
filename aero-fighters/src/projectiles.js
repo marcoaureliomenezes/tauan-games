@@ -12,6 +12,7 @@ import { game } from './state.js';
 import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, COLORS } from './config.js';
 import { explosion, spawnMissileSmoke, nuclearExplosion } from './fx.js';
 import { damageTarget } from './targets.js';
+import { deformTerrainNuclear } from './world.js';
 
 // ─── Balas ───────────────────────────────────────────────────────────────────
 // Tracer estilo M61 Vulcan: cilindro alongado amarelo brilhante, trilhando atrás da bala
@@ -281,8 +282,15 @@ function applyNuclearShockwave(epicenter) {
     game.player.lives = 0;
   } else if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS) {
     game.player.lives = Math.max(0, game.player.lives - 1);
-    game.flags.cameraShake = { intensity: 5.0, duration: 2.0 };
   }
+  // Shake forte em toda a área de dano (proporcional à distância)
+  if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS) {
+    const shakeFactor = Math.max(0.2, 1 - pd / MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS);
+    game.flags.cameraShake = { intensity: 14.0 * shakeFactor, duration: 5.0 };
+  }
+
+  // Deforma o terreno — cria cratera nas ilhas/montanhas dentro do raio
+  deformTerrainNuclear(epicenter, MISSILES_NUCLEAR.BLAST_RADIUS);
 }
 
 /** Atualiza mísseis nucleares: homing + impacto + explosão. */

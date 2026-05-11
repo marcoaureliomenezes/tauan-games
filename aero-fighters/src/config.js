@@ -62,9 +62,9 @@ export const MISSILES_NUCLEAR = {
   CLOSE_TURN_RATE: 0.38,
   LIFE: 12.0,
   DAMAGE: 4000,
-  BLAST_RADIUS: 180,
-  PLAYER_KILL_RADIUS: 80,
-  PLAYER_DAMAGE_RADIUS: 200,
+  BLAST_RADIUS:         400,   // raio de destruição de alvos e terreno
+  PLAYER_KILL_RADIUS:   200,   // morte instantânea dentro deste raio
+  PLAYER_DAMAGE_RADIUS: 450,   // perde 1 vida + shake forte até aqui
 };
 
 /** Alias mantido para compatibilidade — aponta para light */

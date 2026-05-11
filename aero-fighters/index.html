@@ -62,6 +62,10 @@
     #lives { color: #ff5560; font-size: 18px; }
     #stall-warn { color: #ff4400; font-weight: bold; display: none; animation: blink 0.4s step-start infinite; }
     @keyframes blink { 50% { opacity: 0; } }
+    #nuke-flash {
+      position: fixed; inset: 0; background: #fff;
+      opacity: 0; pointer-events: none; z-index: 100;
+    }
   </style>
 </head>
 <body>
@@ -100,6 +104,7 @@
     </div>
   </div>
   <div id="overlay"></div>
+  <div id="nuke-flash"></div>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

@@ -1,158 +1,230 @@
-// fx.js — Efeitos visuais: partículas, debris, fumaça de explosão, shockwaves, flashes.
+// fx.js — Efeitos visuais: partículas, debris, fumaça, shockwaves, flashes, nuclear.
 // Exporta: explosion, megaExplosion, spawnShockwave, spawnMuzzleFlash, spawnFlash,
-//   spawnMissileSmoke, updateParticles, scheduleDelayed.
-// Para adicionar efeito novo: crie pool + função spawnXxx + chame em updateParticles.
-//
-// Fumaça de chaminé de fábrica está em factory-fx.js (pool separado, 30 slots).
-// explosionSmokePool (50 slots) — exclusivo deste módulo, nunca mistura com chaminés.
+//   spawnMissileSmoke, nuclearExplosion, updateParticles, scheduleDelayed.
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { COLORS } from './config.js';
 
-const PART_GEOM   = new THREE.SphereGeometry(0.3, 6, 6);
-const DEBRIS_GEOM = new THREE.BoxGeometry(0.4, 0.4, 0.4);
-const SMOKE_GEOM  = new THREE.SphereGeometry(1.0, 6, 5);
-const SHOCK_GEOM  = new THREE.RingGeometry(0.85, 1.0, 32);
+// ─── Geometrias compartilhadas ────────────────────────────────────────────────
+const PART_GEOM      = new THREE.SphereGeometry(0.3, 6, 6);
+const DEBRIS_GEOM    = new THREE.BoxGeometry(0.6, 0.6, 0.6);   // ligeiramente maior
+const SMOKE_GEOM     = new THREE.SphereGeometry(1.0, 6, 5);
+const FIRE_GLOW_GEOM = new THREE.SphereGeometry(1.5, 6, 5);    // coluna de fogo duradoura
+const SPARK_GEOM     = new THREE.SphereGeometry(0.12, 5, 4);
+const SHOCK_GEOM     = new THREE.RingGeometry(0.7, 1.0, 48);   // anel mais espesso
 SHOCK_GEOM.rotateX(-Math.PI / 2);
 
-// Pools ativos + livres
-const particles = [], particlePool = [];
-const debrisItems = [], debrisPool = [];
-const explosionSmoke = [], explosionSmokePool = [];   // fumaça de explosão — 50 slots, exclusivo de spawnExplosion
-const smokeTrail = [], smokeTrailPool = [];   // trilha de míssil (small, fast fade)
-const sparks = [], sparksPool = [];           // faíscas amarelas brilhantes (curtíssimas)
-const shockwaves = [], flashes = [];
+// ─── Arrays de partículas ativas + pools livres ───────────────────────────────
+const particles     = [], particlePool     = [];
+const debrisItems   = [], debrisPool       = [];
+const explosionSmoke= [], explosionSmokePool = [];
+const smokeTrail    = [], smokeTrailPool   = [];
+const sparks        = [], sparksPool       = [];
+const fireGlowItems = [], fireGlowPool     = [];   // coluna de fogo sustentada
+const shockwaves    = [], flashes          = [];
 
-// Timers diferidos (substituem setTimeout — atualizados pelo loop)
+// Timers diferidos (substitui setTimeout — sincronizados com o game loop)
 const delayedCallbacks = [];
 
-// Pools maiores para suportar megaExplosões 4x (até 3 explosões simultâneas + chained)
-for (let i = 0; i < 250; i++) {
-  const m = new THREE.Mesh(PART_GEOM, new THREE.MeshBasicMaterial({ color: COLORS.fireOrange, transparent: true, opacity: 1 }));
+// ─── Inicialização dos pools ──────────────────────────────────────────────────
+// Fire balls — AdditiveBlending: partículas somam luz, criando fireball brilhante
+for (let i = 0; i < 300; i++) {
+  const m = new THREE.Mesh(PART_GEOM, new THREE.MeshBasicMaterial({
+    color: COLORS.fireOrange, transparent: true, opacity: 1,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
   m.visible = false; scene.add(m); particlePool.push(m);
 }
+
+// Debris / estilhaços
 for (let i = 0; i < 150; i++) {
   const m = new THREE.Mesh(DEBRIS_GEOM, new THREE.MeshBasicMaterial({ color: COLORS.debrisDark }));
   m.visible = false; scene.add(m); debrisPool.push(m);
 }
-for (let i = 0; i < 50; i++) {  // explosionSmokePool: 50 slots — exclusivo de spawnExplosion
-  const m = new THREE.Mesh(SMOKE_GEOM, new THREE.MeshBasicMaterial({ color: COLORS.smokeGrey, transparent: true, opacity: 0.7 }));
+
+// Fumaça de explosão — pool exclusivo, não mistura com fábricas
+for (let i = 0; i < 80; i++) {
+  const m = new THREE.Mesh(SMOKE_GEOM, new THREE.MeshBasicMaterial({
+    color: 0x1a1a1a, transparent: true, opacity: 0.85,
+  }));
   m.visible = false; scene.add(m); explosionSmokePool.push(m);
 }
-// Sparks: pequeninas esferas amarelo-branco brilhantes, vida muito curta, alta velocidade
-const SPARK_GEOM = new THREE.SphereGeometry(0.12, 5, 4);
+
+// Sparks brilhantes — AdditiveBlending para efeito elétrico/faísca
 for (let i = 0; i < 100; i++) {
-  const m = new THREE.Mesh(SPARK_GEOM, new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 1 }));
+  const m = new THREE.Mesh(SPARK_GEOM, new THREE.MeshBasicMaterial({
+    color: 0xffffaa, transparent: true, opacity: 1,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
   m.visible = false; scene.add(m); sparksPool.push(m);
 }
-// Trilha de míssil: pequena, vida curta, fade rápido — dimensionada para 100+ partículas
+
+// Trilha de míssil
 for (let i = 0; i < 120; i++) {
-  const m = new THREE.Mesh(SMOKE_GEOM, new THREE.MeshBasicMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.55 }));
+  const m = new THREE.Mesh(SMOKE_GEOM, new THREE.MeshBasicMaterial({
+    color: 0xeeeeee, transparent: true, opacity: 0.55,
+  }));
   m.visible = false; scene.add(m); smokeTrailPool.push(m);
+}
+
+// Colunas de fogo sustentadas — AdditiveBlending, vida longa (2.5–4s)
+for (let i = 0; i < 100; i++) {
+  const m = new THREE.Mesh(FIRE_GLOW_GEOM, new THREE.MeshBasicMaterial({
+    color: 0xff5500, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  m.visible = false; scene.add(m); fireGlowPool.push(m);
 }
 
 // ─── Nuclear FX pools (HEADLESS guard) ───────────────────────────────────────
 const HEADLESS_FX = typeof navigator !== 'undefined' && navigator.webdriver === true;
 
-const nucStemPool = [];
-const mushroomPool = [];
+const nucStemPool   = [];
+const mushroomPool  = [];
 
 if (!HEADLESS_FX) {
-  const nucStemMat = new THREE.MeshBasicMaterial({ color: 0x886655, transparent: true, opacity: 0.8 });
-  for (let i = 0; i < 80; i++) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(2.0, 6, 5), nucStemMat.clone());
-    m.visible = false;
-    scene.add(m);
+  // Stem do cogumelo: 120 partículas marrom-acinzentadas subindo
+  const nucStemMat = new THREE.MeshBasicMaterial({ color: 0x886655, transparent: true, opacity: 0.85 });
+  for (let i = 0; i < 120; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(2.5, 6, 5), nucStemMat.clone());
+    m.visible = false; scene.add(m);
     nucStemPool.push({ mesh: m, life: 0, vel: new THREE.Vector3() });
   }
 
-  const mushroomMat = new THREE.MeshBasicMaterial({ color: 0x998877, transparent: true, opacity: 0.75 });
-  for (let i = 0; i < 60; i++) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(4.0, 8, 6), mushroomMat.clone());
-    m.visible = false;
-    scene.add(m);
+  // Cap do cogumelo: 100 partículas grandes, espalham para fora
+  const mushroomMat = new THREE.MeshBasicMaterial({ color: 0xaa9977, transparent: true, opacity: 0.85 });
+  for (let i = 0; i < 100; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(6.0, 8, 6), mushroomMat.clone());
+    m.visible = false; scene.add(m);
     mushroomPool.push({ mesh: m, life: 0, vel: new THREE.Vector3() });
   }
 }
+
+// ─── Funções internas ─────────────────────────────────────────────────────────
 
 function spawnMushroomCap(pos) {
   for (let i = 0; i < mushroomPool.length; i++) {
     const p = mushroomPool[i];
     if (p.life > 0) continue;
     const angle = Math.random() * Math.PI * 2;
-    const r = Math.random() * 70;
-    p.mesh.position.set(pos.x + Math.cos(angle) * r, pos.y + (Math.random() - 0.5) * 20, pos.z + Math.sin(angle) * r);
-    const s = 3 + Math.random() * 5;
+    const r = 20 + Math.random() * 110;  // 20–130 m de raio (era 0–70)
+    p.mesh.position.set(
+      pos.x + Math.cos(angle) * r,
+      pos.y + (Math.random() - 0.5) * 40,  // era ±20
+      pos.z + Math.sin(angle) * r,
+    );
+    const s = 5 + Math.random() * 10;  // era 3+5
     p.mesh.scale.setScalar(s);
-    p.mesh.material.opacity = 0.75;
-    p.vel.set((Math.cos(angle) * r * 0.05), 1 + Math.random() * 2, (Math.sin(angle) * r * 0.05));
-    p.life = 5.0 + Math.random() * 2;
+    p.mesh.material.opacity = 0.85;
+    // velocidade: partículas próximas ao centro sobem mais, bordas se afastam
+    const rise = 0.5 + Math.random() * 2.0;
+    p.vel.set(Math.cos(angle) * r * 0.07, rise, Math.sin(angle) * r * 0.07);
+    p.life = 7.0 + Math.random() * 3.0;  // era 5+2
     p.mesh.visible = true;
   }
 }
 
-/** Explosão nuclear com efeitos multi-camada: flash, fireball, stem, mushroom cap, shockwaves. */
+/** Flash DOM branco de detonação nuclear (usa CSS transition). */
+function triggerNukeFlash() {
+  if (typeof document === 'undefined') return;
+  const el = document.getElementById('nuke-flash');
+  if (!el) return;
+  el.style.transition = 'none';
+  el.style.opacity = '1';
+  scheduleDelayed(0.08, () => {
+    el.style.transition = 'opacity 2.5s ease-out';
+    el.style.opacity = '0';
+  });
+}
+
+// ─── API pública ──────────────────────────────────────────────────────────────
+
+/** Explosão nuclear com efeitos multi-camada: flash de tela, fireball, stem, mushroom cap, shockwaves. */
 export function nuclearExplosion(pos) {
   if (HEADLESS_FX) {
-    // Em headless: apenas efeitos leves
     explosion(pos, 5, COLORS.fireYellow);
     spawnShockwave(pos, 200, 0xffeeaa);
     return;
   }
 
-  // t=0: flash + fireball
-  spawnFlash(pos, 40);
-  explosion(pos, 20);
-  spawnShockwave(pos, 200, 0xffeeaa);
+  // t=0: flash branco de tela + fireball enorme + dois anéis de shockwave
+  triggerNukeFlash();
+  spawnFlash(pos, 50);
+  explosion(pos, 28, COLORS.fireYellow);  // era scale 20
+  spawnShockwave(pos, 280, 0xffffff);      // anel branco de pressão
+  const groundPos = pos.clone(); groundPos.y = 0.5;
+  spawnShockwave(groundPos, 320, 0xffdd88); // anel ras do chão
 
-  // t=150ms: stem (partículas subindo)
+  // t=80ms: segundo flash (bola de fogo laranja)
+  scheduleDelayed(0.08, () => {
+    explosion(pos, 18, COLORS.fireOrange);
+  });
+
+  // t=150ms: stem (coluna de fumaça/fogo subindo)
   scheduleDelayed(0.15, () => {
     for (let i = 0; i < nucStemPool.length; i++) {
       const p = nucStemPool[i];
       if (p.life > 0) continue;
       const angle = Math.random() * Math.PI * 2;
-      const r = Math.random() * 15;
-      p.mesh.position.set(pos.x + Math.cos(angle) * r, pos.y + Math.random() * 30, pos.z + Math.sin(angle) * r);
-      p.mesh.scale.setScalar(1 + Math.random() * 2.5);
-      p.mesh.material.opacity = 0.75;
-      p.vel.set((Math.random() - 0.5) * 3, 20 + Math.random() * 35, (Math.random() - 0.5) * 3);
-      p.life = 3.0 + Math.random() * 2.5;
+      const r = Math.random() * 18;
+      p.mesh.position.set(
+        pos.x + Math.cos(angle) * r,
+        pos.y + Math.random() * 40,
+        pos.z + Math.sin(angle) * r,
+      );
+      p.mesh.scale.setScalar(1.2 + Math.random() * 3.0);
+      p.mesh.material.opacity = 0.85;
+      p.vel.set(
+        (Math.random() - 0.5) * 4,
+        25 + Math.random() * 45,  // era 20–35, agora sobe mais rápido
+        (Math.random() - 0.5) * 4,
+      );
+      p.life = 4.0 + Math.random() * 3.0;  // era 3+2.5
       p.mesh.visible = true;
     }
   });
 
-  // t=400ms: mushroom cap
-  scheduleDelayed(0.4, () => {
-    const capPos = new THREE.Vector3(pos.x, pos.y + 200, pos.z);
+  // t=300ms: anel de shockwave médio + explosão laranja secundária
+  scheduleDelayed(0.3, () => {
+    explosion(pos, 15, COLORS.fireOrange);
+    spawnShockwave(pos, 480, 0xffeeaa);  // era 200
+  });
+
+  // t=500ms: mushroom cap sobe bem alto
+  scheduleDelayed(0.5, () => {
+    const capPos = new THREE.Vector3(pos.x, pos.y + 220, pos.z);  // era +200
     spawnMushroomCap(capPos);
   });
 
-  // t=600ms: outer shockwave
-  scheduleDelayed(0.6, () => {
-    spawnShockwave(pos, 350, 0xddccaa);
+  // t=700ms: anel externo final
+  scheduleDelayed(0.7, () => {
+    spawnShockwave(pos, 700, 0xddccaa);  // era 350
   });
 
-  // t=800ms–4s: secondary explosions chain
-  for (let i = 0; i < 10; i++) {
-    scheduleDelayed(0.8 + Math.random() * 3.2, () => {
-      const ox = (Math.random() - 0.5) * 300;
-      const oz = (Math.random() - 0.5) * 300;
-      explosion(new THREE.Vector3(pos.x + ox, pos.y, pos.z + oz), 3 + Math.random() * 5);
+  // t=800ms–7s: 18 explosões chained espalhadas (era 10 em 4s)
+  for (let i = 0; i < 18; i++) {
+    const delay = 0.8 + (i / 18) * 6.2 + Math.random() * 0.5;
+    scheduleDelayed(delay, () => {
+      const ox = (Math.random() - 0.5) * 400;
+      const oz = (Math.random() - 0.5) * 400;
+      const sc = 4 + Math.random() * 8;
+      explosion(new THREE.Vector3(pos.x + ox, Math.max(pos.y, 0), pos.z + oz), sc, COLORS.fireOrange);
     });
   }
 }
 
-/** Explosão pequena/média. @param {THREE.Vector3} pos @param {number} scale @param {number} color */
+/** Explosão pequena/média com fogo glowing, fumaça animada e coluna duradoura.
+ *  @param {THREE.Vector3} pos @param {number} scale @param {number} color */
 export function explosion(pos, scale = 1, color = COLORS.fireOrange) {
+  // Fire balls (additive — brilham juntas)
   const pn = Math.floor(22 * scale);
   for (let i = 0; i < pn; i++) {
     const m = particlePool.pop(); if (!m) break;
     m.material.color.setHex(color);
     m.material.opacity = 1;
     m.position.copy(pos);
-    // Tamanho varia: maioria pequena, alguns grandes (fireball core)
     const initScale = 0.7 + Math.random() * 1.5;
     m.scale.setScalar(initScale);
     m.visible = true;
@@ -167,6 +239,34 @@ export function explosion(pos, scale = 1, color = COLORS.fireOrange) {
       growth: 1.8 + Math.random() * 0.8,
     });
   }
+
+  // Colunas de fogo sustentadas (fireGlow) — sobem devagar, duram 2.5–4s
+  const gn = Math.floor(8 * scale);
+  for (let i = 0; i < gn; i++) {
+    const m = fireGlowPool.pop(); if (!m) break;
+    m.material.opacity = 0.9;
+    m.position.set(
+      pos.x + (Math.random() - 0.5) * 4 * scale,
+      pos.y + Math.random() * 2,
+      pos.z + (Math.random() - 0.5) * 4 * scale,
+    );
+    const initS = 0.5 + Math.random() * 1.0;
+    m.scale.setScalar(initS);
+    m.visible = true;
+    const maxLife = 2.5 + Math.random() * 1.5;
+    fireGlowItems.push({
+      mesh: m,
+      vx: (Math.random() - 0.5) * 3 * scale,
+      vy: 3 + Math.random() * 5,
+      vz: (Math.random() - 0.5) * 3 * scale,
+      life: maxLife,
+      max: maxLife,
+      initScale: initS,
+      maxScale: 2.5 + Math.random() * 2.0,
+    });
+  }
+
+  // Debris / estilhaços
   const dn = Math.floor(8 * scale);
   for (let i = 0; i < dn; i++) {
     const m = debrisPool.pop(); if (!m) break;
@@ -176,36 +276,40 @@ export function explosion(pos, scale = 1, color = COLORS.fireOrange) {
     m.visible = true;
     debrisItems.push({
       mesh: m,
-      vx: (Math.random() - 0.5) * 22 * scale,
-      vy: Math.random() * 14 * scale + 4,
-      vz: (Math.random() - 0.5) * 22 * scale,
+      vx: (Math.random() - 0.5) * 24 * scale,
+      vy: Math.random() * 16 * scale + 4,
+      vz: (Math.random() - 0.5) * 24 * scale,
       rx: (Math.random() - 0.5) * 10,
       ry: (Math.random() - 0.5) * 10,
       rz: (Math.random() - 0.5) * 10,
       life: 1.8,
     });
   }
-  const sn = Math.floor(6 * scale);
+
+  // Fumaça — começa escura (fuligem), clareia com o tempo
+  const sn = Math.floor(10 * scale);  // era 6
   for (let i = 0; i < sn; i++) {
-    const m = explosionSmokePool.pop(); if (!m) break;  // draws from explosionSmokePool only
-    m.material.opacity = 0.75;
-    m.material.color.setHex(COLORS.smokeGrey);
+    const m = explosionSmokePool.pop(); if (!m) break;
+    m.material.color.setHex(0x111111);   // inicia quase preta
+    m.material.opacity = 0.9;
     m.position.copy(pos);
-    m.position.x += (Math.random() - 0.5) * 3;
-    m.position.z += (Math.random() - 0.5) * 3;
+    m.position.x += (Math.random() - 0.5) * 4;
+    m.position.z += (Math.random() - 0.5) * 4;
     m.scale.setScalar(1);
     m.visible = true;
+    const maxLife = 3.0 + Math.random() * 1.5;
     explosionSmoke.push({
       mesh: m,
       vx: (Math.random() - 0.5) * 2,
       vy: 1.6 + Math.random() * 2.0,
       vz: (Math.random() - 0.5) * 2,
-      life: 2.6 + Math.random() * 0.8,
-      max: 3.6,
-      maxScale: 3.0 + Math.random() * 3.0,
+      life: maxLife,
+      max: maxLife,
+      maxScale: 4.0 + Math.random() * 4.0,
     });
   }
-  // Sparks brilhantes (apenas se scale>=1 — em mini explosões fica feio)
+
+  // Sparks (additive — brilho elétrico)
   if (scale >= 0.9) {
     const sparkN = Math.floor(14 * scale);
     for (let i = 0; i < sparkN; i++) {
@@ -224,12 +328,22 @@ export function explosion(pos, scale = 1, color = COLORS.fireOrange) {
       });
     }
   }
+
+  // Anel no chão (apenas quando a explosão ocorre perto do solo)
+  if (pos.y < 20) {
+    const gndPos = pos.clone(); gndPos.y = 0.2;
+    spawnShockwave(gndPos, scale * 18, 0xffcc44);
+  }
 }
 
 export function spawnShockwave(pos, maxR, color = COLORS.shockwave) {
-  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.9,
+    side: THREE.DoubleSide, depthWrite: false,   // evita z-fighting com oceano
+  });
   const m = new THREE.Mesh(SHOCK_GEOM, mat);
-  m.position.copy(pos); m.position.y = Math.max(pos.y, 0.5);
+  m.position.copy(pos);
+  m.position.y = Math.max(pos.y, 0.5);
   scene.add(m);
   shockwaves.push({ mesh: m, mat, life: 0.6, max: 0.6, maxR });
 }
@@ -248,29 +362,22 @@ export function spawnFlash(pos, scale = 4) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(scale, 12, 10), mat);
   m.position.copy(pos);
   scene.add(m);
-  flashes.push({ mesh: m, mat, life: 0.18, max: 0.18 });
+  flashes.push({ mesh: m, mat, life: 0.22, max: 0.22 });
 }
 
-/** Mega-explosão épica multi-camada. 4× maior que v2; 3 ondas coloridas + 3-5 sub-pops.
- *  @param {THREE.Vector3} pos @param {'target'|'crash'} kind */
+/** Mega-explosão épica multi-camada para alvos grandes e crash do jato. */
 export function megaExplosion(pos, kind = 'target') {
   const big = kind === 'crash';
-  // Scale 4x maior do que v2: target 2.0 → 5.0, crash 3.2 → 7.0
   const sc = big ? 7.0 : 5.0;
   const p = pos.clone();
   const fireColors = [COLORS.flameYellow, COLORS.fireOrange, COLORS.fireRed];
 
-  // t=0: flash branco enorme + fireball amarelo + shockwave gigante
   spawnFlash(p, big ? 18 : 12);
   explosion(p, sc, fireColors[0]);
   spawnShockwave(p, big ? 95 : 70);
-  // t+0.10s: expansão laranja
   scheduleDelayed(0.10, () => explosion(p, sc * 0.85, fireColors[1]));
-  // t+0.18s: segunda shockwave (anel duplo)
   scheduleDelayed(0.18, () => spawnShockwave(p, big ? 70 : 50, COLORS.shockwaveSecondary));
-  // t+0.22s: onda vermelha (contraste, fim do fireball)
   scheduleDelayed(0.22, () => explosion(p, sc * 0.65, fireColors[2]));
-  // 3-5 sub-pops nos arredores em 0.3-1.1s (chained explosions)
   const subPops = big ? 5 : 3;
   for (let i = 0; i < subPops; i++) {
     const dx = (Math.random() - 0.5) * 16;
@@ -305,7 +412,7 @@ export function spawnMissileSmoke(pos) {
 
 /** Atualiza todas as partículas e efeitos. @param {number} dt segundos */
 export function updateParticles(dt) {
-  // Partículas — agora com initScale e growth variáveis
+  // Fire balls (additive)
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i]; p.life -= dt;
     p.mesh.position.x += p.vx * dt;
@@ -318,7 +425,24 @@ export function updateParticles(dt) {
     p.mesh.scale.setScalar(s);
     if (p.life <= 0) { p.mesh.visible = false; particlePool.push(p.mesh); particles.splice(i, 1); }
   }
-  // Sparks: vida curta, leve gravidade, fade rápido
+
+  // Colunas de fogo sustentadas (fireGlow) — crescem e depois murcham
+  for (let i = fireGlowItems.length - 1; i >= 0; i--) {
+    const g = fireGlowItems[i]; g.life -= dt;
+    g.mesh.position.x += g.vx * dt;
+    g.mesh.position.y += g.vy * dt;
+    g.mesh.position.z += g.vz * dt;
+    g.vy *= 0.985;
+    const t = g.life / g.max;
+    // cresce até metade da vida depois reduz
+    const growPhase = t > 0.5 ? (1 - t) * 2 : 1.0;
+    const s = g.initScale + growPhase * g.maxScale;
+    g.mesh.scale.setScalar(s);
+    g.mesh.material.opacity = Math.max(0, t * 0.9);
+    if (g.life <= 0) { g.mesh.visible = false; fireGlowPool.push(g.mesh); fireGlowItems.splice(i, 1); }
+  }
+
+  // Sparks
   for (let i = sparks.length - 1; i >= 0; i--) {
     const s = sparks[i]; s.life -= dt;
     s.mesh.position.x += s.vx * dt;
@@ -329,6 +453,7 @@ export function updateParticles(dt) {
     s.mesh.material.opacity = Math.max(0, t);
     if (s.life <= 0) { s.mesh.visible = false; sparksPool.push(s.mesh); sparks.splice(i, 1); }
   }
+
   // Debris
   for (let i = debrisItems.length - 1; i >= 0; i--) {
     const d = debrisItems[i]; d.life -= dt;
@@ -343,7 +468,8 @@ export function updateParticles(dt) {
       d.mesh.visible = false; debrisPool.push(d.mesh); debrisItems.splice(i, 1);
     }
   }
-  // Fumaça de explosão — retorna ao explosionSmokePool ao expirar
+
+  // Fumaça — começa preta (fuligem), clareia para cinza claro conforme dissipa
   for (let i = explosionSmoke.length - 1; i >= 0; i--) {
     const s = explosionSmoke[i]; s.life -= dt;
     s.mesh.position.x += s.vx * dt;
@@ -351,11 +477,16 @@ export function updateParticles(dt) {
     s.mesh.position.z += s.vz * dt;
     s.vy *= 0.98;
     const t = s.life / s.max;
-    s.mesh.material.opacity = Math.max(0, t * 0.7);
+    s.mesh.material.opacity = Math.max(0, t * 0.75);
+    // Transição de cor: preto → cinza escuro → cinza claro
+    if (t > 0.65)      s.mesh.material.color.setHex(0x111111);
+    else if (t > 0.35) s.mesh.material.color.setHex(0x555555);
+    else               s.mesh.material.color.setHex(0x999999);
     const sc = 1 + (1 - t) * s.maxScale;
     s.mesh.scale.setScalar(sc);
     if (s.life <= 0) { s.mesh.visible = false; explosionSmokePool.push(s.mesh); explosionSmoke.splice(i, 1); }
   }
+
   // Trilha de míssil
   for (let i = smokeTrail.length - 1; i >= 0; i--) {
     const s = smokeTrail[i]; s.life -= dt;
@@ -364,19 +495,20 @@ export function updateParticles(dt) {
     s.mesh.position.z += s.vz * dt;
     const t = s.life / s.max;
     s.mesh.material.opacity = Math.max(0, t * 0.55);
-    const sc = 0.35 + (1 - t) * s.maxScale;
-    s.mesh.scale.setScalar(sc);
+    s.mesh.scale.setScalar(0.35 + (1 - t) * s.maxScale);
     if (s.life <= 0) { s.mesh.visible = false; smokeTrailPool.push(s.mesh); smokeTrail.splice(i, 1); }
   }
-  // Shockwaves
+
+  // Shockwaves — expande e desvane
   for (let i = shockwaves.length - 1; i >= 0; i--) {
     const sw = shockwaves[i]; sw.life -= dt;
     const t = sw.life / sw.max;
     const r = (1 - t) * sw.maxR;
     sw.mesh.scale.set(r, 1, r);
-    sw.mat.opacity = t * 0.85;
+    sw.mat.opacity = t * 0.9;
     if (sw.life <= 0) { scene.remove(sw.mesh); sw.mat.dispose(); shockwaves.splice(i, 1); }
   }
+
   // Flashes
   for (let i = flashes.length - 1; i >= 0; i--) {
     const f = flashes[i]; f.life -= dt;
@@ -385,28 +517,32 @@ export function updateParticles(dt) {
     f.mat.opacity = Math.max(0, t);
     if (f.life <= 0) { scene.remove(f.mesh); f.mat.dispose(); flashes.splice(i, 1); }
   }
-  // Nuclear stem update
+
+  // Nuclear stem — sobe e desacelera
   for (const p of nucStemPool) {
     if (p.life <= 0) continue;
     p.life -= dt;
     p.mesh.position.addScaledVector(p.vel, dt);
-    p.vel.y *= 0.98; // decelerate upward
-    if (p.life <= 0) { p.mesh.visible = false; } else {
-      p.mesh.material.opacity = Math.min(0.8, p.life * 0.3);
-    }
+    p.vel.y *= 0.975;  // era 0.98 — decai mais suave
+    p.vel.x *= 0.995;
+    p.vel.z *= 0.995;
+    p.mesh.material.opacity = p.life <= 0 ? 0 : Math.min(0.85, p.life * 0.25);
+    if (p.life <= 0) p.mesh.visible = false;
   }
-  // Mushroom cap update
+
+  // Mushroom cap — expande e sobe lentamente
   for (const p of mushroomPool) {
     if (p.life <= 0) continue;
     p.life -= dt;
     p.mesh.position.addScaledVector(p.vel, dt);
-    const s = p.mesh.scale.x + dt * 0.5;
-    p.mesh.scale.setScalar(Math.min(s, 15));
-    if (p.life <= 0) { p.mesh.visible = false; } else {
-      p.mesh.material.opacity = Math.min(0.75, p.life * 0.15);
-    }
+    p.vel.y *= 0.99;
+    const s = p.mesh.scale.x + dt * 0.8;  // era 0.5 — cresce mais rápido
+    p.mesh.scale.setScalar(Math.min(s, 22));  // era 15
+    p.mesh.material.opacity = p.life <= 0 ? 0 : Math.min(0.85, p.life * 0.12);  // era 0.15
+    if (p.life <= 0) p.mesh.visible = false;
   }
-  // Callbacks diferidos (substitui setTimeout)
+
+  // Callbacks diferidos
   for (let i = delayedCallbacks.length - 1; i >= 0; i--) {
     const c = delayedCallbacks[i]; c.t -= dt;
     if (c.t <= 0) { c.fn(); delayedCallbacks.splice(i, 1); }
