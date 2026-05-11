@@ -48,7 +48,7 @@ export function recycleBullet(p) {
 }
 
 /** Atualiza todas as balas: move, checa hit em alvos (player) ou no jato (inimigo). */
-export function updateBullets(dt, jetPos, onPlayerHit) {
+export function updateBullets(dt, jetPos, onPlayerHit, wingmen = []) {
   const jx = jetPos.x, jy = jetPos.y, jz = jetPos.z;
   for (let i = game.projectiles.length - 1; i >= 0; i--) {
     const p = game.projectiles[i];
@@ -69,6 +69,21 @@ export function updateBullets(dt, jetPos, onPlayerHit) {
       const d2 = dx * dx + dy * dy + dz * dz;
       if (d2 < 4) { onPlayerHit(); consumed = true; }
       else if (d2 < 64) { audio.closeMiss(); }
+      else {
+        for (const wm of wingmen) {
+          if (wm.dead || wm.falling) continue;
+          const wx = p.mesh.position.x - wm.mesh.position.x;
+          const wy = p.mesh.position.y - wm.mesh.position.y;
+          const wz = p.mesh.position.z - wm.mesh.position.z;
+          if (wx * wx + wy * wy + wz * wz < 9) {
+            wm.hp -= 1;
+            if (wm.hp <= 0) { wm.falling = true; wm.fallTimer = 3.0; }
+            audio.hit();
+            consumed = true;
+            break;
+          }
+        }
+      }
     }
     if (consumed || p.life <= 0) { recycleBullet(p); game.projectiles.splice(i, 1); }
   }
