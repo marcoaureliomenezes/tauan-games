@@ -8,7 +8,7 @@ import { WORLD } from './config.js';
 export const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(WORLD.SKY_COLOR, WORLD.FOG_NEAR, WORLD.FOG_FAR);
 
-export const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 2000);
+export const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 6000);
 camera.position.set(0, 90, 20);
 
 // Detecta ambiente automatizado (Playwright/headless) — desliga shadow map nesses casos

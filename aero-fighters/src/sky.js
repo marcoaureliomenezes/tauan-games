@@ -1,10 +1,16 @@
 // sky.js — Sky dome com Rayleigh + Mie scattering simulado via ShaderMaterial GLSL.
 // Substitui o CubeTexture estático do scene.js.
 // Exporta: initSky, updateSky, getSunData, getAmbientData, getSkyColor.
+//
+// FIX: _skyGroup segue a câmera a cada frame (skyDome radius=3800 > camera.far anterior=2000
+// causava o oval preto ao voar longe da origem). Shader usa model-space position (vLocalPos)
+// para que altitude = normalize(position).y seja sempre relativo ao centro do dome, não à
+// origem do mundo.
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { DAY_CYCLE_SPEED } from './config.js';
+import { camera } from './scene.js';
 
 // ─── Referências internas ────────────────────────────────────────────────────
 const sunDir = new THREE.Vector3(0, 1, 0);
@@ -13,6 +19,9 @@ let _sunIntensity = 1.15;
 let _ambColorHex = 0xffffff;
 let _ambIntensity = 0.55;
 let _horizColorHex = 0x90c8f0;
+
+// Grupo que encapsula dome + objetos noturnos — segue a câmera em updateSky()
+let _skyGroup = null;
 
 // Objetos de céu noturno — preenchidos em initSky
 let starMat = null;
@@ -23,12 +32,16 @@ let neb1Mat = null;
 let neb2Mat = null;
 let skyUniforms = null;
 
+// Vetor reutilizável para evitar alocação por frame
+const _moonWorldPos = new THREE.Vector3();
+
 // ─── ShaderMaterial ──────────────────────────────────────────────────────────
+// Usa vLocalPos (model space) para que altitude = normalize(position).y seja sempre
+// relativo ao centro do dome — correto mesmo quando o grupo se move com a câmera.
 const vertexShader = /* glsl */`
-varying vec3 vWorldPos;
+varying vec3 vLocalPos;
 void main() {
-  vec4 worldPos = modelMatrix * vec4(position, 1.0);
-  vWorldPos = worldPos.xyz;
+  vLocalPos = position;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
@@ -40,10 +53,10 @@ uniform vec3 horizonColor;
 uniform vec3 sunColor;
 uniform float sunVisible;
 
-varying vec3 vWorldPos;
+varying vec3 vLocalPos;
 
 void main() {
-  vec3 dir = normalize(vWorldPos);
+  vec3 dir = normalize(vLocalPos);
   float altitude = dir.y; // -1 to +1
 
   // Mistura horizonte → zênite
@@ -71,31 +84,24 @@ function getSkyPalette(tod) {
   const day     = { top: new THREE.Color(0x1a70e0), horiz: new THREE.Color(0x90c8f0), sun: new THREE.Color(0xfffaaa), sunVis: 1.0 };
   const dusk    = { top: new THREE.Color(0x1a2060), horiz: new THREE.Color(0xe04010), sun: new THREE.Color(0xff9040), sunVis: 1.0 };
 
-  let a, b, k;
+  let k;
 
   if (tod < 0.15) {
-    // Noite pura
     return { ...night };
   } else if (tod < 0.25) {
-    // Noite → Amanhecer
     k = smoothstepJS((tod - 0.15) / 0.10);
     return lerpPalette(night, dawn, k);
   } else if (tod < 0.32) {
-    // Amanhecer → Dia
     k = smoothstepJS((tod - 0.25) / 0.07);
     return lerpPalette(dawn, day, k);
   } else if (tod < 0.68) {
-    // Dia puro
     return { ...day };
   } else if (tod < 0.75) {
-    // Dia → Entardecer
     k = smoothstepJS((tod - 0.68) / 0.07);
     return lerpPalette(day, dusk, k);
   } else if (tod < 0.85) {
-    // Entardecer
     return { ...dusk };
   } else if (tod < 0.92) {
-    // Entardecer → Noite
     k = smoothstepJS((tod - 0.85) / 0.07);
     return lerpPalette(dusk, night, k);
   } else {
@@ -118,7 +124,6 @@ function lerpPalette(a, b, k) {
 
 // ─── Luz ambiente / sol dinâmicos ────────────────────────────────────────────
 function computeLighting(tod, palette) {
-  // Intensidade direcional: 0 à noite, pico 1.15 ao meio-dia
   const isNight = tod < 0.15 || tod > 0.92;
   const isDawn  = tod >= 0.15 && tod < 0.32;
   const isDusk  = tod >= 0.68 && tod < 0.92;
@@ -143,7 +148,6 @@ function computeLighting(tod, palette) {
   _sunIntensity = dirInt;
   _ambIntensity = ambInt;
 
-  // Cor do sol da direcional = cor do sol da paleta
   const sc = palette.sun;
   if (dirInt > 0) {
     _sunColorHex = sc.getHex();
@@ -151,7 +155,6 @@ function computeLighting(tod, palette) {
     _sunColorHex = 0x111122;
   }
 
-  // Cor ambiente: azulada à noite, branca de dia
   const ac = palette.horiz.clone().multiplyScalar(0.6);
   if (isNight) {
     _ambColorHex = 0x0a0e1a;
@@ -159,12 +162,11 @@ function computeLighting(tod, palette) {
     _ambColorHex = ac.getHex();
   }
 
-  // Cor do horizonte para fog
   _horizColorHex = palette.horiz.getHex();
 }
 
 // ─── Estrelas ────────────────────────────────────────────────────────────────
-function buildStars(scene) {
+function buildStars(parent) {
   const starCount = 3000;
   const positions = new Float32Array(starCount * 3);
   const colors    = new Float32Array(starCount * 3);
@@ -192,11 +194,11 @@ function buildStars(scene) {
     vertexColors: true, transparent: true, opacity: 0,
   });
   const stars = new THREE.Points(starGeo, starMat);
-  scene.add(stars);
+  parent.add(stars);
 }
 
 // ─── Lua ─────────────────────────────────────────────────────────────────────
-function buildMoon(scene) {
+function buildMoon(parent) {
   const moonCanvas = (typeof document !== 'undefined') ? document.createElement('canvas') : null;
   if (!moonCanvas) return;
   moonCanvas.width = moonCanvas.height = 128;
@@ -215,11 +217,11 @@ function buildMoon(scene) {
     new THREE.SphereGeometry(55, 16, 16),
     new THREE.MeshBasicMaterial({ map: moonTex }),
   );
-  scene.add(moonMesh);
+  parent.add(moonMesh);
 }
 
 // ─── Via Láctea ──────────────────────────────────────────────────────────────
-function buildMilkyWay(scene) {
+function buildMilkyWay(parent) {
   const mwCount = 1200;
   const mwPositions = new Float32Array(mwCount * 3);
   const mwColors    = new Float32Array(mwCount * 3);
@@ -243,7 +245,7 @@ function buildMilkyWay(scene) {
   mwMat = new THREE.PointsMaterial({
     size: 0.9, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0,
   });
-  scene.add(new THREE.Points(mwGeo, mwMat));
+  parent.add(new THREE.Points(mwGeo, mwMat));
 }
 
 // ─── Nebulosas ───────────────────────────────────────────────────────────────
@@ -261,27 +263,32 @@ function makeNebulaCanvas(color1, color2, w, h) {
   return new THREE.CanvasTexture(nc);
 }
 
-function buildNebulae(scene) {
+function buildNebulae(parent) {
   const tex1 = makeNebulaCanvas('rgba(180,80,180,0.3)','rgba(80,40,120,0.15)',256,128);
   if (!tex1) return;
   neb1Mat = new THREE.MeshBasicMaterial({ map: tex1, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
   const neb1 = new THREE.Mesh(new THREE.PlaneGeometry(500, 280), neb1Mat);
+  // Posição local ao grupo (relativa à câmera) — sem lookAt pois o grupo só translada
   neb1.position.set(2000, 800, -3000);
-  neb1.lookAt(0,0,0);
-  scene.add(neb1);
+  neb1.rotation.set(0.2, 0.5, 0);
+  parent.add(neb1);
 
   const tex2 = makeNebulaCanvas('rgba(60,120,200,0.25)','rgba(40,160,120,0.1)',256,128);
   neb2Mat = new THREE.MeshBasicMaterial({ map: tex2, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
   const neb2 = new THREE.Mesh(new THREE.PlaneGeometry(400, 200), neb2Mat);
   neb2.position.set(-2500, 600, -2800);
-  neb2.lookAt(0,0,0);
-  scene.add(neb2);
+  neb2.rotation.set(0.1, -0.4, 0);
+  parent.add(neb2);
 }
 
 // ─── API pública ─────────────────────────────────────────────────────────────
 
-/** Inicializa sky dome + objetos noturnos. Deve ser chamado uma vez em scene.js / main.js. */
+/** Inicializa sky dome + objetos noturnos. Deve ser chamado uma vez no boot. */
 export function initSky(scene) {
+  // Grupo que seguirá a câmera — evita que o dome saia do frustum ao voar longe da origem
+  _skyGroup = new THREE.Group();
+  scene.add(_skyGroup);
+
   // Sky dome
   skyUniforms = {
     sunDirection: { value: sunDir.clone() },
@@ -301,25 +308,29 @@ export function initSky(scene) {
 
   const skyDome = new THREE.Mesh(new THREE.SphereGeometry(3800, 32, 32), skyMat);
   skyDome.renderOrder = -1;
-  scene.add(skyDome);
+  _skyGroup.add(skyDome);
 
-  // Objetos noturnos
-  buildStars(scene);
-  buildMoon(scene);
-  buildMilkyWay(scene);
-  buildNebulae(scene);
+  // Objetos noturnos — adicionados ao grupo para seguirem a câmera
+  buildStars(_skyGroup);
+  buildMoon(_skyGroup);
+  buildMilkyWay(_skyGroup);
+  buildNebulae(_skyGroup);
 
-  // Luz lunar — começa desligada, intensidade aumenta com nightFactor
+  // Luz lunar — adicionada à scene (é uma luz direcional mundial)
   moonLight = new THREE.DirectionalLight(0x8899cc, 0.0);
   scene.add(moonLight);
 
-  // Sincroniza estado inicial com timeOfDay = 0.35 (dia)
+  // Posição inicial do grupo = posição inicial da câmera
+  _skyGroup.position.copy(camera.position);
+
   _applyTimeOfDay(game.timeOfDay || 0.35);
 }
 
-/** Avança o ciclo dia/noite e atualiza uniforms do shader. */
+/** Avança o ciclo dia/noite e mantém o sky group centrado na câmera. */
 export function updateSky(dt) {
-  // Avança timeOfDay
+  // Mantém dome + estrelas + lua centrados na câmera (elimina o oval preto)
+  if (_skyGroup) _skyGroup.position.copy(camera.position);
+
   if (typeof game.timeOfDay === 'undefined') game.timeOfDay = 0.35;
   const speed = (typeof DAY_CYCLE_SPEED !== 'undefined') ? DAY_CYCLE_SPEED : 0.003;
   game.timeOfDay = (game.timeOfDay + dt * speed) % 1.0;
@@ -350,10 +361,13 @@ function _applyTimeOfDay(tod) {
   if (starMat) starMat.opacity = Math.min(1.0, nightFactor) * 0.9;
 
   if (moonMesh) {
+    // Posição LOCAL ao grupo (a lua fica 3500 u do player, na direção anti-sol)
     moonMesh.position.copy(sunDir).multiplyScalar(-3500);
     moonMesh.visible = nightFactor > 0.05;
     if (moonLight) {
-      moonLight.position.copy(moonMesh.position);
+      // moonLight é world-space; posição = posição do grupo + posição local da lua
+      _moonWorldPos.addVectors(_skyGroup ? _skyGroup.position : moonMesh.position, moonMesh.position);
+      moonLight.position.copy(_moonWorldPos);
       moonLight.intensity = nightFactor * 0.25;
     }
   }
@@ -364,7 +378,6 @@ function _applyTimeOfDay(tod) {
 }
 
 function _nightFactor(tod) {
-  // 1 quando completamente noite (tod < 0.1 ou > 0.9), 0 de dia (0.35-0.65)
   if (tod < 0.1) return 1.0;
   if (tod < 0.20) return 1.0 - smoothstepJS((tod - 0.1) / 0.10);
   if (tod < 0.80) return 0.0;
