@@ -11,7 +11,7 @@ import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
 import { PLAYER, ROLL, COLORS } from './config.js';
-import { explosion, spawnMissileSmoke } from './fx.js';
+import { explosion, megaExplosion, spawnMissileSmoke } from './fx.js';
 import { checkTerrainCollision } from './world.js';
 
 // ─── Mesh do F-35 ────────────────────────────────────────────────────────────
@@ -299,9 +299,8 @@ export function barrelRoll() {
 export function updatePlayer(dt, input, onCrash) {
   if (!game.running || game.flags.paused) return;
 
-  // Mayday: sem controle — cai com wobble e fogo até ejetar
+  // Mayday: sem controle — cai com wobble e fogo até impactar o solo
   if (game.flags.mayday) {
-    game.flags.maydayTimer -= dt;
     game.flags.damageSmoke -= dt;
     if (game.flags.damageSmoke <= 0) {
       game.flags.damageSmoke = 0.06;
@@ -309,15 +308,23 @@ export function updatePlayer(dt, input, onCrash) {
       spawnMissileSmoke(_maydayPos);
       if (Math.random() < 0.4) explosion(_maydayPos.clone(), 0.3, COLORS.fireOrange);
     }
-    const wobble = Math.sin(game.flags.maydayTimer * 8) * 0.6 + (Math.random() - 0.5) * 0.4;
-    jet.rotateX(wobble * dt);
-    jet.rotateZ((Math.random() - 0.5) * 0.8 * dt);
-    game.player.speed = Math.max(10, game.player.speed - 15 * dt);
+    // Tumble progressivamente mais rápido conforme perde altitude
+    const spin = 0.8 + Math.max(0, (80 - jet.position.y) / 80) * 1.8;
+    jet.rotateX(((Math.random() - 0.4) * spin) * dt);
+    jet.rotateZ(((Math.random() - 0.5) * spin) * dt);
+    // Freia motores, gravidade aumentada
+    game.player.speed = Math.max(8, game.player.speed - 20 * dt);
     const fwdM = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
     jet.position.addScaledVector(fwdM, game.player.speed * dt);
-    jet.position.y -= (PLAYER.GRAVITY * 3.5) * dt;
+    jet.position.y -= (PLAYER.GRAVITY * 4.0) * dt;
     game.player.y = jet.position.y;
-    if (game.flags.maydayTimer <= 0) _ejectAndRespawn(onCrash);
+    // Impacto no solo — mega explosão e então ejeção/respawn
+    const impact = checkTerrainCollision(jet.position);
+    if (impact) {
+      megaExplosion(jet.position.clone(), 'crash');
+      jet.visible = false;
+      _ejectAndRespawn(onCrash);
+    }
     return;
   }
 
@@ -439,7 +446,6 @@ export function playerHit() {
   } else {
     game.player.hp = 0;
     game.flags.mayday = true;
-    game.flags.maydayTimer = 5.5;
     game.flags.invincibility = 0;
     explosion(jet.position.clone(), 1.6, COLORS.playerHitOrange);
     audio.mayday();
