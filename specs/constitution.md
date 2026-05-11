@@ -13,9 +13,9 @@ Repositório de jogos e experimentos interativos desenvolvidos por Tauan. Espaç
 
 ## Princípios de Desenvolvimento
 
-1. **Projetos independentes** — cada jogo/experimento é uma pasta isolada
+1. **Projetos independentes** — cada jogo/experimento é uma pasta isolada _(exceção: tooling de qualidade compartilhado — `package.json` e `tests/` na raiz do repo são infraestrutura transversal, não lógica de jogo)_
 2. **Simplicidade primeiro** — sem over-engineering; o objetivo é aprender e se divertir
-3. **Documentação mínima** — README por jogo com instruções de como rodar
+3. **Documentação mínima** — README por jogo é obrigatório com instruções de como rodar. Documentos adicionais (`AGENTS.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`) são opcionais quando o jogo cresce além de 1 arquivo e precisa orientar agentes/colaboradores.
 
 ---
 
