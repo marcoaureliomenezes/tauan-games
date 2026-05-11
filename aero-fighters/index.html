@@ -79,6 +79,26 @@
     <span id="stall-warn">&#9888; STALL</span>
     <button id="sound-toggle" type="button">&#128266; SOM</button>
   </div>
+  <div id="map-select" style="position:fixed;top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,0.88);display:flex;flex-direction:column;align-items:center;
+    justify-content:center;z-index:30;color:white;font-family:monospace;">
+    <h2 style="color:#00aaff;letter-spacing:4px;margin-bottom:16px;font-size:28px">AERO STRIKE</h2>
+    <p style="color:#aaa;margin-bottom:28px;letter-spacing:2px;font-size:13px">SELECIONE O TEATRO DE OPERAÇÕES</p>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:center">
+      <button onclick="window.selectMap('islands')"
+        style="background:#111;border:1px solid #0af;color:#0af;padding:14px 28px;cursor:pointer;font-size:14px;letter-spacing:2px;font-family:monospace">
+        MAR DO SUL
+      </button>
+      <button onclick="window.selectMap('desert')"
+        style="background:#111;border:1px solid #0af;color:#0af;padding:14px 28px;cursor:pointer;font-size:14px;letter-spacing:2px;font-family:monospace">
+        DESERTO
+      </button>
+      <button onclick="window.selectMap('rio')"
+        style="background:#111;border:1px solid #0af;color:#0af;padding:14px 28px;cursor:pointer;font-size:14px;letter-spacing:2px;font-family:monospace">
+        RIO DE JANEIRO
+      </button>
+    </div>
+  </div>
   <div id="overlay"></div>
   <script type="module" src="src/main.js"></script>
 </body>

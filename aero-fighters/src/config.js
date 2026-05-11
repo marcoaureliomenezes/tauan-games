@@ -83,6 +83,7 @@ export const TARGETS = {
   building: { hp: 14, score: 450, hr2: 18, dropChance: 0.3 },
   convoy:   { hp: 12, score: 380, hr2: 60, dropChance: 0.4 },
   aaGun:    { hp:  6, score: 250, hr2:  9, dropChance: 0.1 },
+  warship:  { hp: 35, score: 1200, hr2: 80, dropChance: 0.5 },
 };
 
 /** Canhões antiaéreos (única defesa hostil) */
@@ -139,8 +140,9 @@ export const COLORS = {
   pickup: 0x40ff40,
 };
 
-/** Layout fixo de alvos por missão.
+/** Layout fixo de alvos por missão (mapa ilhas).
  * Formato: [islandIndex, dx_relativo_à_ilha, dz_relativo_à_ilha, tipo]
+ * islandIndex = -1 significa coordenada absoluta (X, Z) no oceano.
  * Missão 1 usa os primeiros 8, missão 2 usa 12, missão 3+ usa todos. */
 export const TARGET_LAYOUT = [
   [3,   0,   0, 'base'],
@@ -159,12 +161,56 @@ export const TARGET_LAYOUT = [
   [9,   0,   0, 'building'],
   [6,  30,  10, 'aaGun'],
   [11, 22,  10, 'aaGun'],
+  [-1, -500, -700, 'warship'],
+  [-1,  500, -900, 'warship'],
+  [-1, -300, -1400, 'warship'],
 ];
 
-/** Definição fixa das 12 ilhas: [centerX, centerZ, radius, peakHeight] */
+/** Layout de alvos para o mapa deserto.
+ * Formato: [mesaIdx, dx, dz, tipo] — mesaIdx=-1 significa coordenada absoluta no piso. */
+export const TARGET_LAYOUT_DESERT = [
+  [0,   0,  0, 'base'],
+  [0,  30, -20, 'aaGun'],
+  [1,   0,  0, 'factory'],
+  [2,   0,  0, 'factory'],
+  [2,  25, 10, 'aaGun'],
+  [3,   0,  0, 'aaGun'],
+  [4,   0,  0, 'base'],
+  [4,  20, 20, 'aaGun'],
+  [-1, 200, -100, 'convoy'],
+  [-1,-300,  200, 'convoy'],
+  [5,   0,  0, 'building'],
+  [6,   0,  0, 'aaGun'],
+];
+
+/** Layout de alvos para o mapa Rio de Janeiro.
+ * Formato: [morroIdx, dx, dz, tipo] — morroIdx=-1 significa coordenada absoluta. */
+export const TARGET_LAYOUT_RIO = [
+  [-1, 150,  300, 'warship'],
+  [-1,-100,  400, 'warship'],
+  [-1, 300,  500, 'warship'],
+  [1,   0,   0, 'base'],
+  [0,   0,   0, 'aaGun'],
+  [3,   0,   0, 'base'],
+  [5,  10,  10, 'aaGun'],
+  [5, -10,  15, 'building'],
+  [6,   0,   0, 'factory'],
+  [6,  20, -10, 'aaGun'],
+  [7,   0,   0, 'building'],
+  [7, -15,  10, 'aaGun'],
+];
+
+/** Definição fixa das 18 ilhas: [centerX, centerZ, radius, peakHeight] */
 export const ISLAND_DEFS = [
   [ 100, -320,  70, 55], [-360, -580,  95, 78], [ 520, -480,  58, 42],
   [-120, -920, 115, 94], [ 620, -830,  68, 52], [-540, -420,  50, 36],
   [ 240,-1180, 105, 88], [ -70,-1480,  62, 50], [ 820,-1080,  82, 66],
   [-700, -980,  78, 62], [ 350, -650,  55, 40], [-430,-1300,  90, 72],
+  // 6 novas ilhas (área expandida para ±1800)
+  [-800,  400, 115, 95],   // ilha grande noroeste
+  [ 600,-1500, 120, 108],  // ilha grande sudeste
+  [ 950,  200,  65,  45],  // média leste
+  [-200,  800,  55,  38],  // média norte
+  [ 400,  650,  38,  22],  // pequena / recife nordeste
+  [-700, -900,  42,  18],  // pequena / recife oeste
 ];

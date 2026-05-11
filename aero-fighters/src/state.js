@@ -17,6 +17,7 @@ function createInitialState() {
     islands: [],
     timeOfDay: 0.35,    // ciclo dia/noite: 0.0 (meia-noite) → 1.0 (meia-noite)
     time: 0,            // tempo total de jogo em segundos (para animações)
+    activeMap: 'islands', // mapa ativo: 'islands' | 'desert' | 'rio'
     player: {
       x: 0, y: 80, pitch: 0, pz: 0,
       dead: false, lives: 3,
@@ -52,6 +53,7 @@ export function resetState() {
   game.time = fresh.time;
   game.kills = fresh.kills;
   game.cycle = fresh.cycle;
+  // activeMap persiste entre resets (player escolhe uma vez por sessão)
   game.targetsTotal = fresh.targetsTotal;
   game.targetsDestroyed = fresh.targetsDestroyed;
   // limpa arrays in-place (mantém referência exportada)

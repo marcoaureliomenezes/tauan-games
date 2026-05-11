@@ -7,7 +7,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
-import { TARGETS, AA, MISSION } from './config.js';
+import { TARGETS, AA, MISSION, TARGET_LAYOUT } from './config.js';
 import { explosion, megaExplosion, spawnShockwave } from './fx.js';
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { spawnBullet, spawnPickup } from './projectiles.js';
@@ -139,17 +139,81 @@ export function makeAAGun() {
   return g;
 }
 
-const MAKERS = { base: makeBase, factory: makeFactory, building: makeBuilding, convoy: makeConvoy, aaGun: makeAAGun };
+/** Navio de guerra: casco + superestrutura + torre de canhão + mastro. */
+export function makeWarship() {
+  const g = new THREE.Group();
+  const hullMat  = new THREE.MeshLambertMaterial({ color: 0x3a3f4a });
+  const superMat = new THREE.MeshLambertMaterial({ color: 0x4a5060 });
+  const gunMat   = new THREE.MeshLambertMaterial({ color: 0x2a2f38 });
+
+  // Hull
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 9.0), hullMat);
+  hull.position.y = 0.5;
+  g.add(hull);
+
+  // Proa (bow)
+  const bow = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.8, 2.5), hullMat);
+  bow.position.set(0, 0.4, -5.0);
+  bow.rotation.x = 0.15;
+  g.add(bow);
+
+  // Superestrutura (ponte)
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.8, 3.5), superMat);
+  bridge.position.set(0, 1.9, 0.5);
+  g.add(bridge);
+
+  // Mastro
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 4.5, 6), superMat);
+  mast.position.set(0, 4.8, 0.5);
+  g.add(mast);
+
+  // Torrreta frontal
+  const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.8, 8), gunMat);
+  turret.position.set(0, 1.4, -2.5);
+  g.add(turret);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.10, 2.5, 6), gunMat);
+  barrel.rotation.z = Math.PI / 2;
+  barrel.position.set(0, 1.8, -2.5);
+  g.add(barrel);
+
+  // Canhão AA traseiro
+  const aaBase = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.6, 8), gunMat);
+  aaBase.position.set(0, 1.4, 2.0);
+  g.add(aaBase);
+
+  g.castShadow = true;
+  g.receiveShadow = true;
+  return g;
+}
+
+const MAKERS = { base: makeBase, factory: makeFactory, building: makeBuilding, convoy: makeConvoy, aaGun: makeAAGun, warship: makeWarship };
 
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
-/** Cria um alvo no terreno de uma ilha. */
-export function spawnTarget(islandIdx, dx, dz, type) {
-  const isl = game.islands[islandIdx];
-  const yGround = islandHeightAt(isl, dx, dz);
+/** Cria um alvo no terreno de uma ilha ou em coordenada absoluta (islandIdx=-1). */
+export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
   const def = TARGETS[type];
-  const mesh = MAKERS[type]();
-  mesh.position.set(isl.cx + dx, yGround, isl.cz + dz);
+  const maker = MAKERS[type];
+  if (!def || !maker) return null;
+
+  let worldX, worldZ, yGround;
+
+  if (islandIdx === -1) {
+    // Coordenada absoluta no oceano / chão do mapa
+    worldX = dx;
+    worldZ = dz;
+    yGround = type === 'warship' ? 0.6 : 0;
+  } else {
+    const isl = game.islands[islandIdx];
+    if (!isl) return null;
+    const hFn = (heightFn) ? heightFn : islandHeightAt;
+    yGround = hFn(isl, dx, dz);
+    worldX = isl.cx + dx;
+    worldZ = isl.cz + dz;
+  }
+
+  const mesh = maker();
+  mesh.position.set(worldX, yGround, worldZ);
   mesh.rotation.y = Math.random() * Math.PI * 2;
   // Alvos projetam e recebem sombra
   mesh.traverse((obj) => { if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; } });
@@ -165,6 +229,19 @@ export function spawnTarget(islandIdx, dx, dz, type) {
   }
   const hpBonus = Math.floor((game.cycle - 1) * MISSION.HP_BONUS_PER_CYCLE);
   const aaSpeedup = Math.min(AA.MAX_SPEEDUP, (game.cycle - 1) * AA.CYCLE_SPEEDUP);
+
+  // Warships têm waypoints de patrulha circulares
+  let path = null;
+  if (type === 'warship') {
+    const px = worldX, pz = worldZ;
+    const r = 200 + Math.random() * 150;
+    path = [];
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.random() * 0.5;
+      path.push([px + Math.cos(a) * r, pz + Math.sin(a) * r]);
+    }
+  }
+
   const t = {
     type, mesh,
     hp: def.hp + hpBonus, maxHp: def.hp + hpBonus,
@@ -172,8 +249,10 @@ export function spawnTarget(islandIdx, dx, dz, type) {
     dropChance: def.dropChance,
     dead: false,
     fireTimer: 1.0 + Math.random() * 2.0,
-    fireInterval: type === 'aaGun' ? AA.BASE_INTERVAL - aaSpeedup : Infinity,
-    range: AA.RANGE,
+    fireInterval: (type === 'aaGun' || type === 'warship') ? AA.BASE_INTERVAL - aaSpeedup : Infinity,
+    range: type === 'warship' ? 800 : AA.RANGE,
+    path,
+    pathIdx: 0,
   };
   game.targets.push(t);
   return t;
@@ -211,7 +290,7 @@ export function killTarget(t) {
 const _aaDir = new THREE.Vector3();
 const _aaOrig = new THREE.Vector3();
 
-/** Atualiza alvos. AA guns miram e atiram; outros tipos são passivos. */
+/** Atualiza alvos. AA guns miram e atiram; warships patrulham e atiram. */
 export function updateTargets(dt, jetPos) {
   for (let i = game.targets.length - 1; i >= 0; i--) {
     const t = game.targets[i];
@@ -219,6 +298,7 @@ export function updateTargets(dt, jetPos) {
     if (!t.dead && t.hp <= 0) killTarget(t);
     if (t.dead) { game.targets.splice(i, 1); continue; }
     if (t.type === 'aaGun') updateAAGun(t, dt, jetPos);
+    if (t.type === 'warship') updateWarship(t, dt, jetPos);
   }
 }
 
@@ -234,6 +314,35 @@ function updateAAGun(t, dt, jetPos) {
     _aaDir.subVectors(jetPos, t.mesh.position).normalize();
     _aaOrig.copy(t.mesh.position); _aaOrig.y += 1.8;
     _aaOrig.addScaledVector(_aaDir, 1.2);
+    spawnBullet(_aaOrig.clone(), _aaDir, true);
+    audio.aaFire(t.mesh.position);
+  }
+}
+
+const _wsDir = new THREE.Vector2();
+function updateWarship(t, dt, jetPos) {
+  if (!t.path || t.path.length === 0) return;
+  // Movimento ao longo de waypoints
+  const wp = t.path[t.pathIdx];
+  _wsDir.set(wp[0] - t.mesh.position.x, wp[1] - t.mesh.position.z);
+  if (_wsDir.length() < 8) {
+    t.pathIdx = (t.pathIdx + 1) % t.path.length;
+  } else {
+    _wsDir.normalize().multiplyScalar(4 * dt);
+    t.mesh.position.x += _wsDir.x;
+    t.mesh.position.z += _wsDir.y;
+    t.mesh.position.y = 0.6;
+    t.mesh.rotation.y = Math.atan2(_wsDir.x, _wsDir.y);
+  }
+  // Disparo contra o player
+  const dist2 = t.mesh.position.distanceToSquared(jetPos);
+  if (dist2 > t.range * t.range) return;
+  t.fireTimer -= dt;
+  if (t.fireTimer <= 0) {
+    t.fireTimer = t.fireInterval + Math.random() * 0.6;
+    _aaDir.subVectors(jetPos, t.mesh.position).normalize();
+    _aaOrig.copy(t.mesh.position); _aaOrig.y += 2.2;
+    _aaOrig.addScaledVector(_aaDir, 2.0);
     spawnBullet(_aaOrig.clone(), _aaDir, true);
     audio.aaFire(t.mesh.position);
   }

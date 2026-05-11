@@ -5,6 +5,7 @@
 import { game } from './state.js';
 import { TARGET_LAYOUT, MISSION } from './config.js';
 import { spawnTarget, clearTargets } from './targets.js';
+import { getTargetLayout } from './maps/index.js';
 import { clearMissiles, clearPickups, recycleBullet } from './projectiles.js';
 import { megaExplosion, scheduleDelayed } from './fx.js';
 import { jet, respawnJet } from './player.js';
@@ -24,8 +25,12 @@ export function spawnMission(missionNum) {
   // CONTRATO: writer de game.targetsDestroyed / targetsTotal
   game.targetsDestroyed = 0;
   const n = targetCountForMission(missionNum);
-  for (let i = 0; i < n; i++) {
-    const [idx, dx, dz, type] = TARGET_LAYOUT[i];
+  // Usa o layout do mapa ativo (fallback para TARGET_LAYOUT do mapa ilhas)
+  const layout = getTargetLayout(game.activeMap || 'islands');
+  // Limita ao tamanho do layout disponível
+  const count = Math.min(n, layout.length);
+  for (let i = 0; i < count; i++) {
+    const [idx, dx, dz, type] = layout[i];
     spawnTarget(idx, dx, dz, type);
   }
   game.targetsTotal = game.targets.length;

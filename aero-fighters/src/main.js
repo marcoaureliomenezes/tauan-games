@@ -19,13 +19,59 @@ import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } f
 import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver } from './missions.js';
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
 import { initMinimap, updateMinimap } from './ui/minimap.js';
+import { MAPS } from './maps/index.js';
 
 // ─── Boot do mundo ───────────────────────────────────────────────────────────
 attachToBody();
 initSky(scene);
+// Ilhas criadas por padrão (mapa 'islands' é o default até selectMap() ser chamado)
 createIslands();
 createCrosshair();
 initMinimap();
+
+// ─── Seleção de Mapa ─────────────────────────────────────────────────────────
+// Guarda referência aos objetos extras criados pelos mapas alternativos
+// para permitir limpeza ao reiniciar (futuro). Por ora, seleção é uma vez por sessão.
+let _activeMapUpdate = updateWorld; // função de update do mapa atual
+
+/** Chamado pelos botões do #map-select overlay no HTML. */
+window.selectMap = function(mapKey) {
+  const el = document.getElementById('map-select');
+  if (el) el.style.display = 'none';
+
+  if (mapKey !== 'islands') {
+    // Para mapas não-ilhas: inicializa o mapa (sobrescreve game.islands)
+    const mapDef = MAPS[mapKey];
+    if (mapDef) {
+      mapDef.create(scene);
+      _activeMapUpdate = mapDef.update;
+    }
+  }
+  // Atualiza estado
+  game.activeMap = mapKey;
+
+  // Mostra o overlay de instruções (início do jogo)
+  showOverlay(
+    'AERO STRIKE — F-35 LIGHTNING II',
+    'Missão: destrua todos os alvos militares (bases, fábricas, prédios, comboios).\n\n' +
+    'CONTROLES (estilo simulador):\n' +
+    '↑ nariz para BAIXO   ↓ nariz para CIMA   (invertido)\n' +
+    '← → rolar/virar     W acelerar    S frear\n' +
+    'Q/E leme    Espaço/Z canhão    X míssil leve    B míssil pesado    N NUCLEAR    Shift roll    P pausa    M mudo\n\n' +
+    '⚠ EVITE colisão com montanhas e o mar — destruição instantânea\n\n' +
+    'pressione Espaço para iniciar',
+    0,
+  );
+};
+
+// Se não houver #map-select (headless/test), inicializa direto com mapa padrão
+if (typeof document !== 'undefined') {
+  const mapSelectEl = document.getElementById('map-select');
+  if (!mapSelectEl) {
+    game.activeMap = 'islands';
+  }
+  // Se está em headless (sem o overlay), também inicia direto
+}
 
 // Speed lines decorativos
 const speedLines = [];
@@ -227,7 +273,7 @@ function tick() {
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
     updateSpeedLines();
-    updateWorld(dt, jet.position);
+    _activeMapUpdate(dt, jet.position);
     updateAmbientFlak(dt, jet.position, jet.quaternion);
 
     checkMissionComplete();
@@ -250,7 +296,7 @@ function tick() {
     updateParticles(dt);
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
-    updateWorld(dt, jet.position);
+    _activeMapUpdate(dt, jet.position);
   }
 
   updateCamera(dt);
@@ -262,15 +308,19 @@ function tick() {
 }
 
 // ─── Boot overlay + loop ─────────────────────────────────────────────────────
-showOverlay(
-  'AERO STRIKE — F-35 LIGHTNING II',
-  'Missão: destrua todos os alvos militares (bases, fábricas, prédios, comboios).\n\n' +
-  'CONTROLES (estilo simulador):\n' +
-  '↑ nariz para BAIXO   ↓ nariz para CIMA   (invertido)\n' +
-  '← → rolar/virar     W acelerar    S frear\n' +
-  'Q/E leme    Espaço/Z canhão    X míssil leve    B míssil pesado    N NUCLEAR    Shift roll    P pausa    M mudo\n\n' +
-  '⚠ EVITE colisão com montanhas e o mar — destruição instantânea\n\n' +
-  'pressione Espaço para iniciar',
-  0,
-);
+// A tela de seleção de mapa (#map-select no HTML) mostra primeiro.
+// showOverlay de instruções é chamado dentro de selectMap() após a seleção.
+// Se #map-select não existir (headless/teste), mostra overlay diretamente.
+{
+  const mapSelectEl = typeof document !== 'undefined' && document.getElementById('map-select');
+  if (!mapSelectEl) {
+    // Headless / sem map-select: inicia direto com mapa padrão
+    game.activeMap = 'islands';
+    showOverlay(
+      'AERO STRIKE — F-35 LIGHTNING II',
+      'Missão: destrua todos os alvos militares.\n\npressione Espaço para iniciar',
+      0,
+    );
+  }
+}
 tick();
