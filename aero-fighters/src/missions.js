@@ -1,0 +1,114 @@
+// missions.js — Layout fixo de alvos + fluxo de missão (start/restart/crash/nextMission).
+// Exporta: spawnMission, startGame, restartGame, gameOver, crashAndDie, nextMission, targetCountForMission.
+// Para adicionar uma missão diferente: edite TARGET_LAYOUT em config.js.
+
+import { game } from './state.js';
+import { TARGET_LAYOUT, MISSION } from './config.js';
+import { spawnTarget, clearTargets } from './targets.js';
+import { clearMissiles, clearPickups, recycleBullet } from './projectiles.js';
+import { megaExplosion, scheduleDelayed } from './fx.js';
+import { jet, respawnJet } from './player.js';
+import { audio } from './audio.js';
+import { showOverlay, hideOverlay } from './hud.js';
+
+/** Quantos alvos a missão N tem. Missão 1=8, 2=12, 3+=16. */
+export function targetCountForMission(m) {
+  const sizes = MISSION.WAVE_SIZES;
+  if (m <= sizes.length) return sizes[m - 1];
+  return sizes[sizes.length - 1];
+}
+
+/** Spawna todos os alvos da missão N e mostra overlay. */
+export function spawnMission(missionNum) {
+  clearTargets();
+  // CONTRATO: writer de game.targetsDestroyed / targetsTotal
+  game.targetsDestroyed = 0;
+  const n = targetCountForMission(missionNum);
+  for (let i = 0; i < n; i++) {
+    const [idx, dx, dz, type] = TARGET_LAYOUT[i];
+    spawnTarget(idx, dx, dz, type);
+  }
+  game.targetsTotal = game.targets.length;
+  showOverlay(
+    `MISSÃO ${missionNum}`,
+    `${game.targetsTotal} alvos militares detectados\ndestrua todos para avançar`,
+    2200,
+  );
+}
+
+/** Inicia o jogo a partir do menu inicial. */
+export function startGame() {
+  if (game.running) return;
+  // CONTRATO: writer de game.running
+  game.running = true;
+  hideOverlay();
+  audio.startEngine();
+  if (game.targets.length === 0) spawnMission(game.cycle);
+}
+
+/** Reinicia tudo do zero (após gameOver). */
+export function restartGame() {
+  clearTargets();
+  for (const p of game.projectiles) recycleBullet(p);
+  game.projectiles.length = 0;
+  clearMissiles();
+  clearPickups();
+  game.score = 0;
+  game.kills = 0;
+  game.cycle = 1;
+  game.targetsDestroyed = 0;
+  game.targetsTotal = 0;
+  game.player.lives = 3;
+  game.player.missiles = 100;
+  game.player.heavyMissiles = 10;
+  game.player.dead = false;
+  game.flags.missionFailed = false;
+  game.flags.missionCompleteShown = false;
+  game.flags.invincibility = 0;
+  game.flags.crashFreezeTime = 0;
+  respawnJet();
+  game.running = true;
+  hideOverlay();
+  audio.startEngine();
+  spawnMission(1);
+}
+
+/** Encerra o jogo com overlay de derrota. */
+export function gameOver(reason = '') {
+  if (game.flags.missionFailed) return;
+  game.running = false;
+  game.flags.missionFailed = true;
+  game.player.dead = true;
+  audio.stopEngine();
+  showOverlay(reason || 'MISSÃO FALHOU', 'pressione Espaço para reiniciar', 0);
+}
+
+/** Crash imediato em terreno: mega-explosão + game over após pequena pausa. */
+export function crashAndDie(where) {
+  if (game.flags.missionFailed) return;
+  megaExplosion(jet.position.clone(), 'crash');
+  jet.visible = false;
+  game.flags.crashFreezeTime = 2.5;
+  const label = where === 'SEA' ? 'IMPACTO NO MAR' : 'COLISÃO COM TERRENO';
+  scheduleDelayed(0.1, () => gameOver(`AERONAVE DESTRUÍDA\n${label}`));
+}
+
+/** Avança para a próxima missão. */
+export function nextMission() {
+  game.cycle += 1;
+  showOverlay('MISSÃO COMPLETA', `Missão ${game.cycle - 1} cumprida — preparando próxima zona`, MISSION.NEXT_OVERLAY_MS);
+  scheduleDelayed(MISSION.COMPLETE_DELAY_MS / 1000, () => {
+    if (!game.flags.missionFailed) spawnMission(game.cycle);
+  });
+}
+
+/** Detecta missão completa (todos alvos destruídos). Chamar a cada tick. */
+export function checkMissionComplete() {
+  if (!game.running || game.flags.missionCompleteShown) return;
+  if (game.targetsTotal === 0) return;
+  if (game.targetsDestroyed >= game.targetsTotal) {
+    game.flags.missionCompleteShown = true;
+    scheduleDelayed(2.5, () => { game.flags.missionCompleteShown = false; });
+    nextMission();
+  }
+}

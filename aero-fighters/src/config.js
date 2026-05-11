@@ -1,0 +1,153 @@
+// config.js — Constantes do jogo (números, cores, layouts).
+// Exporta: PLAYER, CANNON, MISSILES, TARGETS, AA, MISSION, WORLD, COLORS.
+// Para ajustar a "sensação" do jogo, mude um número aqui e recarregue.
+
+/** Física e controles do avião */
+export const PLAYER = {
+  MAX_SPD: 80,        // m/s — velocidade máxima com throttle 100%
+  MIN_SPD: 8,         // m/s — abaixo disso o avião perde sustentação
+  STALL_SPD: 10,      // m/s — limiar para HUD piscar "STALL"
+  GRAVITY: 14,        // m/s² — puxa o avião para baixo todo frame
+  PITCH_RATE: 1.45,   // rad/s — quão rápido o nariz sobe/desce
+  ROLL_RATE: 2.30,    // rad/s — rolagem (banking)
+  YAW_RATE: 0.80,     // rad/s — coordenado com roll em viradas
+  RUDDER_FACTOR: 0.65,// multiplicador do yaw puro (Q/E)
+  THROTTLE_UP_RATE: 1.3,
+  THROTTLE_DN_RATE: 0.9,
+  CONVERGE_RATE: 1.6, // velocidade da convergência para o alvo de throttle
+  START_HEIGHT: 80,   // altura inicial em unidades 3D
+  SEA_CRASH_Y: 3,     // abaixo disso = crash no mar
+  MOUNTAIN_BUFFER: 2.5, // margem em cima do terreno antes de crashar
+};
+
+/** Canhão de tiro rápido */
+export const CANNON = {
+  RATE: 0.08,         // segundos entre tiros (= 12.5 tiros/s)
+  BULLET_SPD: 110,    // m/s — tracers rápidos como M61 Vulcan (escala arcade)
+  BULLET_LIFE: 2.0,   // segundos antes do despawn
+  WING_OFFSET: 0.65,  // distância de cada cano até centerline (asas do F-35)
+  MUZZLE_OFFSET: 2.2, // distância para frente do nariz onde a bala spawn
+};
+
+/** Míssil leve (X) — dispara rápido, dano modesto, supply grande */
+export const MISSILES_LIGHT = {
+  MAX: 100,
+  INITIAL_SPD: 80,
+  TRACKING_SPD: 130,
+  TURN_RATE: 0.30,
+  CLOSE_TURN_RATE: 0.55,  // próxima ao alvo (<40m) — turn mais agressivo
+  LIFE: 6.0,
+  DAMAGE: 4,
+  SEARCH_RANGE: 1200,
+};
+
+/** Míssil pesado (B) — dano 5x, supply limitado, leve mais lento */
+export const MISSILES_HEAVY = {
+  MAX: 10,
+  INITIAL_SPD: 65,
+  TRACKING_SPD: 100,
+  TURN_RATE: 0.22,
+  CLOSE_TURN_RATE: 0.45,
+  LIFE: 8.0,
+  DAMAGE: 20,
+  SEARCH_RANGE: 1500,
+};
+
+/** Alias mantido para compatibilidade — aponta para light */
+export const MISSILES = MISSILES_LIGHT;
+
+/** Barrel roll */
+export const ROLL = {
+  DUR: 0.5,
+  COOLDOWN: 1.5,
+};
+
+/** Tipos de alvo estáticos */
+export const TARGETS = {
+  base:     { hp: 28, score: 800, hr2: 36, dropChance: 0.6 },
+  factory:  { hp: 20, score: 600, hr2: 28, dropChance: 0.5 },
+  building: { hp: 14, score: 450, hr2: 18, dropChance: 0.3 },
+  convoy:   { hp: 12, score: 380, hr2: 60, dropChance: 0.4 },
+  aaGun:    { hp:  6, score: 250, hr2:  9, dropChance: 0.1 },
+};
+
+/** Canhões antiaéreos (única defesa hostil) */
+export const AA = {
+  RANGE: 220,         // m
+  BASE_INTERVAL: 1.7, // s entre tiros (mission 1)
+  CYCLE_SPEEDUP: 0.15,// s a menos por missão
+  MAX_SPEEDUP: 0.7,   // limite de aceleração
+};
+
+/** Estrutura de missões */
+export const MISSION = {
+  WAVE_SIZES: [8, 12, 16],   // missão 1, 2, 3+
+  HP_BONUS_PER_CYCLE: 3,
+  COMPLETE_DELAY_MS: 2400,
+  NEXT_OVERLAY_MS: 2200,
+};
+
+/** Mundo (oceano, fog, ilhas) */
+export const WORLD = {
+  OCEAN_SIZE: 10000,
+  FOG_NEAR: 300,
+  FOG_FAR: 700,
+  SKY_COLOR: 0x87ceeb,
+  CLOUD_COUNT: 60,
+  AMBIENT_FLAK_GATE_CYCLE: 2, // flak ambiente só após esta missão
+};
+
+/** Paleta visual */
+export const COLORS = {
+  jetGrey: 0x2d3037,
+  jetDark: 0x1c1e23,
+  jetPanel: 0x3a3d44,
+  jetCanopy: 0x0a0a18,
+  jetCanopyGlass: 0x1a2440,
+  exhaustOrange: 0xff7020,
+  flameYellow: 0xffdd66,
+  fireOrange: 0xffaa30,
+  fireRed: 0xff5020,
+  fireYellow: 0xffcc40,
+  smokeGrey: 0x404040,
+  chimneySmoke: 0x383838,
+  debrisDark: 0x1f1f22,
+  flash: 0xffffff,
+  shockwave: 0xffeeaa,
+  shockwaveSecondary: 0xffaa66,
+  flakAmbient: 0x999999,
+  playerHitOrange: 0xff5500,
+  bulletWhite: 0xffffff,
+  bulletEnemy: 0xff5050,
+  pickup: 0x40ff40,
+};
+
+/** Layout fixo de alvos por missão.
+ * Formato: [islandIndex, dx_relativo_à_ilha, dz_relativo_à_ilha, tipo]
+ * Missão 1 usa os primeiros 8, missão 2 usa 12, missão 3+ usa todos. */
+export const TARGET_LAYOUT = [
+  [3,   0,   0, 'base'],
+  [3,  30,  15, 'aaGun'],
+  [3, -30,  20, 'aaGun'],
+  [1,   0,   0, 'factory'],
+  [6,   0,   0, 'base'],
+  [11,  0,   0, 'building'],
+  [2,   0,   0, 'convoy'],
+  [7,   0,   0, 'convoy'],
+  [0,   0,   0, 'base'],
+  [0,  22,  18, 'aaGun'],
+  [8,   0,   0, 'factory'],
+  [10,  0,   0, 'building'],
+  [4,   0,   0, 'factory'],
+  [9,   0,   0, 'building'],
+  [6,  30,  10, 'aaGun'],
+  [11, 22,  10, 'aaGun'],
+];
+
+/** Definição fixa das 12 ilhas: [centerX, centerZ, radius, peakHeight] */
+export const ISLAND_DEFS = [
+  [ 100, -320,  70, 55], [-360, -580,  95, 78], [ 520, -480,  58, 42],
+  [-120, -920, 115, 94], [ 620, -830,  68, 52], [-540, -420,  50, 36],
+  [ 240,-1180, 105, 88], [ -70,-1480,  62, 50], [ 820,-1080,  82, 66],
+  [-700, -980,  78, 62], [ 350, -650,  55, 40], [-430,-1300,  90, 72],
+];
