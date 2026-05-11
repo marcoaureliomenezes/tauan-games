@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Playwright output
+test-results/
+tests/screenshots/
+
+# Runtime artifacts
+.server.pid
+
+# Environment secrets (never commit)
+.env
+*.env.local

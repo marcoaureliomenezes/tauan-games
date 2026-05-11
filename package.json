@@ -1,0 +1,12 @@
+{
+  "name": "tauan-games-tests",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:trex": "playwright test tests/trex/",
+    "test:aero": "playwright test tests/aero-fighters/"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  }
+}
