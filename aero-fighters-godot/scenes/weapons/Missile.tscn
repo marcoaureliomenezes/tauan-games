@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://weapon_missile"]
+
+[ext_resource type="Script" path="res://scripts/missile.gd" id="1_missile"]
+
+[node name="Missile" type="RigidBody3D"]
+script = ExtResource("1_missile")
+gravity_scale = 0.0
+collision_layer = 2
+collision_mask = 4

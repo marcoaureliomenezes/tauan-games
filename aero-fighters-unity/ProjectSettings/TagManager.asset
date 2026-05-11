@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 2
+  tags:
+  - Player
+  - Target
+  - Bullet
+  - EnemyBullet
+  - Missile
+  - Island
+  - Ocean
+  - Pickup
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  -
+  - Water
+  - UI
+  -
+  -
+  - Player
+  - Targets
+  - Projectiles
+  - World
+  - HUD
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0

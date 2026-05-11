@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://target_aagun"]
+
+[ext_resource type="Script" path="res://scripts/target_aa_gun.gd" id="1_aagun"]
+
+[node name="AAGun" type="StaticBody3D"]
+script = ExtResource("1_aagun")
+collision_layer = 4
+collision_mask = 2

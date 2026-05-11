@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aero Fighters — Babylon.js</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; }
+    #hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      pointer-events: none;
+      color: white;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 8px;
+      text-shadow: 1px 1px 2px #000;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+    }
+    #mission { color: #ffcc44; font-weight: bold; letter-spacing: 1px; }
+    #targets { color: #ff8844; }
+    #sound-toggle {
+      pointer-events: auto;
+      margin-left: auto;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      border: 1px solid #888;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 4px 10px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    #sound-toggle:hover { background: rgba(40,40,40,0.85); border-color: #ccc; }
+    #overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: monospace;
+      font-size: 24px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.65);
+      display: none;
+      z-index: 20;
+      padding: 20px;
+      white-space: pre-line;
+    }
+    #overlay.visible { display: flex; }
+    #overlay .sub { font-size: 13px; margin-top: 14px; opacity: 0.85; line-height: 1.8; }
+    #lives { color: #ff5560; font-size: 18px; }
+    #stall-warn { color: #ff4400; font-weight: bold; display: none; animation: blink 0.4s step-start infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <span id="mission">MISSAO 1</span>
+    <span id="lives">&#9829;&#9829;&#9829;</span>
+    <span id="score">SCORE: 000000</span>
+    <span id="missiles">MSLS: 100</span>
+    <span id="heavy-missiles">HVY: 10</span>
+    <span id="nuclear-missiles" style="color:#00ff44">&#9762; NUK: 3</span>
+    <span id="speed">SPD: 0</span>
+    <span id="throttle">THR: 50%</span>
+    <span id="altitude">ALT: 0m</span>
+    <span id="targets">ALVOS: 0/0</span>
+    <span id="stall-warn">&#9888; STALL</span>
+    <button id="sound-toggle" type="button">&#128266; SOM</button>
+  </div>
+  <div id="overlay"></div>
+
+  <!-- Babylon.js UMD via CDN — expoe global BABYLON -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+
+  <!-- Game entry point -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
