@@ -125,7 +125,8 @@ let _starSprites = null;
 function buildStars(parent) {
   // Criamos estrelas como pequenos meshes de esfera agrupados num SPS
   const starCount = 1500;
-  const SPS = new BABYLON.SolidParticleSystem('stars', scene, { updatable: false });
+  // updatable:true garante que SPS.particles[] e populado apos buildMesh()
+  const SPS = new BABYLON.SolidParticleSystem('stars', scene, { updatable: true });
   const starMesh = BABYLON.MeshBuilder.CreateSphere('starTemplate', { diameter: 1, segments: 2 }, scene);
   SPS.addShape(starMesh, starCount);
   starMesh.dispose();
@@ -139,27 +140,24 @@ function buildStars(parent) {
   starsMesh.material = mat;
   _starMat = mat;
 
-  SPS.initParticles = () => {
-    for (let i = 0; i < SPS.nbParticles; i++) {
-      const p = SPS.particles[i];
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 3700;
-      p.position.set(
-        r * Math.sin(phi) * Math.cos(theta),
-        r * Math.cos(phi),
-        r * Math.sin(phi) * Math.sin(theta),
-      );
-      const size = 1.5 + Math.random() * 4.5;
-      p.scaling.setAll(size);
-      const type = Math.random();
-      if (type < 0.15) { p.color = new BABYLON.Color4(0.7, 0.8, 1.0, 1.0); }
-      else if (type < 0.25) { p.color = new BABYLON.Color4(1.0, 0.95, 0.7, 1.0); }
-      else { p.color = new BABYLON.Color4(1.0, 1.0, 1.0, 1.0); }
-    }
-  };
-  SPS.initParticles();
+  for (let i = 0; i < SPS.nbParticles; i++) {
+    const p = SPS.particles[i];
+    if (!p) continue;
+    const theta = Math.random() * Math.PI * 2;
+    const phi   = Math.acos(2 * Math.random() - 1);
+    const r     = 3700;
+    p.position.x = r * Math.sin(phi) * Math.cos(theta);
+    p.position.y = r * Math.cos(phi);
+    p.position.z = r * Math.sin(phi) * Math.sin(theta);
+    const size = 1.5 + Math.random() * 4.5;
+    p.scaling.setAll(size);
+    const type = Math.random();
+    if (type < 0.15)       p.color = new BABYLON.Color4(0.7, 0.8, 1.0, 1.0);
+    else if (type < 0.25)  p.color = new BABYLON.Color4(1.0, 0.95, 0.7, 1.0);
+    else                   p.color = new BABYLON.Color4(1.0, 1.0, 1.0, 1.0);
+  }
   SPS.setParticles();
+  SPS.refreshVisibleSize();
 }
 
 // ─── Lua ─────────────────────────────────────────────────────────────────────
