@@ -100,69 +100,71 @@ function createMorro(hDef, scene) {
   return { cx, cz, radius, peakHeight: height, mesh, type };
 }
 
-/** Cria a malha urbana do Rio: asfalto, praia e edifícios via InstancedMesh. */
+/** Cria a malha urbana do Rio: asfalto, praia, avenida e edifícios. */
 function createUrbanZone(scene) {
-  // Asphalt city ground
-  const asphalt = new THREE.MeshLambertMaterial({ color: 0x353535 });
-  const cityFloor = new THREE.Mesh(new THREE.PlaneGeometry(1400, 700), asphalt);
+  const GROUND_Y = 0.3; // slightly above ocean (y=0) to avoid z-fighting
+
+  // Asphalt city ground — z: 0 to 600 (north of promenade)
+  const asphalt = new THREE.MeshLambertMaterial({ color: 0x373737, side: THREE.DoubleSide });
+  const cityFloor = new THREE.Mesh(new THREE.PlaneGeometry(1400, 620), asphalt);
   cityFloor.rotation.x = -Math.PI / 2;
-  cityFloor.position.set(-50, 0.4, 230);
+  cityFloor.position.set(-25, GROUND_Y, 310);
   cityFloor.receiveShadow = true;
   scene.add(cityFloor);
 
-  // Beach strip (Copacabana / Ipanema)
-  const beachMat = new THREE.MeshLambertMaterial({ color: 0xf0d98a });
-  const beach = new THREE.Mesh(new THREE.PlaneGeometry(1200, 180), beachMat);
+  // Beach strip (Copacabana / Ipanema) — z: -220 to -20 (non-overlapping with city)
+  const beachMat = new THREE.MeshLambertMaterial({ color: 0xf0d68a, side: THREE.DoubleSide });
+  const beach = new THREE.Mesh(new THREE.PlaneGeometry(1400, 200), beachMat);
   beach.rotation.x = -Math.PI / 2;
-  beach.position.set(-50, 0.3, -90);
+  beach.position.set(-25, GROUND_Y - 0.05, -120);
   beach.receiveShadow = true;
   scene.add(beach);
 
-  // Promenade (Avenida Atlântica) — light grey strip between beach and city
-  const promMat = new THREE.MeshLambertMaterial({ color: 0x7a7a7a });
-  const prom = new THREE.Mesh(new THREE.PlaneGeometry(1200, 35), promMat);
+  // Avenida Atlântica promenade — z: -20 to 0 (thin strip separating beach from city)
+  const promMat = new THREE.MeshLambertMaterial({ color: 0x888888, side: THREE.DoubleSide });
+  const prom = new THREE.Mesh(new THREE.PlaneGeometry(1400, 22), promMat);
   prom.rotation.x = -Math.PI / 2;
-  prom.position.set(-50, 0.5, -8);
+  prom.position.set(-25, GROUND_Y + 0.05, -9);
   scene.add(prom);
 
-  // Collect building positions (skip avenues and morro footprints)
+  // ─── Buildings via InstancedMesh (one draw call) ───────────────────────────
   const bData = [];
-  const avZs = [0, 150, 290, 430];  // major avenues (bz positions)
-  const avXs = [-180, -50, 90, 230, 360]; // cross avenues
+  const avZs = [0, 150, 300, 450];   // major east-west avenues
+  const avXs = [-200, -50, 100, 250, 380]; // cross avenues
 
-  for (let bx = -300; bx <= 430; bx += 32) {
-    for (let bz = 10; bz <= 530; bz += 27) {
-      // Avenue gaps
-      if (avXs.some(ax => Math.abs(bx - ax) < 15)) continue;
-      if (avZs.some(az => Math.abs(bz - az) < 13)) continue;
-      if (Math.random() < 0.15) continue; // minor streets
+  for (let bx = -320; bx <= 450; bx += 32) {
+    for (let bz = 10; bz <= 580; bz += 27) {
+      if (avXs.some(ax => Math.abs(bx - ax) < 14)) continue; // avenue gap
+      if (avZs.some(az => Math.abs(bz - az) < 12)) continue; // avenue gap
+      if (Math.random() < 0.14) continue; // minor streets / parks
 
-      // Skip morro footprints
       const onMorro = HILL_DEFS.some(([cx, cz, r]) =>
-        Math.hypot(bx - cx, bz - cz) < r + 20,
+        Math.hypot(bx - cx, bz - cz) < r + 18,
       );
       if (onMorro) continue;
 
-      // Taller buildings downtown (around x=50, z=200)
-      const downtown = Math.max(0, 1 - Math.hypot(bx - 50, bz - 200) / 220);
-      const h = 12 + Math.random() * 65 * (0.3 + downtown * 0.7);
-      const w = 14 + Math.random() * 8;
-      const d = 14 + Math.random() * 8;
-      bData.push({ x: bx, z: bz, h, w, d });
+      // Taller skyscrapers downtown (around Cinelândia / Leblon at x=60, z=200)
+      const dt = Math.max(0, 1 - Math.hypot(bx - 60, bz - 200) / 200);
+      const h = 12 + Math.random() * 68 * (0.25 + dt * 0.75);
+      bData.push({ x: bx, z: bz, h, w: 14 + Math.random() * 9, d: 14 + Math.random() * 9 });
     }
   }
 
   const iGeo = new THREE.BoxGeometry(1, 1, 1);
   const iMat = new THREE.MeshLambertMaterial();
   const iMesh = new THREE.InstancedMesh(iGeo, iMat, bData.length);
+  // CRITICAL: disable frustum culling — InstancedMesh bounding sphere defaults to
+  // 1x1x1 (base geometry) and causes the entire batch to vanish when camera moves.
+  iMesh.frustumCulled = false;
   iMesh.castShadow = true;
 
   const _dummy = new THREE.Object3D();
   const _col = new THREE.Color();
-  const bColors = [0x9aaab8, 0x7e8f9c, 0xb2a898, 0x6a808e, 0xa09280, 0x8899ab, 0xbdb5a5];
+  const bColors = [0x9aaab8, 0x7e8f9c, 0xb2a898, 0x6a808e, 0xa09280, 0x8899ab, 0xbcb4a4];
 
   bData.forEach((b, i) => {
-    _dummy.position.set(b.x, b.h / 2, b.z);
+    // Base of each building sits on GROUND_Y
+    _dummy.position.set(b.x, GROUND_Y + b.h / 2, b.z);
     _dummy.scale.set(b.w, b.h, b.d);
     _dummy.updateMatrix();
     iMesh.setMatrixAt(i, _dummy.matrix);

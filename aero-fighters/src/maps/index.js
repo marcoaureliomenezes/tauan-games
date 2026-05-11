@@ -41,3 +41,7 @@ export const MAPS = {
 export function getTargetLayout(mapKey) {
   return MAPS[mapKey]?.layout ?? TARGET_LAYOUT;
 }
+
+export function getMapHeightFn(mapKey) {
+  return MAPS[mapKey]?.heightAt ?? islandHeightAt;
+}

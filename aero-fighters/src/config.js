@@ -184,20 +184,25 @@ export const TARGET_LAYOUT_DESERT = [
 ];
 
 /** Layout de alvos para o mapa Rio de Janeiro.
- * Formato: [morroIdx, dx, dz, tipo] — morroIdx=-1 significa coordenada absoluta. */
+ * Formato: [morroIdx, dx, dz, tipo] — morroIdx=-1 significa coordenada absoluta ao nível do chão.
+ * Navios de guerra ficam no oceano (z < -200), AA guns no topo dos morros,
+ * alvos terrestres (fábricas, bases) na malha urbana ao nível do chão. */
 export const TARGET_LAYOUT_RIO = [
-  [-1, 150,  300, 'warship'],
-  [-1,-100,  400, 'warship'],
-  [-1, 300,  500, 'warship'],
-  [1,   0,   0, 'base'],
-  [0,   0,   0, 'aaGun'],
-  [3,   0,   0, 'base'],
-  [5,  10,  10, 'aaGun'],
-  [5, -10,  15, 'building'],
-  [6,   0,   0, 'factory'],
-  [6,  20, -10, 'aaGun'],
-  [7,   0,   0, 'building'],
-  [7, -15,  10, 'aaGun'],
+  // Navios de guerra no Atlântico (sul da praia)
+  [-1,   80, -280, 'warship'],
+  [-1, -200, -340, 'warship'],
+  [-1,  320, -250, 'warship'],
+  // AA guns nos topos dos morros famosos
+  [ 0,    0,    0, 'aaGun'],   // Pão de Açúcar
+  [ 1,    0,    0, 'aaGun'],   // Corcovado
+  [ 3,    0,    0, 'aaGun'],   // Pedra da Gávea
+  // Alvos terrestres na malha urbana (islandIdx=-1, y=0)
+  [-1,   60,  180, 'base'],
+  [-1, -100,  260, 'factory'],
+  [-1,  200,  330, 'factory'],
+  [-1,  -40,  140, 'building'],
+  [-1,  150,  240, 'building'],
+  [-1,   30,  390, 'base'],
 ];
 
 /** Definição fixa das 18 ilhas: [centerX, centerZ, radius, peakHeight] */
