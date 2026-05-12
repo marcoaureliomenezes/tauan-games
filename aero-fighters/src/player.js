@@ -319,10 +319,11 @@ export function updatePlayer(dt, input, onCrash) {
     jet.position.y -= (PLAYER.GRAVITY * 4.0) * dt;
     game.player.y = jet.position.y;
     // Impacto no solo — mega explosão e então ejeção/respawn
+    // jet.visible permanece true durante toda a queda (T-BF04)
+    // só é ocultado dentro de _ejectAndRespawn, após a explosão
     const impact = checkTerrainCollision(jet.position);
     if (impact) {
       megaExplosion(jet.position.clone(), 'crash');
-      jet.visible = false;
       _ejectAndRespawn(onCrash);
     }
     return;
@@ -420,6 +421,9 @@ export function updatePlayer(dt, input, onCrash) {
 }
 
 function _ejectAndRespawn(onGameOver) {
+  // Ocultar o jet somente aqui, após a explosão de impacto (T-BF04)
+  // Durante todo o mayday o avião estava visível caindo fisicamente
+  jet.visible = false;
   game.flags.mayday = false;
   game.flags.maydayTimer = 0;
   game.player.lives -= 1;

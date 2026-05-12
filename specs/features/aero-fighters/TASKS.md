@@ -1,6 +1,6 @@
 # TASKS: Aero Fighters Assault Replica
 
-> **Status:** [x] Approved
+> **Status:** [x] Approved — 2026-05-12 (Sprint 1 de Bug Fixes adicionado e aprovado pelo operador)
 > **PLAN:** `specs/features/aero-fighters/PLAN.md`
 > **Prerequisite:** `testing-infra` all tasks complete (T01–T07)
 
@@ -448,3 +448,59 @@ Implementar em `src/world.js`:
 ## Done Condition
 
 Todas as tasks T01-T28 complete (com T15 marcado como removido). `npx playwright test tests/aero-fighters/smoke.spec.js` mostra **18 passed**. `aero-fighters/README.md` existe. Operador abre `aero-fighters/index.html` (via `python3 -m http.server`) em browser e joga um jogo funcional de F-35 Ground Strike.
+
+---
+
+## Sprint 1 — Bug Fixes (2026-05-12)
+
+> **Fonte:** `.dadaia/reports/game-developer/2026-05-12T000000Z-aero-fighters-gameplay-review.md`
+> **SPEC:** §10 (Bug Fixes — Sprint 1), FR-06 (mayday visível até impacto), FR-12 (Heightmap consistency)
+> **Aprovação operador:** "Sim. implemente." (2026-05-12)
+>
+> Cada task abaixo é **paralelizável** dentro do mesmo arquivo apenas se não conflitar em linhas. T-BF03 é independente (`config.js`). T-BF01 e T-BF02 mexem em arquivos distintos (`world.js` e `targets.js`) e podem rodar em paralelo, mas o autor deve estar ciente que ambas dependem da função `islandHeightAt()` corrigida (T-BF01) para resultado funcional final. T-BF04 é isolada em `player.js`.
+
+### [x] T-BF01 — Corrigir `islandHeightAt()` (incluir noise na fórmula de colisão)
+
+- **Arquivo:** `src/world.js:158-163`
+- **O que fazer:** alinhar `islandHeightAt(isl, dx, dz)` com a fórmula usada por `createIsland()` para o mesh visual, incluindo o ruído senoidal de 4 octaves (`sin(x*0.18)*cos(z*0.14)*5 + sin(x*0.36+1.5)*cos(z*0.29+0.8)*2.5 + sin(x*0.72)*cos(z*0.63)*1.2 + sin(x*1.42+0.4)*cos(z*1.18-0.6)*0.6`). Aplicar `Math.max(0, parabola + noise)`. Alternativa permitida: `THREE.Raycaster` vertical contra o mesh da ilha, desde que determinístico e ≤ 1 ms por chamada.
+- **Pré-condição:** nenhuma (independente de outras tasks do Sprint 1).
+- **Pode rodar em paralelo com:** T-BF02, T-BF03, T-BF04.
+- **Verificação:** voar próximo a montanhas confirma que avião não bate em "montanha invisível"; colisão e mesh coincidem visualmente; `checkTerrainCollision()` agora dispara em pontos onde o terreno renderizado realmente está. Smoke suite Playwright continua **18 passed**.
+- **Requisito SPEC:** FR-12; §10.2.
+
+### [x] T-BF02 — Corrigir `spawnTarget()` (usar altura real do terreno)
+
+- **Arquivo:** `src/targets.js:232-234`
+- **O que fazer:** garantir que o `yGround` passado para `mesh.position.set(worldX, yGround, worldZ)` corresponda à altura visível do mesh naquele `(x, z)`. Após T-BF01, o uso de `islandHeightAt()` (corrigida) já satisfaz o requisito. Caso a estratégia escolhida em T-BF01 seja raycast, replicar a mesma estratégia aqui ou reaproveitar uma função utilitária comum.
+- **Pré-condição:** funcional somente após T-BF01 estar mergeada; pode ser **escrita em paralelo**, mas só passa nos testes manuais quando T-BF01 entrar.
+- **Pode rodar em paralelo com:** T-BF01 (desenvolvimento), T-BF03, T-BF04.
+- **Verificação:** nenhum alvo militar (base, factory, building, convoy, AA gun) aparece flutuando no ar ou enterrado no solo ao iniciar qualquer missão (1, 2, 3+). Inspeção visual em todas as 12 ilhas em `ISLAND_DEFS`. Playwright AC-12 continua passando.
+- **Requisito SPEC:** FR-12; §10.1.
+
+### [x] T-BF03 — Aumentar `MOUNTAIN_BUFFER` de 2.5 para 10 (paliativo imediato)
+
+- **Arquivo:** `src/config.js:20`
+- **O que fazer:** alterar a constante `MOUNTAIN_BUFFER` de `2.5` para `10`. É um paliativo enquanto T-BF01 não está mergeada; cobre o pico máximo de noise (~9.3 m). Pode ser revisado para baixo depois que T-BF01 entrar.
+- **Pré-condição:** nenhuma. Mudança atômica de 1 linha.
+- **Pode rodar em paralelo com:** T-BF01, T-BF02, T-BF04.
+- **Verificação:** redução imediata e perceptível de colisões falsas com "montanha invisível" mesmo sem T-BF01. Playwright smoke suite continua **18 passed**.
+- **Requisito SPEC:** FR-12 (parágrafo do paliativo); §10.3.
+
+### [x] T-BF04 — Manter `jet.visible` durante mayday
+
+- **Arquivo:** `src/player.js:322-326`
+- **O que fazer:** remover `jet.visible = false` do callback de impacto no fluxo de mayday. O jet deve permanecer visível durante toda a queda (gravidade ampliada + tumble) até impactar o terreno/mar. A `megaExplosion('crash')` continua sendo disparada no impacto, mas `jet.visible = false` é movido para dentro de `_ejectAndRespawn()` (`player.js:422-435`) — só após explodir é que o mesh some, junto com o início do respawn.
+- **Pré-condição:** nenhuma.
+- **Pode rodar em paralelo com:** T-BF01, T-BF02, T-BF03.
+- **Verificação:** ao ser abatido em qualquer altitude (especialmente em altitudes altas, 100+ unidades), o avião cai visivelmente em chamas e tumbling até bater no chão antes de explodir. Playwright smoke suite continua **18 passed** (incluindo AC-17 que cobre `lives = 0`).
+- **Requisito SPEC:** FR-06 (bloco do mayday); §10.4.
+
+### Sprint 1 — Done Condition
+
+- T-BF01 + T-BF02 + T-BF03 + T-BF04 todos `[x]`.
+- `npx playwright test tests/aero-fighters/smoke.spec.js --reporter=list` mostra **18 passed** (sem regressão dos 18 ACs originais).
+- Inspeção visual do operador confirma:
+  - Sem alvos flutuando.
+  - Sem colisão em "montanha invisível".
+  - Avião abatido cai visível até o impacto.
+- AC-18 (FPS) permanece com a flakiness atual já documentada — não é objetivo do Sprint 1 (vai para Sprint 3 / FIX-09).
