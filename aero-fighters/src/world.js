@@ -132,6 +132,13 @@ function createIsland(cx, cz, radius, peakHeight) {
   return mesh;
 }
 
+// Função de altura do mapa ativo — trocada via setActiveHeightFn ao mudar de mapa.
+// Default: islandHeightAt (mapa Ilhas é o padrão).
+let _activeHeightFn = islandHeightAt;
+
+/** Define a função de altura do mapa ativo. Chamado por main.js ao trocar de mapa. */
+export function setActiveHeightFn(fn) { _activeHeightFn = fn; }
+
 /** Anel de espuma branca em volta de cada ilha (no waterline). */
 function createFoamRing(cx, cz, radius) {
   const ring = new THREE.Mesh(
@@ -177,7 +184,7 @@ export function checkTerrainCollision(jetPosition) {
     const dz = jetPosition.z - isl.cz;
     const r2 = dx * dx + dz * dz;
     if (r2 < isl.radius * isl.radius) {
-      const localH = islandHeightAt(isl, dx, dz);
+      const localH = _activeHeightFn(isl, dx, dz);
       if (jetPosition.y < localH + PLAYER.MOUNTAIN_BUFFER) return 'MOUNTAIN';
     }
   }

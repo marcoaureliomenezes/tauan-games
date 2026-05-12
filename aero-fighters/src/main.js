@@ -8,7 +8,7 @@ import { CANNON } from './config.js';
 import { audio } from './audio.js';
 import { scene, camera, renderer, attachToBody, dirLight, ambLight } from './scene.js';
 import { initSky, updateSky, getSunData, getAmbientData, getSkyColor } from './sky.js';
-import { ocean, createIslands, updateWorld, updateAmbientFlak } from './world.js';
+import { ocean, createIslands, updateWorld, updateAmbientFlak, setActiveHeightFn } from './world.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
 import { input, installListeners, onAction } from './input.js';
@@ -19,7 +19,7 @@ import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } f
 import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver } from './missions.js';
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
 import { initMinimap, updateMinimap } from './ui/minimap.js';
-import { MAPS } from './maps/index.js';
+import { MAPS, getMapHeightFn } from './maps/index.js';
 import { spawnWingmen, updateWingmen, clearWingmen } from './wingmen.js';
 
 // ─── Boot do mundo ───────────────────────────────────────────────────────────
@@ -53,7 +53,11 @@ window.selectMap = function(mapKey) {
     if (mapDef) {
       mapDef.create(scene);
       _activeMapUpdate = mapDef.update;
+      setActiveHeightFn(mapDef.heightAt);
     }
+  } else {
+    // Mapa ilhas: restaura a função de altura padrão
+    setActiveHeightFn(getMapHeightFn('islands'));
   }
   // Atualiza estado
   game.activeMap = mapKey;
