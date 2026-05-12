@@ -107,16 +107,20 @@ export function updateDesertWorld(dt, playerPos) {
   // Sem oceano animado. Nuvens são geridas pelo sky.js existente.
 }
 
-/** Altura de uma mesa/cânion em (dx, dz) relativos ao centro. */
+/** Altura de uma mesa/cânion em (dx, dz) relativos ao centro.
+ *  Inclui o mesmo noise senoidal de createMesa() para evitar divergência de colisão. */
 export function desertHeightAt(isl, dx, dz) {
+  const noise = Math.sin(dx * 0.15) * 1.5 + Math.cos(dz * 0.12) * 1.5;
   const t = Math.sqrt(dx * dx + dz * dz) / isl.radius;
   if (isl.type === 'mesa') {
-    if (t < 0.7) return isl.peakHeight;
-    if (t < 1.0) return isl.peakHeight * (1 - (t - 0.7) / 0.3);
-    return 0;
+    let h = 0;
+    if (t < 0.7) h = isl.peakHeight;
+    else if (t < 1.0) h = isl.peakHeight * (1 - (t - 0.7) / 0.3);
+    return Math.max(0, h + noise);
   } else {
-    // canyon
-    if (t < 0.7) return -isl.peakHeight * 0.6;
+    // canyon — pode ser negativo (vale)
+    if (t < 0.7) return Math.max(-10, -isl.peakHeight * 0.6 + noise);
+    if (t < 1.0) return Math.max(-10, -isl.peakHeight * 0.6 * (1 - (t - 0.7) / 0.3) + noise);
     return 0;
   }
 }

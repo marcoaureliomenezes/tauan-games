@@ -210,11 +210,28 @@ export function updateRioWorld(dt, playerPos) {
   // Oceano estático no mapa Rio (diferente do mapa ilhas que tem animação)
 }
 
-/** Altura de um morro em (dx, dz) relativos ao centro. */
+/** Altura de um morro em (dx, dz) relativos ao centro.
+ *  Inclui o mesmo noise senoidal de createMorro() e as fórmulas corretas por tipo
+ *  para eliminar divergência entre mesh visual e colisão. */
 export function rioHeightAt(isl, dx, dz) {
   const t = Math.sqrt(dx * dx + dz * dz) / isl.radius;
-  if (isl.type === 'mesa') {
-    return t < 0.65 ? isl.peakHeight : isl.peakHeight * Math.max(0, 1 - (t - 0.65) / 0.25);
+  if (t >= 1.0) return 0;
+  const noise = Math.sin(dx * 0.2) * 2 + Math.cos(dz * 0.18) * 2;
+  let h = 0;
+  if (isl.type === 'rock') {
+    h = isl.peakHeight * Math.max(0, 1 - t * t * 2.0);
+  } else if (isl.type === 'mesa') {
+    h = t < 0.65 ? isl.peakHeight : isl.peakHeight * Math.max(0, 1 - (t - 0.65) / 0.25);
+  } else if (isl.type === 'twin') {
+    const d1 = Math.sqrt((dx - 0.3 * isl.radius) ** 2 + dz * dz);
+    const d2 = Math.sqrt((dx + 0.3 * isl.radius) ** 2 + dz * dz);
+    h = isl.peakHeight * Math.max(
+      Math.max(0, 1 - (d1 / isl.radius * 1.8) ** 2),
+      Math.max(0, 1 - (d2 / isl.radius * 1.8) ** 2),
+    );
+  } else {
+    // forest / urban
+    h = isl.peakHeight * Math.max(0, 1 - t * t * 1.6);
   }
-  return isl.peakHeight * Math.max(0, 1 - t * t * 1.6);
+  return Math.max(0, h + noise);
 }
