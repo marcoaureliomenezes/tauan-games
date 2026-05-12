@@ -17,7 +17,7 @@ export const PLAYER = {
   CONVERGE_RATE: 1.6, // velocidade da convergência para o alvo de throttle
   START_HEIGHT: 80,   // altura inicial em unidades 3D
   SEA_CRASH_Y: 3,     // abaixo disso = crash no mar
-  MOUNTAIN_BUFFER: 2.5, // margem em cima do terreno antes de crashar
+  MOUNTAIN_BUFFER: 10,  // margem em cima do terreno antes de crashar (cobre pico max de noise ~9.3 — T-BF03)
 };
 
 /** Canhão de tiro rápido */

@@ -1,6 +1,6 @@
 # SPEC: Aero Fighters Assault Replica
 
-> **Status:** [x] Approved
+> **Status:** [x] Approved — 2026-05-12 (Sprint 1 de Bug Fixes aprovado pelo operador: "Sim. implemente.")
 > **Author:** dadaia Labs
 > **Created:** 2026-05-09
 
@@ -113,8 +113,8 @@ O jogo é **air-to-ground**. Alvos são estruturas militares estáticas posicion
 
 - Player começa com **3 vidas** (icons `♥♥♥` no HUD top-left)
 - Tomar hit (bala inimiga de AA, colisão com alvo): -1 vida; shake 0.3s; 2s invincibility (jet pisca, `flags.invincibility`)
-- **Última vida perdida:** slow-motion 0.5× por 1s → overlay "MISSÃO FALHOU — pressione Espaço para tentar novamente"
-- **Crash em terreno (mar Y ≤ 3 ou montanha via heightmap dome + `MOUNTAIN_BUFFER 2.5`) = morte instantânea independente de vidas remanescentes.** Tela: white flash + double shockwave + "MISSÃO FALHOU" imediato. Crash freeze 2s (`flags.crashFreezeTime`) antes de habilitar restart (evita reinício acidental).
+- **Última vida perdida (mayday):** ao ser abatido, o avião DEVE permanecer **visível** e cair fisicamente (gravidade ampliada + tumble) até **impactar o terreno ou o mar**. Somente após o impacto a `megaExplosion('crash')` é disparada, `jet.visible = false` é setado e o respawn é iniciado. Não é permitido ocultar o jet antes do impacto visual. Slow-motion 0.5× por 1s ao iniciar o mayday → overlay "MISSÃO FALHOU — pressione Espaço para tentar novamente" só após o impacto.
+- **Crash em terreno (mar Y ≤ 3 ou montanha via heightmap dome + `MOUNTAIN_BUFFER`) = morte instantânea independente de vidas remanescentes.** Tela: white flash + double shockwave + "MISSÃO FALHOU" imediato. Crash freeze 2s (`flags.crashFreezeTime`) antes de habilitar restart (evita reinício acidental).
 - **Restart:** reseta state (via `resetState()` em `src/state.js`), cycle 1, mission 1
 
 ### FR-07 — Scoring
@@ -281,6 +281,33 @@ Após "MISSÃO COMPLETA" (todos os alvos destruídos), o jogo avança para próx
 - Ambient flak (decorative grey puffs) começa a aparecer após `cycle ≥ 2` (`WORLD.AMBIENT_FLAK_GATE_CYCLE`)
 - Overlay de transição: `MISSION.COMPLETE_DELAY_MS = 2400ms` + `NEXT_OVERLAY_MS = 2200ms`
 
+### FR-12 — Heightmap Consistency (collision ↔ render)
+
+> Adicionado em 2026-05-12 a partir do achado B-1/B-2 do `game-developer` gameplay review (`.dadaia/reports/game-developer/2026-05-12T000000Z-aero-fighters-gameplay-review.md`).
+
+A função autoritativa de altura do terreno DEVE retornar **o mesmo valor que o vértice visível do mesh** em qualquer `(x, z)` dentro de uma ilha. Essa altura é a fonte única de verdade para:
+
+1. **Detecção de colisão** (`checkTerrainCollision` em `world.js`)
+2. **Posicionamento de alvos** (`spawnTarget` em `targets.js`)
+3. **Qualquer lógica futura** que precise da elevação do terreno
+
+Especificação obrigatória:
+
+- `islandHeightAt(isl, dx, dz)` DEVE usar a **mesma fórmula** do mesh visual em `createIsland()`, incluindo o ruído senoidal de 4 octaves:
+
+  ```
+  noise = sin(x*0.18)*cos(z*0.14)*5
+        + sin(x*0.36+1.5)*cos(z*0.29+0.8)*2.5
+        + sin(x*0.72)*cos(z*0.63)*1.2
+        + sin(x*1.42+0.4)*cos(z*1.18-0.6)*0.6
+  h = max(0, (1 - dist²*1.35) * peakHeight + noise)
+  ```
+
+  Alternativa permitida: amostrar a altura via `THREE.Raycaster` vertical contra o mesh da ilha, desde que o resultado seja determinístico e custe ≤ 1 ms por chamada.
+
+- `MOUNTAIN_BUFFER` paliativo: enquanto `islandHeightAt()` não estiver alinhada com o mesh, o buffer DEVE ser ≥ `10` para cobrir o pico máximo de noise (~9.3 unidades). Após `islandHeightAt()` corrigida, o buffer pode ser revisado.
+- `spawnTarget()` DEVE usar a `islandHeightAt()` corrigida (ou raycast) para posicionar `mesh.position.y` exatamente sobre o terreno visível. Nenhum alvo militar pode aparecer flutuando no ar ou enterrado no solo no início de qualquer missão.
+
 ---
 
 ## 8. Open Questions
@@ -294,3 +321,46 @@ _(none at spec creation time)_
 - [x] Draft reviewed by operator
 - [x] **Status:** [x] Approved — 2026-05-09
 - [x] **Status:** [x] Approved — 2026-05-11 — Backfill aprovado pelo operador. Implementação verificada: 18 ACs passando, modularização 15 ES modules, F-35 Ground Strike sim. Ver `.dadaia/reports/refine-specs.md` para detalhes.
+- [x] **Status:** [x] Approved — 2026-05-12 — Sprint 1 de Bug Fixes (§10) aprovado pelo operador ("Sim. implemente."). Base: relatório `.dadaia/reports/game-developer/2026-05-12T000000Z-aero-fighters-gameplay-review.md`. FR-06 e FR-12 atualizados; FRs anteriores (FR-01 a FR-11) e os 18 ACs originais permanecem válidos.
+
+---
+
+## 10. Bug Fixes — Sprint 1 (2026-05-12)
+
+> Fonte: relatório de gameplay review do `game-developer` em
+> `.dadaia/reports/game-developer/2026-05-12T000000Z-aero-fighters-gameplay-review.md`.
+> Operador aprovou explicitamente: **"Sim. implemente."**.
+>
+> Esta seção descreve os bugs em produção que devem ser corrigidos antes de qualquer nova feature. As correções estão alinhadas com FR-06 (mayday visível até impacto) e FR-12 (consistência de heightmap). FRs FR-01..FR-11 e os 18 ACs anteriores permanecem inalterados.
+
+### §10.1 — B-1: Alvos militares flutuando no ar
+
+- **Sintoma observado:** ao iniciar uma missão, alvos militares (base, factory, building, convoy, AA gun) podem aparecer flutuando vários metros acima do terreno visível (até ~9 m), ou parcialmente enterrados no solo.
+- **Causa raiz:** `spawnTarget()` em `src/targets.js:232-234` chama `islandHeightAt()` para obter `yGround`. Mas `islandHeightAt()` em `src/world.js:158-163` usa apenas a fórmula parabólica `peakHeight * (1 - t² * 1.35)`, ignorando o ruído senoidal de 4 octaves usado pelo mesh visual em `createIsland()`. As duas alturas divergem, principalmente longe do centro da ilha.
+- **Comportamento esperado após correção:** nenhum alvo militar aparece flutuando ou enterrado. A posição `mesh.position.y` de cada alvo coincide visualmente com o vértice do terreno renderizado naquele `(x, z)`.
+- **Requisito ancorado:** FR-12 (Heightmap Consistency).
+
+### §10.2 — B-2: Colisão com "montanha invisível"
+
+- **Sintoma observado:** o avião colide com terreno em coordenadas onde, visualmente, parece haver espaço livre. Em outros pontos, atravessa visivelmente um pico de noise sem detectar colisão.
+- **Causa raiz:** `checkTerrainCollision()` em `src/world.js:166-178` usa a mesma `islandHeightAt()` parabólica simplificada, mais `MOUNTAIN_BUFFER = 2.5` (`src/config.js:20`). O noise pode adicionar até +9.3 m ou subtrair valor equivalente ao mesh visual — o buffer 2.5 é insuficiente para cobrir essa divergência.
+- **Comportamento esperado após correção:** colisão e mesh visual coincidem em todos os pontos. O avião só crasha quando realmente toca o terreno renderizado.
+- **Requisito ancorado:** FR-12 (Heightmap Consistency).
+
+### §10.3 — B-3: `MOUNTAIN_BUFFER` insuficiente (paliativo)
+
+- **Sintoma observado:** mesmo antes da correção definitiva, o jogo apresenta colisões falsas em zonas onde o noise é negativo (terreno visível abaixo da parábola).
+- **Causa raiz:** `MOUNTAIN_BUFFER = 2.5` em `src/config.js:20` é menor que o pico máximo de noise (~9.3 m).
+- **Comportamento esperado após correção (paliativo):** com `MOUNTAIN_BUFFER ≈ 10`, a margem cobre o pico de noise; o avião deixa de crashar contra "montanhas invisíveis" enquanto §10.1/§10.2 não estão implementadas. Após FR-12 estar implementada, o operador pode revisar o buffer para baixo.
+- **Requisito ancorado:** FR-12 (Heightmap Consistency — parágrafo do paliativo).
+
+### §10.4 — B-4: Avião abatido some antes de impactar o solo
+
+- **Sintoma observado:** ao ser abatido (mayday), o avião desaparece (`jet.visible = false`) imediatamente quando a explosão acontece — sem queda visível, sem ver a carcaça chegando no chão. A altitude pode ser de até 150+ unidades; o frame de desaparecimento corta toda a animação dramática.
+- **Causa raiz:** em `src/player.js:322-326`, o callback de impacto seta `jet.visible = false` no mesmo frame da `megaExplosion('crash')`. Adicionalmente, o fluxo de mayday em `player.js:303-328` aplica gravidade 4× e tumble, mas o jet some no instante do impacto, não durante o respawn.
+- **Comportamento esperado após correção:** durante todo o mayday, `jet.visible = true` é preservado. O jet cai fisicamente (gravidade ampliada + tumble crescente) até impactar o terreno/mar. Só **após** o impacto a `megaExplosion('crash')` é disparada e o jet é ocultado, dentro do fluxo de `_ejectAndRespawn()`.
+- **Requisito ancorado:** FR-06 (Player Health, Lives & Crash — bloco do mayday).
+
+### §10.5 — Bugs fora do Sprint 1
+
+> Os achados B-5 (FPS flaky em headless) e FIX-05..FIX-09 (drag aerodinâmico, momentum angular, calibração de `CONVERGE_RATE`, spin do mayday, vértices do oceano) **não** estão no escopo deste Sprint. Eles continuam no backlog do relatório do `game-developer` e podem ser refinados em uma futura iteração da SPEC (Sprint 2 — feel de voo; Sprint 3 — polish).

@@ -7,7 +7,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { game } from './state.js';
-import { ISLAND_DEFS, WORLD, COLORS } from './config.js';
+import { ISLAND_DEFS, WORLD, COLORS, PLAYER } from './config.js';
 import { explosion } from './fx.js';
 
 // ─── Oceano ──────────────────────────────────────────────────────────────────
@@ -154,12 +154,19 @@ export function createIslands() {
   }
 }
 
-/** Altura local de uma ilha em (dx, dz) relativos ao centro. Função pura. */
+/** Altura local de uma ilha em (dx, dz) relativos ao centro. Função pura.
+ *  Usa a mesma fórmula que createIsland() — parabólica + noise senoidal 4 octaves (T-BF01).
+ *  Antes usava apenas a parábola, causando divergência entre colisão e mesh visual. */
 export function islandHeightAt(isl, dx, dz) {
   const r2 = dx * dx + dz * dz;
   if (r2 >= isl.radius * isl.radius) return 0;
-  const t = Math.sqrt(r2) / isl.radius;
-  return isl.peakHeight * Math.max(0, 1 - t * t * 1.35);
+  const dist = Math.sqrt(r2) / isl.radius;
+  const noise =
+    Math.sin(dx * 0.18) * Math.cos(dz * 0.14) * 5 +
+    Math.sin(dx * 0.36 + 1.5) * Math.cos(dz * 0.29 + 0.8) * 2.5 +
+    Math.sin(dx * 0.72) * Math.cos(dz * 0.63) * 1.2 +
+    Math.sin(dx * 1.42 + 0.4) * Math.cos(dz * 1.18 - 0.6) * 0.6;
+  return Math.max(0, (1 - dist * dist * 1.35) * isl.peakHeight + noise);
 }
 
 /** Checa colisão do avião com terreno. @returns {'SEA'|'MOUNTAIN'|null} */
@@ -171,7 +178,7 @@ export function checkTerrainCollision(jetPosition) {
     const r2 = dx * dx + dz * dz;
     if (r2 < isl.radius * isl.radius) {
       const localH = islandHeightAt(isl, dx, dz);
-      if (jetPosition.y < localH + 2.5) return 'MOUNTAIN';
+      if (jetPosition.y < localH + PLAYER.MOUNTAIN_BUFFER) return 'MOUNTAIN';
     }
   }
   return null;
