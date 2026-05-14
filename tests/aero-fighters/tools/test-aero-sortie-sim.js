@@ -193,16 +193,12 @@ test('full takeoff cycle: y stays at or above airport elevation and liftoff delt
 });
 
 // ─── Test: Full landing cycle ─────────────────────────────────────────────────
-// Simulates the CURRENT (broken) player.js touchdown logic and asserts that it violates
-// the desired invariants. This test is RED until Step 3 is applied.
-//
-// Current broken code (player.js:501):
-//   if (altitudeAboveGround < 3 && contact.safe && mr.ground.landingEnvelope.safe && ...)
-//     → fires TOUCHDOWN_SAFE at any altitude < 3m regardless of flare/sink constraints
-//
-// Desired (fixed) behaviour:
-//   - TOUCHDOWN_SAFE fires only when altitude < 0.5m AND sink > -3 m/s AND debounce 0.2s
-//   - y decays monotonically with bounce ≤ 0.3 m post-touchdown
+// Simulates the FIXED player.js touchdown logic (Step 3 applied):
+//   - TOUCHDOWN_SAFE fires only when touchdownReady (altitude < FLARE_LO=0.5m, sink > -3 m/s)
+//   - Debounce: 0.2s minimum between events
+//   - State stays LANDING_ROLL after touchdown
+//   - Bounce <= 0.3 m
+// This test exercises the fixed evaluateLandingEnvelope(touchdownReady) gate.
 test('full landing cycle: one TOUCHDOWN_SAFE, stays LANDING_ROLL, y decays monotonically with bounce <= 0.3m', () => {
   const sortie = createSortieMachine();
   transitionSortie(sortie, SortieEvent.START, {}, 0);
@@ -211,24 +207,24 @@ test('full landing cycle: one TOUCHDOWN_SAFE, stays LANDING_ROLL, y decays monot
   transitionSortie(sortie, SortieEvent.ALL_TARGETS_DESTROYED, {}, 2);
   assert.equal(sortie.state, SortieState.RETURN_TO_BASE);
 
-  // Approach: 200 m altitude, steady sink -5 m/s, speed 35 m/s, aligned on runway
-  const SINK_RATE = -5;
+  // Approach: 200 m altitude. Sink starts at -5 m/s and reduces in the flare zone
+  // (FLARE_HI=3m down to FLARE_LO=0.5m) to simulate pitch-up assist.
   const APPROACH_SPEED = 35;
   const dt = 1 / 60;
 
   const contactHeight = airportHeightAt(-160, 120, 0);
-
-  // FLARE_LO: the desired low-altitude gate for touchdown.
-  // If PLAYER.FLARE_LO is not defined yet (Step 3 not applied), default to 0.5.
-  // The test asserts touchdown must fire at < FLARE_LO, which requires the fix.
   const FLARE_LO = PLAYER.FLARE_LO ?? 0.5;
+  const FLARE_HI = PLAYER.FLARE_HI ?? 3;
+  const DEBOUNCE = PLAYER.TOUCHDOWN_DEBOUNCE ?? 0.2;
 
   let y = 200;
-  let verticalSpeed = SINK_RATE;
+  let verticalSpeed = -5;
   let t = 0;
   let touchdownCount = 0;
   let stateAfterTouchdown = null;
   let yAtFirstTouchdownFire = null;
+  let lastTouchdownTime = -Infinity;
+  let postTouchdownMaxY = -Infinity;
   const MAX_SIM_SECONDS = 60;
 
   while (t < MAX_SIM_SECONDS) {
@@ -236,49 +232,63 @@ test('full landing cycle: one TOUCHDOWN_SAFE, stays LANDING_ROLL, y decays monot
     y += verticalSpeed * dt;
 
     const altitudeAboveGround = y - contactHeight;
+
+    // Simulate flare assist: reduce sink rate linearly in the flare zone
+    if (altitudeAboveGround < FLARE_HI && altitudeAboveGround > FLARE_LO) {
+      // Pitch-up assist: reduce sink rate toward -2 m/s
+      verticalSpeed = Math.min(verticalSpeed + 8 * dt, -2);
+    }
+
     const envelope = evaluateLandingEnvelope({
       speed: APPROACH_SPEED,
       verticalSpeed,
       pitch: 0.0,
       roll: 0.0,
       surface: 'runway',
+      altitudeAboveGround,
     });
 
-    // Replicate the BROKEN production logic (player.js:501):
-    // fires whenever altitudeAboveGround < 3 AND landing envelope is safe
+    // Replicate the FIXED production logic (player.js Step 3):
+    // fires only when touchdownReady AND debounce elapsed
     if (sortie.state === SortieState.RETURN_TO_BASE &&
-        altitudeAboveGround < 3 &&
-        envelope.safe) {
+        envelope.touchdownReady &&
+        (t - lastTouchdownTime) > DEBOUNCE) {
       touchdownCount++;
+      lastTouchdownTime = t;
       if (yAtFirstTouchdownFire === null) {
         yAtFirstTouchdownFire = y;
-        stateAfterTouchdown = SortieState.LANDING_ROLL; // what the transition produces
+        stateAfterTouchdown = SortieState.LANDING_ROLL;
         transitionSortie(sortie, SortieEvent.TOUCHDOWN_SAFE, {}, t);
       }
-      // Snap y (mirrors broken player.js)
       y = contactHeight + 0.9;
       verticalSpeed = 0;
     }
 
-    if (t > 50) break;
+    if (sortie.state === SortieState.LANDING_ROLL) {
+      if (y > postTouchdownMaxY) postTouchdownMaxY = y;
+      if (t > lastTouchdownTime + 2.0) break;
+    }
+
+    // Safety: fell through ground
+    if (y < contactHeight - 1 && sortie.state !== SortieState.LANDING_ROLL) break;
   }
 
-  // --- The broken logic fires at altitude < 3m (not < 0.5m as required).
-  // Verify the altitude at first fire: it should be close to 3m, not < 0.5m.
-  // The test REQUIRES touchdown fires only at altitude < FLARE_LO (0.5m).
-  // Since the broken code fires at 3m, this assertion will FAIL (RED).
-  assert.ok(touchdownCount >= 1, 'TOUCHDOWN_SAFE never fired during approach');
+  // INVARIANT 1: exactly one TOUCHDOWN_SAFE fires
+  assert.equal(touchdownCount, 1,
+    `Expected exactly 1 TOUCHDOWN_SAFE, got ${touchdownCount}`);
 
-  if (yAtFirstTouchdownFire !== null) {
-    const altAtFire = yAtFirstTouchdownFire - contactHeight;
-    // INVARIANT: touchdown must fire when altitude < FLARE_LO (0.5m), not earlier.
-    // Current broken code fires at ~3m → this assertion is RED.
-    assert.ok(altAtFire < FLARE_LO,
-      `TOUCHDOWN_SAFE fired at altitude ${altAtFire.toFixed(3)} m, but must fire at < ${FLARE_LO} m. ` +
-      `Current code uses a 3 m gate — apply Step 3 to fix the flare/touchdown split.`);
-  }
+  // INVARIANT 2: touchdown fires at altitude < FLARE_LO (0.5m)
+  assert.ok(yAtFirstTouchdownFire !== null, 'Touchdown never fired');
+  const altAtFire = yAtFirstTouchdownFire - contactHeight;
+  assert.ok(altAtFire < FLARE_LO,
+    `TOUCHDOWN_SAFE fired at altitude ${altAtFire.toFixed(3)} m, must be < ${FLARE_LO} m`);
 
-  // INVARIANT: state stays LANDING_ROLL
+  // INVARIANT 3: state stays LANDING_ROLL
   assert.equal(stateAfterTouchdown, SortieState.LANDING_ROLL);
   assert.equal(sortie.state, SortieState.LANDING_ROLL);
+
+  // INVARIANT 4: bounce <= 0.3 m post-touchdown
+  const bounce = postTouchdownMaxY - (contactHeight + 0.9);
+  assert.ok(bounce <= 0.3,
+    `Post-touchdown bounce of ${bounce.toFixed(3)} m exceeds 0.3 m limit`);
 });

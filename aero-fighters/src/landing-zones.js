@@ -42,8 +42,29 @@ export function evaluateTakeoffEnvelope({ speed, throttle, pitch, surface }) {
   };
 }
 
-export function evaluateLandingEnvelope({ speed, verticalSpeed, pitch, roll, surface }) {
-  const safe = surface === 'runway' && speed >= 18 && speed <= 52 &&
-    verticalSpeed > -9 && Math.abs(pitch) <= 0.32 && Math.abs(roll) <= 0.5;
-  return { safe, maxSpeed: 52, minSpeed: 18, maxDescentRate: -9, surface };
+/** Evaluates the landing envelope and classifies landing phase.
+ *  Phase 'flare': altitude in [FLARE_LO, FLARE_HI] and sink in [SINK_MAX, -1] m/s — assist only.
+ *  Phase 'touchdown': altitude < FLARE_LO AND sink > -3 m/s — fires TOUCHDOWN_SAFE.
+ *  Phase 'unsafe': roll > 0.5 OR pitch > 0.32 OR sink < SINK_MAX — fires TOUCHDOWN_UNSAFE. */
+export function evaluateLandingEnvelope({ speed, verticalSpeed, pitch, roll, surface, altitudeAboveGround = null }) {
+  const FLARE_HI = 3;
+  const FLARE_LO = 0.5;
+  const SINK_MAX = -9;
+  const unsafe = Math.abs(roll) > 0.5 || Math.abs(pitch) > 0.32 || verticalSpeed < SINK_MAX;
+  const onRunway = surface === 'runway';
+  const inSpeedRange = speed >= 18 && speed <= 52;
+  // 'safe' reflects that the aircraft CAN land (used for TOUCHDOWN_SAFE gate in player.js)
+  // touchdownReady: only true in the touchdown phase (altitude < FLARE_LO, sink > -3)
+  const touchdownReady = onRunway && inSpeedRange && !unsafe &&
+    altitudeAboveGround !== null && altitudeAboveGround < FLARE_LO && verticalSpeed > -3;
+  const safe = onRunway && inSpeedRange && !unsafe;
+  return {
+    safe,
+    touchdownReady,
+    unsafe,
+    maxSpeed: 52,
+    minSpeed: 18,
+    maxDescentRate: SINK_MAX,
+    surface,
+  };
 }

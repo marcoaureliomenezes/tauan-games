@@ -531,13 +531,23 @@ export function updatePlayer(dt, input, onCrash) {
     });
     mr.groundContact = contact;
     mr.landingZoneStatus = contact;
-    if (altitudeAboveGround < 3 && contact.safe && mr.ground.landingEnvelope.safe && mr.sortie.state === SortieState.RETURN_TO_BASE) {
-      jet.position.y = contact.height + 0.9;
-      mr.ground.groundSpeed = Math.max(12, game.player.speed * 0.62);
-      transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_SAFE, {}, game.time);
-    } else if (altitudeAboveGround < 2 && !contact.safe && mr.sortie.state === SortieState.RETURN_TO_BASE) {
-      transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_UNSAFE, {}, game.time);
-      onCrash(contact.reason);
+    const verticalSpeed = fwd.y * game.player.speed - PLAYER.GRAVITY;
+    if (mr.sortie.state === SortieState.RETURN_TO_BASE) {
+      // Touchdown with flare/hysteresis:
+      // - touchdownReady: altitude < FLARE_LO (0.5m) AND sink > -3 m/s AND not unsafe
+      // - Debounce: TOUCHDOWN_SAFE cannot fire within TOUCHDOWN_DEBOUNCE seconds of last fire
+      const lastTD = mr.sortie.lastTouchdownTime ?? -Infinity;
+      const debounceOk = (game.time - lastTD) > PLAYER.TOUCHDOWN_DEBOUNCE;
+      if (mr.ground.landingEnvelope.touchdownReady && debounceOk) {
+        jet.position.y = contact.height + 0.9;
+        mr.ground.groundSpeed = Math.max(12, game.player.speed * 0.62);
+        mr.sortie.lastTouchdownTime = game.time;
+        transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_SAFE, {}, game.time);
+      // Unsafe touchdown: bad attitude OR sink rate < SINK_MAX — evaluated at low altitude
+      } else if (altitudeAboveGround < PLAYER.FLARE_LO && mr.ground.landingEnvelope.unsafe) {
+        transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_UNSAFE, {}, game.time);
+        onCrash(contact.reason);
+      }
     }
   }
 }
