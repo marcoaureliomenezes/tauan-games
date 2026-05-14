@@ -329,7 +329,11 @@ export function updatePlayer(dt, input, onCrash) {
     }
     const fwdG = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
     jet.position.addScaledVector(fwdG, game.player.speed * dt);
-    jet.position.y = contact.height + 0.9;
+    // Only snap to ground when NOT in active liftoff rotation.
+    // Once liftoffVsp is accumulating, allow y to rise freely.
+    if (!sortie.liftoffVsp || sortie.liftoffVsp <= 0) {
+      jet.position.y = contact.height + 0.9;
+    }
 
     if (sortie.state === SortieState.TAXI_OUT && contact.type === 'runway') {
       transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, game.time);

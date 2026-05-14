@@ -19,8 +19,8 @@ export const PLAYER = {
   SEA_CRASH_Y: 3,     // abaixo disso = crash no mar
   MOUNTAIN_BUFFER: 10,  // margem em cima do terreno antes de crashar (cobre pico max de noise ~9.3 — T-BF03)
   // Takeoff rotation parameters
-  V_ROTATE: 42,       // m/s — velocidade mínima para iniciar rotação de decolagem
-  ROTATE_LIFT: 7.5,   // m/s² — sustentação extra durante rotação (atinge 4m em ~0.8s)
+  V_ROTATE: 28,       // m/s — velocidade mínima para iniciar rotação de decolagem (era 42)
+  ROTATE_LIFT: 15,    // m/s² — sustentação extra durante rotação (era 7.5; atinge 4m em ~0.5s)
   // Landing flare / touchdown parameters
   FLARE_HI: 3,        // m — altitude de entrada na fase de flare
   FLARE_LO: 0.5,      // m — altitude de toque (touchdown só ocorre abaixo disso)
