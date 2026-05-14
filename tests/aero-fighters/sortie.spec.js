@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const path = require('path');
 
 // NOTE: GROUND_STATES is kept as a local Set here intentionally.
 // Playwright specs run in a browser context via page.evaluate(); they cannot import
@@ -99,5 +100,55 @@ test('E2E takeoff: y stays above airport elevation and liftoff delta <= 1m', asy
   const bigDeltas = violations.filter(v => v.deltaY);
   expect(bigDeltas.length).toBe(0,
     `Single-frame liftoff Δy > 1 m detected: ${JSON.stringify(bigDeltas.slice(0, 3))}`
+  );
+});
+
+// ─── Task B — Visual smoke: desert runway must be flat (no terrain height > 0) ─
+// Loads map=desert in testMode, samples terrain height at a grid covering the
+// runway + taxiway + service footprint at 10 m resolution using the runtime
+// __aeroDebug.getTerrainHeightAt(x, z) hook (same function the map validator uses).
+// Any sample > 0 means a terrain feature (mesa/noise) is intruding into the airport,
+// which is the exact defect the airport-flatten fix (Step 1) was meant to prevent.
+// A runway-camera screenshot is saved for operator eyeball verification.
+//
+// Desert airport geometry (from src/airport.js):
+//   Runway:      center (-160, 120), length 760, width 58   → x ∈ [-189,−131], z ∈ [−260, 500]
+//   Taxiway:     center (-160, 260), length 180, width 34   → x ∈ [-177,−143], z ∈ [ 170, 350]
+//   ServiceZone: center (-160, 350), length  86, width 70   → x ∈ [-195,−125], z ∈ [ 307, 393]
+test('Visual smoke: desert runway terrain height is 0 everywhere in airport footprint', async ({ page }) => {
+  await page.goto('/aero-fighters/index.html?map=desert&testMode=1');
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+
+  // Sample the combined footprint at 10 m resolution.
+  // Returns an array of { x, z, height } for any sample where height > 0.
+  const intrusions = await page.evaluate(() => {
+    const STEP = 10;
+    const zones = [
+      // [xMin, xMax, zMin, zMax] — all inclusive
+      [-189, -131, -260, 500],   // runway
+      [-177, -143,  170, 350],   // taxiway
+      [-195, -125,  307, 393],   // service zone
+    ];
+    const found = [];
+    for (const [xMin, xMax, zMin, zMax] of zones) {
+      for (let x = xMin; x <= xMax; x += STEP) {
+        for (let z = zMin; z <= zMax; z += STEP) {
+          const h = window.__aeroDebug.getTerrainHeightAt(x, z);
+          if (h > 0) found.push({ x, z, height: h });
+        }
+      }
+    }
+    return found;
+  });
+
+  // Save screenshot for operator eyeball check regardless of result.
+  // The image path is relative to the spec file so it stays under version control.
+  const screenshotPath = path.join(__dirname, 'screenshots', 'desert-runway-clean.png');
+  await page.screenshot({ path: screenshotPath, fullPage: false });
+
+  // Assert: zero terrain intrusions into airport footprint.
+  expect(intrusions.length).toBe(0,
+    `Terrain height > 0 detected inside desert airport footprint at ${intrusions.length} sample(s):\n` +
+    JSON.stringify(intrusions.slice(0, 5), null, 2)
   );
 });
