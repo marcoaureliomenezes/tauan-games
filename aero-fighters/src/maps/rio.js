@@ -4,6 +4,8 @@
 
 import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
+import { airportSurface } from '../landing-zones.js';
+import { desertAirport } from '../airport.js';
 
 let _scene = null;
 
@@ -212,8 +214,14 @@ export function updateRioWorld(dt, playerPos) {
 
 /** Altura de um morro em (dx, dz) relativos ao centro.
  *  Inclui o mesmo noise senoidal de createMorro() e as fórmulas corretas por tipo
- *  para eliminar divergência entre mesh visual e colisão. */
+ *  para eliminar divergência entre mesh visual e colisão.
+ *  Airport-flatten: se o ponto cai sobre a superfície do aeroporto, retorna elevation=0 (parity). */
 export function rioHeightAt(isl, dx, dz) {
+  const worldX = isl.cx + dx;
+  const worldZ = isl.cz + dz;
+  if (airportSurface({ x: worldX, z: worldZ }) !== 'none') {
+    return desertAirport.elevation;
+  }
   const t = Math.sqrt(dx * dx + dz * dz) / isl.radius;
   if (t >= 1.0) return 0;
   const noise = Math.sin(dx * 0.2) * 2 + Math.cos(dz * 0.18) * 2;

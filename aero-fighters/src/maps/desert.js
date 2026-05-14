@@ -4,6 +4,8 @@
 
 import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
+import { airportSurface } from '../landing-zones.js';
+import { desertAirport } from '../airport.js';
 
 // HEADLESS guard: cena injetada via parâmetro
 let _scene = null;
@@ -108,8 +110,14 @@ export function updateDesertWorld(dt, playerPos) {
 }
 
 /** Altura de uma mesa/cânion em (dx, dz) relativos ao centro.
- *  Inclui o mesmo noise senoidal de createMesa() para evitar divergência de colisão. */
+ *  Inclui o mesmo noise senoidal de createMesa() para evitar divergência de colisão.
+ *  Airport-flatten: se o ponto cai sobre a superfície do aeroporto, retorna elevation=0. */
 export function desertHeightAt(isl, dx, dz) {
+  const worldX = isl.cx + dx;
+  const worldZ = isl.cz + dz;
+  if (airportSurface({ x: worldX, z: worldZ }) !== 'none') {
+    return desertAirport.elevation;
+  }
   const noise = Math.sin(dx * 0.15) * 1.5 + Math.cos(dz * 0.12) * 1.5;
   const t = Math.sqrt(dx * dx + dz * dz) / isl.radius;
   if (isl.type === 'mesa') {
