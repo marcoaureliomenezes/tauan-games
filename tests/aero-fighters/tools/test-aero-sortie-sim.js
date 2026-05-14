@@ -5,7 +5,7 @@ import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR, PLAYER } from '../../
 import { evaluateLandingEnvelope, evaluateTakeoffEnvelope, airportHeightAt } from '../../../aero-fighters/src/landing-zones.js';
 import { createGroundPhysicsState, updateGroundRoll } from '../../../aero-fighters/src/ground-physics.js';
 import { createServiceState, startService, updateService } from '../../../aero-fighters/src/service-scene.js';
-import { createSortieMachine, SortieEvent, SortieState, transitionSortie } from '../../../aero-fighters/src/sortie-state.js';
+import { createSortieMachine, SortieEvent, SortieState, GROUND_STATES, transitionSortie } from '../../../aero-fighters/src/sortie-state.js';
 import { createEjectionState, requestEjection, updateEjection } from '../../../aero-fighters/src/ejection.js';
 
 test('sortie state machine covers takeoff to return-to-base to service', () => {
@@ -52,15 +52,6 @@ test('ejection survival policy always saves pilot in first slice', () => {
   assert.equal(e.pilotState, 'SURVIVED');
   assert.equal(e.saved, true);
 });
-
-// ─── Ground-state constants mirrored from player.js ─────────────────────────
-const GROUND_STATES = new Set([
-  SortieState.TAXI_OUT,
-  SortieState.TAKEOFF_ROLL,
-  SortieState.LANDING_ROLL,
-  SortieState.TAXI_IN,
-  SortieState.NEXT_SORTIE_READY,
-]);
 
 const AIRPORT_ELEVATION = 0; // desertAirport.elevation
 

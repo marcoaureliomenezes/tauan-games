@@ -15,7 +15,7 @@ import { explosion, megaExplosion, spawnMissileSmoke } from './fx.js';
 import { checkTerrainCollision } from './world.js';
 import { classifyGroundContact, airportSurface } from './landing-zones.js';
 import { syncFlightGroundDiagnostics, updateGroundRoll } from './ground-physics.js';
-import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
+import { SortieEvent, SortieState, GROUND_STATES, transitionSortie } from './sortie-state.js';
 
 // ─── Mesh do F-35 ────────────────────────────────────────────────────────────
 function buildJet() {
