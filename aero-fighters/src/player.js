@@ -13,6 +13,9 @@ import { game } from './state.js';
 import { PLAYER, ROLL, COLORS } from './config.js';
 import { explosion, megaExplosion, spawnMissileSmoke } from './fx.js';
 import { checkTerrainCollision } from './world.js';
+import { classifyGroundContact, airportSurface } from './landing-zones.js';
+import { syncFlightGroundDiagnostics, updateGroundRoll } from './ground-physics.js';
+import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 
 // ─── Mesh do F-35 ────────────────────────────────────────────────────────────
 function buildJet() {
@@ -259,7 +262,7 @@ function buildWingLoadout(jet) {
 export const jet = buildJet();
 jet.scale.set(1.4, 1.4, 1.4);
 buildWingLoadout(jet);
-jet.position.set(0, PLAYER.START_HEIGHT, 0);
+jet.position.set(game.player.x, game.player.y, game.player.pz || 0);
 scene.add(jet);
 
 // ─── Estado de física ────────────────────────────────────────────────────────
@@ -298,6 +301,77 @@ export function barrelRoll() {
  */
 export function updatePlayer(dt, input, onCrash) {
   if (!game.running || game.flags.paused) return;
+  const mr = game.missionRealism;
+  const sortie = mr?.sortie;
+  const groundStates = new Set([
+    SortieState.TAXI_OUT,
+    SortieState.TAKEOFF_ROLL,
+    SortieState.LANDING_ROLL,
+    SortieState.TAXI_IN,
+    SortieState.NEXT_SORTIE_READY,
+  ]);
+  if (mr?.enabled && sortie && groundStates.has(sortie.state)) {
+    const contact = classifyGroundContact({ x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
+    mr.groundContact = contact;
+    mr.landingZoneStatus = contact;
+    updateGroundRoll(mr.ground, input, dt, contact.type, game.player.throttle);
+    if (input.throttleUp) game.player.throttle = Math.min(1, game.player.throttle + dt * PLAYER.THROTTLE_UP_RATE);
+    if (input.throttleDown) game.player.throttle = Math.max(0.02, game.player.throttle - dt * PLAYER.THROTTLE_DN_RATE);
+    game.player.speed = mr.ground.groundSpeed;
+
+    if (input.rollLeft || input.yawLeft) {
+      _yawQ.setFromAxisAngle(_worldUp, PLAYER.YAW_RATE * 0.55 * dt);
+      jet.quaternion.premultiply(_yawQ);
+    }
+    if (input.rollRight || input.yawRight) {
+      _yawQ.setFromAxisAngle(_worldUp, -PLAYER.YAW_RATE * 0.55 * dt);
+      jet.quaternion.premultiply(_yawQ);
+    }
+    const fwdG = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
+    jet.position.addScaledVector(fwdG, game.player.speed * dt);
+    jet.position.y = contact.height + 0.9;
+
+    if (sortie.state === SortieState.TAXI_OUT && contact.type === 'runway') {
+      transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, game.time);
+    }
+    if (sortie.state === SortieState.TAKEOFF_ROLL && game.player.speed >= 38) {
+      transitionSortie(sortie, SortieEvent.TAKEOFF_SPEED_REACHED, {}, game.time);
+    }
+    // Smooth liftoff: gate on runway contact + V_ROTATE speed + rotation input.
+    // Applies ROTATE_LIFT force gradually; no teleport. Transitions to AIRBORNE
+    // only when height > 4m above airport elevation AND vertical speed > 0.
+    if (sortie.state === SortieState.TAKEOFF_ROLL &&
+        contact.type === 'runway' &&
+        game.player.speed >= PLAYER.V_ROTATE &&
+        (input.pitchDown || input.pitchUp)) {
+      if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
+      sortie.liftoffVsp += PLAYER.ROTATE_LIFT * dt;
+      jet.position.y += sortie.liftoffVsp * dt;
+      game.player.speed = Math.max(game.player.speed, 45);
+      const altAbove = jet.position.y - contact.height;
+      if (altAbove > 4 && sortie.liftoffVsp > 0) {
+        transitionSortie(sortie, SortieEvent.LIFTOFF, {}, game.time);
+      }
+    }
+    // Per-frame floor clamp: never let the jet go underground while in ground states
+    // or when sitting on an airport surface.
+    const floorClampHeight = contact.height + 0.9;
+    if (GROUND_STATES.has(sortie.state) || airportSurface({ x: jet.position.x, z: jet.position.z }) !== 'none') {
+      jet.position.y = Math.max(jet.position.y, floorClampHeight);
+    } else {
+      // Still clamp to runway height if we're just barely off the ground during liftoff rotation
+      jet.position.y = Math.max(jet.position.y, contact.height + 0.9);
+    }
+    if ((sortie.state === SortieState.LANDING_ROLL || sortie.state === SortieState.TAXI_IN) && contact.type === 'service' && game.player.speed < 10) {
+      transitionSortie(sortie, SortieEvent.SERVICE_ZONE_REACHED, {}, game.time);
+    }
+
+    game.player.x = jet.position.x;
+    game.player.y = jet.position.y;
+    game.player.pz = jet.position.z;
+    game.player.pitch = jet.rotation.x;
+    return;
+  }
 
   // Mayday: sem controle — cai com wobble e fogo até impactar o solo
   if (game.flags.mayday) {
@@ -373,7 +447,18 @@ export function updatePlayer(dt, input, onCrash) {
 
   // Crash
   const crash = checkTerrainCollision(jet.position);
-  if (crash) { onCrash(crash); return; }
+  if (crash) {
+    if (mr?.enabled && crash === 'MOUNTAIN') {
+      transitionSortie(mr.sortie, SortieEvent.MOUNTAIN_CONTACT, {}, game.time);
+      game.flags.mayday = true;
+      game.flags.invincibility = 0;
+      explosion(jet.position.clone(), 1.6, COLORS.playerHitOrange);
+      audio.mayday();
+      return;
+    }
+    onCrash(crash);
+    return;
+  }
 
   // Light smoke trail from engine when hull is at 1 HP
   if (game.player.hp === 1) {
@@ -412,12 +497,49 @@ export function updatePlayer(dt, input, onCrash) {
     }
   }
 
+  // Per-frame floor clamp (airborne physics path):
+  // If the jet is over an airport surface, ensure y never goes below contact.height + 0.9.
+  // This guard prevents the one-frame underground clip when gravity drives y < terrain.
+  if (mr?.enabled) {
+    const _floorContact = classifyGroundContact(
+      { x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
+    const _onAirportSurface = airportSurface({ x: jet.position.x, z: jet.position.z }) !== 'none';
+    const _inGroundState = GROUND_STATES.has(mr?.sortie?.state);
+    if (_inGroundState || _onAirportSurface) {
+      jet.position.y = Math.max(jet.position.y, _floorContact.height + 0.9);
+    }
+  }
+
   // CONTRATO: writer de game.player.x/y/pitch/pz — escritos POR ÚLTIMO (após movimento do frame)
   // Intencional: refletem posição final do frame; HUD e tests sempre lêem valor corrente.
   game.player.x = jet.position.x;
   game.player.y = jet.position.y;
   game.player.pz = jet.position.z;
   game.player.pitch = jet.rotation.x;
+  if (mr?.enabled) {
+    const contact = classifyGroundContact({ x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
+    const altitudeAboveGround = jet.position.y - contact.height;
+    syncFlightGroundDiagnostics(mr.ground, {
+      speed: game.player.speed,
+      throttle: game.player.throttle,
+      pitch: jet.rotation.x,
+      roll: jet.rotation.z,
+      verticalSpeed: fwd.y * game.player.speed - PLAYER.GRAVITY,
+      surface: contact.type,
+      contact,
+      altitudeAboveGround,
+    });
+    mr.groundContact = contact;
+    mr.landingZoneStatus = contact;
+    if (altitudeAboveGround < 3 && contact.safe && mr.ground.landingEnvelope.safe && mr.sortie.state === SortieState.RETURN_TO_BASE) {
+      jet.position.y = contact.height + 0.9;
+      mr.ground.groundSpeed = Math.max(12, game.player.speed * 0.62);
+      transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_SAFE, {}, game.time);
+    } else if (altitudeAboveGround < 2 && !contact.safe && mr.sortie.state === SortieState.RETURN_TO_BASE) {
+      transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_UNSAFE, {}, game.time);
+      onCrash(contact.reason);
+    }
+  }
 }
 
 function _ejectAndRespawn(onGameOver) {
@@ -450,6 +572,7 @@ export function playerHit() {
   } else {
     game.player.hp = 0;
     game.flags.mayday = true;
+    if (game.missionRealism?.enabled) transitionSortie(game.missionRealism.sortie, SortieEvent.CRITICAL_DAMAGE, {}, game.time);
     game.flags.invincibility = 0;
     explosion(jet.position.clone(), 1.6, COLORS.playerHitOrange);
     audio.mayday();
@@ -458,12 +581,19 @@ export function playerHit() {
 
 /** Reseta o avião para o estado inicial (chamado por restartGame). */
 export function respawnJet() {
-  jet.position.set(0, PLAYER.START_HEIGHT, 0);
+  if (game.missionRealism?.enabled) {
+    jet.position.set(-160, 0.9, 350);
+  } else {
+    jet.position.set(0, PLAYER.START_HEIGHT, 0);
+  }
   jet.quaternion.set(0, 0, 0, 1);
   jet.visible = true;
-  game.player.speed = 25;
-  game.player.throttle = 0.5;
+  game.player.speed = game.missionRealism?.enabled ? 0 : 25;
+  game.player.throttle = game.missionRealism?.enabled ? 0.05 : 0.5;
   game.player.stalled = false;
+  game.player.x = jet.position.x;
+  game.player.y = jet.position.y;
+  game.player.pz = jet.position.z;
 }
 
 /** Vetor "forward" do jato + posição do bico (para spawnar projéteis). */

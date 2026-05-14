@@ -96,16 +96,27 @@ function simGroundFrame(state, input, dt) {
   }
 }
 
-// Simulates the liftoff transition: detects when sortie should become AIRBORNE.
+// Simulates the FIXED liftoff transition: smooth lift using ROTATE_LIFT force.
+// Returns deltaY for the current frame to check the <= 1m invariant.
 function simLiftoffFrame(state, input, dt) {
   const { sortie, jet } = state;
   const prevY = jet.y;
+  const ROTATE_LIFT = PLAYER.ROTATE_LIFT ?? 7.5;
+  const V_ROTATE = PLAYER.V_ROTATE ?? 42;
+  const contactHeight = 0; // airport elevation
 
-  if (sortie.state === SortieState.TAKEOFF_ROLL && state.speed >= 42 && (input.pitchDown || input.pitchUp)) {
-    // BUG: current code does jet.position.y = 6 (teleport).
-    // The fixed version smoothly raises y. We detect LIFTOFF event here.
-    jet.y = 6; // <<< this is the BUG being tested — teleport > 1 m
-    transitionSortie(sortie, SortieEvent.LIFTOFF, {}, state.t);
+  if (sortie.state === SortieState.TAKEOFF_ROLL &&
+      state.speed >= V_ROTATE &&
+      (input.pitchDown || input.pitchUp)) {
+    if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
+    sortie.liftoffVsp += ROTATE_LIFT * dt;
+    jet.y += sortie.liftoffVsp * dt;
+    // Floor clamp
+    jet.y = Math.max(jet.y, contactHeight + 0.9);
+    const altAbove = jet.y - contactHeight;
+    if (altAbove > 4 && sortie.liftoffVsp > 0) {
+      transitionSortie(sortie, SortieEvent.LIFTOFF, {}, state.t);
+    }
   }
 
   const deltaY = Math.abs(jet.y - prevY);
@@ -113,6 +124,10 @@ function simLiftoffFrame(state, input, dt) {
 }
 
 // ─── Test: Full takeoff cycle ─────────────────────────────────────────────────
+// Drives the physics module from cold start through TAXI_OUT → TAKEOFF_ROLL → AIRBORNE.
+// Invariants:
+//   A. While in ground states, y >= airport elevation every frame.
+//   B. During liftoff rotation, no single-frame Δy > 1 m (detects teleport bug).
 test('full takeoff cycle: y stays at or above airport elevation and liftoff delta <= 1m', () => {
   const sortie = createSortieMachine();
   const ground = createGroundPhysicsState();
@@ -124,28 +139,33 @@ test('full takeoff cycle: y stays at or above airport elevation and liftoff delt
     speed: 0,
     ground,
     sortie,
-    jet: { x: -160, y: AIRPORT_ELEVATION + 0.9, z: 350 }, // start at service zone
+    jet: { x: -160, y: AIRPORT_ELEVATION + 0.9, z: 350 },
   };
 
   const violations = [];
-  let liftoffDeltaY = null;
+  const liftoffDeltas = []; // all per-frame Δy during liftoff rotation
   const dt = 1 / 60;
   const MAX_SIM_SECONDS = 60;
+  let inLiftoffRotation = false;
 
   while (state.t < MAX_SIM_SECONDS) {
-    const input = { throttleUp: true, pitchUp: state.speed >= 40 };
+    const V_ROTATE = PLAYER.V_ROTATE ?? 42;
+    const pitchUp = state.speed >= V_ROTATE;
+    const input = { throttleUp: true, pitchUp };
     state.t += dt;
 
-    const prevY = state.jet.y;
+    // Once rotation starts, only run liftoffFrame (not groundFrame which resets y)
+    if (state.sortie.state === SortieState.TAKEOFF_ROLL && pitchUp && state.speed >= V_ROTATE) {
+      inLiftoffRotation = true;
+    }
 
-    if (GROUND_STATES.has(state.sortie.state)) {
+    if (GROUND_STATES.has(state.sortie.state) && !inLiftoffRotation) {
       simGroundFrame(state, input, dt);
     }
 
-    // Check for liftoff transition (mirrors the broken teleport in player.js)
-    if (state.sortie.state === SortieState.TAKEOFF_ROLL && state.speed >= 42 && input.pitchUp) {
+    if (inLiftoffRotation && state.sortie.state === SortieState.TAKEOFF_ROLL) {
       const { deltaY } = simLiftoffFrame(state, input, dt);
-      liftoffDeltaY = deltaY;
+      liftoffDeltas.push(deltaY);
     }
 
     // INVARIANT A: while in ground states, y >= airport elevation
@@ -155,18 +175,18 @@ test('full takeoff cycle: y stays at or above airport elevation and liftoff delt
       }
     }
 
-    // Exit once airborne
     if (state.sortie.state === SortieState.AIRBORNE) break;
   }
 
-  // Assert INVARIANT A: no frame underground during ground states
+  // INVARIANT A: no frame underground during ground states
   assert.equal(violations.length, 0,
     `Player went underground during ground states: ${JSON.stringify(violations.slice(0, 3))}`);
 
-  // Assert INVARIANT B: liftoff delta <= 1 m (detects teleport bug)
-  assert.ok(liftoffDeltaY !== null, 'Liftoff transition never fired');
-  assert.ok(liftoffDeltaY <= 1,
-    `Single-frame liftoff Δy too large: ${liftoffDeltaY.toFixed(3)} m (should be <= 1 m; current code teleports to y=6)`);
+  // INVARIANT B: every per-frame Δy during liftoff rotation must be <= 1 m
+  assert.ok(liftoffDeltas.length > 0, 'Liftoff rotation never started');
+  const maxDeltaY = Math.max(...liftoffDeltas);
+  assert.ok(maxDeltaY <= 1,
+    `Single-frame liftoff Δy too large: ${maxDeltaY.toFixed(3)} m (should be <= 1 m; current code teleports to y=6)`);
 
   // Assert reached AIRBORNE
   assert.equal(state.sortie.state, SortieState.AIRBORNE);

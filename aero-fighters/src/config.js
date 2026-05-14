@@ -18,6 +18,14 @@ export const PLAYER = {
   START_HEIGHT: 80,   // altura inicial em unidades 3D
   SEA_CRASH_Y: 3,     // abaixo disso = crash no mar
   MOUNTAIN_BUFFER: 10,  // margem em cima do terreno antes de crashar (cobre pico max de noise ~9.3 — T-BF03)
+  // Takeoff rotation parameters
+  V_ROTATE: 42,       // m/s — velocidade mínima para iniciar rotação de decolagem
+  ROTATE_LIFT: 7.5,   // m/s² — sustentação extra durante rotação (atinge 4m em ~0.8s)
+  // Landing flare / touchdown parameters
+  FLARE_HI: 3,        // m — altitude de entrada na fase de flare
+  FLARE_LO: 0.5,      // m — altitude de toque (touchdown só ocorre abaixo disso)
+  TOUCHDOWN_DEBOUNCE: 0.2, // s — janela de debounce para evento TOUCHDOWN_SAFE
+  SINK_MAX: -9,       // m/s — taxa de descida insegura (TOUCHDOWN_UNSAFE)
 };
 
 /** Canhão de tiro rápido */
