@@ -55,7 +55,7 @@ O teste deve falhar antes da implementacao do mapa e passar ao final da feature.
 
 ---
 
-### [-] T02 — QA: expandir validadores existentes para inhauma
+### [x] T02 — QA: expandir validadores existentes para inhauma
 
 **Owner:** `qa-engineer`
 
@@ -86,7 +86,7 @@ No inicio, os checks de `inhauma` podem falhar por mapa ausente; ao final devem 
 
 ---
 
-### [ ] T03 — Game-dev: registrar map key e skeleton do mapa Inhauma
+### [-] T03 — Game-dev: registrar map key e skeleton do mapa Inhauma
 
 **Owner:** `game-developer`
 

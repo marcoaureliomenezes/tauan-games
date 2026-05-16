@@ -1,4 +1,4 @@
-import { materializeLayout, validateMap, validateTargets, desertHeightAt, rioHeightAt, MAP_VALIDATION_DEFS } from '../../../aero-fighters/src/map-validation.js';
+import { materializeLayout, validateMap, validateTargets, desertHeightAt, rioHeightAt, inhaumaHeightAt, MAP_VALIDATION_DEFS } from '../../../aero-fighters/src/map-validation.js';
 import { invalidMapCases } from '../fixtures/invalid-map-cases.js';
 
 function cloneTargets(targets) {
@@ -12,21 +12,31 @@ function formatError(error) {
 }
 
 // ─── Airport geometry constants (mirrors airport.js, no THREE dependency) ───
-const AIRPORT_FOOTPRINT = {
-  elevation: 0,
-  runway:      { cx: -160, cz: 120,  halfW: 29,   halfL: 380 },
-  taxiway:     { cx: -160, cz: 260,  halfW: 17,   halfL: 90  },
-  serviceZone: { cx: -160, cz: 350,  halfW: 35,   halfL: 43  },
+const AIRPORT_FOOTPRINTS = {
+  desert: {
+    elevation: 0,
+    runway:      { cx: -160, cz: 120,  halfW: 29, halfL: 380 },
+    taxiway:     { cx: -160, cz: 260,  halfW: 17, halfL: 90  },
+    serviceZone: { cx: -160, cz: 350,  halfW: 35, halfL: 43  },
+  },
+  inhauma: {
+    elevation: 0,
+    runway:      { cx: -560, cz: 320, halfW: 26, halfL: 310 },
+    taxiway:     { cx: -560, cz: 430, halfW: 15, halfL: 80  },
+    serviceZone: { cx: -610, cz: 475, halfW: 42, halfL: 38  },
+  },
 };
 
 function inAirportRect(x, z, rect) {
   return Math.abs(x - rect.cx) <= rect.halfW && Math.abs(z - rect.cz) <= rect.halfL;
 }
 
-function isOnAirportSurface(x, z) {
-  return inAirportRect(x, z, AIRPORT_FOOTPRINT.runway) ||
-    inAirportRect(x, z, AIRPORT_FOOTPRINT.taxiway) ||
-    inAirportRect(x, z, AIRPORT_FOOTPRINT.serviceZone);
+function isOnAirportSurface(mapId, x, z) {
+  const footprint = AIRPORT_FOOTPRINTS[mapId];
+  if (!footprint) return false;
+  return inAirportRect(x, z, footprint.runway) ||
+    inAirportRect(x, z, footprint.taxiway) ||
+    inAirportRect(x, z, footprint.serviceZone);
 }
 
 // ─── Runway-obstacle sweep ────────────────────────────────────────────────────
@@ -47,6 +57,9 @@ function buildHeightFnForMap(mapId) {
       } else if (mapId === 'rio') {
         const h = rioHeightAt(region, dx, dz);
         if (h > maxH) maxH = h;
+      } else if (mapId === 'inhauma') {
+        const h = inhaumaHeightAt(region, dx, dz);
+        if (h > maxH) maxH = h;
       }
     }
     return maxH;
@@ -57,7 +70,9 @@ function runwayObstacleSweep(mapId) {
   const heightAt = buildHeightFnForMap(mapId);
   if (!heightAt) return [];
   const errors = [];
-  const { runway, taxiway, serviceZone, elevation } = AIRPORT_FOOTPRINT;
+  const footprint = AIRPORT_FOOTPRINTS[mapId];
+  if (!footprint) return [];
+  const { runway, taxiway, serviceZone, elevation } = footprint;
   const zones = [runway, taxiway, serviceZone];
   for (const zone of zones) {
     const xMin = zone.cx - zone.halfW;
@@ -78,7 +93,7 @@ function runwayObstacleSweep(mapId) {
 
 let failed = false;
 
-for (const mapId of ['rio', 'desert']) {
+for (const mapId of ['rio', 'desert', 'inhauma']) {
   const errors = validateMap(mapId);
   if (errors.length) {
     failed = true;
@@ -90,7 +105,7 @@ for (const mapId of ['rio', 'desert']) {
 }
 
 // ─── Runway-obstacle sweep for each map ──────────────────────────────────────
-for (const mapId of ['rio', 'desert']) {
+for (const mapId of ['rio', 'desert', 'inhauma']) {
   const sweepErrors = runwayObstacleSweep(mapId);
   if (sweepErrors.length) {
     failed = true;
