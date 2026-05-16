@@ -86,7 +86,7 @@ No inicio, os checks de `inhauma` podem falhar por mapa ausente; ao final devem 
 
 ---
 
-### [-] T03 — Game-dev: registrar map key e skeleton do mapa Inhauma
+### [x] T03 — Game-dev: registrar map key e skeleton do mapa Inhauma
 
 **Owner:** `game-developer`
 
@@ -108,7 +108,7 @@ npx playwright test tests/aero-fighters/map.spec.js --config=tests/playwright.co
 
 ---
 
-### [ ] T04 — Game-dev: implementar relevo procedural fiel
+### [x] T04 — Game-dev: implementar relevo procedural fiel
 
 **Owner:** `game-developer`
 
@@ -134,7 +134,7 @@ npx playwright test tests/aero-fighters/inhauma-fidelity.spec.js --config=tests/
 
 ---
 
-### [ ] T05 — Game-dev: estradas e orientacao geografica
+### [x] T05 — Game-dev: estradas e orientacao geografica
 
 **Owner:** `game-developer`
 
@@ -156,7 +156,7 @@ npx playwright test tests/aero-fighters/inhauma-fidelity.spec.js --config=tests/
 
 ---
 
-### [ ] T06 — Game-dev: Inhauma ultra detail
+### [x] T06 — Game-dev: Inhauma ultra detail
 
 **Owner:** `game-developer`
 
@@ -180,7 +180,7 @@ npx playwright test tests/aero-fighters/inhauma-fidelity.spec.js --config=tests/
 
 ---
 
-### [ ] T07 — Game-dev: Cachoeira da Prata, Sete Lagoas e fazendas
+### [x] T07 — Game-dev: Cachoeira da Prata, Sete Lagoas e fazendas
 
 **Owner:** `game-developer`
 
@@ -199,7 +199,7 @@ npx playwright test tests/aero-fighters/inhauma-fidelity.spec.js --config=tests/
 
 ---
 
-### [ ] T08 — Game-dev: aerodromo de Inhauma e landing zones por mapa
+### [x] T08 — Game-dev: aerodromo de Inhauma e landing zones por mapa
 
 **Owner:** `game-developer`
 
@@ -223,7 +223,7 @@ npx playwright test tests/aero-fighters/inhauma-fidelity.spec.js --config=tests/
 
 ---
 
-### [ ] T09 — Game-dev: targets e gameplay do mapa
+### [x] T09 — Game-dev: targets e gameplay do mapa
 
 **Owner:** `game-developer`
 
@@ -246,7 +246,7 @@ npx playwright test tests/aero-fighters/map.spec.js tests/aero-fighters/inhauma-
 
 ---
 
-### [ ] T10 — QA: visual smoke e regressao completa
+### [-] T10 — QA: visual smoke e regressao completa
 
 **Owner:** `qa-engineer`
 

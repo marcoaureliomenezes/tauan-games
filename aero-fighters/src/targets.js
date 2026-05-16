@@ -12,6 +12,7 @@ import { explosion, megaExplosion, spawnShockwave, scheduleDelayed } from './fx.
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { spawnBullet, spawnPickup } from './projectiles.js';
 import { islandHeightAt } from './world.js';
+import { airportSurface } from './landing-zones.js';
 
 // ─── Mesh builders ───────────────────────────────────────────────────────────
 
@@ -211,6 +212,18 @@ export function makeWarship() {
 
 const MAKERS = { base: makeBase, factory: makeFactory, building: makeBuilding, convoy: makeConvoy, aaGun: makeAAGun, warship: makeWarship };
 
+function groundHeightAtAbsolute(worldX, worldZ, heightFn) {
+  let best = 0;
+  for (const isl of game.islands) {
+    const dx = worldX - isl.cx;
+    const dz = worldZ - isl.cz;
+    if (dx * dx + dz * dz <= isl.radius * isl.radius) {
+      best = Math.max(best, heightFn(isl, dx, dz));
+    }
+  }
+  return best;
+}
+
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 /** Cria um alvo no terreno de uma ilha ou em coordenada absoluta (islandIdx=-1). */
@@ -225,7 +238,8 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
     // Coordenada absoluta no oceano / chão do mapa
     worldX = dx;
     worldZ = dz;
-    yGround = type === 'warship' ? 0.6 : 0;
+    const hFn = (heightFn) ? heightFn : islandHeightAt;
+    yGround = type === 'warship' ? 0.6 : groundHeightAtAbsolute(worldX, worldZ, hFn);
   } else {
     const isl = game.islands[islandIdx];
     if (!isl) return null;
@@ -235,9 +249,12 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
     worldZ = isl.cz + dz;
   }
 
+  // Skip spawn if target lands on airport pavement (runway / taxiway / service)
+  if (airportSurface({ x: worldX, z: worldZ }, game.activeMap) !== 'none') return null;
+
   const mesh = maker();
   mesh.position.set(worldX, yGround, worldZ);
-  mesh.rotation.y = Math.random() * Math.PI * 2;
+  mesh.rotation.y = game.rng.range(0, Math.PI * 2);
   // Alvos projetam e recebem sombra
   mesh.traverse((obj) => { if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; } });
   scene.add(mesh);
@@ -257,10 +274,10 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
   let path = null;
   if (type === 'warship') {
     const px = worldX, pz = worldZ;
-    const r = 200 + Math.random() * 150;
+    const r = 200 + game.rng.range(0, 150);
     path = [];
     for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * Math.PI * 2 + Math.random() * 0.5;
+      const a = (i / 4) * Math.PI * 2 + game.rng.range(0, 0.5);
       path.push([px + Math.cos(a) * r, pz + Math.sin(a) * r]);
     }
   }
@@ -271,11 +288,14 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
     score: def.score, hr2: def.hr2,
     dropChance: def.dropChance,
     dead: false,
-    fireTimer: 1.0 + Math.random() * 2.0,
+    fireTimer: 1.0 + game.rng.range(0, 2.0),
     fireInterval: type === 'warship' ? WARSHIP.INTERVAL : (type === 'aaGun' ? AA.BASE_INTERVAL - aaSpeedup : Infinity),
     range: type === 'warship' ? WARSHIP.RANGE : AA.RANGE,
     path,
     pathIdx: 0,
+    spawnX: worldX,
+    spawnY: yGround,
+    spawnZ: worldZ,
   };
   game.targets.push(t);
   return t;
@@ -302,13 +322,13 @@ export function killTarget(t) {
     audio.explosion(0.5, t.mesh.position);
   }
   if (t.type === 'factory') removeSmokeEmittersOf(t.mesh);
-  if (Math.random() < t.dropChance) spawnPickup(t.mesh.position.clone());
+  if (!game.missionRealism?.enabled && game.rng.random() < t.dropChance) spawnPickup(t.mesh.position.clone());
   // CONTRATO: writer de game.score / game.kills / game.targetsDestroyed
   game.score += t.score;
   game.kills += 1;
   game.targetsDestroyed += 1;
   // Award 1 nuclear missile every 5 targets destroyed
-  if (game.targetsDestroyed % 5 === 0) {
+  if (!game.missionRealism?.enabled && game.targetsDestroyed % 5 === 0) {
     game.player.nuclearMissiles = (game.player.nuclearMissiles || 0) + 1;
   }
   scene.remove(t.mesh);
@@ -337,7 +357,7 @@ function updateAAGun(t, dt, jetPos) {
   t.mesh.rotation.y = Math.atan2(dx, dz);
   t.fireTimer -= dt;
   if (t.fireTimer <= 0) {
-    t.fireTimer = t.fireInterval + Math.random() * 0.4;
+    t.fireTimer = t.fireInterval + game.rng.range(0, 0.4);
     _aaDir.subVectors(jetPos, t.mesh.position).normalize();
     _aaOrig.copy(t.mesh.position); _aaOrig.y += 1.8;
     _aaOrig.addScaledVector(_aaDir, 1.2);
@@ -370,7 +390,7 @@ function updateWarship(t, dt, jetPos) {
   if (dist2 > t.range * t.range) return;
   t.fireTimer -= dt;
   if (t.fireTimer <= 0) {
-    t.fireTimer = t.fireInterval + Math.random() * 0.4;
+    t.fireTimer = t.fireInterval + game.rng.range(0, 0.4);
     const fireFrom = t.mesh.position;
     _aaDir.subVectors(jetPos, fireFrom).normalize();
     _aaOrig.copy(fireFrom); _aaOrig.y += 2.2;
@@ -383,8 +403,8 @@ function updateWarship(t, dt, jetPos) {
     const orig2 = _aaOrig.clone();
     const dir2 = _aaDir.clone();
     scheduleDelayed(0.08, () => {
-      dir2.x += (Math.random() - 0.5) * 0.08;
-      dir2.z += (Math.random() - 0.5) * 0.08;
+      dir2.x += game.rng.range(-0.5, 0.5) * 0.08;
+      dir2.z += game.rng.range(-0.5, 0.5) * 0.08;
       dir2.normalize();
       spawnBullet(orig2, dir2, true);
     });

@@ -1,27 +1,30 @@
-import { desertAirport } from './airport.js';
+import { getAirportForMap } from './airport.js';
 
 function inRect(pos, rect) {
   return Math.abs(pos.x - rect.center.x) <= rect.width / 2 &&
     Math.abs(pos.z - rect.center.z) <= rect.length / 2;
 }
 
-export function airportSurface(pos) {
-  if (inRect(pos, desertAirport.runway)) return 'runway';
-  if (inRect(pos, desertAirport.taxiway)) return 'taxiway';
-  if (inRect(pos, desertAirport.serviceZone)) return 'service';
+export function airportSurface(pos, activeMap = 'desert') {
+  const airport = getAirportForMap(activeMap);
+  if (inRect(pos, airport.runway)) return 'runway';
+  if (inRect(pos, airport.taxiway)) return 'taxiway';
+  if (inRect(pos, airport.serviceZone)) return 'service';
   return 'none';
 }
 
-export function airportHeightAt(x, z, fallbackHeight = 0) {
-  const surface = airportSurface({ x, z });
-  return surface !== 'none' ? desertAirport.elevation : fallbackHeight;
+export function airportHeightAt(x, z, fallbackHeight = 0, activeMap = 'desert') {
+  const airport = getAirportForMap(activeMap);
+  const surface = airportSurface({ x, z }, activeMap);
+  return surface !== 'none' ? airport.elevation : fallbackHeight;
 }
 
 export function classifyGroundContact(pos, activeMap = 'desert', terrainHeight = 0, terrainKind = null) {
-  if (activeMap === 'desert') {
-    const surface = airportSurface(pos);
+  if (activeMap === 'desert' || activeMap === 'inhauma') {
+    const airport = getAirportForMap(activeMap);
+    const surface = airportSurface(pos, activeMap);
     if (surface !== 'none') {
-      return { type: surface, safe: true, height: desertAirport.elevation, reason: 'airport-pavement' };
+      return { type: surface, safe: true, height: airport.elevation, reason: 'airport-pavement' };
     }
   }
   if (terrainKind === 'mountain') return { type: 'mountain', safe: false, height: terrainHeight, reason: 'mountain-contact' };
@@ -56,7 +59,7 @@ export function evaluateLandingEnvelope({ speed, verticalSpeed, pitch, roll, sur
   // 'safe' reflects that the aircraft CAN land (used for TOUCHDOWN_SAFE gate in player.js)
   // touchdownReady: only true in the touchdown phase (altitude < FLARE_LO, sink > -3)
   const touchdownReady = onRunway && inSpeedRange && !unsafe &&
-    altitudeAboveGround !== null && altitudeAboveGround < FLARE_LO && verticalSpeed > -3;
+    altitudeAboveGround !== null && altitudeAboveGround < FLARE_LO && verticalSpeed > -5;
   const safe = onRunway && inSpeedRange && !unsafe;
   return {
     safe,

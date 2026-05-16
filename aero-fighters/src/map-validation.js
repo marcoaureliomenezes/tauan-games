@@ -1,6 +1,6 @@
 // map-validation.js — pure map/target validation helpers for QA.
 
-import { TARGET_LAYOUT_DESERT, TARGET_LAYOUT_RIO } from './config.js';
+import { TARGET_LAYOUT_DESERT, TARGET_LAYOUT_RIO, TARGET_LAYOUT_INHAUMA } from './config.js';
 
 // ─── Airport geometry constants (no-THREE dependency) ─────────────────────────
 const _AIRPORT = {
@@ -10,8 +10,16 @@ const _AIRPORT = {
   serviceZone: { cx: -160, cz: 350,  hw: 35,  hl: 43  },
 };
 
-function _onAirport(x, z) {
-  const { runway, taxiway, serviceZone } = _AIRPORT;
+const _INHAUMA_AIRPORT = {
+  elevation: 0,
+  runway:      { cx: -560, cz: 320, hw: 26, hl: 310 },
+  taxiway:     { cx: -560, cz: 430, hw: 15, hl: 80  },
+  serviceZone: { cx: -610, cz: 475, hw: 42, hl: 38  },
+};
+
+function _onAirport(x, z, mapId = 'desert') {
+  const airport = mapId === 'inhauma' ? _INHAUMA_AIRPORT : _AIRPORT;
+  const { runway, taxiway, serviceZone } = airport;
   return (Math.abs(x - runway.cx) <= runway.hw && Math.abs(z - runway.cz) <= runway.hl) ||
     (Math.abs(x - taxiway.cx) <= taxiway.hw && Math.abs(z - taxiway.cz) <= taxiway.hl) ||
     (Math.abs(x - serviceZone.cx) <= serviceZone.hw && Math.abs(z - serviceZone.cz) <= serviceZone.hl);
@@ -49,6 +57,18 @@ export const MAP_VALIDATION_DEFS = {
       [-400, -300, 40, 50, 'urban', 'morro2'],
       [200, 600, 30, 45, 'urban', 'morro3'],
     ].map(([cx, cz, radius, peakHeight, type, name], id) => ({ id, cx, cz, radius, peakHeight, type, name })),
+  },
+  inhauma: {
+    bounds: { minX: -1600, maxX: 1700, minZ: -1100, maxZ: 1000 },
+    layout: TARGET_LAYOUT_INHAUMA,
+    regions: [
+      ['urban-rise-inhauma', 0, 0, 360, 10, 'urbanRise'],
+      ['morros-oeste-inhauma', -380, 40, 270, 52, 'roundedHill'],
+      ['morro-norte-inhauma', -40, -330, 230, 44, 'roundedHill'],
+      ['serra-sete-lagoas', 760, -300, 430, 76, 'ridge'],
+      ['vale-cachoeira-prata', -940, 520, 260, 16, 'valley'],
+      ['morros-sudeste-inhauma', 330, 330, 240, 40, 'roundedHill'],
+    ].map(([name, cx, cz, radius, peakHeight, type], id) => ({ id, name, cx, cz, radius, peakHeight, type })),
   },
 };
 
@@ -94,9 +114,28 @@ export function rioHeightAt(region, dx, dz) {
   return Math.max(0, h + noise);
 }
 
+export function inhaumaHeightAt(region, dx, dz) {
+  const worldX = region.cx + dx;
+  const worldZ = region.cz + dz;
+  if (_onAirport(worldX, worldZ, 'inhauma')) return _INHAUMA_AIRPORT.elevation;
+  const distance = Math.hypot(dx, dz);
+  const t = distance / region.radius;
+  if (t >= 1) return 0;
+  const noise = Math.sin(dx * 0.036) * 1.8 + Math.cos(dz * 0.031) * 1.5;
+  if (region.type === 'urbanRise') return Math.max(0, region.peakHeight * (1 - t * t * 1.4) + noise * 0.35);
+  if (region.type === 'ridge') {
+    const ridgeBand = Math.max(0, 1 - Math.abs(dz) / (region.radius * 0.55));
+    const falloff = Math.max(0, 1 - Math.abs(dx) / region.radius);
+    return Math.max(0, region.peakHeight * ridgeBand * falloff + noise);
+  }
+  if (region.type === 'valley') return Math.max(0, region.peakHeight * 0.35 * (1 - t) + noise * 0.25);
+  return Math.max(0, region.peakHeight * Math.max(0, 1 - t * t * 1.35) + noise);
+}
+
 export function heightForMap(mapId, region, dx, dz) {
   if (mapId === 'desert') return desertHeightAt(region, dx, dz);
   if (mapId === 'rio') return rioHeightAt(region, dx, dz);
+  if (mapId === 'inhauma') return inhaumaHeightAt(region, dx, dz);
   return 0;
 }
 

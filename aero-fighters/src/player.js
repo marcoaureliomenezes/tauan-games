@@ -14,6 +14,7 @@ import { PLAYER, ROLL, COLORS } from './config.js';
 import { explosion, megaExplosion, spawnMissileSmoke } from './fx.js';
 import { checkTerrainCollision } from './world.js';
 import { classifyGroundContact, airportSurface } from './landing-zones.js';
+import { getAirportForMap } from './airport.js';
 import { syncFlightGroundDiagnostics, updateGroundRoll } from './ground-physics.js';
 import { SortieEvent, SortieState, GROUND_STATES, transitionSortie } from './sortie-state.js';
 
@@ -274,12 +275,19 @@ game.flags.rollDir = 1;
 const _pitchQ = new THREE.Quaternion();
 const _rollQ  = new THREE.Quaternion();
 const _yawQ   = new THREE.Quaternion();
+const _attitudeEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const _lPitch = new THREE.Vector3(1, 0, 0);
 const _lRoll  = new THREE.Vector3(0, 0, 1);
 const _worldUp = new THREE.Vector3(0, 1, 0);
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _maydayPos = new THREE.Vector3();
+
+function clampPitchAttitude() {
+  _attitudeEuler.setFromQuaternion(jet.quaternion, 'YXZ');
+  _attitudeEuler.x = Math.max(PLAYER.PITCH_DOWN_LIMIT, Math.min(PLAYER.PITCH_UP_LIMIT, _attitudeEuler.x));
+  jet.quaternion.setFromEuler(_attitudeEuler);
+}
 
 /** Inicia um barrel roll (se cooldown permitir). */
 export function barrelRoll() {
@@ -347,8 +355,11 @@ export function updatePlayer(dt, input, onCrash) {
     if (sortie.state === SortieState.TAKEOFF_ROLL &&
         contact.type === 'runway' &&
         game.player.speed >= PLAYER.V_ROTATE &&
-        (input.pitchDown || input.pitchUp)) {
+        input.pitchDown) {
       if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
+      _pitchQ.setFromAxisAngle(_lPitch, PLAYER.PITCH_RATE * 0.35 * dt);
+      jet.quaternion.multiply(_pitchQ);
+      clampPitchAttitude();
       sortie.liftoffVsp += PLAYER.ROTATE_LIFT * dt;
       jet.position.y += sortie.liftoffVsp * dt;
       game.player.speed = Math.max(game.player.speed, 45);
@@ -360,7 +371,7 @@ export function updatePlayer(dt, input, onCrash) {
     // Per-frame floor clamp: never let the jet go underground while in ground states
     // or when sitting on an airport surface.
     const floorClampHeight = contact.height + 0.9;
-    if (GROUND_STATES.has(sortie.state) || airportSurface({ x: jet.position.x, z: jet.position.z }) !== 'none') {
+    if (GROUND_STATES.has(sortie.state) || airportSurface({ x: jet.position.x, z: jet.position.z }, game.activeMap) !== 'none') {
       jet.position.y = Math.max(jet.position.y, floorClampHeight);
     } else {
       // Still clamp to runway height if we're just barely off the ground during liftoff rotation
@@ -396,11 +407,12 @@ export function updatePlayer(dt, input, onCrash) {
     jet.position.addScaledVector(fwdM, game.player.speed * dt);
     jet.position.y -= (PLAYER.GRAVITY * 4.0) * dt;
     game.player.y = jet.position.y;
-    // Impacto no solo — mega explosão e então ejeção/respawn
-    // jet.visible permanece true durante toda a queda (T-BF04)
-    // só é ocultado dentro de _ejectAndRespawn, após a explosão
+    // Impacto no solo — mega explosão e então ejeção/respawn.
+    // Mínimo de 2 s de queda visível antes de disparar o crash (T-BF04).
+    // jet.visible permanece true durante toda a queda; ocultado dentro de _ejectAndRespawn.
+    game.flags.maydayTimer = (game.flags.maydayTimer || 0) + dt;
     const impact = checkTerrainCollision(jet.position);
-    if (impact) {
+    if (impact && game.flags.maydayTimer >= 2.0) {
       megaExplosion(jet.position.clone(), 'crash');
       _ejectAndRespawn(onCrash);
     }
@@ -420,6 +432,7 @@ export function updatePlayer(dt, input, onCrash) {
   // Pitch INVERTIDO (estilo simulador)
   if (input.pitchUp)   { _pitchQ.setFromAxisAngle(_lPitch, -PLAYER.PITCH_RATE * dt); jet.quaternion.multiply(_pitchQ); }
   if (input.pitchDown) { _pitchQ.setFromAxisAngle(_lPitch,  PLAYER.PITCH_RATE * dt); jet.quaternion.multiply(_pitchQ); }
+  if (input.pitchUp || input.pitchDown) clampPitchAttitude();
 
   // Roll + yaw coordenado
   if (input.rollLeft) {
@@ -445,8 +458,8 @@ export function updatePlayer(dt, input, onCrash) {
   jet.position.y -= PLAYER.GRAVITY * dt;
   if (!game.player.stalled) {
     const liftFactor = Math.min(game.player.speed / (PLAYER.MIN_SPD * 2.5), 1.0);
-    const up = _v2.set(0, 1, 0).applyQuaternion(jet.quaternion);
-    jet.position.addScaledVector(up, PLAYER.GRAVITY * liftFactor * dt);
+    // Sustentação aplicada em Y mundo (não local) — elimina oscilação em ângulos de pitch
+    jet.position.y += PLAYER.GRAVITY * liftFactor * dt;
   }
 
   // Crash
@@ -455,6 +468,7 @@ export function updatePlayer(dt, input, onCrash) {
     if (mr?.enabled && crash === 'MOUNTAIN') {
       transitionSortie(mr.sortie, SortieEvent.MOUNTAIN_CONTACT, {}, game.time);
       game.flags.mayday = true;
+      game.flags.maydayTimer = 0;
       game.flags.invincibility = 0;
       explosion(jet.position.clone(), 1.6, COLORS.playerHitOrange);
       audio.mayday();
@@ -507,7 +521,7 @@ export function updatePlayer(dt, input, onCrash) {
   if (mr?.enabled) {
     const _floorContact = classifyGroundContact(
       { x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
-    const _onAirportSurface = airportSurface({ x: jet.position.x, z: jet.position.z }) !== 'none';
+    const _onAirportSurface = airportSurface({ x: jet.position.x, z: jet.position.z }, game.activeMap) !== 'none';
     const _inGroundState = GROUND_STATES.has(mr?.sortie?.state);
     if (_inGroundState || _onAirportSurface) {
       jet.position.y = Math.max(jet.position.y, _floorContact.height + 0.9);
@@ -586,6 +600,7 @@ export function playerHit() {
   } else {
     game.player.hp = 0;
     game.flags.mayday = true;
+    game.flags.maydayTimer = 0;
     if (game.missionRealism?.enabled) transitionSortie(game.missionRealism.sortie, SortieEvent.CRITICAL_DAMAGE, {}, game.time);
     game.flags.invincibility = 0;
     explosion(jet.position.clone(), 1.6, COLORS.playerHitOrange);
@@ -596,7 +611,8 @@ export function playerHit() {
 /** Reseta o avião para o estado inicial (chamado por restartGame). */
 export function respawnJet() {
   if (game.missionRealism?.enabled) {
-    jet.position.set(-160, 0.9, 350);
+    const airport = getAirportForMap(game.activeMap);
+    jet.position.set(airport.serviceZone.center.x, airport.elevation + 0.9, airport.serviceZone.center.z);
   } else {
     jet.position.set(0, PLAYER.START_HEIGHT, 0);
   }

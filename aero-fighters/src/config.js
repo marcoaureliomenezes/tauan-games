@@ -9,6 +9,8 @@ export const PLAYER = {
   STALL_SPD: 10,      // m/s — limiar para HUD piscar "STALL"
   GRAVITY: 14,        // m/s² — puxa o avião para baixo todo frame
   PITCH_RATE: 1.45,   // rad/s — quão rápido o nariz sobe/desce
+  PITCH_UP_LIMIT: 0.58,   // rad — impede subida vertical/descontrole após decolagem
+  PITCH_DOWN_LIMIT: -0.70, // rad — impede mergulho invertido por input sustentado
   ROLL_RATE: 2.30,    // rad/s — rolagem (banking)
   YAW_RATE: 0.80,     // rad/s — coordenado com roll em viradas
   RUDDER_FACTOR: 0.65,// multiplicador do yaw puro (Q/E)
@@ -17,9 +19,9 @@ export const PLAYER = {
   CONVERGE_RATE: 1.6, // velocidade da convergência para o alvo de throttle
   START_HEIGHT: 80,   // altura inicial em unidades 3D
   SEA_CRASH_Y: 3,     // abaixo disso = crash no mar
-  MOUNTAIN_BUFFER: 10,  // margem em cima do terreno antes de crashar (cobre pico max de noise ~9.3 — T-BF03)
+  MOUNTAIN_BUFFER: 5,   // margem acima do terreno amostrado antes de crashar — alinha colisão com superfície visual
   // Takeoff rotation parameters
-  V_ROTATE: 28,       // m/s — velocidade mínima para iniciar rotação de decolagem (era 42)
+  V_ROTATE: 32,       // m/s — velocidade mínima para iniciar rotação de decolagem (mais próximo do canLiftoff=42)
   ROTATE_LIFT: 15,    // m/s² — sustentação extra durante rotação (era 7.5; atinge 4m em ~0.5s)
   // Landing flare / touchdown parameters
   FLARE_HI: 3,        // m — altitude de entrada na fase de flare
@@ -226,6 +228,33 @@ export const TARGET_LAYOUT_RIO = [
   [-1,  -40,  140, 'building'],
   [-1,  150,  240, 'building'],
   [-1,   30,  390, 'base'],
+];
+
+/** Layout de alvos para o mapa Inhauma.
+ * Formato: [regionIdx, dx, dz, tipo] — regionIdx=-1 significa coordenada absoluta.
+ * Alvos civis principais ficam preservados; targets militares usam periferia,
+ * morros/serras, MG-238 e zonas industriais/rurais. */
+export const TARGET_LAYOUT_INHAUMA = [
+  [3,    0,    0, 'aaGun'],    // serra no eixo de Sete Lagoas
+  [1,    0,    0, 'aaGun'],    // morros oeste de Inhauma
+  [-1, -760,  430, 'convoy'],  // MG-238 perto de Cachoeira da Prata
+  [-1, -220,  210, 'convoy'],  // MG-238 sul de Inhauma
+  [-1,  840, -250, 'convoy'],  // MG-238 rumo Sete Lagoas
+  [-1, 1120, -330, 'factory'],
+  [-1, 1310, -520, 'base'],
+  [-1, 1020, -120, 'building'],
+  [-1, -980,  620, 'base'],
+  [-1, -850,  360, 'building'],
+  [5,    0,    0, 'aaGun'],
+  [-1, -520, -310, 'factory'],
+  [-1,  320,  360, 'base'],
+  [-1,  480,  140, 'building'],
+  [2,    0,    0, 'aaGun'],
+  [-1, -330,  560, 'convoy'],
+  [-1,  680, -540, 'factory'],
+  [-1, 1450, -260, 'building'],
+  [-1, 1200, -760, 'aaGun'],
+  [-1, -1180, 460, 'factory'],
 ];
 
 /** Definição fixa das 18 ilhas: [centerX, centerZ, radius, peakHeight] */

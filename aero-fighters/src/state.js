@@ -2,9 +2,27 @@
 // Exporta: `game` (compartilhado com window.game), `resetState()` para reinício.
 // Para adicionar campo novo: edite createInitialState() e documente em CONVENTIONS.md.
 
+import { createRng, parseRuntimeConfig } from './rng.js';
+import { createSortieMachine, SortieState } from './sortie-state.js';
+import { createGroundPhysicsState } from './ground-physics.js';
+import { createServiceState } from './service-scene.js';
+import { createEjectionState } from './ejection.js';
+import { createCameraRig } from './camera-modes.js';
+
+const runtimeConfig = parseRuntimeConfig(typeof window !== 'undefined' ? window.location.search : '');
+const runtimeRng = createRng(runtimeConfig.seed);
+
+function initialPlayerPosition(mapKey) {
+  if (mapKey === 'inhauma') return { x: -610, y: 0.9, pz: 475 };
+  return { x: -160, y: 0.9, pz: 350 };
+}
+
 /** Constrói o objeto de estado padrão. */
 function createInitialState() {
+  const initialPlayer = initialPlayerPosition(runtimeConfig.map || 'desert');
   return {
+    runtime: runtimeConfig,
+    rng: runtimeRng,
     running: false,
     score: 0,
     projectiles: [],
@@ -18,15 +36,30 @@ function createInitialState() {
     wingmen: [],           // aliados AI em formação
     timeOfDay: 0.35,    // ciclo dia/noite: 0.0 (meia-noite) → 1.0 (meia-noite)
     time: 0,            // tempo total de jogo em segundos (para animações)
-    activeMap: 'islands', // mapa ativo: 'islands' | 'desert' | 'rio'
+    activeMap: runtimeConfig.map || 'desert', // mapa ativo: 'islands' | 'desert' | 'rio'
+    missionRealism: {
+      enabled: true,
+      sortie: createSortieMachine(SortieState.MENU),
+      ground: createGroundPhysicsState(),
+      service: createServiceState(runtimeConfig.testMode),
+      ejection: createEjectionState(),
+      camera: createCameraRig(),
+      groundContact: null,
+      landingZoneStatus: null,
+      missionScore: 0,
+      criticalVideoCapture: false,
+      hudLayout: { style: 'n64-green-combat', overlap: false },
+      aircraftVisual: { model: 'procedural-f35-v2', gearVisible: true, loadoutVisible: true },
+      desertLandmarks: { roads: 0, hangars: 0, lights: 0 },
+    },
     player: {
-      x: 0, y: 80, pitch: 0, pz: 0,
+      x: initialPlayer.x, y: initialPlayer.y, pitch: 0, pz: initialPlayer.pz,
       dead: false, lives: 3,
       hp: 3,                 // pontos de dano dentro da vida atual (3 hits → mayday)
       missiles: 100,         // mísseis leves (X)
       heavyMissiles: 10,     // mísseis pesados (B) — dano 5x, supply limitado
       nuclearMissiles: 3,    // mísseis nucleares (N) — devastadores, supply 3
-      speed: 25, throttle: 0.5, stalled: false,
+      speed: 0, throttle: 0.05, stalled: false,
     },
     flags: {
       paused: false,
@@ -56,6 +89,8 @@ export function resetState() {
   game.score = fresh.score;
   game.timeOfDay = fresh.timeOfDay;
   game.time = fresh.time;
+  game.runtime = fresh.runtime;
+  game.rng = fresh.rng;
   game.kills = fresh.kills;
   game.cycle = fresh.cycle;
   // activeMap persiste entre resets (player escolhe uma vez por sessão)
@@ -68,6 +103,7 @@ export function resetState() {
   game.wingmen.length = 0;
   // player
   Object.assign(game.player, fresh.player);
+  game.missionRealism = fresh.missionRealism;
   // flags
   Object.assign(game.flags, fresh.flags);
 }

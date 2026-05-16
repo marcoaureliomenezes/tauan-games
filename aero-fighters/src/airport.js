@@ -13,7 +13,24 @@ export const desertAirport = Object.freeze({
   text: { value: AIRPORT_TEXT, center: { x: 20, z: 170 }, width: 360, depth: 42 },
 });
 
-let airportGroup = null;
+export const INHAUMA_AIRPORT_TEXT = 'AERODROMO INHAUMA';
+
+export const inhaumaAirport = Object.freeze({
+  id: 'aerodromo-inhauma',
+  map: 'inhauma',
+  elevation: 0,
+  runway: { center: { x: -560, z: 320 }, heading: 0, length: 620, width: 52 },
+  touchdownZone: { center: { x: -560, z: 140 }, length: 160, width: 44 },
+  taxiway: { center: { x: -560, z: 430 }, length: 160, width: 30 },
+  serviceZone: { center: { x: -610, z: 475 }, length: 76, width: 84 },
+  text: { value: INHAUMA_AIRPORT_TEXT, center: { x: -500, z: 450 }, width: 260, depth: 36 },
+});
+
+const airportGroups = new Map();
+
+export function getAirportForMap(map = 'desert') {
+  return map === 'inhauma' ? inhaumaAirport : desertAirport;
+}
 
 function addBox(group, x, y, z, sx, sy, sz, color) {
   const mesh = new THREE.Mesh(
@@ -45,7 +62,7 @@ function addPavement(group, center, width, length, color) {
   return mesh;
 }
 
-function addGroundLabel(group, airport) {
+function addGroundLabel(group, airport, labelText = AIRPORT_TEXT) {
   const canvas = document.createElement('canvas');
   canvas.width = 2048;
   canvas.height = 256;
@@ -56,7 +73,7 @@ function addGroundLabel(group, airport) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#f7f0b0';
-  ctx.fillText(AIRPORT_TEXT, canvas.width / 2, canvas.height / 2);
+  ctx.fillText(labelText, canvas.width / 2, canvas.height / 2);
   const tex = new THREE.CanvasTexture(canvas);
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(airport.text.width, airport.text.depth), mat);
@@ -83,7 +100,7 @@ function addGroundLabel(group, airport) {
 }
 
 export function createDesertAirport(scene) {
-  if (airportGroup) return airportGroup;
+  if (airportGroups.has('desert')) return airportGroups.get('desert');
   const airport = desertAirport;
   const group = new THREE.Group();
   group.name = 'tauan-papai-airport';
@@ -111,25 +128,60 @@ export function createDesertAirport(scene) {
   addBox(group, -315, 0, 284, 4, 5, 4, 0x1c57ff);
   addBox(group, -304, 0, 284, 4, 5, 4, 0x1c57ff);
 
-  const label = addGroundLabel(group, airport);
+  const label = addGroundLabel(group, airport, AIRPORT_TEXT);
   group.userData.airport = airport;
   group.userData.airportText = label;
   scene.add(group);
-  airportGroup = group;
+  airportGroups.set('desert', group);
   return group;
 }
 
-export function getAirportDiagnostics() {
+export function createInhaumaAirport(scene) {
+  if (airportGroups.has('inhauma')) return airportGroups.get('inhauma');
+  const airport = inhaumaAirport;
+  const group = new THREE.Group();
+  group.name = 'inhauma-airport';
+
+  addPavement(group, airport.runway.center, airport.runway.width, airport.runway.length, 0x26292b);
+  addPavement(group, airport.taxiway.center, airport.taxiway.width, airport.taxiway.length, 0x303332);
+  addPavement(group, airport.serviceZone.center, airport.serviceZone.width, airport.serviceZone.length, 0x3b3a33);
+
+  for (let i = -4; i <= 4; i++) {
+    addBox(group, airport.runway.center.x - airport.runway.width * 0.42, 0, airport.runway.center.z + i * 58, 1.8, 1.0, 1.8, 0x88ffcc);
+    addBox(group, airport.runway.center.x + airport.runway.width * 0.42, 0, airport.runway.center.z + i * 58, 1.8, 1.0, 1.8, 0x88ffcc);
+  }
+  for (let i = -3; i <= 3; i++) {
+    addBox(group, airport.runway.center.x, 0, airport.runway.center.z + i * 70, 2.8, 0.2, 28, 0xe8e8d0);
+  }
+
+  addBox(group, -660, 0, 500, 48, 16, 34, 0x806f55);
+  addBox(group, -660, 16, 500, 54, 6, 40, 0x5b3f2f);
+  addBox(group, -615, 0, 535, 26, 10, 22, 0x8a7a5f);
+  addBox(group, -700, 0, 450, 18, 9, 18, 0xb58a62);
+
+  const label = addGroundLabel(group, airport, INHAUMA_AIRPORT_TEXT);
+  group.userData.airport = airport;
+  group.userData.airportText = label;
+  scene.add(group);
+  airportGroups.set('inhauma', group);
+  return group;
+}
+
+export function getAirportDiagnostics(map = 'desert') {
+  const airport = getAirportForMap(map);
+  const group = airportGroups.get(airport.map);
   return {
-    id: desertAirport.id,
-    map: desertAirport.map,
-    runwayBounds: desertAirport.runway,
-    serviceZoneBounds: desertAirport.serviceZone,
+    id: airport.id,
+    map: airport.map,
+    elevation: airport.elevation,
+    runwayBounds: airport.runway,
+    serviceZoneBounds: airport.serviceZone,
+    taxiwayBounds: airport.taxiway,
     airportText: {
-      value: AIRPORT_TEXT,
-      bounds: desertAirport.text,
-      letterCount: AIRPORT_TEXT.replaceAll(' ', '').length,
-      lightCount: airportGroup?.userData?.airportText?.lights?.length ?? 0,
+      value: airport.text.value,
+      bounds: airport.text,
+      letterCount: airport.text.value.replaceAll(' ', '').length,
+      lightCount: group?.userData?.airportText?.lights?.length ?? 0,
     },
   };
 }
