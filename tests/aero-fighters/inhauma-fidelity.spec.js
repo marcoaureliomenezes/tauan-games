@@ -145,4 +145,30 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     expect(result.grounded).toEqual([]);
     expect(result.onCivil).toEqual([]);
   });
+
+  test('visual smoke shows a non-empty varied Inhauma scene within renderer budget', async ({ page }) => {
+    const errors = await openInhauma(page, 'inhauma-visual-smoke');
+    await page.waitForTimeout(1000);
+    const stats = await page.evaluate(() => {
+      const snapshot = window.__aeroDebug.getSnapshot();
+      return {
+        calls: snapshot.renderer.calls,
+        triangles: snapshot.renderer.triangles,
+        averageFps: snapshot.frames.averageFps,
+      };
+    });
+    const shot = await page.screenshot({ fullPage: false });
+    const buckets = new Set();
+    for (let i = 0; i < shot.length - 3; i += 97) {
+      buckets.add(`${shot[i] >> 5},${shot[i + 1] >> 5},${shot[i + 2] >> 5}`);
+    }
+
+    expect(errors).toEqual([]);
+    expect(Number.isFinite(stats.calls)).toBe(true);
+    expect(Number.isFinite(stats.triangles)).toBe(true);
+    expect(Number.isFinite(stats.averageFps)).toBe(true);
+    expect(stats.calls).toBeLessThan(260);
+    expect(stats.triangles).toBeLessThan(250000);
+    expect(buckets.size).toBeGreaterThan(12);
+  });
 });

@@ -246,7 +246,7 @@ npx playwright test tests/aero-fighters/map.spec.js tests/aero-fighters/inhauma-
 
 ---
 
-### [-] T10 — QA: visual smoke e regressao completa
+### [x] T10 — QA: visual smoke e regressao completa
 
 **Owner:** `qa-engineer`
 
@@ -269,9 +269,9 @@ npm run test:aero:qa
 
 ## Completion Criteria
 
-- [ ] Todos os checks de `inhauma-fidelity.spec.js` passam.
-- [ ] `npm run validate:aero-map` passa.
-- [ ] `npm run test:aero:qa` passa.
-- [ ] Inhauma, Cachoeira da Prata e Sete Lagoas aparecem orientadas corretamente.
-- [ ] Igreja, campo, Area de Lazer da Manga, praca, estradas, fazendas e relevo estao representados.
-- [ ] Aerodromo de Inhauma funciona sem quebrar o aeroporto do deserto.
+- [x] Todos os checks de `inhauma-fidelity.spec.js` passam.
+- [x] `npm run validate:aero-map` passa.
+- [x] `npm run test:aero:qa` passa.
+- [x] Inhauma, Cachoeira da Prata e Sete Lagoas aparecem orientadas corretamente.
+- [x] Igreja, campo, Area de Lazer da Manga, praca, estradas, fazendas e relevo estao representados.
+- [x] Aerodromo de Inhauma funciona sem quebrar o aeroporto do deserto.
