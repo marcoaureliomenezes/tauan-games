@@ -31,7 +31,7 @@ Antes de tocar codigo de producao em `aero-fighters/`:
 
 ## Tasks
 
-### [-] T01 — QA-first: criar suite de fidelidade Inhauma
+### [x] T01 — QA-first: criar suite de fidelidade Inhauma
 
 **Owner:** `qa-engineer`
 
@@ -55,7 +55,7 @@ O teste deve falhar antes da implementacao do mapa e passar ao final da feature.
 
 ---
 
-### [ ] T02 — QA: expandir validadores existentes para inhauma
+### [-] T02 — QA: expandir validadores existentes para inhauma
 
 **Owner:** `qa-engineer`
 
