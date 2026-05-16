@@ -14,7 +14,7 @@ const _INHAUMA_AIRPORT = {
   elevation: 0,
   runway:      { cx: -560, cz: 320, hw: 26, hl: 310 },
   taxiway:     { cx: -560, cz: 430, hw: 15, hl: 80  },
-  serviceZone: { cx: -610, cz: 475, hw: 42, hl: 38  },
+  serviceZone: { cx: -560, cz: 475, hw: 42, hl: 38  },
 };
 
 function _onAirport(x, z, mapId = 'desert') {

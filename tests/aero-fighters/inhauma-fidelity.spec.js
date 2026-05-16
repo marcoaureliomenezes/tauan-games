@@ -146,6 +146,31 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     expect(result.onCivil).toEqual([]);
   });
 
+  test('player can taxi straight from Inhauma aerodrome and take off', async ({ page }) => {
+    await openInhauma(page, 'inhauma-takeoff');
+    await page.keyboard.down('KeyW');
+    await page.waitForTimeout(3500);
+    await page.keyboard.down('ArrowDown');
+    await page.waitForTimeout(2200);
+    await page.keyboard.up('ArrowDown');
+    await page.keyboard.up('KeyW');
+
+    const state = await page.evaluate(() => ({
+      sortieState: window.game.missionRealism.sortie.state,
+      y: window.game.player.y,
+      z: window.game.player.pz,
+      speed: window.game.player.speed,
+      dead: window.game.player.dead,
+      contact: window.game.missionRealism.groundContact,
+    }));
+
+    expect(state.dead).toBe(false);
+    expect(state.sortieState).toBe('AIRBORNE');
+    expect(state.y).toBeGreaterThan(8);
+    expect(state.speed).toBeGreaterThan(40);
+    expect(state.contact.type).toBe('runway');
+  });
+
   test('visual smoke shows a non-empty varied Inhauma scene within renderer budget', async ({ page }) => {
     const errors = await openInhauma(page, 'inhauma-visual-smoke');
     await page.waitForTimeout(1000);

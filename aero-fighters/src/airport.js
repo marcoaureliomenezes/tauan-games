@@ -22,7 +22,7 @@ export const inhaumaAirport = Object.freeze({
   runway: { center: { x: -560, z: 320 }, heading: 0, length: 620, width: 52 },
   touchdownZone: { center: { x: -560, z: 140 }, length: 160, width: 44 },
   taxiway: { center: { x: -560, z: 430 }, length: 160, width: 30 },
-  serviceZone: { center: { x: -610, z: 475 }, length: 76, width: 84 },
+  serviceZone: { center: { x: -560, z: 475 }, length: 76, width: 84 },
   text: { value: INHAUMA_AIRPORT_TEXT, center: { x: -500, z: 450 }, width: 260, depth: 36 },
 });
 

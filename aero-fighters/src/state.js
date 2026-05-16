@@ -13,7 +13,7 @@ const runtimeConfig = parseRuntimeConfig(typeof window !== 'undefined' ? window.
 const runtimeRng = createRng(runtimeConfig.seed);
 
 function initialPlayerPosition(mapKey) {
-  if (mapKey === 'inhauma') return { x: -610, y: 0.9, pz: 475 };
+  if (mapKey === 'inhauma') return { x: -560, y: 0.9, pz: 475 };
   return { x: -160, y: 0.9, pz: 350 };
 }
 

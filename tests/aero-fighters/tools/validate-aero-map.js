@@ -23,7 +23,7 @@ const AIRPORT_FOOTPRINTS = {
     elevation: 0,
     runway:      { cx: -560, cz: 320, halfW: 26, halfL: 310 },
     taxiway:     { cx: -560, cz: 430, halfW: 15, halfL: 80  },
-    serviceZone: { cx: -610, cz: 475, halfW: 42, halfL: 38  },
+    serviceZone: { cx: -560, cz: 475, halfW: 42, halfL: 38  },
   },
 };
 
