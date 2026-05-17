@@ -34,7 +34,7 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
   mirror the plugin source into operator-owned `cesium-unreal-pin` repo
   (LD-16). Blocks Phase 2.
 
-- **T-002 [ ] OPEN — Register operator's machine as self-hosted GH runner
+- **T-002 [-] IN PROGRESS — Register operator's machine as self-hosted GH runner
   `gpu-rtx3060`.** Owner: `devops-engineer`. Labels:
   `self-hosted,gpu-rtx3060,ue5-builder`. Windows registration first; Linux
   second (WSL2 with GPU passthrough or Linux VM). Verify with a UE5
