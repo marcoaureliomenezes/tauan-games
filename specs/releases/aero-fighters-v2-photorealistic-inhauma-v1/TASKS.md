@@ -66,6 +66,9 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
   `(-19.47, -44.46, 2095.0 m WGS84)`; AA gun WGS84 `(-19.490, -44.387)`.
   Wire into FTF assertions for AC-V2-02, AC-V2-03, AC-V2-06 (LD-04).
 
+- **T-006 [-] IN PROGRESS — Pre-author Cesium-isolation lint script (paper).**
+  Owner: `game-developer` (lint hat). Authors `aero-fighters-v2/Tools/lint-cesium-isolation.sh` enforcing LD-15 / SPEC §10. CI wiring lands in Wave 2.
+
 ---
 
 ## Conventions
