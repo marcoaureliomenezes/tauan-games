@@ -42,6 +42,7 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
   `GOOGLE_MAPS_TILES_API_KEY` fetched via
   `op item get "aero-fighters-v2/google-maps-tiles-api-key" --field credential`
   (LD-08, LD-24). Gate-1 fires end of Week 1.
+  - T-002 closure pending operator action: runner physical registration. Workflow + doc landed in commit 86d8258. Operator dispatches aero-v2-runner-healthcheck.yml; on green artifact, flip T-002 [x] manually with closing commit `chore(tasks): finish T-002`.
 
 - **T-003 [-] IN PROGRESS — Source generic delta-wing CC0 mesh; document license.**
   Owner: `game-designer` (hat) + `game-developer`. Search Sketchfab CC0 +
