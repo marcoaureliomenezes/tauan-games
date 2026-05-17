@@ -1,0 +1,78 @@
+# .gitignore — aero-fighters-v2
+# Release: aero-fighters-v2-photorealistic-inhauma-v1
+# Canonical Epic UE5 ignore list, extended for this project's tooling.
+
+# ---------------------------------------------------------------------------
+# UE5 build artifacts
+# These are regenerated from source by UnrealBuildTool; committing them
+# bloats the repo and causes merge conflicts.
+# ---------------------------------------------------------------------------
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+*.VC.db
+*.opensdf
+*.opendb
+*.sdf
+*.sln
+*.suo
+*.xcodeproj/
+*.xcworkspace/
+
+# Compiled output symbols/imports (Windows link artifacts)
+*.target
+*.exp
+*.ilk
+*.lib
+*.pdb
+
+# Temporary asset files created by UE5 during cook/save
+*.uasset.tmp
+
+# ---------------------------------------------------------------------------
+# Local environment + offline tile cache (SPEC §8, NFR-V2-02, RR-V2-07)
+# .env.local is operator-created from .env.local.example — never commit it.
+# *-tile-cache/ directories contain gigabytes of Google tile data that must
+# not be committed (Google ToS, repo size).
+# ---------------------------------------------------------------------------
+.env.local
+*-tile-cache/
+
+# ---------------------------------------------------------------------------
+# OS / editor noise
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# ---------------------------------------------------------------------------
+# Python harness venv + caches (Tools/)
+# The venv is operator-local; .pyc files are bytecode caches.
+# ---------------------------------------------------------------------------
+Tools/__pycache__/
+Tools/*.pyc
+Tools/venv/
+Tools/.venv/
+
+# ---------------------------------------------------------------------------
+# UE5 Staging output (SPEC §11)
+# Shipping builds land in Saved/StagedBuilds/. Saved/ is already ignored
+# above, but the explicit entry documents the intent. Operators pull builds
+# out of StagedBuilds/ manually; git does not track them.
+# ---------------------------------------------------------------------------
+StagedBuilds/
+
+# ---------------------------------------------------------------------------
+# Reports + closure artifacts
+# git LFS tracks keeper baseline screenshots (Reports/baselines/**).
+# One-shot timestamped run reports are ignored to avoid polluting history.
+# The pattern matches YYYY or 2026 in the filename suffix.
+# ---------------------------------------------------------------------------
+Reports/perf-*.html
+Reports/screenshot-diff-*.html
+Reports/smoke/*-2026*.md
