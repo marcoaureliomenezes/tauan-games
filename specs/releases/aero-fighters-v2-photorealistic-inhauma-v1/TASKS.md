@@ -70,6 +70,12 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
   Owner: `game-developer` (lint hat). Authors `aero-fighters-v2/Tools/lint-cesium-isolation.sh` enforcing LD-15 / SPEC §10. CI wiring lands in Wave 2.
   Closure: Vacuous-pass verified. Wave 2 wires into .github/workflows/aero-v2-ci.yml.
 
+- **T-007 [-] IN PROGRESS — Author AC-V2 traceability matrix (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tests/AcceptanceCriteria.md`. Maps every AC-V2-XX to test path + method (FTF / Python harness / manual). Filled per Wave by the wave-owning agent.
+
+- **T-008 [-] IN PROGRESS — Pre-author screenshot-diff harness skeleton (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tools/screenshot-diff-harness.py`. Implements SSIM + pHash core, UE5 launch parameterized. Wired into CI in Wave 7.
+
+- **T-009 [-] IN PROGRESS — Pre-author perf harness skeleton (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tools/perf-harness.py`. Frame-time series + percentile assertion. UE5 launch parameterized.
+
 ---
 
 ## Conventions
