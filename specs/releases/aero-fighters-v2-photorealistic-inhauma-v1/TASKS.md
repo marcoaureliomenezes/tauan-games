@@ -44,12 +44,13 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
   (LD-08, LD-24). Gate-1 fires end of Week 1.
   - T-002 closure pending operator action: runner physical registration. Workflow + doc landed in commit 86d8258. Operator dispatches aero-v2-runner-healthcheck.yml; on green artifact, flip T-002 [x] manually with closing commit `chore(tasks): finish T-002`.
 
-- **T-003 [-] IN PROGRESS — Source generic delta-wing CC0 mesh; document license.**
+- **T-003 [x] DONE — Source generic delta-wing CC0 mesh; document license.**
   Owner: `game-designer` (hat) + `game-developer`. Search Sketchfab CC0 +
   PolyHaven CC0 filtered to generic delta-wing fighter / no real-world
   likeness; if no acceptable source, hand-model UE5 BP primitive assembly.
   Record source URL + license string in the asset-license table (PLAN
   deliverable). Blocks Phase 3 (FR-V2-04).
+  Closure: hand-model path elected after prior CC0 search returned no acceptable sources. See Content/Aircraft/HandModeled.md.
 
 - **T-004 [ ] OPEN — Stand up 5-module UE5 layout with georef seam + CI
   lint.** Owner: `game-developer`. Create modules Core, Georef, Gameplay,
