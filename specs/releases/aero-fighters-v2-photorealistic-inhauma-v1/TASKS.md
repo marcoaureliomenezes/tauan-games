@@ -79,13 +79,17 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
 - **T-009 [x] DONE — Pre-author perf harness skeleton (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tools/perf-harness.py`. Frame-time series + percentile assertion. UE5 launch parameterized.
   Closure: parse_frame_times_csv/compute_mean_fps/compute_percentile/assert_ac_v2_17/write_html_report fully implemented; run_scripted_flight_and_capture() stubbed (NotImplementedError, Wave 6). --self-check exits 0 (stdlib only, no external deps). py_compile OK. Commit a24da73.
 
-- **T-010 [-] IN PROGRESS — Pre-author tile-cache populate skeleton (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/Tools/tile-cache-populate.py`. Hits Google Map Tiles API for the 20km radius around Inhaúma; populates the offline cache per LD-22 / RR-V2-07. Auth-stubbed until operator key lands.
+- **T-010 [x] DONE — Pre-author tile-cache populate skeleton (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/Tools/tile-cache-populate.py`. Hits Google Map Tiles API for the 20km radius around Inhaúma; populates the offline cache per LD-22 / RR-V2-07. Auth-stubbed until operator key lands.
+  Closure: Full argparse CLI (--center-lat/lon, --radius-km, --lod, --output-dir, --max-tiles, --yes, --dry-run). Web Mercator XYZ tile enumeration at LOD 18. Auth guard (exit 2), cost estimate + confirm prompt (--yes skips), per-tile progress, sha256 + byte-size manifest append. requests>=2.31 already in Tools/requirements.txt. py_compile OK, dry-run exits 3.
 
-- **T-011 [-] IN PROGRESS — Author .env.local.example (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/.env.local.example`. Documents GOOGLE_MAPS_TILES_API_KEY + CESIUM_OFFLINE_TILES per SPEC §8.
+- **T-011 [x] DONE — Author .env.local.example (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/.env.local.example`. Documents GOOGLE_MAPS_TILES_API_KEY + CESIUM_OFFLINE_TILES per SPEC §8.
+  Closure: GOOGLE_MAPS_TILES_API_KEY (required), CESIUM_OFFLINE_TILES=1 (default on), CESIUM_TILE_CACHE_DIR (commented default), UE_INSTALL_PATH (commented). 1Password fetch command documented. SPEC §8 referenced.
 
-- **T-012 [-] IN PROGRESS — Author project README (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/README.md`. Operator-facing setup + run instructions.
+- **T-012 [x] DONE — Author project README (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/README.md`. Operator-facing setup + run instructions.
+  Closure: All required sections: title+description, status, prerequisites, first-time setup (7 steps), running, testing, architecture overview, Cesium isolation rule, cost governance, license notice, links, MVP scope reminder.
 
-- **T-013 [-] IN PROGRESS — Author UE5 .gitignore (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/.gitignore`. Standard UE5 ignore list (Binaries/, DerivedDataCache/, Intermediate/, Saved/, etc.).
+- **T-013 [x] DONE — Author UE5 .gitignore (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/.gitignore`. Standard UE5 ignore list (Binaries/, DerivedDataCache/, Intermediate/, Saved/, etc.).
+  Closure: Epic canonical UE5 entries + .env.local / *-tile-cache / Python venv / StagedBuilds / timestamped report artifacts. All entries commented.
 
 ---
 
