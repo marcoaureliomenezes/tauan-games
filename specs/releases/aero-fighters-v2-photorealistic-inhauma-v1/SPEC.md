@@ -1,6 +1,10 @@
 # SPEC: Aero Fighters v2 — Photorealistic Inhaúma (MVP v1)
 
-> **Status:** Aprovado — 2026-05-17 (aprovado pelo operador via workflow operator-approval gate)
+> **Status:** CANCELLED — 2026-05-17 (hardware-forced pivot; superseded by aero-fighters-v2-stylized-inhauma-v1)
+> **Cancellation reason:** Operator's only dev hardware is Dell Inspiron 15-3511 with Intel Iris Xe G7 iGPU (~1.7 TFLOPS, ~7× below RTX 3060). NFR-V2-01's 60 FPS Cesium Photoreal target is unreachable. Replaced atomically by stylized v2 — see specs/releases/aero-fighters-v2-stylized-inhauma-v1/SPEC.md and report .dadaia/reports/tauan-games/product-engineer/2026-05-17T210822Z-stylized-pivot.html.
+> **Original approval:** below (preserved for historical reference)
+>
+> **Original Status:** Aprovado — 2026-05-17 (aprovado pelo operador via workflow operator-approval gate)
 > **Author:** product-engineer (dadaia Labs)
 > **Created:** 2026-05-17
 > **Release id:** `aero-fighters-v2-photorealistic-inhauma-v1`
@@ -514,3 +518,4 @@ Cross-references for the PLAN author:
 ## 15. Approval
 
 - [x] **Status:** Aprovado — 2026-05-17 (operator approval via workflow gate)
+- [x] **Status:** CANCELLED — 2026-05-17 (hardware-forced pivot; superseded by aero-fighters-v2-stylized-inhauma-v1)

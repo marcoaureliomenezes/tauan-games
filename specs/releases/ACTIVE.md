@@ -1,2 +1,2 @@
-release: aero-fighters-v2-photorealistic-inhauma-v1
-phase: approved
+release: aero-fighters-v2-stylized-inhauma-v1
+phase: drafting

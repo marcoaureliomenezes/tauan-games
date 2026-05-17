@@ -1,3 +1,5 @@
+<!-- REWRITE PENDING — see aero-fighters-v2-stylized-inhauma-v1/TASKS.md T-S-12 -->
+<!-- (Cesium prereqs, Google Maps Tiles API, GCP cost-governance section to be replaced with NASA EarthData + OSM ODbL attribution + Linux-only build instructions) -->
 # Aero Fighters v2
 
 Photorealistic flight game over Inhaúma MG, UE 5.5 + Cesium for Unreal.

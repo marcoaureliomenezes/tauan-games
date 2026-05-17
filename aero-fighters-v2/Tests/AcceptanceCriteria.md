@@ -1,3 +1,5 @@
+<!-- REWRITE PENDING — see aero-fighters-v2-stylized-inhauma-v1/TASKS.md T-S-07 -->
+<!-- (AC-V2-XX rows to be replaced with AC-V2-S-01..23 derived from new SPEC §9) -->
 # aero-fighters-v2 — Acceptance Criteria Traceability Matrix
 
 > Owns mapping AC-V2-XX → test path → test name → method → owning wave.

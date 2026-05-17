@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# REWRITE PENDING — see aero-fighters-v2-stylized-inhauma-v1/TASKS.md T-S-09
+# (Algorithm survives unchanged; docstring + AC reference re-pin to AC-V2-S-18 on Iris Xe baseline)
 """Performance harness for aero-fighters-v2 (AC-V2-17, NFR-V2-01).
 
 Reads frame-time series data, computes mean FPS + percentiles, asserts the

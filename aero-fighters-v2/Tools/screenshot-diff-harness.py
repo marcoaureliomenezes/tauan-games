@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# REWRITE PENDING — see aero-fighters-v2-stylized-inhauma-v1/TASKS.md T-S-08
+# (Algorithm survives unchanged; baselines rewrite for cel-shaded poses + thresholds tighten to AC-V2-S-19)
 """Screenshot-diff harness for aero-fighters-v2 (AC-V2-18, FR-V2-14).
 
 Captures screenshots at 4 fixed WGS84 reference poses inside a Shipping build,
