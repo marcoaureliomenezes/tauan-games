@@ -76,6 +76,14 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
 
 - **T-009 [-] IN PROGRESS — Pre-author perf harness skeleton (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tools/perf-harness.py`. Frame-time series + percentile assertion. UE5 launch parameterized.
 
+- **T-010 [-] IN PROGRESS — Pre-author tile-cache populate skeleton (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/Tools/tile-cache-populate.py`. Hits Google Map Tiles API for the 20km radius around Inhaúma; populates the offline cache per LD-22 / RR-V2-07. Auth-stubbed until operator key lands.
+
+- **T-011 [-] IN PROGRESS — Author .env.local.example (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/.env.local.example`. Documents GOOGLE_MAPS_TILES_API_KEY + CESIUM_OFFLINE_TILES per SPEC §8.
+
+- **T-012 [-] IN PROGRESS — Author project README (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/README.md`. Operator-facing setup + run instructions.
+
+- **T-013 [-] IN PROGRESS — Author UE5 .gitignore (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/.gitignore`. Standard UE5 ignore list (Binaries/, DerivedDataCache/, Intermediate/, Saved/, etc.).
+
 ---
 
 ## Conventions
