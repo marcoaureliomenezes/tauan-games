@@ -1,0 +1,48 @@
+{
+  "schema_version": "handoff-v1",
+  "agent": "devops-engineer",
+  "context": "tauan-games",
+  "produced_at": "2026-05-17T06:16:38Z",
+  "release_id": "aero-fighters-v2-photorealistic-inhauma-v1",
+  "artifact": {
+    "type": "report",
+    "path": "repos/tauan-games/.dadaia/reports/devops-engineer/2026-05-17T061638Z-game-devops.html",
+    "content_hash": "2e3b7fb8cb3eb75c3feda901b74c0a4c7fad58095bd8ae0807b7f77eeb431129"
+  },
+  "findings": [
+    {
+      "severity": "HIGH",
+      "message": "Self-hosted runner setup is a hard Week 1 dependency — GitHub-hosted runners are structurally insufficient for UE5.4 Shipping builds (disk: 14 GB free on Windows vs 100+ GB required; RAM: 16 GB vs 32-64 GB required). No v2 CI exists without this. Setup time: 2-4h one-time."
+    },
+    {
+      "severity": "HIGH",
+      "message": "Screenshot-diff CI must be scoped to tagged release builds only (aero-v2-* tags). Running on every PR would exhaust the $20/month Google Maps Tiles API cap in days — estimated $1.60-$8.00 per CI session (400-2000 tile requests at 4 geo-poses). This is a CI infrastructure constraint, not a test strategy choice."
+    },
+    {
+      "severity": "MEDIUM",
+      "message": "Linux Shipping build feasibility depends on operator hardware. If the Linux self-hosted runner cannot be registered and pass a compile-check by end of Week 1, Linux should be flagged at-risk immediately — not discovered as a slip at Week 3 per the current D17 wording."
+    },
+    {
+      "severity": "INFO",
+      "message": "OQ-13 resolved: tag naming convention locked as aero-v1-<semver> for Three.js releases and aero-v2-<semver> for UE5 releases. Workflow trigger filters use these prefixes for unambiguous separation."
+    },
+    {
+      "severity": "INFO",
+      "message": "OQ-08 resolved: recommended runner topology is self-hosted hybrid — v1 CI on ubuntu-latest (unchanged), v2 builds on self-hosted [windows/linux, ue5-builder]. Monthly cost: $5-36 (electricity + tile API)."
+    },
+    {
+      "severity": "INFO",
+      "message": "OQ-05 partially resolved (DevOps side): .tile-cache/ gitignored layout, 5GB cap, LRU eviction by mtime, make tile-cache-populate Makefile target. Engine-side Cesium tile redirect implementation assigned to game-developer (see objection in report). OQ-03 (1Password item ID) requires operator action."
+    }
+  ],
+  "decisions_required": [
+    "OQ-03: Operator must create the 1Password item 'aero-fighters-v2/google-maps-tiles-api-key' and record the item ID.",
+    "OQ-10: software-architect must propose the exact Cesium for Unreal plugin version/commit hash compatible with UE5.4 — devops will express it as a committed .cesium-version pin file.",
+    "D17 if-slip rule: synthesis SPEC should add a Week 1 runner-availability gate in addition to the Week 3 Cesium rendering gate (proposed wording in Objections section of report)."
+  ],
+  "next_handoff": {
+    "agent": "product-engineer",
+    "context": "tauan-games",
+    "expected_artifact_type": "spec"
+  }
+}

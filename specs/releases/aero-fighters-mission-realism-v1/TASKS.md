@@ -32,7 +32,7 @@ Approved by operator on 2026-05-13: "Aprovado."
 
 ### T01 — Define bug closure protocol in TASKS execution
 
-- [-] Every confirmed rendering/physics/map/camera/aircraft/gameplay bug gets a task or subtask.
+- [ ] Every confirmed rendering/physics/map/camera/aircraft/gameplay bug gets a task or subtask.
 - [ ] Each bug task records evidence, suspected cause, fix, validation command/scenario, and regression guard.
 - [ ] No bug is closed by report only.
 - [ ] If a bug cannot fit this feature, create a follow-up spec candidate with reason/risk.

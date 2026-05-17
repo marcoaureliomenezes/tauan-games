@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DevOps Review — aero-fighters-v2 (Photorealistic Inhauma v1)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #1a1a1a;
+    background: #fff;
+    max-width: 960px;
+    margin: 2rem auto;
+    padding: 0 1.5rem 4rem;
+  }
+  h1 { font-size: 1.75rem; border-bottom: 2px solid #333; padding-bottom: .5rem; margin-top: 0; }
+  h2 { font-size: 1.3rem; border-bottom: 1px solid #ddd; padding-bottom: .25rem; margin-top: 2.5rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.75rem; }
+  h4 { font-size: 1rem; margin-top: 1.25rem; }
+  a  { color: #0969da; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 87.5%;
+    background: #f6f8fa;
+    padding: .15em .4em;
+    border-radius: 3px;
+  }
+  pre {
+    background: #f6f8fa;
+    border: 1px solid #e4e8ec;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; font-size: 90%; }
+  table { border-collapse: collapse; width: 100%; margin: 1.25rem 0; font-size: .95rem; }
+  th, td { border: 1px solid #d0d7de; padding: .45rem .75rem; text-align: left; vertical-align: top; }
+  th { background: #f6f8fa; font-weight: 600; }
+  tr:nth-child(even) { background: #fafafa; }
+  blockquote {
+    border-left: 4px solid #d0d7de;
+    margin: 1rem 0;
+    padding: .5rem 1rem;
+    color: #555;
+  }
+  ul, ol { padding-left: 1.5rem; }
+  li { margin: .25rem 0; }
+  .meta {
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: .75rem 1rem;
+    margin-bottom: 2rem;
+    font-size: .9rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 2rem;
+  }
+  .meta span { color: #555; }
+  .meta strong { color: #1a1a1a; }
+  .badge {
+    display: inline-block;
+    padding: .15em .5em;
+    border-radius: 3px;
+    font-size: .8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .badge-critical { background: #ffd7d7; color: #a00; }
+  .badge-high     { background: #fff0d0; color: #c05000; }
+  .badge-medium   { background: #fffad0; color: #806000; }
+  .badge-low      { background: #daffd0; color: #1a5c00; }
+  .badge-pass     { background: #daffd0; color: #1a5c00; }
+  .badge-fail     { background: #ffd7d7; color: #a00; }
+  .badge-pending  { background: #e0eaff; color: #0550ae; }
+  .finding { border: 1px solid #e4e8ec; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+  .finding h3 { margin-top: 0; }
+  .callout { border-left: 4px solid #0969da; background: #f0f6ff; padding: .6rem 1rem; border-radius: 0 4px 4px 0; margin: .75rem 0; }
+  .callout-warn { border-left-color: #c05000; background: #fff8f0; }
+  .callout-danger { border-left-color: #a00; background: #fff0f0; }
+  .callout-ok { border-left-color: #1a5c00; background: #f0fff4; }
+  .seq { counter-reset: seq; list-style: none; padding-left: 0; }
+  .seq li { counter-increment: seq; padding: .4rem 0 .4rem 2.2rem; position: relative; }
+  .seq li::before { content: counter(seq); position: absolute; left: 0; font-weight: 700; color: #0969da; }
+  .tag-locked { display: inline-block; padding: .05em .45em; border-radius: 3px; background: #2e8b57; color: #fff; font-size: .78em; font-weight: 600; }
+  .tag-defer  { display: inline-block; padding: .05em .45em; border-radius: 3px; background: #c05000; color: #fff; font-size: .78em; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="meta">
+  <span><strong>Agente:</strong> devops-engineer</span>
+  <span><strong>Gerado em:</strong> 2026-05-17T061638Z</span>
+  <span><strong>Contexto:</strong> tauan-games</span>
+  <span><strong>Run:</strong> <code>game-spec-definition / devops_review</code></span>
+  <span><strong>Stage:</strong> <code>devops_review</code> (parallel specialist)</span>
+  <span><strong>Discovery input:</strong> <code>2026-05-17T060824Z-game-discovery.html</code></span>
+</div>
+
+<h1>DevOps Review — aero-fighters-v2: Photorealistic Inhauma v1</h1>
+
+<p>This report covers all CI/CD, build, deployment, and secret-management decisions required for
+the <code>aero-fighters-v2</code> UE5.4 release alongside the existing v1 (Three.js) infrastructure.
+Every section maps directly to a locked operator decision from the discovery report. Cross-domain
+objections are isolated in the final section.</p>
+
+<blockquote>
+Pipeline philosophy applied: this is a personal game project for a solo operator.
+Every step must earn its place. A 4-week timeline means CI must be minimal-but-correct, not
+aspirationally complete. Complexity is deferred; correctness is mandatory from day 1.
+</blockquote>
+
+<!-- ================================================================== -->
+<h2>Secret Management</h2>
+
+<p><span class="tag-locked">LOCKED</span> D3: Google Maps Tiles API key is in the operator's
+personal GCP project. Hard cap USD 20/month. Key in operator env + 1Password. Offline tile cache
+for dev workflow. This section also addresses OQ-03 (1Password item ID) and OQ-05 (offline cache).</p>
+
+<h3>Where the key lives</h3>
+<table>
+  <thead><tr><th>Tier</th><th>Storage</th><th>Value</th><th>Access</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Local dev (operator machine)</td>
+      <td><code>aero-fighters-v2/.env.local</code> (gitignored via .gitignore rule)</td>
+      <td><code>GOOGLE_MAPS_TILES_API_KEY=&lt;value&gt;</code></td>
+      <td>Operator reads from 1Password, pastes once. Never committed.</td>
+    </tr>
+    <tr>
+      <td>1Password vault</td>
+      <td>Item: <code>aero-fighters-v2/google-maps-tiles-api-key</code><br>(Item ID is the OQ-03 deliverable — operator assigns when creating the item)</td>
+      <td>Full API key value in field named <code>credential</code></td>
+      <td><code>op item get "aero-fighters-v2/google-maps-tiles-api-key" --field credential</code></td>
+    </tr>
+    <tr>
+      <td>GitHub CI</td>
+      <td>GitHub Secret: <code>GOOGLE_MAPS_TILES_API_KEY</code> on the <code>tauan-games</code> repo</td>
+      <td>Same key value as 1Password</td>
+      <td>Scoped to this repo only. Referenced in ci-v2.yml and release-v2.yml exclusively.</td>
+    </tr>
+    <tr>
+      <td>Release binary</td>
+      <td>Embedded at build time (see Key Embedding subsection below)</td>
+      <td>Baked into the packaged build via UE5 config injection</td>
+      <td>CI only — never built from a developer's local machine for distribution</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Dev workflow: .env.local protocol</h3>
+<p>A committed <code>aero-fighters-v2/.env.example</code> documents the required variable. The
+actual <code>.env.local</code> is gitignored and must never be committed:</p>
+<pre><code># aero-fighters-v2/.env.example
+# Copy this to .env.local and populate from 1Password:
+#   op item get "aero-fighters-v2/google-maps-tiles-api-key" --field credential
+GOOGLE_MAPS_TILES_API_KEY=&lt;get-from-1password&gt;
+
+# Set to 1 to use the offline tile cache (no live API calls, no cost)
+# 0 = live fetch from Google Maps Tiles API
+# Default for dev: leave 1 unless you need to refresh the cache
+CESIUM_OFFLINE_TILES=1
+</code></pre>
+
+<div class="callout callout-warn">
+<strong>Offline cache as default:</strong> Per discovery conflict prediction C7 (devops wins on
+cost enforcement), the offline tile cache must be the default dev workflow once the cache is
+populated. Live tile fetch is opt-in via <code>CESIUM_OFFLINE_TILES=0</code>.
+See Offline Tile Cache section below.
+</div>
+
+<h3>How CI receives the key</h3>
+<p>The key is stored as a repository-level GitHub Secret (not org-level). In v2 workflows:</p>
+<pre><code>env:
+  GOOGLE_MAPS_TILES_API_KEY: ${{ secrets.GOOGLE_MAPS_TILES_API_KEY }}
+</code></pre>
+<p>This secret is never referenced in <code>ci-v1.yml</code> or <code>pages.yml</code>, ensuring
+v1 CI cannot accidentally trigger tile API calls or expose the secret scope.</p>
+
+<h3>How the release binary embeds the key</h3>
+<p>For MVP, embed at build time is the correct strategy over a runtime config fetch.
+Runtime fetch would require a config server (infrastructure not justified for a personal project).</p>
+<ol>
+  <li>CI injects <code>GOOGLE_MAPS_TILES_API_KEY</code> as an environment variable during the
+  UE5 Shipping build step (via the <code>-set:</code> argument to RunUAT or by pre-writing
+  to a project config file before invoking the build command).</li>
+  <li>The UE5 project (game-developer's responsibility) reads this variable during the cook phase
+  and bakes the value into the packaged <code>DefaultGame.ini</code> or Cesium config.</li>
+  <li>The resulting zip contains the key and functions without any runtime config dependency.</li>
+</ol>
+
+<div class="callout callout-danger">
+<strong>Risk: embedded key in a public GitHub Release zip is extractable.</strong>
+For a personal project with a $20/month hard cap and billing alerts, this is an accepted risk.
+The worst case before the alert fires and the key is rotated is a $20 overcharge.
+If the game's user base grows, move to a runtime-fetch architecture with key rotation.
+This is explicitly post-MVP scope.
+</div>
+
+<h3>Rotation cadence and revocation drill</h3>
+<table>
+  <thead><tr><th>Trigger</th><th>Steps</th><th>Time to complete</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Scheduled (every 90 days)</td>
+      <td>Generate new key in GCP Console. Update 1Password item. Update GitHub Secret. Push new tagged release to distribute updated binary.</td>
+      <td>~30 min</td>
+    </tr>
+    <tr>
+      <td>Billing spike (suspected compromise)</td>
+      <td>1. Disable key in GCP Console (&lt;2 min). 2. Generate new key. 3. Update 1Password + GitHub Secret. 4. Trigger new release build. 5. Monitor billing for 24h after rotation.</td>
+      <td>&lt;15 min for revocation; new release in ~2h</td>
+    </tr>
+    <tr>
+      <td>$20 cap alert fires</td>
+      <td>GCP does not auto-disable. Operator manually disables key in GCP Console. Dev work continues with offline cache. Re-enable at start of next billing month.</td>
+      <td>&lt;5 min after alert receipt</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Offline tile cache strategy (OQ-05)</h3>
+<p>DevOps-side proposal (implementation is game-developer's responsibility per the objection
+in the final section):</p>
+<ul>
+  <li><strong>Layout:</strong> <code>aero-fighters-v2/.tile-cache/</code> — gitignored.
+  A <code>.tile-cache/.gitkeep</code> keeps the directory tracked without content.</li>
+  <li><strong>Size cap:</strong> 5 GB (covers the 20 km radius around Inhauma at useful LOD
+  — exact figure is a PLAN deliverable requiring measurement). The populate script checks
+  available disk space before writing and aborts if remaining space would drop below 10 GB.</li>
+  <li><strong>Eviction policy:</strong> LRU by file modification time. The populate script
+  prunes tiles older than 30 days when total size exceeds the cap.</li>
+  <li><strong>Populate command:</strong> <code>make tile-cache-populate</code> — a Makefile
+  target wrapping the Cesium offline cache fetch script (implemented by game-developer using
+  the Cesium for Unreal offline cache API). Requires <code>.env.local</code> to be populated
+  with the API key.</li>
+  <li><strong>CI behavior:</strong> CI does not populate the offline cache. CI screenshot-diff
+  tests use the live API (counted against the $20 cap). This is acceptable because
+  screenshot-diff tests run only on tagged release builds, not every PR — estimated CI tile
+  spend: $0.50–$2.00 per release tag (see Cost Monitoring section).</li>
+</ul>
+
+<!-- ================================================================== -->
+<h2>UE5 Build Pipeline (Windows + Linux)</h2>
+
+<p><span class="tag-locked">LOCKED</span> D1: UE 5.4. D5: Windows x64 native AND Linux x64
+native, both primary targets. D11: CI builds the Shipping binaries and attaches them to a
+git tag.</p>
+
+<h3>Hardware requirements for UE5.4 Shipping builds</h3>
+<table>
+  <thead><tr><th>Resource</th><th>Minimum (Epic documented)</th><th>Recommended for UE5.4 + Cesium</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>RAM</td><td>32 GB</td><td>64 GB</td><td>Cesium plugin + Lumen + Nanite shader compilation inflates memory significantly. 16 GB runners will OOM on Shipping builds with large plugins active.</td></tr>
+    <tr><td>Disk (free)</td><td>100 GB</td><td>200 GB</td><td>UE5 engine source: ~100 GB. Derived Data Cache (DDC): ~30-50 GB additional. Build intermediates: ~30 GB. Packaged output: ~5-10 GB. Clean build total: ~200 GB.</td></tr>
+    <tr><td>CPU cores</td><td>8 cores</td><td>16+ cores</td><td>UnrealBuildTool parallelizes shader and code compilation across all available cores. 4-core runners produce approximately 4x slower builds.</td></tr>
+    <tr><td>GPU (build step)</td><td>Not required</td><td>Not required</td><td>GPU is required for runtime testing (perf gate, screenshot-diff), not for compilation. Build is CPU-only. This distinction is critical for runner selection.</td></tr>
+    <tr><td>GPU (test step)</td><td>RTX 3060 or equivalent</td><td>RTX 3060 (matches the perf floor D6)</td><td>Performance gate (AC-V2-07) and screenshot-diff (AC-V2-06) require real GPU rendering. Software rendering gives meaningless perf numbers.</td></tr>
+  </tbody>
+</table>
+
+<h3>Runner options analysis (resolves OQ-08)</h3>
+
+<div class="finding">
+  <h3><span class="badge badge-fail">INSUFFICIENT</span> GitHub-hosted ubuntu-latest / windows-latest</h3>
+  <p><strong>Specs:</strong> 16 GB RAM, 4 cores, ~14 GB disk free after OS (Windows) or ~30 GB (Linux).</p>
+  <p><strong>Verdict:</strong> Structurally insufficient for UE5.4 + Cesium Shipping builds. The disk constraint alone (14 GB on Windows) eliminates this option — the UE5 engine alone exceeds it. RAM (16 GB) is also below the minimum for plugin-heavy Shipping builds.</p>
+</div>
+
+<div class="finding">
+  <h3><span class="badge badge-medium">TOO EXPENSIVE</span> GitHub larger runners (16-core, 64 GB RAM)</h3>
+  <p><strong>Specs:</strong> 64 GB RAM, 500 GB disk, 16 cores. Billed at $0.256/min (Linux) or $0.512/min (Windows).</p>
+  <p><strong>Cost per build:</strong> A UE5.4 Shipping build (project code + Cesium, engine pre-cached — not possible on GitHub-hosted) takes 60–120 min. At $0.512/min for Windows: $30–$60 per platform, $60–$120 per release (both platforms). This exceeds the $20 tile API cap and is unsustainable for a solo personal project with no revenue.</p>
+  <p><strong>Additional problem:</strong> GitHub-hosted runners cannot cache the UE5 engine binaries between runs (the cache limit is 10 GB; UE5 engine binaries exceed 50 GB). Every run would require a fresh engine download + compilation — 4–6 hours per build on the largest available runners.</p>
+</div>
+
+<div class="finding">
+  <h3><span class="badge badge-pass">RECOMMENDED</span> Self-hosted runners on operator hardware</h3>
+  <p><strong>Cost:</strong> $0 marginal (electricity only, ~$5–15/month for active build sessions).</p>
+  <p><strong>Advantages:</strong> Full control over engine pre-installation, DDC persistence, GPU access for test jobs, no disk constraints, no per-minute billing.</p>
+  <p><strong>Setup cost:</strong> ~2–4 hours one-time to register runners and install UE5.4. This must happen in Week 1 of the 4-week sprint — it is a hard dependency for all v2 CI.</p>
+  <p><strong>Constraints:</strong> Operator's machine must be online when CI triggers (tag pushes trigger release builds). For a solo operator, this is acceptable — they control when they push tags.</p>
+</div>
+
+<h3>Runner label scheme</h3>
+<ul>
+  <li><code>self-hosted, windows, ue5-builder</code> — Windows Shipping builds + Windows GPU tests</li>
+  <li><code>self-hosted, linux, ue5-builder</code> — Linux Shipping builds + Linux GPU tests</li>
+</ul>
+<p>If the operator has only a Windows machine, Linux can run in WSL2 registered as a second
+runner, or a Linux VM with GPU passthrough. If Linux CI proves impossible to set up within
+Week 1 constraints, this is the D17 if-slip trigger point — not week 3 (Cesium rendering),
+but week 1 (runner availability).</p>
+
+<h3>Workflow files to create (proposed, not authored here)</h3>
+<table>
+  <thead><tr><th>File</th><th>Trigger</th><th>Runner</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>.github/workflows/ci-v1.yml</code></td>
+      <td><code>push</code> (v1 paths), <code>pull_request</code> to main (v1 paths), tag <code>aero-v1-*</code></td>
+      <td><code>ubuntu-latest</code></td>
+      <td>Playwright tests for v1 Three.js game. Rename and path-filter of existing ci.yml.</td>
+    </tr>
+    <tr>
+      <td><code>.github/workflows/ci-v2.yml</code></td>
+      <td><code>pull_request</code> to main (v2 paths)</td>
+      <td><code>self-hosted, windows, ue5-builder</code></td>
+      <td>UE5 compile-check only on PRs (no Shipping package, no GPU tests). Fast failure gate.</td>
+    </tr>
+    <tr>
+      <td><code>.github/workflows/release-v2.yml</code></td>
+      <td>tag <code>aero-v2-*</code></td>
+      <td>Build jobs: self-hosted. Publish job: ubuntu-latest</td>
+      <td>Full Shipping matrix build (Windows + Linux), artifact packaging, GitHub Release creation with checksums.</td>
+    </tr>
+    <tr>
+      <td><code>.github/workflows/pages.yml</code></td>
+      <td><code>push</code> to main, <code>workflow_dispatch</code></td>
+      <td><code>ubuntu-latest</code></td>
+      <td>Deploy v1 to GitHub Pages. Existing file — keep as-is.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Build time estimates (self-hosted, 16-core, engine pre-installed)</h3>
+<table>
+  <thead><tr><th>Scenario</th><th>Time estimate</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>First engine compile (no cache at all)</td><td>4–6 hours</td><td>One-time setup. After this, engine binaries are cached on-disk on the runner permanently.</td></tr>
+    <tr><td>Project compile-check (engine cached, code changes only)</td><td>5–20 min</td><td>What runs on PRs via ci-v2.yml. Fast enough to be useful feedback.</td></tr>
+    <tr><td>Windows Shipping package (engine cached, DDC warm)</td><td>30–90 min</td><td>Includes cook, pak, staging. DDC warmth is critical — cold DDC adds 30–60 min.</td></tr>
+    <tr><td>Linux Shipping package (engine cached, DDC warm)</td><td>45–120 min</td><td>Linux cross-compile from Windows (RunUAT supports this) or native Linux runner. Native Linux runner preferred for reliability.</td></tr>
+    <tr><td>v1 Playwright CI</td><td>3–8 min</td><td>Current performance. No change expected.</td></tr>
+  </tbody>
+</table>
+
+<h3>Caching strategy</h3>
+<ul>
+  <li><strong>Engine version pin:</strong> A committed file <code>aero-fighters-v2/.ue5-version</code>
+  contains the exact UE5 minor version (e.g., <code>5.4.4</code>). CI reads this and verifies
+  the pre-installed engine on the runner matches before building. Mismatch causes a clear failure
+  with an actionable error message rather than a cryptic build failure.</li>
+  <li><strong>Cesium plugin pin (OQ-10):</strong> The Cesium for Unreal plugin is pinned by commit
+  hash in a committed file <code>aero-fighters-v2/.cesium-version</code> (or as a git submodule).
+  The software-architect proposes the compatible version; devops owns the pin format. See objection
+  in final section.</li>
+  <li><strong>DDC:</strong> Persisted as a named directory on the self-hosted runner's local disk.
+  Not uploaded to GitHub Actions cache (too large — 30–50 GB vs. 10 GB cache limit). Survives
+  across runs automatically. Manual invalidation when engine version pin changes.</li>
+  <li><strong>GitHub Actions artifact cache:</strong> Used only for small inter-job data (e.g.,
+  build metadata passed from build jobs to the publish job). Not used for engine or DDC.</li>
+</ul>
+
+<!-- ================================================================== -->
+<h2>Distribution Pipeline (GitHub Releases)</h2>
+
+<p><span class="tag-locked">LOCKED</span> D11: GitHub Releases zip, attached to git tag.
+CI builds .exe + Linux binary. No itch.io, no Steam.</p>
+
+<h3>Tag naming convention (resolves OQ-13)</h3>
+<p>This is a devops-engineer decision per the Decision Authority Matrix (CI/build tie-breaker):</p>
+<ul>
+  <li><strong>v1 tags:</strong> <code>aero-v1-&lt;semver&gt;</code> — e.g., <code>aero-v1-1.3.0</code></li>
+  <li><strong>v2 tags:</strong> <code>aero-v2-&lt;semver&gt;</code> — e.g., <code>aero-v2-0.1.0</code></li>
+</ul>
+<p>The tag prefix is the unambiguous trigger discriminator between v1 and v2 workflows.
+No other naming scheme (date-based, commit-hash-based) is considered — semver with the
+game prefix is the most human-readable and toolchain-compatible format.</p>
+
+<h3>Full distribution flow</h3>
+<ol class="seq">
+  <li>Operator confirms the release is ready, then runs:
+  <code>git tag aero-v2-0.1.0 &amp;&amp; git push origin aero-v2-0.1.0</code></li>
+  <li><code>release-v2.yml</code> triggers on <code>push: tags: aero-v2-*</code>.</li>
+  <li>Workflow checks out the tag with <code>fetch-depth: 0</code> for changelog generation.</li>
+  <li>Matrix job fans out two parallel builds:
+    <code>build-windows</code> on <code>[self-hosted, windows, ue5-builder]</code>
+    and <code>build-linux</code> on <code>[self-hosted, linux, ue5-builder]</code>.</li>
+  <li>Each build job: verifies <code>.ue5-version</code> matches the pre-installed engine.
+  Verifies <code>.cesium-version</code> pin. Injects <code>GOOGLE_MAPS_TILES_API_KEY</code>
+  from GitHub Secret into the build environment.</li>
+  <li>Each build job: invokes <code>RunUAT.sh BuildCookRun</code> (Linux) or
+  <code>RunUAT.bat BuildCookRun</code> (Windows) with <code>-shipping</code>,
+  <code>-platform=Win64</code> / <code>-platform=Linux</code>, and the project .uproject path.</li>
+  <li>Each build job: creates a zip artifact:
+  <code>aero-fighters-v2-win64-aero-v2-0.1.0.zip</code> or
+  <code>aero-fighters-v2-linux64-aero-v2-0.1.0.zip</code>.</li>
+  <li>Each build job: generates SHA256 checksum:
+  <code>sha256sum aero-fighters-v2-win64-aero-v2-0.1.0.zip &gt; aero-fighters-v2-win64-aero-v2-0.1.0.zip.sha256</code></li>
+  <li>Each build job: uploads both files as GitHub Actions artifacts (zip + .sha256).</li>
+  <li><code>publish-release</code> job runs on <code>ubuntu-latest</code> after both build jobs
+  complete (<code>needs: [build-windows, build-linux]</code>).</li>
+  <li>Publish job downloads all 4 artifacts. Generates changelog from
+  <code>git log &lt;prev-aero-v2-tag&gt;..HEAD --pretty="- %s (%h)"</code>.</li>
+  <li>Publish job creates the GitHub Release:
+  <code>gh release create aero-v2-0.1.0 --title "aero-fighters-v2 v0.1.0" --notes "$CHANGELOG"
+  aero-fighters-v2-win64-*.zip aero-fighters-v2-win64-*.sha256
+  aero-fighters-v2-linux64-*.zip aero-fighters-v2-linux64-*.sha256</code></li>
+  <li>Release notes include: version, platform matrix, SHA256 checksums table, known issues
+  section, and a note that the API key is embedded (for transparency with the operator;
+  end-user-facing notes do not need to mention the key).</li>
+</ol>
+
+<h3>Release artifact naming</h3>
+<pre><code>aero-fighters-v2-win64-aero-v2-0.1.0.zip
+aero-fighters-v2-win64-aero-v2-0.1.0.zip.sha256
+aero-fighters-v2-linux64-aero-v2-0.1.0.zip
+aero-fighters-v2-linux64-aero-v2-0.1.0.zip.sha256
+</code></pre>
+
+<h3>Signature policy (scope cut decision)</h3>
+<p>Windows code signing (EV OV certificate, $200–$500/year, SmartScreen bypass) is deferred
+post-MVP. End users will see a Windows SmartScreen "unrecognized publisher" warning on first
+launch. This is acceptable for a personal game with a solo operator and known end-user base.
+See 4-Week Scope Cut section for the explicit MUST/DEFER table.</p>
+
+<p>Linux: no equivalent of SmartScreen. The zip tarball approach (extract and run) is standard
+for indie Linux game distribution. No .deb or .AppImage packaging in MVP.</p>
+
+<!-- ================================================================== -->
+<h2>Cost Monitoring</h2>
+
+<p><span class="tag-locked">LOCKED</span> D3: Hard cap USD 20/month on Google Maps Tiles API.
+AC-V2-10 requires billing alerts at 50%, 80%, 100% of cap. Operator receives email on each tier.</p>
+
+<h3>GCP Cloud Billing budget configuration</h3>
+<p>The operator configures this in GCP Console under
+<strong>Billing &gt; Budgets &amp; alerts</strong> for the project that owns the API key.
+This is a one-time setup before the first tile fetch occurs — Week 1 prerequisite.</p>
+
+<table>
+  <thead><tr><th>Alert tier</th><th>Threshold (D3: $20 cap)</th><th>Notification</th><th>Automated action</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Early warning</td>
+      <td>$10.00 (50%)</td>
+      <td>Email to operator Gmail (GCP built-in)</td>
+      <td>None — informational only</td>
+    </tr>
+    <tr>
+      <td>Warning</td>
+      <td>$15.00 (75%)</td>
+      <td>Email + Hermes Telegram (if integration built in MVP; email is the minimum)</td>
+      <td>None — operator should begin throttling dev tile fetches</td>
+    </tr>
+    <tr>
+      <td>Hard cap</td>
+      <td>$20.00 (100%)</td>
+      <td>Email + Hermes Telegram</td>
+      <td>None (GCP cannot auto-disable keys). Operator manually disables key in GCP Console within 5 min of alert.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout callout-warn">
+<strong>GCP billing alerts do NOT auto-disable API keys.</strong> The $20 alert is a notification,
+not an automatic cutoff. There is no GCP-native mechanism to hard-stop API access at a spend
+threshold without programmatic Cloud Functions — over-engineering for a $20 monthly cap.
+The operator disables the key manually after the alert fires. The expected response time is
+under 5 minutes given the Telegram alert reaches the operator's phone immediately.
+</div>
+
+<h3>Hermes Telegram notification integration</h3>
+<p>Per CLAUDE.md, Hermes is the operator's Telegram bot running on the VPS. Integration path:</p>
+<ol>
+  <li>GCP budget alert publishes a Pub/Sub notification to a <code>billing-alerts</code> topic
+  when each threshold is crossed.</li>
+  <li>A Cloud Run job (or lightweight Cloud Function) subscribed to that topic forwards the alert
+  as a Telegram message to the operator via the Hermes gateway or directly via the Telegram Bot
+  API.</li>
+  <li>Message format: <code>[GCP ALERT] Maps Tiles API: $XX.XX spent of $20.00 cap (XX%). If at
+  100%: disable API key in GCP Console immediately.</code></li>
+</ol>
+
+<div class="callout">
+<strong>Scope note:</strong> If setting up a Cloud Run job is too much overhead for the 4-week
+sprint, email-only alerts satisfy AC-V2-10 (which requires alerts, not specifically Hermes).
+Hermes integration is recommended for operator convenience but is explicitly deferrable to
+post-MVP without violating any acceptance criterion.
+</div>
+
+<h3>CI tile API budget control</h3>
+<p>CI screenshot-diff tests that make live tile requests run only on tagged release builds
+(<code>release-v2.yml</code>), not on every PR (<code>ci-v2.yml</code>). For a solo operator
+releasing approximately once per month, this limits CI tile spend to one render session per
+release. Estimated cost per session: $0.50–$2.00 for 4+ geo-poses in the 20 km radius.
+This leaves $18–$19.50 per month for operator dev work — comfortable within the $20 cap.</p>
+
+<h3>What to do when the cap is hit</h3>
+<ol>
+  <li>GCP Console &gt; APIs &amp; Services &gt; Credentials &gt; Select key &gt; Disable.</li>
+  <li>Continue dev work using the offline tile cache (<code>CESIUM_OFFLINE_TILES=1</code> in .env.local).</li>
+  <li>At the start of the next billing cycle, re-enable the key in GCP Console.</li>
+  <li>If the overage was due to a CI run, audit which workflow job triggered unexpected tile fetches
+  and add a guard to prevent recurrence.</li>
+</ol>
+
+<!-- ================================================================== -->
+<h2>CI Runner Sizing</h2>
+
+<h3>Full comparison matrix</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Option</th><th>RAM / Disk / CPU</th><th>GPU for tests</th><th>Cost per UE5 Shipping build</th><th>UE5 5.4 viable?</th><th>Verdict</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>GitHub <code>ubuntu-latest</code> / <code>windows-latest</code></td>
+      <td>16 GB / ~14-30 GB free / 4 cores</td>
+      <td>No</td>
+      <td>$0 (public repo free tier)</td>
+      <td>No — RAM and especially disk are insufficient. Windows runner has ~14 GB disk free; UE5 engine alone requires 100+ GB.</td>
+      <td><span class="badge badge-fail">INSUFFICIENT</span></td>
+    </tr>
+    <tr>
+      <td>GitHub larger runners (16-core, 64 GB)</td>
+      <td>64 GB / 500 GB / 16 cores</td>
+      <td>No (GPU runners are a separate, much more expensive tier)</td>
+      <td>~$30–$60 per platform ($0.256–$0.512/min x 60–120 min); $60–$120 per release</td>
+      <td>Yes for build; no for GPU-gated tests; no for DDC caching (10 GB cache limit blocks engine caching)</td>
+      <td><span class="badge badge-medium">TOO EXPENSIVE</span></td>
+    </tr>
+    <tr>
+      <td>Self-hosted on operator hardware</td>
+      <td>Operator's machine (assumed 32+ GB RAM, 500+ GB disk, 8+ cores)</td>
+      <td>Yes — operator's RTX 3060 directly available</td>
+      <td>$5–$15/month electricity (active build period)</td>
+      <td>Yes — full control, no disk/RAM/GPU constraints</td>
+      <td><span class="badge badge-pass">RECOMMENDED</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Formal recommendation</h3>
+<p><strong>Hybrid runner topology:</strong></p>
+<ul>
+  <li><strong>v1 CI (<code>ci-v1.yml</code>):</strong> <code>ubuntu-latest</code> (GitHub-hosted).
+  Current behavior — correct, keep unchanged.</li>
+  <li><strong>v2 build CI (<code>ci-v2.yml</code>, <code>release-v2.yml</code> build jobs):</strong>
+  <code>self-hosted [windows, ue5-builder]</code> and <code>self-hosted [linux, ue5-builder]</code>.</li>
+  <li><strong>v2 release publish (<code>release-v2.yml</code> publish job):</strong>
+  <code>ubuntu-latest</code> (GitHub-hosted). Publish is just <code>gh release create</code>
+  — no UE5 involved, standard runner is fine.</li>
+  <li><strong>GPU-gated tests (perf gate, screenshot-diff):</strong> Self-hosted runner,
+  same machine with RTX 3060. Run only on tagged release builds.</li>
+</ul>
+
+<h3>Monthly cost projection</h3>
+<table>
+  <thead><tr><th>Component</th><th>Monthly cost</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>v1 CI (GitHub-hosted Playwright)</td><td>$0</td><td>Well within free tier for a public repo with infrequent builds</td></tr>
+    <tr><td>v2 build CI (self-hosted, electricity)</td><td>$5–$15</td><td>4-week active dev period with multiple builds per day; drops to ~$1/month at maintenance pace</td></tr>
+    <tr><td>Google Maps Tiles API</td><td>$0–$20</td><td>Capped by billing alert. Dev cache reduces this toward $0 during normal dev.</td></tr>
+    <tr><td>GitHub Actions storage (release artifacts)</td><td>$0–$1</td><td>Release zips stored in GitHub Releases (outside Actions cache quota)</td></tr>
+    <tr><td><strong>Total monthly</strong></td><td><strong>$5–$36</strong></td><td>Well within range for a solo personal project</td></tr>
+  </tbody>
+</table>
+
+<h3>Self-hosted runner setup checklist (Week 1 prerequisite)</h3>
+<ul>
+  <li>Install GitHub Actions runner agent from Settings &gt; Actions &gt; Runners &gt; New self-hosted runner</li>
+  <li><code>./config.sh --url https://github.com/&lt;owner&gt;/tauan-games --token &lt;token&gt; --labels ue5-builder</code></li>
+  <li>Pre-install UE 5.4 at a fixed path (e.g., <code>C:\UE_5.4</code> Windows, <code>/opt/UE_5.4</code> Linux)</li>
+  <li>Configure shared DDC path in UE5 editor preferences (persists across builds)</li>
+  <li>Register runner as a system service: <code>./svc.sh install &amp;&amp; ./svc.sh start</code></li>
+  <li>For Linux runner: install Vulkan drivers, build-essential, and Cesium Linux prerequisites</li>
+  <li>Verify runner appears online in GitHub repo settings before first push</li>
+</ul>
+
+<!-- ================================================================== -->
+<h2>Parallel-v1 CI Matrix</h2>
+
+<p><span class="tag-locked">LOCKED</span> D9: v1 (Three.js) continues evolving in parallel.
+The existing Playwright suite must remain green throughout all v2 development.
+OQ-13 (tag naming) is resolved above.</p>
+
+<h3>Current v1 CI baseline assessment</h3>
+<p>The existing <code>ci.yml</code> is well-constructed: pinned action hashes (good security
+posture), Node 20, Playwright with Chromium, browser binary caching keyed on
+<code>package-lock.json</code> hash, artifact upload on failure. The only change needed is
+renaming to <code>ci-v1.yml</code> and adding path filters. Content of jobs is kept verbatim.</p>
+
+<h3>Proposed workflow trigger matrix</h3>
+<table>
+  <thead><tr><th>Workflow file</th><th>Trigger</th><th>Path filter</th><th>Runner</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>ci-v1.yml</code></td>
+      <td><code>push</code> (any branch), <code>pull_request</code> to main, tag <code>aero-v1-*</code></td>
+      <td><code>aero-fighters/**</code>, <code>tauan-trex/**</code>, <code>tests/**</code>, <code>package.json</code>, <code>package-lock.json</code></td>
+      <td><code>ubuntu-latest</code></td>
+    </tr>
+    <tr>
+      <td><code>ci-v2.yml</code></td>
+      <td><code>pull_request</code> to main</td>
+      <td><code>aero-fighters-v2/**</code></td>
+      <td><code>self-hosted [windows, ue5-builder]</code></td>
+    </tr>
+    <tr>
+      <td><code>release-v2.yml</code></td>
+      <td>tag <code>aero-v2-*</code></td>
+      <td>(no path filter — tag trigger is sufficient)</td>
+      <td>Build jobs: self-hosted. Publish job: ubuntu-latest</td>
+    </tr>
+    <tr>
+      <td><code>pages.yml</code></td>
+      <td><code>push</code> to main, <code>workflow_dispatch</code></td>
+      <td>(no change from existing)</td>
+      <td><code>ubuntu-latest</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Path filter isolation guarantee</h3>
+<p>Path filters ensure that CI runs only the jobs relevant to what changed:</p>
+<ul>
+  <li>Changes to <code>aero-fighters-v2/**</code> only: v2 compile-check runs, v1 Playwright does NOT run.</li>
+  <li>Changes to <code>aero-fighters/**</code> or <code>tests/**</code> only: v1 Playwright runs, v2 compile-check does NOT run.</li>
+  <li>Changes to both (e.g., cross-cutting refactor, <code>package.json</code> update): both run in parallel — still isolated, just concurrent.</li>
+</ul>
+
+<p>This guarantees that v2 development cannot accidentally slow down or break v1 CI, and vice versa.</p>
+
+<h3>Secrets isolation</h3>
+<p><code>GOOGLE_MAPS_TILES_API_KEY</code> is referenced only in <code>ci-v2.yml</code> and
+<code>release-v2.yml</code>. It is absent from <code>ci-v1.yml</code> and <code>pages.yml</code>.
+This prevents any v1 CI run from incurring API costs or accidentally exposing the key.</p>
+
+<h3>v1 caching (preserve as-is)</h3>
+<p>The existing Playwright browser cache pattern (keyed on <code>hashFiles('package-lock.json')</code>,
+stored at <code>~/.cache/ms-playwright</code>) is correct. Copy verbatim into <code>ci-v1.yml</code>.</p>
+
+<h3>v2 caching (new, self-hosted strategy)</h3>
+<p>Engine binaries and DDC persist on the self-hosted runner's local disk across all runs.
+GitHub Actions cache is not used for v2 build artifacts (size exceeds limits). Only small
+inter-job outputs (metadata, checksums) use the Actions artifact upload/download mechanism.</p>
+
+<!-- ================================================================== -->
+<h2>4-Week Scope Cut</h2>
+
+<p><span class="tag-locked">LOCKED</span> D10: 4-week timeline, risk-on commitment.
+The following table is the authoritative MUST/DEFER split for all DevOps deliverables.</p>
+
+<table>
+  <thead>
+    <tr><th>Item</th><th>Status</th><th>Rationale</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Self-hosted runner(s) registered + UE5.4 pre-installed</td>
+      <td><span class="badge badge-critical">MUST-HAVE — Week 1</span></td>
+      <td>Hard dependency for all v2 CI. Without this, no v2 CI at all. ~2–4h one-time setup. Non-negotiable.</td>
+    </tr>
+    <tr>
+      <td>Tag naming convention enforced (<code>aero-v1-*</code> / <code>aero-v2-*</code>)</td>
+      <td><span class="badge badge-critical">MUST-HAVE — Week 1</span></td>
+      <td>OQ-13. Required from the first v2 commit to prevent workflow trigger collisions.</td>
+    </tr>
+    <tr>
+      <td>GitHub Secret <code>GOOGLE_MAPS_TILES_API_KEY</code> configured</td>
+      <td><span class="badge badge-critical">MUST-HAVE — Week 1</span></td>
+      <td>Required before any CI build or screenshot-diff test touches Cesium.</td>
+    </tr>
+    <tr>
+      <td>GCP billing budget alerts at $10/$15/$20</td>
+      <td><span class="badge badge-critical">MUST-HAVE — Week 1, before first tile fetch</span></td>
+      <td>AC-V2-10. Must be in place before any tile API call occurs. 15-minute setup in GCP Console.</td>
+    </tr>
+    <tr>
+      <td>v1 Playwright CI passes on every PR (ci-v1.yml, path-filtered)</td>
+      <td><span class="badge badge-critical">MUST-HAVE</span></td>
+      <td>AC-V2-11. Non-negotiable. Existing ci.yml is the base — rename + add path filters.</td>
+    </tr>
+    <tr>
+      <td>UE5 compile-check CI on PRs (ci-v2.yml)</td>
+      <td><span class="badge badge-high">MUST-HAVE</span></td>
+      <td>Fast feedback loop that Blueprint compilation does not break. Catches errors before they compound over 4 weeks.</td>
+    </tr>
+    <tr>
+      <td>Full Shipping build + GitHub Release on tag (release-v2.yml)</td>
+      <td><span class="badge badge-high">MUST-HAVE for MVP delivery</span></td>
+      <td>AC-V2-08 (Windows zip), AC-V2-09 (Linux zip). The distributable artifact is the MVP deliverable. Without this, there is no release.</td>
+    </tr>
+    <tr>
+      <td>SHA256 checksums on release artifacts</td>
+      <td><span class="badge badge-high">MUST-HAVE</span></td>
+      <td>Trivial to add (one shell command). Enables integrity verification for end users.</td>
+    </tr>
+    <tr>
+      <td>Automated perf gate (RTX 3060 @ 60 FPS headless GPU test)</td>
+      <td><span class="badge badge-high">MUST-HAVE — Week 3</span></td>
+      <td>AC-V2-07. Required for MVP closure. Implement after build pipeline is proven (Weeks 1–2). Not day-1 CI, but must be in place before the final tag.</td>
+    </tr>
+    <tr>
+      <td>Branch protection: require v1 Playwright status check before merge to main</td>
+      <td><span class="badge badge-medium">RECOMMENDED</span></td>
+      <td>Solo team means no PR review gate, but requiring the Playwright check prevents accidental v1 regressions from being merged. Low effort, high value.</td>
+    </tr>
+    <tr>
+      <td>Screenshot-diff CI scoped to tags only (not per-PR)</td>
+      <td><span class="badge badge-medium">MUST-HAVE (architecture decision, not scope cut)</span></td>
+      <td>Per-PR screenshot-diff would exhaust the $20 tile budget in days. Run only on <code>aero-v2-*</code> tags. This is an infrastructure constraint, not a feature deferral.</td>
+    </tr>
+    <tr>
+      <td>Windows code signing (SmartScreen bypass)</td>
+      <td><span class="badge badge-medium">DEFER post-MVP</span></td>
+      <td>EV certificate: $200–$500/year. SmartScreen warning is acceptable for a personal game. Defer until user distribution requires it.</td>
+    </tr>
+    <tr>
+      <td>Linux .deb / .AppImage packaging</td>
+      <td><span class="badge badge-medium">DEFER post-MVP</span></td>
+      <td>Raw zip tarball is sufficient for MVP Linux distribution. Packaging adds complexity (.deb control files, dependency declarations) with no functional benefit for the target user base.</td>
+    </tr>
+    <tr>
+      <td>Hermes Telegram billing alert integration (Cloud Run job)</td>
+      <td><span class="badge badge-low">DEFER post-MVP</span></td>
+      <td>Email alerts satisfy AC-V2-10. Hermes integration via Pub/Sub + Cloud Run is non-trivial setup. Defer; email is the minimum viable alert mechanism.</td>
+    </tr>
+    <tr>
+      <td>Automatic API key rotation (Secrets Manager)</td>
+      <td><span class="badge badge-low">DEFER post-MVP</span></td>
+      <td>Manual 90-day rotation is sufficient for a solo project. Automation requires a secrets management service (overkill for this scope).</td>
+    </tr>
+    <tr>
+      <td>Offline tile cache automated population (<code>make tile-cache-populate</code>)</td>
+      <td><span class="badge badge-low">DEFER to PLAN</span></td>
+      <td>OQ-05. Depends on software-architect and game-developer defining the Cesium offline cache API. DevOps wraps it in a Makefile target once the implementation is defined — cannot be authored before the API is settled.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Week-by-week CI milestone plan</h3>
+<table>
+  <thead><tr><th>Week</th><th>CI deliverable</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Week 1</td>
+      <td>Self-hosted runner(s) registered and online. <code>.ue5-version</code> file committed.
+      Tag naming convention established. <code>ci-v1.yml</code> renamed + path-filtered (v1 CI confirmed green).
+      GitHub Secret configured. GCP billing alerts live. <code>ci-v2.yml</code> created (compile-check stub).</td>
+    </tr>
+    <tr>
+      <td>Week 2</td>
+      <td>First successful UE5 compile-check on a PR via <code>ci-v2.yml</code>.
+      DDC warm on runner after first full compile. <code>.cesium-version</code> pin committed.</td>
+    </tr>
+    <tr>
+      <td>Week 3</td>
+      <td>Perf gate test scripted and running on self-hosted GPU. First full Shipping build attempt
+      on a pre-release tag. Screenshot-diff CI confirmed scoped to tags only.</td>
+    </tr>
+    <tr>
+      <td>Week 4</td>
+      <td><code>release-v2.yml</code> end-to-end tested on a pre-release tag (<code>aero-v2-0.1.0-rc1</code>).
+      GitHub Release created with both platform zips + checksums. v1 Playwright remains green.
+      All AC-V2-08, AC-V2-09, AC-V2-10, AC-V2-11 verified in CI.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ================================================================== -->
+<h2>Objections (Cross-Domain)</h2>
+
+<p>Per the Decision Authority Matrix (<code>game-agents-coordination.md</code>), devops-engineer
+has tie-breaker authority on CI/CD, build, and deploy decisions. The following are objections
+raised into other specialists' domains, each documented with evidence as required by the
+matrix ("objection without evidence is automatically ignored").</p>
+
+<div class="finding">
+  <h3><span class="badge badge-high">OBJECTION into game-tester</span> Screenshot-diff CI on every PR will exhaust the $20/month tile budget</h3>
+  <p><strong>Evidence:</strong> Google Maps Tiles API pricing: ~$0.004 per session tile request.
+  A single screenshot-diff render at useful LOD for a 20 km radius scene requires 100–500 tile
+  requests (based on Cesium's typical request volume for a medium-altitude view). Four geo-poses
+  per test run = 400–2000 requests = $1.60–$8.00 per CI run. If screenshot-diff runs on every
+  PR during a 4-week active sprint (2–5 PRs/day), monthly CI tile spend reaches $96–$1,200 —
+  far exceeding the $20 cap.</p>
+  <p><strong>Proposed resolution (devops wins on CI infrastructure):</strong> Screenshot-diff tests
+  (AC-V2-06) run only on tagged release builds. PRs get compile-check only. The synthesis SPEC
+  should encode this as a constraint on when AC-V2-06 is validated, so game-tester designs the
+  harness to be triggered exclusively via the release workflow.</p>
+</div>
+
+<div class="finding">
+  <h3><span class="badge badge-high">OBJECTION into game-tester</span> Performance gate (AC-V2-07) methodology requires clarification of GPU-headless vs. software-headless</h3>
+  <p><strong>Evidence:</strong> Discovery conflict C6 surfaces the headless vs. windowed perf
+  testing dispute. "Headless" UE5 on Linux without explicit GPU setup defaults to software
+  rendering (Mesa llvmpipe) which produces CPU-bound frame times unrelated to RTX 3060
+  performance. A meaningful 60 FPS gate requires GPU-backed headless: Vulkan (Linux) or
+  D3D12 (Windows) with the physical GPU active, launched with UE5 flags
+  <code>-nullrhi</code> avoided, <code>-RenderOffScreen</code> or equivalent used instead.</p>
+  <p><strong>Proposed resolution:</strong> The self-hosted runner has the RTX 3060 physically
+  available. DevOps provides the runner with correct GPU drivers (Vulkan on Linux, D3D12 on
+  Windows). Game-tester must specify the exact UE5 command-line flags that activate GPU-backed
+  headless rendering for the perf gate. DevOps owns the runner infrastructure; game-tester owns
+  the test invocation. The synthesis SPEC should assign this interface definition explicitly.</p>
+</div>
+
+<div class="finding">
+  <h3><span class="badge badge-medium">OBJECTION into software-architect</span> Cesium plugin version pin must live in a committed file, not only in CI workflow YAML</h3>
+  <p><strong>Evidence:</strong> Reproducible builds require the exact Cesium plugin version to be
+  captured in source control and readable by both CI and local developer toolchains. If the version
+  is expressed only in workflow YAML, a developer building locally may use a different (incompatible)
+  plugin version, producing builds that pass locally but fail CI or vice versa. The correct pattern
+  is a committed file (<code>aero-fighters-v2/.cesium-version</code>) containing the exact release
+  tag or commit hash.</p>
+  <p><strong>Resolution (devops wins on CI/build):</strong> The file format is devops-engineer's
+  decision. The version value is software-architect's proposal (OQ-10, within their compat analysis
+  scope). SPEC should assign: architect proposes compatible Cesium version, devops specifies the
+  pin file format and CI validation step, game-developer implements the engine-side reading of the
+  pin file during build configuration.</p>
+</div>
+
+<div class="finding">
+  <h3><span class="badge badge-medium">OBJECTION into game-developer</span> Offline tile cache default requires engine-side implementation</h3>
+  <p><strong>Evidence:</strong> The <code>CESIUM_OFFLINE_TILES</code> environment variable
+  convention proposed in this report requires an implementation hook inside the UE5 project —
+  Blueprints or C++ plugin configuration — that reads this variable and redirects Cesium tile
+  requests to the local cache directory. This is game code, not DevOps infrastructure. DevOps
+  provides the environment variable convention, the <code>.env.example</code> template, and the
+  Makefile target wrapper; game-developer implements the engine-side tile redirect behavior.</p>
+  <p><strong>Proposed resolution:</strong> SPEC explicitly assigns the offline cache engine
+  implementation to game-developer with the constraint that it must honor the
+  <code>CESIUM_OFFLINE_TILES</code> environment variable (or equivalent documented interface) that
+  DevOps injects in CI and documents in <code>.env.example</code>.</p>
+</div>
+
+<div class="finding">
+  <h3><span class="badge badge-low">OBJECTION into product-engineer — D17 if-slip rule scope</span></h3>
+  <p><strong>Evidence:</strong> The discovery report proposes the if-slip rule at "end of week 3
+  if Cesium tiles do not render at 60 FPS on Linux." From a DevOps perspective, the more
+  actionable slip trigger is earlier: if the Linux self-hosted runner cannot be registered and
+  a UE5 compile-check cannot complete by end of Week 1, the Linux platform should immediately
+  be flagged as at-risk. Waiting until Week 3 to discover a runner setup problem wastes two
+  weeks of potential remediation time.</p>
+  <p><strong>Proposed resolution (product-engineer has final word on scope):</strong> The synthesis
+  SPEC should add a Week 1 CI gate to the if-slip rule: "If by end of Week 1 the Linux
+  self-hosted runner is not registered and passing a compile-check, Linux is flagged as at-risk
+  and the operator must decide by end of Week 2 whether to deprioritize Linux for MVP." This is
+  a DevOps-domain addition that complements, not replaces, the product-engineer's Week 3 slip rule.</p>
+</div>
+
+<!-- ================================================================== -->
+<h2>GitHub Configuration Checklist</h2>
+<p>Pre-implementation setup requirements for the synthesis SPEC to include:</p>
+
+<h4>Secrets (Settings &gt; Secrets and variables &gt; Actions &gt; Secrets)</h4>
+<ul>
+  <li><code>GOOGLE_MAPS_TILES_API_KEY</code> — Google Maps Tiles API key. Obtain via:
+  <code>op item get "aero-fighters-v2/google-maps-tiles-api-key" --field credential</code>
+  after the 1Password item is created (OQ-03).</li>
+</ul>
+
+<h4>Variables</h4>
+<ul>
+  <li>None required for MVP. All build parameters are derived from committed pin files.</li>
+</ul>
+
+<h4>Environments</h4>
+<ul>
+  <li>None required for MVP. The release publish job runs without a manual gate — solo operator
+  controls releases by controlling when they push tags.</li>
+</ul>
+
+<h4>Branch protection (Settings &gt; Branches &gt; Rule for <code>main</code>)</h4>
+<ul>
+  <li>Required status checks before merge: <code>Playwright Tests</code> (exact job name from ci-v1.yml)</li>
+  <li>Require branches to be up to date: yes</li>
+  <li>Allow force pushes: no</li>
+  <li>Required approvals: 0 (solo team, D13)</li>
+</ul>
+
+<h4>Self-hosted runners (Settings &gt; Actions &gt; Runners &gt; New self-hosted runner)</h4>
+<ul>
+  <li>Register Windows runner with label <code>ue5-builder</code></li>
+  <li>Register Linux runner with label <code>ue5-builder</code></li>
+  <li>Both must appear as "online" in Settings before the first <code>aero-v2-*</code> tag is pushed</li>
+</ul>
+
+<p style="margin-top: 3em; color: #666; font-size: .85em; text-align: center;">
+  Generated by <code>devops-engineer</code> &middot; workflow <code>game-spec-definition</code>
+  stage <code>devops_review</code> &middot; 2026-05-17T061638Z
+</p>
+
+</body>
+</html>
