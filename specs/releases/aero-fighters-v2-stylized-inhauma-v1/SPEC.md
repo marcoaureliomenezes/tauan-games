@@ -1,6 +1,6 @@
 # SPEC: Aero Fighters v2 — Stylized Inhaúma (MVP-2)
 
-> **Status:** Drafting — 2026-05-17 (operator-grilled pivot; awaiting approval)
+> **Status:** Aprovado — 2026-05-17 (aprovado pelo operador após dadaia-grill-me session; substitui aero-fighters-v2-photorealistic-inhauma-v1)
 > **Release id:** aero-fighters-v2-stylized-inhauma-v1
 > **Engine ladder slot:** Degrau 3 (Unreal Engine 5) — foundation-immutable
 > **Supersedes:** aero-fighters-v2-photorealistic-inhauma-v1 (cancelled 2026-05-17 — hardware constraint)
