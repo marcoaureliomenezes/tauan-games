@@ -1,10 +1,10 @@
 # TASKS: Aero Fighters v2 — Stylized Inhaúma (MVP-2)
 
-> **Status:** Pending — awaiting SPEC approval
+> **Status:** Aprovado — 2026-05-17 (SPEC + PLAN both approved; ready for Wave 1)
 > **Author:** product-engineer (dadaia Labs)
 > **Created:** 2026-05-17
 > **SPEC:** `specs/releases/aero-fighters-v2-stylized-inhauma-v1/SPEC.md`
-> **PLAN:** (pending SPEC approval)
+> **PLAN:** `specs/releases/aero-fighters-v2-stylized-inhauma-v1/PLAN.md`
 > **Release id:** `aero-fighters-v2-stylized-inhauma-v1`
 > **Supersedes:** `aero-fighters-v2-photorealistic-inhauma-v1` (cancelled 2026-05-17)
 > **Grill input:** `.dadaia/reports/tauan-games/product-engineer/2026-05-17T210822Z-stylized-pivot.html`
