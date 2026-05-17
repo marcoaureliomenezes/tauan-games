@@ -1,0 +1,48 @@
+{
+  "schema_version": "handoff-v1",
+  "agent": "software-architect",
+  "context": "tauan-games",
+  "produced_at": "2026-05-17T06:15:46Z",
+  "release_id": "aero-fighters-v2-photorealistic-inhauma-v1",
+  "artifact": {
+    "type": "report",
+    "path": ".dadaia/reports/software-architect/2026-05-17T061546Z-game-arch.html",
+    "content_hash": "2372a11539018c191cf82f1e4c166513032b0c7ec11b4f9fb0dd3c358cd6d1ea"
+  },
+  "findings": [
+    { "severity": "CRITICAL", "message": "Cesium must not leak past AeroFightersGeoref — enforce via Build.cs whitelist and CI grep gate." },
+    { "severity": "CRITICAL", "message": "R1: Cesium for Unreal may drop UE 5.4 mid-MVP; pin via exact commit SHA and mirror upstream." },
+    { "severity": "CRITICAL", "message": "R2: Georef seam violation (raw FVector cm in gameplay) breaks the if-slip rule and AA-gun placement portability." },
+    { "severity": "CRITICAL", "message": "F1 (forbidden): skipping the georef abstraction makes the if-slip rule un-executable." },
+    { "severity": "CRITICAL", "message": "F2 (forbidden): flight math in Blueprint guarantees mid-sprint rewrite + retune; recommend C++ FlightComponent with BP-exposed tuning." },
+    { "severity": "CRITICAL", "message": "F3 (forbidden): committing Cesium tile bytes to git violates Google Tiles ToS and bloats repo." },
+    { "severity": "CRITICAL", "message": "F4 (forbidden): Combat reaching mutably into GameState recreates v1 side-effect anti-pattern." },
+    { "severity": "HIGH",     "message": "BP-first is not safe for the flight tick path on the 3060 / 60 FPS budget." },
+    { "severity": "HIGH",     "message": "R3: Cesium tile-streaming hitches can spike 50–80 ms on game thread; pre-warm at MENU and cap tile cache." },
+    { "severity": "HIGH",     "message": "R4: Linux Vulkan vs Windows DX12 shader differences will fail per-pixel diff; mandate SSIM/pHash tolerance." },
+    { "severity": "HIGH",     "message": "Anti-pattern watch: God GameMode — hard cap AAeroGameMode at 150 LOC C++ / 80 BP nodes." },
+    { "severity": "MEDIUM",   "message": "Do not copy v1 sortie-state TRANSITIONS map verbatim; port to UE-idiomatic switch on tuple." },
+    { "severity": "MEDIUM",   "message": "Anti-pattern watch: BP Cast-To chains — use BP Interfaces for HUD-to-Pawn wiring." },
+    { "severity": "MEDIUM",   "message": "Anti-pattern watch: Anemic Domain Model in Core — types must expose behavior, not raw fields." },
+    { "severity": "MEDIUM",   "message": "R5: Cesium default-config drift across versions — set all config explicitly, never default." },
+    { "severity": "MEDIUM",   "message": "R6: Google 3D Tiles license vs offline cache (OQ-05) — cache path via env var, never committed." },
+    { "severity": "MEDIUM",   "message": "R7: UE 5.4 is on maintenance; defer UE bump to v2.1 discovery." },
+    { "severity": "INFO",     "message": "Proposed 7-module layout: Core, Georef (Cesium-only), Gameplay, Combat, HUD, Audio, Harness (EditorOnly)." },
+    { "severity": "INFO",     "message": "Slim 4-state sortie machine (Menu/Airborne/Crashed/SessionEnded) ported from v1 — redesigned, not omitted." },
+    { "severity": "INFO",     "message": "Concessions C1–C4: roll Audio+HUD into Gameplay, no custom plugins, defer Strategy for flight model." },
+    { "severity": "INFO",     "message": "BP-to-C++ promotion trigger proposed (closes OQ-02): 0.30 ms/frame per class, 2.0 ms total BP VM, 150-node soft cap." }
+  ],
+  "decisions_required": [
+    "Synthesis must adjudicate O3 (BP-first interpretation for FlightComponent) — game-developer has tie-breaker per Decision Authority Matrix.",
+    "Synthesis must adjudicate O1 (SSIM vs per-pixel screenshot-diff tolerance) — game-tester has tie-breaker.",
+    "Operator must finalize if-slip rule wording (OQ-04); architectural proposal supplied for both Linux-drop and Cesium-swap fallbacks.",
+    "Product-engineer must clarify whether foundation 'no external assets' rule extends to UE5 (O5) — Quixel/Marketplace assets needed within 4 weeks.",
+    "Devops-engineer must pick exact Cesium plugin commit SHA (OQ-10) within the compat envelope documented in this report.",
+    "Synthesis must add ACs AC-V2-13 (Cesium isolation lint), AC-V2-14 (FGeoCoord round-trip), AC-V2-15 (GameMode size cap) to SPEC section 7."
+  ],
+  "next_handoff": {
+    "agent": "product-engineer",
+    "context": "tauan-games",
+    "expected_artifact_type": "spec"
+  }
+}

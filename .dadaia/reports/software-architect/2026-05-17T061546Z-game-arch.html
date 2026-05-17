@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Architecture Review — aero-fighters-v2 (UE5.4 + Cesium)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         max-width: 1180px; margin: 2em auto; padding: 0 1.5em; line-height: 1.55;
+         color: #1d1f23; background: #fafafa; }
+  h1 { border-bottom: 3px solid #234; padding-bottom: 0.35em; }
+  h2 { border-bottom: 1px solid #ccd; padding-bottom: 0.25em; margin-top: 2.4em;
+       color: #18305c; }
+  h3 { color: #2a4a8a; margin-top: 1.6em; }
+  h4 { color: #3b3b3b; margin-bottom: 0.3em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0;
+          background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  th, td { border: 1px solid #cdd2da; padding: 0.55em 0.75em; vertical-align: top;
+           text-align: left; }
+  th { background: #eef1f6; font-weight: 600; }
+  tr:nth-child(even) td { background: #f7f9fc; }
+  code { background: #eef0f3; padding: 0.1em 0.4em; border-radius: 3px;
+         font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; }
+  pre { background: #1d1f23; color: #f3f3f3; padding: 1em; border-radius: 4px;
+        overflow-x: auto; font-size: 0.88em; line-height: 1.4; }
+  .meta { background: #eef4ff; border-left: 4px solid #2a4a8a; padding: 0.6em 1em;
+          margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .risk { background: #fff6ec; border-left: 4px solid #d2691e; padding: 0.6em 1em;
+          margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .danger { background: #fdecec; border-left: 4px solid #c0392b; padding: 0.6em 1em;
+            margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .ok { background: #ecf7ee; border-left: 4px solid #2e8b57; padding: 0.6em 1em;
+        margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .tag { display: inline-block; padding: 0.05em 0.55em; border-radius: 10px;
+         font-size: 0.78em; font-weight: 600; margin-right: 0.3em; color: #fff; }
+  .t-crit { background: #c0392b; }
+  .t-high { background: #d2691e; }
+  .t-med  { background: #b8860b; }
+  .t-low  { background: #5f6c7b; }
+  .t-ok   { background: #2e8b57; }
+  .t-info { background: #2a4a8a; }
+  .finding { background: #fff; border-left: 4px solid #2a4a8a; padding: 0.75em 1em;
+             margin: 1em 0; border-radius: 0 3px 3px 0;
+             box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+  .finding.crit { border-left-color: #c0392b; }
+  .finding.high { border-left-color: #d2691e; }
+  .finding.med  { border-left-color: #b8860b; }
+  .finding.low  { border-left-color: #5f6c7b; }
+  .finding h4 { margin-top: 0; }
+  ul.compact li { margin: 0.18em 0; }
+  .ascii { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.82em;
+           white-space: pre; background: #f4f6fa; padding: 1em; border-radius: 4px;
+           overflow-x: auto; border: 1px solid #dee2ea; }
+  .obj { background: #f6efff; border-left: 4px solid #6c4ab0; padding: 0.6em 1em;
+         margin: 1em 0; border-radius: 0 3px 3px 0; }
+</style>
+</head>
+<body>
+
+<h1>Architecture Review — aero-fighters-v2</h1>
+<h3 style="margin-top:0; color:#666;">UE5.4 + Cesium for Unreal — Photorealistic Inhaúma MG — Parallel-Specialist Stage <code>arch_review</code></h3>
+
+<div class="meta">
+  <b>Workflow:</b> <code>game-spec-definition.workflow.md</code> v0.1.0 — stage <code>arch_review</code><br>
+  <b>Spec context:</b> <code>tauan-games</code><br>
+  <b>Release codename:</b> <code>aero-fighters-v2-photorealistic-inhauma-v1</code><br>
+  <b>Author:</b> <code>software-architect</code> (specialist, one of five running in parallel)<br>
+  <b>Produced at (UTC):</b> <code>2026-05-17T06:15:46Z</code><br>
+  <b>Primary input:</b>
+  <code>.dadaia/reports/product-engineer/2026-05-17T060824Z-game-discovery.html</code><br>
+  <b>Decision Authority:</b> architecture decisions land here, <i>except</i> UE5-specific
+  idioms where <code>game-developer</code> has tie-breaker (per
+  <code>game-agents-coordination.md</code>). Items inside this report that intrude into
+  <code>game-developer</code> / <code>devops-engineer</code> / <code>game-designer</code> /
+  <code>game-tester</code> domains are flagged as <b>objections with evidence</b>,
+  not decisions.<br>
+  <b>Verdict:</b> <span class="tag t-high">CONDITIONAL</span> — architecture is feasible
+  for MVP <i>iff</i> three specific concessions and one hard abstraction (the georef seam)
+  are accepted by synthesis.
+</div>
+
+<p>This report consumes the 15 locked decisions, 13 deferred questions, and 7 conflict
+predictions from the discovery report; cross-references the v1 Three.js architecture
+(<code>aero-fighters/ARCHITECTURE.md</code>, <code>CONVENTIONS.md</code>, and the actual
+src tree at <code>aero-fighters/src/</code>); and applies the
+<code>architect-design-patterns</code>, <code>architect-code-audit</code>,
+<code>game-platform-unreal</code>, <code>game-unreal-developer</code>, and
+<code>game-flight-dynamics</code> skill protocols. Sections are ordered per the workflow
+contract.</p>
+
+<p><b>Top-3 architectural risks</b> surfaced (full detail in <i>Cesium + UE 5.4 Risks</i>
+and the timeline section):</p>
+<ol>
+  <li><b>UE 5.4 pin vs Cesium for Unreal release cadence.</b> Cesium ships frequently and
+  occasionally drops older UE versions on major bumps; we cannot upgrade UE inside MVP.</li>
+  <li><b>Cesium georef coordinate-system leak.</b> If gameplay code (AA gun position,
+  weapon hitscan, future JSBSim hook) addresses world in raw <code>FVector</code> cm
+  without going through a georef-aware seam, the codebase becomes un-portable to any
+  other map and impossible to swap Cesium for a fallback.</li>
+  <li><b>BP-first + 60 FPS floor + Lumen + Cesium tile streaming = no headroom.</b> The
+  per-frame budget on a 3060 at 1080p is ~16.6 ms; Lumen + Cesium tile decode + Niagara
+  already plausibly consume 12–14 ms before a single gameplay tick. The flight model
+  cannot live in Blueprint Tick at MVP scale without measurable risk.</li>
+</ol>
+
+<p><b>Top-3 design-pattern commitments</b> (full detail in <i>Pattern Fit</i>):</p>
+<ol>
+  <li><b>Component pattern via UE Actor-Component</b> for flight, weapons, health,
+  damage — already idiomatic to UE5 and matches v1's module decomposition.</li>
+  <li><b>Hexagonal seam (Port &amp; Adapter) at the georef boundary</b> — domain code
+  consumes a <code>UWorldGeoreferenceComponent</code> interface; the Cesium adapter is
+  the only thing that knows Cesium types. Non-negotiable.</li>
+  <li><b>Observer (UE Delegates) for cross-actor events</b> — enemy destroyed, projectile
+  hit, sortie-state transitions — instead of singleton GameMode pull or Cast-To chains.</li>
+</ol>
+
+<!-- =================================================================== -->
+<h2>UE5 Module Layout</h2>
+
+<p>I propose <b>seven game modules</b> under one Unreal project. UE5 module here means
+a <code>Build.cs</code>-defined compilation unit (header export + DLL boundary), not a
+folder. Each module has an explicit dependency list. Module split is chosen to maximize
+parallel iteration safety (BP recompile blast radius) and to keep the Cesium plugin
+coupling contained in exactly one module.</p>
+
+<table>
+<tr>
+  <th>Module (Build.cs)</th>
+  <th>Responsibility</th>
+  <th>Key C++ classes (initial)</th>
+  <th>BP content folder</th>
+  <th>Depends on</th>
+  <th>Cesium-aware?</th>
+</tr>
+<tr>
+  <td><code>AeroFightersCore</code></td>
+  <td>Pure-domain types: state-machine, sortie events, damage model, scoring,
+      <code>FGeoCoord</code> value type, math helpers. <b>No UE world types.</b></td>
+  <td><code>FSortieState</code> (UENUM), <code>FSortieMachine</code> (USTRUCT),
+      <code>FGeoCoord</code> (lat/lon/alt USTRUCT),
+      <code>UDamageModel</code> (UObject)</td>
+  <td><code>Content/Core/</code> — none initially</td>
+  <td>Engine, CoreUObject only</td>
+  <td><b>No</b></td>
+</tr>
+<tr>
+  <td><code>AeroFightersGeoref</code></td>
+  <td>The <b>only</b> module that imports Cesium. Wraps <code>ACesiumGeoreference</code>
+      and <code>ACesium3DTileset</code> behind a port interface
+      (<code>IWorldGeoreferenceProvider</code>) that the rest of the game consumes.</td>
+  <td><code>UWorldGeoreferenceComponent</code> (port impl),
+      <code>ACesiumTileStreamSubsystem</code>,
+      <code>FGeoToWorldConverter</code></td>
+  <td><code>Content/Georef/</code> — BP_CesiumWorldOrigin</td>
+  <td><code>AeroFightersCore</code>, Cesium plugin, Engine</td>
+  <td><b>Yes — sole owner</b></td>
+</tr>
+<tr>
+  <td><code>AeroFightersGameplay</code></td>
+  <td>Pawn, GameMode, GameState, PlayerController, FlightComponent (arcade), input.
+      Calls the georef port; never imports Cesium.</td>
+  <td><code>AFighterPawn</code> (BP-extensible C++ base),
+      <code>AAeroGameMode</code>, <code>AAeroGameState</code>,
+      <code>AAeroPlayerController</code>, <code>UFlightArcadeComponent</code></td>
+  <td><code>Content/Pawns/</code>, <code>Content/Modes/</code></td>
+  <td><code>AeroFightersCore</code>, <code>AeroFightersGeoref</code> (port)</td>
+  <td><b>No</b></td>
+</tr>
+<tr>
+  <td><code>AeroFightersCombat</code></td>
+  <td>Cannon (12.5 r/s, AC-V2-04), projectiles, hitscan, AA gun enemy archetype, damage
+      propagation via delegates. Owns the projectile pool subsystem.</td>
+  <td><code>UCannonComponent</code>, <code>AProjectile</code>,
+      <code>AAAGunPawn</code>, <code>UProjectilePoolSubsystem</code></td>
+  <td><code>Content/Weapons/</code>, <code>Content/Enemies/AAGun/</code></td>
+  <td><code>AeroFightersCore</code>, <code>AeroFightersGameplay</code></td>
+  <td><b>No</b></td>
+</tr>
+<tr>
+  <td><code>AeroFightersHUD</code></td>
+  <td>UMG widgets, HUD class, throttle/altitude/airspeed readouts, crosshair, RTB marker.
+      UI-only — no gameplay decisions live here.</td>
+  <td><code>AAeroHUD</code>, <code>UFlightInstrumentsWidget</code></td>
+  <td><code>Content/UI/</code></td>
+  <td><code>AeroFightersCore</code>, <code>AeroFightersGameplay</code> (read-only)</td>
+  <td><b>No</b></td>
+</tr>
+<tr>
+  <td><code>AeroFightersAudio</code></td>
+  <td>SoundCues, MetaSounds, attenuation, engine-RPM driver. Procedural-only for MVP per
+      foundation's no-external-assets bias (open question for UE5 — see Objections).</td>
+  <td><code>UEngineAudioComponent</code></td>
+  <td><code>Content/Audio/</code></td>
+  <td><code>AeroFightersGameplay</code></td>
+  <td><b>No</b></td>
+</tr>
+<tr>
+  <td><code>AeroFightersHarness</code> <span class="tag t-info">EditorOnly</span></td>
+  <td>Editor/test harness: screenshot-diff capture rig at fixed geo-poses, perf-loop
+      recorder, BP-to-C++ trigger telemetry sink. Stripped from Shipping builds.</td>
+  <td><code>UPerfRecorderSubsystem</code>, <code>UGeoPoseScreenshotter</code></td>
+  <td><code>Content/Test/</code></td>
+  <td>All gameplay modules (read-only), UnrealEd</td>
+  <td>Reads georef via the same port</td>
+</tr>
+</table>
+
+<div class="ok">
+<b>Why seven, not one monolith and not twenty?</b> Seven is the smallest split that
+isolates Cesium in exactly one module (most important architectural decision in the
+whole project) and keeps the rebuild cost of a BP-only iteration under one minute. More
+modules would multiply <code>.Build.cs</code> maintenance with no parallel-dev benefit
+since the team is solo (D13). Fewer modules force Cesium types into Gameplay headers,
+which prevents ever swapping Cesium for a Google Tiles SDK fallback or a baked offline
+tileset later.
+</div>
+
+<div class="finding crit">
+<h4><span class="tag t-crit">CRITICAL</span> Cesium must not leak past <code>AeroFightersGeoref</code></h4>
+<b>Location:</b> Module dependency graph<br>
+<b>Issue:</b> If any other module's public header includes a Cesium type, the entire
+project transitively depends on Cesium. This kills the if-slip rule (D17) — there is
+no recovery path that drops the Linux build or swaps to a baked tileset without a
+multi-week rewrite.<br>
+<b>Why it matters:</b> Cesium for Unreal averages a release every 4–6 weeks and has
+historically dropped UE 5.0/5.1/5.2 on major bumps. UE 5.5 is already out; UE 5.6 ships
+during our MVP window. If Cesium 3.x drops 5.4 mid-MVP, we either freeze on a Cesium
+release (no bugfixes, no Linux improvements) or rebase the entire engine version mid-sprint
+— neither is acceptable in a 4-week timeline.<br>
+<b>Trade-off if fixed:</b> The port abstraction costs one C++ interface
+(<code>IWorldGeoreferenceProvider</code> with ~6 methods) and one adapter. The benefit
+is total: Cesium can be deleted and replaced in days, not weeks.<br>
+<b>Recommendation:</b> Add a static <code>.Build.cs</code> lint to
+<code>AeroFightersHarness</code> that fails CI if <code>#include "Cesium</code> appears
+in any header under <code>AeroFightersCore</code>, <code>AeroFightersGameplay</code>,
+<code>AeroFightersCombat</code>, <code>AeroFightersHUD</code>, <code>AeroFightersAudio</code>.
+</div>
+
+<h3>Dependency graph (textual, top-down — arrow = "imports from")</h3>
+
+<div class="ascii">
+                  ┌───────────────────────────────┐
+                  │     AeroFightersHarness       │  (EditorOnly; strips on Shipping)
+                  └────────────┬──────────────────┘
+                               │ (read-only, all gameplay modules)
+       ┌───────────────────────┼─────────────────────────────────┐
+       ▼                       ▼                                 ▼
+┌───────────────┐    ┌──────────────────┐              ┌──────────────────┐
+│ AeroFighters  │    │   AeroFighters   │              │   AeroFighters   │
+│      HUD      │    │      Audio       │              │     Combat       │
+└──────┬────────┘    └─────────┬────────┘              └────────┬─────────┘
+       │                       │                                │
+       └────────────┬──────────┴─────────────┬──────────────────┘
+                    ▼                        ▼
+              ┌────────────────────────────────────┐
+              │       AeroFightersGameplay         │
+              │  (Pawn, GameMode, GameState,       │
+              │   FlightArcadeComponent, Input)    │
+              └────────────────┬───────────────────┘
+                               │
+              ┌────────────────┴───────────────────┐
+              ▼                                    ▼
+       ┌──────────────────┐              ┌────────────────────┐
+       │   AeroFighters   │              │   AeroFighters     │
+       │     Georef       │◄═════════════│      Core          │
+       │  (CESIUM ONLY    │              │  (no UE world ─    │
+       │   HERE)          │              │   pure types, SM)  │
+       └────────┬─────────┘              └────────────────────┘
+                │
+                ▼
+     ┌─────────────────────┐
+     │ Cesium for Unreal   │  ← pinned via OQ-10
+     │ + Unreal Engine 5.4 │
+     └─────────────────────┘
+</div>
+
+<p><b>Layer rules (enforced by Build.cs <code>PublicDependencyModuleNames</code>):</b></p>
+<ol>
+  <li><code>Core</code> imports nothing from this project. No UE world types
+      (<code>UWorld</code>, <code>FVector</code> world-space) in public headers.</li>
+  <li><code>Georef</code> imports <code>Core</code> only. Cesium types live only in
+      <code>.cpp</code> files and module-private headers.</li>
+  <li><code>Gameplay</code> imports <code>Core</code> + <code>Georef</code>. Never
+      <code>Combat</code>, <code>HUD</code>, <code>Audio</code>, <code>Harness</code>.</li>
+  <li><code>Combat</code> imports <code>Gameplay</code> (Pawn base) + <code>Core</code>.
+      Never <code>Georef</code> directly — combat asks the FlightComponent for
+      <code>FGeoCoord</code> when needed.</li>
+  <li><code>HUD</code> and <code>Audio</code> import <code>Gameplay</code> read-only
+      (subscribe to delegates; never mutate).</li>
+  <li><code>Harness</code> imports anything (EditorOnly module, stripped in Shipping).</li>
+</ol>
+
+<!-- =================================================================== -->
+<h2>C++/Blueprint Boundary</h2>
+
+<p>Operator locked <b>BP-first prototyping, port hot paths to C++ later</b> (D12, Q14).
+The discovery report defers the trigger threshold (D15, OQ-02) to me to propose. Below
+is the concrete starting boundary plus the migration trigger.</p>
+
+<h3>Per-class starting language</h3>
+
+<table>
+<tr>
+  <th>Class / system</th>
+  <th>Starts as</th>
+  <th>Why</th>
+  <th>Migration risk</th>
+</tr>
+<tr>
+  <td><code>AFighterPawn</code> (player aircraft)</td>
+  <td><b>C++ base + BP subclass</b></td>
+  <td>The Pawn must own the FlightArcadeComponent (C++) and a Cesium-georef-aware
+      <code>SetGeoCoord()</code> method. Subclass in BP for mesh, materials, audio
+      attachments, and designer-tunable values.</td>
+  <td>Low — well-known UE pattern</td>
+</tr>
+<tr>
+  <td><code>UFlightArcadeComponent</code></td>
+  <td><b>C++ from day 1</b></td>
+  <td>Runs every Tick. v1 throttle/pitch/roll math is ~80 LOC of trig; in BP that's
+      ~150 nodes with quaternion ops that are slow in BP VM. Even at MVP scale this
+      will show up on a 3060 budget.</td>
+  <td>Zero migration — already C++</td>
+</tr>
+<tr>
+  <td><code>UCannonComponent</code> (12.5 r/s)</td>
+  <td><b>C++ from day 1</b></td>
+  <td>Fires every 80 ms. The spawn loop, projectile lifetime decrement, and hitscan
+      check are simple but called frequently. Pooled in <code>UProjectilePoolSubsystem</code>.</td>
+  <td>Zero migration</td>
+</tr>
+<tr>
+  <td><code>AProjectile</code> (tracer)</td>
+  <td><b>C++ from day 1</b></td>
+  <td>Per-frame movement + collision query on every active projectile. With cannon at
+      12.5 r/s × ~1.5 s lifetime = ~19 projectiles in flight; BP Tick on each is wasteful
+      compared to one C++ batched update.</td>
+  <td>Zero migration</td>
+</tr>
+<tr>
+  <td><code>AAAGunPawn</code> (the one enemy)</td>
+  <td><b>BP-first</b></td>
+  <td>Single instance in MVP. State machine is trivial (idle → tracking → firing).
+      BP Event Tick at ~10 Hz is fine.</td>
+  <td>Low — promote only if 3+ archetypes appear in v2.1</td>
+</tr>
+<tr>
+  <td><code>AAeroGameMode</code></td>
+  <td><b>BP-first (extends C++ stub)</b></td>
+  <td>GameMode runs once per match. Rules logic in BP is readable and rarely hot. C++
+      stub exists to register the projectile pool subsystem.</td>
+  <td>Low</td>
+</tr>
+<tr>
+  <td><code>AAeroGameState</code></td>
+  <td><b>C++ from day 1</b></td>
+  <td>Holds the <code>FSortieMachine</code> (a USTRUCT defined in Core). State machine
+      transitions are deterministic and tested without UE — must be C++ to be
+      automation-testable headlessly.</td>
+  <td>Zero migration</td>
+</tr>
+<tr>
+  <td><code>AAeroPlayerController</code></td>
+  <td><b>BP-first</b></td>
+  <td>Input mapping uses Enhanced Input System (BP-friendly). Camera-mode cycling
+      logic is light enough.</td>
+  <td>Low</td>
+</tr>
+<tr>
+  <td><code>AAeroHUD</code> + UMG widgets</td>
+  <td><b>BP-only</b></td>
+  <td>UMG is BP-idiomatic. Performance of a 6-element flight HUD is not a concern.</td>
+  <td>None planned</td>
+</tr>
+<tr>
+  <td><code>UWorldGeoreferenceComponent</code> (port)</td>
+  <td><b>C++ from day 1</b></td>
+  <td>This is the architectural seam — defining it in BP would bake Cesium into the BP
+      type system and defeat the whole isolation.</td>
+  <td>None — port is permanent</td>
+</tr>
+<tr>
+  <td>VFX (muzzle flash, hit spark, explosion)</td>
+  <td><b>BP + Niagara assets</b></td>
+  <td>Niagara is asset-driven; BP triggers via delegates. C++ would buy nothing.</td>
+  <td>None</td>
+</tr>
+<tr>
+  <td>Sortie-state transitions wiring</td>
+  <td><b>C++ in Core; BP listeners in Gameplay</b></td>
+  <td>Pure-data SM lives in Core (UNI-testable). BP listens via delegate to react in
+      world (camera change, HUD swap).</td>
+  <td>None</td>
+</tr>
+</table>
+
+<h3>BP-to-C++ promotion trigger (closes OQ-02)</h3>
+
+<p>The trigger has to be measurable on Day 1, not eyeballed at week 3. Proposal:</p>
+
+<div class="meta">
+<b>Promotion trigger (proposed for synthesis):</b>
+<ol>
+<li><b>Hard rule:</b> any class whose <code>Tick</code> consumes more than
+<b>0.30 ms / frame</b> on the target hardware (3060 @ 1080p) as measured by
+<code>stat startfile</code> + Insights for 30 s of representative gameplay must be
+promoted to C++ before the next merge.</li>
+<li><b>Soft rule:</b> any class whose BP graph exceeds <b>150 nodes</b> or whose
+function call depth exceeds <b>5 levels</b> must be reviewed for promotion at the
+end of every week (game-developer's call per Decision Matrix).</li>
+<li><b>Aggregate budget:</b> total BP VM cost reported by Insights must stay under
+<b>2.0 ms / frame</b>. If it crosses 2.0 ms, the largest-cost BP class is promoted
+that week. This protects the 16.6 ms frame budget proactively.</li>
+</ol>
+The 0.30 ms threshold is derived as follows: total budget 16.6 ms; Lumen + Cesium
+streaming reasonably claim 10–12 ms; rendering misc 2 ms; we have ~3 ms for all CPU
+gameplay. With ~10 BP classes ticking, 0.30 ms per class consumes the whole budget —
+so 0.30 ms is the per-class fairness ceiling.
+</div>
+
+<div class="finding high">
+<h4><span class="tag t-high">HIGH</span> BP-first is not safe for the flight tick path</h4>
+<b>Location:</b> <code>UFlightArcadeComponent::TickComponent</code> (proposed)<br>
+<b>Issue:</b> v1's <code>updatePlayer()</code> is 75 LOC of quaternion math, throttle
+convergence, stall checks, and ground-contact lookup. In Blueprint, the same logic
+becomes ~150 nodes and runs through the VM at roughly 5–15× the cost of native code.
+At 60 FPS that's potentially 1.5–4 ms just for the player tick — half our entire CPU
+budget.<br>
+<b>Why it matters:</b> If we start in BP and discover the perf problem in week 3, we
+have to rewrite the flight model AND retune every coefficient because BP-vs-C++ rounding
+behavior diverges slightly. This is exactly the kind of mid-sprint surprise the discovery
+report warned about (Tension T2).<br>
+<b>Trade-off:</b> Starting in C++ costs ~2 days of upfront work but eliminates a
+class of week-3 surprise. The BP-first policy still applies to gameplay rules that
+designers want to tweak — flight feel is one of those, but the math underneath is not.<br>
+<b>Recommendation:</b> Expose <b>tuning</b> in BP via
+<code>UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Flight")</code> on the C++
+component (throttle rate, pitch rate, max speed, stall threshold), so the operator and
+game-developer iterate values in editor without touching code. This satisfies both D12
+(BP-first iteration) and the perf constraint. <b>Per the Decision Matrix, this is an
+objection — game-developer has tie-breaker on UE5-specific idioms; this report
+recommends, the synthesis stage decides with game-developer's input.</b>
+</div>
+
+<!-- =================================================================== -->
+<h2>State Machine Reuse</h2>
+
+<p>v1 has an explicit sortie state machine in <code>aero-fighters/src/sortie-state.js</code>:
+14 states (<code>MENU</code>, <code>TAXI_OUT</code>, <code>TAKEOFF_ROLL</code>,
+<code>AIRBORNE</code>, <code>MISSION_ACTIVE</code>, <code>RETURN_TO_BASE</code>,
+<code>LANDING_ROLL</code>, <code>TAXI_IN</code>, <code>SERVICE_SCENE</code>,
+<code>NEXT_SORTIE_READY</code>, <code>MAYDAY</code>, <code>EJECTION</code>,
+<code>CRASHED</code>, <code>MISSION_FAILED</code>) wired by a <code>TRANSITIONS</code>
+map keyed by <code>state:event</code>.</p>
+
+<p>The MVP scope per D8 is: flight + cannon + one enemy AA gun. No takeoff/landing
+realism, no service scene, no ejection, no parachute, no mission completion loop.
+The relevant question is: <b>does v2 MVP need any SM at all?</b></p>
+
+<table>
+<tr><th>v1 state</th><th>Needed in v2 MVP?</th><th>Why</th></tr>
+<tr><td><code>MENU</code></td><td><b>Yes</b></td><td>Initial state before "Press to start". Cesium tile pre-warm happens here.</td></tr>
+<tr><td><code>TAXI_OUT / TAKEOFF_ROLL / LANDING_ROLL / TAXI_IN</code></td><td>No</td><td>D4 + D8: arcade flight only, no airport realism in MVP.</td></tr>
+<tr><td><code>AIRBORNE</code></td><td><b>Yes</b></td><td>Default flight state.</td></tr>
+<tr><td><code>MISSION_ACTIVE / RETURN_TO_BASE</code></td><td>No</td><td>No mission completion loop in MVP.</td></tr>
+<tr><td><code>SERVICE_SCENE / NEXT_SORTIE_READY</code></td><td>No</td><td>Out of MVP scope (mission realism is v2.1+).</td></tr>
+<tr><td><code>MAYDAY / EJECTION</code></td><td>No</td><td>Out of MVP scope.</td></tr>
+<tr><td><code>CRASHED</code></td><td><b>Yes</b></td><td>Player aircraft can hit terrain (Inhaúma has hills); this must be representable.</td></tr>
+<tr><td><code>MISSION_FAILED</code></td><td>Maybe</td><td>Equivalent to CRASHED in MVP — fold in.</td></tr>
+</table>
+
+<h3>Recommendation: <span class="tag t-ok">REDESIGNED (slimmed)</span> — not omitted</h3>
+
+<div class="meta">
+<b>Proposal:</b> Port the SM <i>structure</i> from v1 — keep the same
+state/event/transition pattern, USTRUCT-encoded — but seed it with only the four states
+MVP needs:
+<pre>UENUM(BlueprintType)
+enum class ESortieState : uint8
+{
+    Menu,
+    Airborne,
+    Crashed,
+    SessionEnded
+};
+
+UENUM(BlueprintType)
+enum class ESortieEvent : uint8
+{
+    StartFlight,        // Menu  → Airborne
+    TerrainImpact,      // Airborne → Crashed
+    Respawn,            // Crashed → Airborne
+    QuitToMenu          // *      → SessionEnded
+};
+
+USTRUCT(BlueprintType)
+struct FSortieMachine
+{
+    GENERATED_BODY()
+    UPROPERTY(BlueprintReadOnly) ESortieState State = ESortieState::Menu;
+    UPROPERTY(BlueprintReadOnly) TArray&lt;FSortieTransitionRecord&gt; History;
+};
+</pre>
+</div>
+
+<p><b>Why redesigned, not omitted:</b></p>
+<ul class="compact">
+  <li>An explicit SM is the cheapest way to keep the "flight + cannon + AA" loop testable
+      without booleans-on-booleans (v1's lesson, per mission-realism SPEC §5 FR-01).</li>
+  <li>v2.1 (full arcade combat) will need the v1 SM back. Designing the slim version
+      with the v1 shape means v2.1 only adds states/events to existing data, never
+      restructures.</li>
+  <li>The slim version is ~40 LOC of C++ in <code>AeroFightersCore</code>. Cost is
+      trivial; the testability win is large because the SM is engine-free and
+      headlessly testable.</li>
+</ul>
+
+<div class="finding med">
+<h4><span class="tag t-med">MEDIUM</span> Do not copy v1's <code>TRANSITIONS</code> Map verbatim into C++</h4>
+<b>Location:</b> <code>aero-fighters/src/sortie-state.js</code> lines 37–52<br>
+<b>Issue:</b> v1 uses a <code>Map</code> keyed by template-string concatenation
+(<code>${state}:${event}</code>). Idiomatic for JS, anti-idiomatic for UE5 C++ where
+the equivalent is a switch on a tuple or a <code>TMap&lt;FStateEventKey, ESortieState&gt;</code>.
+A naive port produces an unidiomatic, hard-to-debug structure.<br>
+<b>Why it matters:</b> The state machine is a documentation artifact as much as it is
+code — game-developer and game-tester will both read it. A non-idiomatic structure
+adds friction to every change.<br>
+<b>Trade-off:</b> Using a switch is more verbose but auto-completes, fails compile on
+typos, and shows up cleanly in stack traces. Worth the verbosity.<br>
+<b>Recommendation:</b> Implement transitions as a single
+<code>FSortieMachine::Transition(ESortieEvent)</code> method with a switch on
+<code>(State, Event)</code> tuples. v1's <code>history</code> ring-buffer
+(line 70: <code>history.length > 32</code>) is a good idea — port it as
+<code>TRingBuffer&lt;FSortieTransitionRecord, 32&gt;</code>.
+</div>
+
+<!-- =================================================================== -->
+<h2>Module Dependency Graph</h2>
+
+<p>The textual graph appears in <i>UE5 Module Layout</i> above. The HTML table below is
+machine-readable for downstream tooling (synthesis stage SPEC will likely pin this as
+an architecture invariant).</p>
+
+<table>
+<tr>
+  <th>From module</th><th>May import</th><th>May NOT import</th>
+  <th>Enforcement</th>
+</tr>
+<tr>
+  <td><code>AeroFightersCore</code></td>
+  <td>Engine, CoreUObject</td>
+  <td>Any other AeroFighters module; Cesium; UMG; Niagara</td>
+  <td><code>.Build.cs</code> PublicDependencyModuleNames whitelist</td>
+</tr>
+<tr>
+  <td><code>AeroFightersGeoref</code></td>
+  <td><code>Core</code>; CesiumRuntime; CesiumEditor (editor-only)</td>
+  <td><code>Gameplay</code>, <code>Combat</code>, <code>HUD</code>, <code>Audio</code></td>
+  <td><code>.Build.cs</code></td>
+</tr>
+<tr>
+  <td><code>AeroFightersGameplay</code></td>
+  <td><code>Core</code>, <code>Georef</code> (public interface only),
+      Engine, EnhancedInput</td>
+  <td>Cesium*; <code>Combat</code>; <code>HUD</code>; <code>Audio</code>; <code>Harness</code></td>
+  <td><code>.Build.cs</code> + CI grep gate (see CRITICAL above)</td>
+</tr>
+<tr>
+  <td><code>AeroFightersCombat</code></td>
+  <td><code>Core</code>, <code>Gameplay</code> (Pawn base only), Engine</td>
+  <td>Cesium*; <code>Georef</code> directly; <code>HUD</code>; <code>Audio</code></td>
+  <td><code>.Build.cs</code> + CI grep gate</td>
+</tr>
+<tr>
+  <td><code>AeroFightersHUD</code></td>
+  <td><code>Core</code>, <code>Gameplay</code> (read-only delegates), UMG</td>
+  <td>Cesium*; <code>Combat</code> directly; mutating <code>Gameplay</code></td>
+  <td><code>.Build.cs</code></td>
+</tr>
+<tr>
+  <td><code>AeroFightersAudio</code></td>
+  <td><code>Core</code>, <code>Gameplay</code> (delegates), AudioMixer, MetaSound</td>
+  <td>Cesium*; <code>Combat</code>; <code>HUD</code></td>
+  <td><code>.Build.cs</code></td>
+</tr>
+<tr>
+  <td><code>AeroFightersHarness</code></td>
+  <td>All gameplay modules (read-only), UnrealEd, AutomationController</td>
+  <td>(none — but stripped from Shipping)</td>
+  <td><code>Type = ModuleType.Editor</code> in <code>.Build.cs</code></td>
+</tr>
+</table>
+
+<div class="ok">
+<b>Cesium coupling boundary (the single most important line in this report):</b>
+<br><br>
+<b><code>AeroFightersGeoref</code> is the only module whose <code>.Build.cs</code> may
+list <code>"CesiumRuntime"</code> in <code>PublicDependencyModuleNames</code> or
+<code>PrivateDependencyModuleNames</code>.</b> Every other module sees Cesium only
+through <code>IWorldGeoreferenceProvider</code> (in Core) and consumes
+<code>FGeoCoord</code> values. This is the seam that makes the if-slip rule (D17)
+actually executable — without it, "drop Linux" or "swap Cesium" is rhetoric, not a
+real fallback.
+</div>
+
+<!-- =================================================================== -->
+<h2>Cesium + UE 5.4 Risks</h2>
+
+<p>The 4-week timeline plus the UE 5.4 hard pin plus the Cesium plugin dependency
+create a small number of high-blast-radius risks. Each is enumerated with a concrete
+mitigation that the synthesis stage can fold into SPEC §Risk Register.</p>
+
+<div class="finding crit">
+<h4><span class="tag t-crit">CRITICAL</span> R1 — Cesium for Unreal drops UE 5.4 mid-MVP</h4>
+<b>Trigger:</b> Cesium ships a major version (e.g. 3.x → 4.x) that drops 5.4 support
+because the team moved to 5.5/5.6. Historically Cesium does this every ~12 months.<br>
+<b>Blast radius:</b> Cannot pull bugfixes; cannot pull new tile-streaming optimizations
+(directly affects 60 FPS gate on 3060); cannot follow the Cesium Linux support timeline.<br>
+<b>Mitigation:</b>
+<ol>
+<li>Pin Cesium plugin to an <b>exact commit SHA</b> via git submodule (not a release tag
+    — tags can move). The pin lives in
+    <code>aero-fighters-v2/Plugins/CesiumForUnreal/.commit-sha</code>.</li>
+<li>Mirror the pinned source to <code>github.com/&lt;operator&gt;/cesium-unreal-pin</code>
+    so the upstream cannot delete it.</li>
+<li>The if-slip rule (D17) <b>must</b> include "Cesium-pin retreat" as an explicit option:
+    if a Cesium bug is found mid-sprint and the bugfix only ships in a newer Cesium that
+    drops 5.4, freeze on the buggy version and document the workaround for the bug.</li>
+</ol>
+<b>Owner:</b> devops-engineer (CI/build per Matrix) — this is an objection passed to
+their report.
+</div>
+
+<div class="finding crit">
+<h4><span class="tag t-crit">CRITICAL</span> R2 — Cesium georef seam violation</h4>
+<b>Trigger:</b> Any gameplay code addresses world position in raw <code>FVector</code>
+centimeters (UE convention) instead of <code>FGeoCoord</code>. As soon as one such
+line exists in Combat or Gameplay, the codebase ties forever to "the current
+CesiumGeoreference origin" and silently breaks if the origin moves (a thing
+<code>ACesiumGeoreference</code> can do via <code>SubLevels</code>).<br>
+<b>Blast radius:</b> AA gun placement breaks; projectile hitscan breaks for tiles
+streaming in at the world edge; future map (Inhaúma 40 km radius, second map) requires
+rewriting every cm-coordinate literal.<br>
+<b>Mitigation:</b>
+<ol>
+<li>All AA-gun and any future placement use <code>FGeoCoord</code> (lat/lon/alt)
+    serialized in a DataAsset. The <code>UWorldGeoreferenceComponent::SpawnAtGeoCoord()</code>
+    call is the only way to put something in the world.</li>
+<li>Add a CI lint that flags magic-number <code>FVector(</code> in gameplay <code>.cpp</code>
+    files (whitelist for clearly-relative offsets).</li>
+<li>The screenshot-diff harness (Harness module) uses <code>FGeoCoord</code> for its
+    fixed poses (per AC-V2-02 / OQ-07 deterministic captures).</li>
+</ol>
+</div>
+
+<div class="finding high">
+<h4><span class="tag t-high">HIGH</span> R3 — Cesium tile-streaming I/O on the game thread</h4>
+<b>Trigger:</b> Cesium's tile loader is async but its decode/upload occasionally hitches
+on the game thread (well-known issue tracked in Cesium GitHub). On a 3060 with thermal
+throttling, this can produce 50–80 ms spikes that violate AC-V2-07's 99th-percentile
+≤ 18.5 ms.<br>
+<b>Blast radius:</b> Perf-gate test in CI fails intermittently; player sees micro-stutter
+during fast traversal.<br>
+<b>Mitigation:</b>
+<ol>
+<li>Pre-warm tiles for the MVP play area at level-load (block in MENU state on a loader,
+    not in AIRBORNE).</li>
+<li>Cap <code>MaxTileCacheBytes</code> to a value derived from RTX 3060's 12 GB VRAM
+    minus Lumen/Niagara budgets — propose 3 GB as starting point; tune in PLAN.</li>
+<li>Profile with Unreal Insights every PR; the perf gate (AC-V2-07) is the canary.</li>
+</ol>
+</div>
+
+<div class="finding high">
+<h4><span class="tag t-high">HIGH</span> R4 — Linux Vulkan vs Cesium tile decode quirks</h4>
+<b>Trigger:</b> Cesium for Unreal's Linux support lags Windows by ~one minor version.
+Shader compile differences between Vulkan (Linux) and DX12 (Windows) produce different
+screenshot-diff outputs at the same geo-pose — failing AC-V2-06 on Linux only.<br>
+<b>Blast radius:</b> Linux build (AC-V2-09) cannot pass photoreal acceptance (AC-V2-06).
+This is exactly the condition that fires the if-slip rule (D17).<br>
+<b>Mitigation:</b>
+<ol>
+<li>Maintain <b>two reference-image baselines</b>, one per platform, from week 1.
+    Diff is per-platform, not cross-platform.</li>
+<li>Architecture decision (objection to game-tester): the screenshot-diff tolerance
+    metric must be SSIM or perceptual-hash, NOT per-pixel — per-pixel will fail across
+    shader variants. (Matrix: game-tester has tie-breaker; this is the
+    architect's evidence-backed recommendation.)</li>
+<li>If R4 fires at week 3, the if-slip rule drops Linux. The georef seam (R2 mitigation)
+    means this is a Build.cs change, not a code rewrite.</li>
+</ol>
+</div>
+
+<div class="finding med">
+<h4><span class="tag t-med">MEDIUM</span> R5 — Cesium plugin update changes <code>FGeoreferenceOriginPlacement</code> default</h4>
+<b>Trigger:</b> Cesium has changed the default origin placement (CartographicOrigin vs
+TrueOrigin) across minor versions in the past. Any unpinned default breaks
+<code>FGeoCoord ↔ FVector</code> round-trips silently.<br>
+<b>Mitigation:</b>
+<ol>
+<li>The <code>UWorldGeoreferenceComponent</code> sets all Cesium config explicitly in
+    code, never relies on defaults.</li>
+<li>Round-trip assertion in the Harness: place at Inhaúma origin, get
+    <code>FGeoCoord</code>, convert back, verify cm-equality. Runs on every CI commit.</li>
+</ol>
+</div>
+
+<div class="finding med">
+<h4><span class="tag t-med">MEDIUM</span> R6 — Google 3D Tiles license terms vs offline cache (OQ-05)</h4>
+<b>Trigger:</b> Google's 3D Tiles ToS restricts caching duration/scope. The dev offline
+cache (D3) might violate cache-lifetime terms; CI screenshot-diff baselines (OQ-06)
+might violate reference-imagery use.<br>
+<b>Mitigation:</b> This is a devops-engineer + product-engineer concern, surfaced here
+because the architecture (offline cache in repo, baselines in repo) is what triggers it.
+The Harness module must <i>not</i> commit tile bytes into git — it points at a local
+cache path declared by env var.
+</div>
+
+<div class="finding med">
+<h4><span class="tag t-med">MEDIUM</span> R7 — UE 5.4 itself is on a maintenance branch</h4>
+<b>Trigger:</b> Epic ships UE 5.5 (already shipped) and 5.6; 5.4 receives only
+critical patches by end of 2026. Any UE-side bug we hit on 5.4 may not be fixed
+upstream.<br>
+<b>Mitigation:</b>
+<ol>
+<li>Cross-reference any UE bug we hit against the 5.5 changelog before reporting; the
+    fix may exist there.</li>
+<li>D1 is locked, so a UE bump is out of MVP scope. v2.1 should plan a UE-version review
+    in its discovery.</li>
+</ol>
+</div>
+
+<!-- =================================================================== -->
+<h2>Pattern Fit</h2>
+
+<p>Applied the <code>architect-design-patterns</code> evaluation protocol to every
+pattern the proposed architecture either commits to or deliberately rejects.</p>
+
+<h3>Patterns committed to (CORRECT)</h3>
+
+<table>
+<tr><th>Pattern</th><th>Where</th><th>Why correct</th></tr>
+<tr>
+  <td><b>Component</b> (UE Actor-Component)</td>
+  <td><code>UFlightArcadeComponent</code>, <code>UCannonComponent</code>,
+      <code>UEngineAudioComponent</code>, <code>UWorldGeoreferenceComponent</code></td>
+  <td>Idiomatic to UE5; matches v1's "entities" module decomposition (player/targets/
+      bullets/missiles); cleanly maps gameplay capabilities to composable pieces.</td>
+</tr>
+<tr>
+  <td><b>Hexagonal (Ports &amp; Adapters)</b></td>
+  <td><code>IWorldGeoreferenceProvider</code> (port in Core) ↔
+      <code>UCesiumGeorefAdapter</code> (in Georef)</td>
+  <td>Solves a real problem (Cesium isolation, R1/R2/R4 mitigation). Without it the
+      if-slip rule is rhetoric. Faithful to the contract.</td>
+</tr>
+<tr>
+  <td><b>Observer</b> (UE Delegates)</td>
+  <td><code>FOnEnemyDestroyed</code>, <code>FOnSortieStateChanged</code>,
+      <code>FOnProjectileHit</code></td>
+  <td>HUD and Audio listen without holding refs to Combat. Avoids the
+      v1 "spawnBullet writes to game.projectiles + targets/state mutation" coupling
+      that ARCHITECTURE.md flagged as smell #2.</td>
+</tr>
+<tr>
+  <td><b>Object Pool</b></td>
+  <td><code>UProjectilePoolSubsystem</code> (cannon tracers)</td>
+  <td>Ported from v1's <code>bulletPoolPlayer</code>/<code>bulletPoolEnemy</code>.
+      Real problem: GC churn at 12.5 r/s would tank perf. Idiomatic via UE Subsystem.</td>
+</tr>
+<tr>
+  <td><b>State Machine</b> (data-driven)</td>
+  <td><code>FSortieMachine</code> in Core</td>
+  <td>Ported from v1; slim version for MVP; restorable for v2.1. Engine-free, headlessly
+      testable.</td>
+</tr>
+<tr>
+  <td><b>Subsystem</b> (UE WorldSubsystem)</td>
+  <td><code>UProjectilePoolSubsystem</code>, <code>UPerfRecorderSubsystem</code></td>
+  <td>UE's idiomatic answer to "single-instance service scoped to a world". Avoids
+      Singleton anti-pattern via the engine's lifecycle.</td>
+</tr>
+</table>
+
+<h3>Patterns deliberately deferred or rejected</h3>
+
+<table>
+<tr><th>Pattern</th><th>Status</th><th>Why</th></tr>
+<tr>
+  <td><b>Strategy</b> for swappable flight model (arcade ↔ JSBSim)</td>
+  <td><span class="tag t-info">DEFERRED to v2.1</span></td>
+  <td>D4 explicitly defers JSBSim. Designing the Strategy now is Speculative Generality
+      (anti-pattern) with zero current use cases. The Component split
+      (<code>UFlightArcadeComponent</code>) leaves room for
+      <code>UFlightJSBSimComponent</code> to plug in via the same Pawn slot when needed.</td>
+</tr>
+<tr>
+  <td><b>Singleton</b></td>
+  <td><span class="tag t-crit">REJECTED</span></td>
+  <td>UE5 idiom is Subsystem (lifecycle-bound), not Singleton. Any "static manager" in
+      gameplay code is a code-review block.</td>
+</tr>
+<tr>
+  <td><b>Service Locator</b></td>
+  <td><span class="tag t-crit">REJECTED</span></td>
+  <td>UE's <code>GetWorld()-&gt;GetSubsystem&lt;T&gt;()</code> looks like Service Locator
+      but is scoped and typed. Anything beyond that (a global registry indexed by string)
+      is anti-pattern in UE5.</td>
+</tr>
+<tr>
+  <td><b>Mediator</b> (centralized hub between Combat ↔ HUD ↔ Audio)</td>
+  <td><span class="tag t-info">REJECTED for MVP</span></td>
+  <td>Delegates do the job at 3-subscriber scale. Mediator becomes useful when ≥ 5
+      modules cross-communicate. v2.1 may need it.</td>
+</tr>
+<tr>
+  <td><b>Inheritance for behavior variation</b></td>
+  <td><span class="tag t-crit">REJECTED</span></td>
+  <td>If v2.1 adds enemy types, they're <code>UActorComponent</code> compositions on a
+      generic <code>AEnemyPawn</code>, not subclasses. v1's lesson:
+      <code>makeBase/makeFactory/makeBuilding/makeConvoy/makeAAGun</code> were procedures
+      not subclasses, and that was the right call.</td>
+</tr>
+</table>
+
+<h3>Anti-patterns to actively prevent</h3>
+
+<div class="finding high">
+<h4><span class="tag t-high">HIGH</span> Anti-pattern watch: "God GameMode"</h4>
+<b>Risk:</b> UE encourages putting everything in <code>AGameMode</code>. Easy slope:
+spawn rules, score, transition logic, projectile pool init, HUD wiring all end up there.
+v1's equivalent was <code>main.js</code> growing to 449 LOC; the proposed v2 layout
+keeps <code>AAeroGameMode</code> as a thin orchestrator (~120 LOC C++ + BP rules) that
+delegates to subsystems and components.<br>
+<b>Hard rule for MVP:</b> <code>AAeroGameMode</code> ≤ 150 LOC C++ and ≤ 80 BP nodes.
+Above that, fields move out into a Subsystem or Component.
+</div>
+
+<div class="finding med">
+<h4><span class="tag t-med">MEDIUM</span> Anti-pattern watch: Cast-To chains</h4>
+<b>Risk:</b> BP-first invites <code>Cast To AFighterPawn → Cast To UFlightArcadeComponent
+→ ...</code> chains as the easy way to wire UI. Each Cast-To loads the entire class
+asset, slowing PIE startup and tying assets together at the asset-reference level.<br>
+<b>Mitigation:</b> Define BP Interfaces (<code>BPI_FlightTelemetry</code>,
+<code>BPI_Damageable</code>) and have HUD widgets consume the interface. Documented in
+the <code>game-unreal-developer</code> skill (Cast To "com moderação — prefira Interfaces").
+</div>
+
+<div class="finding med">
+<h4><span class="tag t-med">MEDIUM</span> Anti-pattern watch: Anemic Domain Model in Core</h4>
+<b>Risk:</b> <code>FGeoCoord</code> and <code>FSortieMachine</code> become data bags
+that Gameplay reaches into and mutates from the outside.<br>
+<b>Mitigation:</b> Both types expose only behavior methods
+(<code>FSortieMachine::Transition</code>, <code>FGeoCoord::Distance</code>) — public
+fields are read-only. <code>UDamageModel</code> exposes
+<code>ApplyDamage(amount, source)</code>, not raw <code>HP</code> mutation.
+</div>
+
+<!-- =================================================================== -->
+<h2>4-Week Timeline Architectural Concessions</h2>
+
+<p>Discovery report tags D10 as <b>RISK</b> and explicitly asks me to opine on whether
+the 4-week timeline is architecturally feasible given D6 (60 FPS on 3060). My
+assessment: <b>feasible only if the three concessions below are accepted and the one
+hard line is held</b>.</p>
+
+<h3>Acceptable concessions (architecturally justified shortcuts)</h3>
+
+<div class="finding">
+<h4><span class="tag t-ok">JUSTIFIED</span> C1 — Skip the <code>AeroFightersAudio</code> module for MVP</h4>
+<b>Concession:</b> Roll audio into <code>AeroFightersGameplay</code> as a single
+<code>UEngineAudioComponent</code>. Refactor out to its own module in v2.1 if/when sound
+design grows beyond engine/cannon/explosion.<br>
+<b>Why justified:</b> v1 audio is 345 LOC; for MVP we need ~3 sounds (engine RPM,
+cannon, explosion). One Component on the Pawn covers it. Building a separate module
+costs a half-day of <code>.Build.cs</code> wiring with no architectural payoff at MVP
+scale.<br>
+<b>Reversibility:</b> Trivial. Moving a Component to its own module is a
+file-move + Build.cs edit; no API changes.
+</div>
+
+<div class="finding">
+<h4><span class="tag t-ok">JUSTIFIED</span> C2 — Skip the <code>AeroFightersHUD</code> module for MVP</h4>
+<b>Concession:</b> UMG widgets and the <code>AAeroHUD</code> class live in
+<code>AeroFightersGameplay</code>. Pull out to its own module in v2.1 if HUD complexity
+grows (multiple HUD modes, replay overlay, etc.).<br>
+<b>Why justified:</b> MVP HUD = airspeed + altitude + crosshair + RTB marker. Four
+widgets, ~100 LOC of UMG. Module boundary cost (Build.cs, header export discipline)
+buys nothing at this size.<br>
+<b>Reversibility:</b> Trivial.
+</div>
+
+<div class="finding">
+<h4><span class="tag t-ok">JUSTIFIED</span> C3 — One <code>.uproject</code> + one <code>.uplugin</code> only (Cesium)</h4>
+<b>Concession:</b> Do not create custom plugins for Core / Georef / Gameplay etc. They
+are all <i>game modules</i> in the same <code>.uproject</code>, not plugins.<br>
+<b>Why justified:</b> Custom UE plugins exist to share code across multiple projects.
+We have one project. Plugin overhead (separate Build.cs, plugin descriptor, hot-reload
+quirks) buys nothing.<br>
+<b>Reversibility:</b> Easy. Game module → plugin migration is a known UE refactor.
+</div>
+
+<div class="finding">
+<h4><span class="tag t-ok">JUSTIFIED</span> C4 — Defer the Strategy pattern around flight model</h4>
+<b>Concession:</b> No <code>IFlightModel</code> interface. <code>AFighterPawn</code>
+directly owns <code>UFlightArcadeComponent</code>. JSBSim swap is a future PR, not a
+day-1 abstraction.<br>
+<b>Why justified:</b> Speculative Generality (per design-patterns skill, MEDIUM
+anti-pattern). v2.1 will be the second use case that justifies the interface — until
+then it is over-engineering.<br>
+<b>Reversibility:</b> Easy. Extract-interface refactor on one component is a known
+move.
+</div>
+
+<h3>Hard lines (concessions that look tempting but are forbidden)</h3>
+
+<div class="finding crit">
+<h4><span class="tag t-crit">FORBIDDEN</span> F1 — Do not skip the georef abstraction</h4>
+<b>Tempting shortcut:</b> "We're solo, we know it's only Cesium, just type
+<code>FVector</code> directly and ship."<br>
+<b>Why forbidden:</b> Every cm-literal in gameplay code is a future migration cost.
+The if-slip rule (D17) becomes un-executable. The AA gun placement (AC-V2-05) bakes
+into Cesium's CesiumGeoreference origin choice and silently breaks if that origin
+moves. This is exactly the "build on stale layers" pattern the architect-code-audit
+skill flags as the primary source of catastrophic incidents.<br>
+<b>What to do instead:</b> Spend the 4 hours to define
+<code>IWorldGeoreferenceProvider</code> + <code>UCesiumGeorefAdapter</code> on day 1.
+That's it.
+</div>
+
+<div class="finding crit">
+<h4><span class="tag t-crit">FORBIDDEN</span> F2 — Do not put flight math in Blueprint</h4>
+<b>Tempting shortcut:</b> "D12 says BP-first, so let's BP the FlightComponent and
+profile later."<br>
+<b>Why forbidden:</b> See HIGH finding in "C++/Blueprint Boundary" — the rewrite cost
+discovered at week 3 plus the retune cost is a guaranteed timeline slip.<br>
+<b>What to do instead:</b> C++ <code>UFlightArcadeComponent</code> from day 1 with
+all coefficients as <code>BlueprintReadWrite UPROPERTY</code>. Designers still iterate
+in editor — that's the spirit of BP-first satisfied without paying the perf bill.
+<i>(Recall: per Matrix, game-developer has tie-breaker on this; this report is
+objection-with-evidence, not a unilateral decision.)</i>
+</div>
+
+<div class="finding crit">
+<h4><span class="tag t-crit">FORBIDDEN</span> F3 — Do not commit Cesium tile bytes to git</h4>
+<b>Tempting shortcut:</b> "Cache tiles in the repo for offline dev workflow (D3)."<br>
+<b>Why forbidden:</b> Google's 3D Tiles ToS restricts persistent caching; repo blows up
+to GBs (architectural impact: every CI clone is slow); license risk (R6).<br>
+<b>What to do instead:</b> The Harness module reads a cache path from an env var
+(<code>AERO_TILE_CACHE_DIR</code>). The dev cache lives under the user's home; CI
+re-fetches on cold runs with the spend cap as the safety net (D3, AC-V2-10). Synthesis
+should hand this off to devops-engineer.
+</div>
+
+<div class="finding crit">
+<h4><span class="tag t-crit">FORBIDDEN</span> F4 — Do not let Combat reach into Gameplay GameState mutably</h4>
+<b>Tempting shortcut:</b> "Combat code does
+<code>GameState-&gt;Score += 100</code> directly when an enemy dies."<br>
+<b>Why forbidden:</b> v1's lesson exactly — <code>spawnBullet</code> wrote to
+<code>game.projectiles</code>, <code>killTarget</code> wrote to <code>game.score</code>,
+side-effects everywhere. ARCHITECTURE.md flagged this as smell #2 in v1.<br>
+<b>What to do instead:</b> Combat broadcasts <code>FOnEnemyDestroyed.Broadcast(points)</code>.
+GameState subscribes. One writer per field; Observer pattern as documented above.
+</div>
+
+<h3>Timeline-feasibility verdict</h3>
+
+<div class="risk">
+<b>Verdict on D10 (4-week timeline):</b> Feasible <i>iff</i> all four hard lines above
+are held AND all four concessions are accepted AND devops gets CI baselines per
+platform working by end of week 1. The single largest schedule risk is not architecture
+— it is the first-ever Cesium integration combined with first-ever UE5 project for the
+operator (F9 in discovery). The georef seam reduces this risk because if Cesium fights
+back, the seam lets us swap to a baked tileset for the demo without rewriting gameplay.
+<br><br>
+<b>Architectural input to the if-slip rule (OQ-04, owned by product-engineer):</b>
+proposed wording —
+<i>"If by end of week 3 Cesium tiles do not render at 60 FPS on Linux at 1080p above
+Inhaúma at the documented test path, drop Linux from MVP. If Cesium tiles do not render
+at 60 FPS on either platform, drop photoreal acceptance (AC-V2-06) from MVP and ship
+arcade-quality tiles via a baked tileset adapter (swap <code>UCesiumGeorefAdapter</code>
+for <code>UBakedTileAdapter</code> — possible in days only because of the georef seam)."</i>
+</div>
+
+<!-- =================================================================== -->
+<h2>Objections (Cross-Domain)</h2>
+
+<p>Per the Decision Authority Matrix, the items below are decisions outside my primary
+authority. I record them as objections with evidence; the synthesis stage and the
+relevant agent's own report adjudicate.</p>
+
+<div class="obj">
+<h4>O1 — Screenshot-diff tolerance metric (game-tester domain)</h4>
+<b>Objection:</b> Tolerance must be SSIM ≥ 0.92 or perceptual hash (pHash distance ≤ 8),
+NOT per-pixel-%, because shader-variant differences between DX12 (Win) and Vulkan
+(Linux) and between minor Cesium releases will produce per-pixel diff > 0.1 % at every
+pose without any visual regression. Evidence: Cesium 2.x → 2.5 release notes mention
+material-graph changes; UE 5.4 DX12 vs Vulkan are known to differ in atmospheric
+scattering precision.<br>
+<b>Owner:</b> game-tester (their report has tie-breaker).
+</div>
+
+<div class="obj">
+<h4>O2 — Cesium plugin pin SHA (devops-engineer domain)</h4>
+<b>Objection:</b> Whichever SHA devops picks for OQ-10, it must satisfy: (a) listed as
+UE 5.4-compatible in Cesium's compat matrix, (b) released ≥ 2 weeks ago (avoid
+regression-of-the-week), (c) has open issues for Linux audited and none rated CRITICAL
+for our use case. Architecture's role per Matrix is to document the compat envelope,
+not pick the pin.<br>
+<b>Owner:</b> devops-engineer.
+</div>
+
+<div class="obj">
+<h4>O3 — BP-first interpretation for FlightComponent (game-developer domain)</h4>
+<b>Objection:</b> See HIGH finding in C++/BP Boundary. I recommend C++ from day 1 with
+BP-exposed tuning; game-developer's report has the final call. If game-developer
+prefers BP-first strictly, the perf gate (AC-V2-07) becomes the canary and we accept
+a possible week-2 rewrite as a documented risk.<br>
+<b>Owner:</b> game-developer.
+</div>
+
+<div class="obj">
+<h4>O4 — Aircraft and AA-gun asset source (game-designer domain)</h4>
+<b>Objection:</b> Architecture has no preference between Quixel/Marketplace/Procedural.
+Architecture's only requirement: the asset reference lives in
+<code>Content/Pawns/Player/</code> and <code>Content/Enemies/AAGun/</code> respectively;
+the C++ Pawn classes do <b>not</b> hard-reference specific FBX paths
+(<code>UPROPERTY(EditAnywhere)</code> reference instead). This keeps asset swap from
+triggering C++ recompiles.<br>
+<b>Owner:</b> game-designer.
+</div>
+
+<div class="obj">
+<h4>O5 — Foundation's "no external assets" rule extension to UE5 (product-engineer domain)</h4>
+<b>Objection:</b> <code>specs/foundation/SPEC.md</code> §"Princípios de produto" #5
+forbids external assets in <i>web games</i>. UE5 is silent. C5 in the discovery's
+Conflict Predictions surfaced this. Architecture's view: a UE5 photoreal game without
+some external assets (sky materials, aircraft model) is months of asset work that does
+not fit 4 weeks. The foundation rule should be explicitly limited to web games in this
+release's SPEC, or marketplace/Quixel asset use should be approved.<br>
+<b>Owner:</b> product-engineer (synthesis).
+</div>
+
+<div class="obj">
+<h4>O6 — Time-of-day fix for screenshot-diff determinism (game-developer + game-tester)</h4>
+<b>Objection:</b> Architecture mandates that the Harness module sets a fixed sun
+position + fixed atmospheric values before any screenshot capture. The mechanism is
+a <code>UDeterministicSkyDirector</code> in Harness that calls into Gameplay-owned
+sky actor via a typed interface. Game-developer owns the gameplay side; game-tester
+owns the harness side; this is just a heads-up that the seam is in the design.<br>
+<b>Owner:</b> game-developer + game-tester.
+</div>
+
+<!-- =================================================================== -->
+<h2>Architecture Risk Register Summary</h2>
+
+<table>
+<tr>
+  <th>ID</th><th>Risk</th><th>Severity</th>
+  <th>Likelihood (4-week window)</th><th>Mitigation owner</th>
+</tr>
+<tr><td>R1</td><td>Cesium drops UE 5.4</td><td><span class="tag t-crit">CRITICAL</span></td>
+    <td>Medium</td><td>devops-engineer (pin) + architect (seam)</td></tr>
+<tr><td>R2</td><td>Georef seam violation</td><td><span class="tag t-crit">CRITICAL</span></td>
+    <td>High without lint; Low with lint</td><td>architect (lint), all writers</td></tr>
+<tr><td>R3</td><td>Tile-stream hitches on game thread</td><td><span class="tag t-high">HIGH</span></td>
+    <td>High</td><td>game-developer (tuning) + devops (perf gate)</td></tr>
+<tr><td>R4</td><td>Linux Vulkan diff drift</td><td><span class="tag t-high">HIGH</span></td>
+    <td>High</td><td>game-tester + devops</td></tr>
+<tr><td>R5</td><td>Cesium default-config drift</td><td><span class="tag t-med">MEDIUM</span></td>
+    <td>Medium</td><td>architect (explicit config)</td></tr>
+<tr><td>R6</td><td>Google Tiles license vs cache</td><td><span class="tag t-med">MEDIUM</span></td>
+    <td>Low</td><td>product-engineer + devops</td></tr>
+<tr><td>R7</td><td>UE 5.4 on maintenance branch</td><td><span class="tag t-med">MEDIUM</span></td>
+    <td>Low (4 weeks)</td><td>architect (defer to v2.1)</td></tr>
+<tr><td>F1</td><td>BP flight tick perf blow-up</td><td><span class="tag t-high">HIGH</span></td>
+    <td>High if BP-only</td><td>game-developer (decision)</td></tr>
+</table>
+
+<!-- =================================================================== -->
+<h2>Inputs to Synthesis Stage</h2>
+
+<p>Concrete items the synthesis SPEC should fold in from this report:</p>
+
+<ol>
+  <li><b>SPEC §Architecture</b>: 7-module split with the Build.cs dependency rules
+  table verbatim. The georef coupling rule is non-negotiable.</li>
+  <li><b>SPEC §Risk Register</b>: rows R1–R7 + F1 above with the assigned owners.</li>
+  <li><b>SPEC §FR-XX (Georef)</b>: introduce <code>IWorldGeoreferenceProvider</code> as
+  a contractual obligation (closes the "build-on-stale" anti-pattern at the source).</li>
+  <li><b>SPEC §AC-V2-XX additions</b>:
+    <ul>
+      <li>AC-V2-13: "No <code>#include "Cesium</code> appears outside
+          <code>AeroFightersGeoref</code> (CI lint passes)." Owner: devops-engineer.</li>
+      <li>AC-V2-14: "<code>FGeoCoord</code> round-trip cm-equality through
+          <code>UWorldGeoreferenceComponent</code>." Owner: game-tester + architect.</li>
+      <li>AC-V2-15: "<code>AAeroGameMode</code> stays under 150 LOC C++ / 80 BP nodes."
+          Owner: architect (review at every PR).</li>
+    </ul>
+  </li>
+  <li><b>SPEC §If-slip rule (OQ-04)</b>: proposed wording in the
+  "Timeline-feasibility verdict" section above. Operator to finalize.</li>
+  <li><b>SPEC §OQ-02 resolution</b>: BP-to-C++ trigger = 0.30 ms/frame per class,
+  2.0 ms total BP VM budget, 150-node soft cap. Validated jointly by game-developer
+  against early prototype.</li>
+  <li><b>Concessions C1–C4 logged as ADRs in the SPEC</b> so reversal is documented.</li>
+  <li><b>Conflict pre-mitigation for C1, C5</b> from discovery report's Conflict
+  Predictions table: this report's recommendations (C++ FlightComponent; foundation
+  rule limited to web games) are inputs; synthesis decides.</li>
+</ol>
+
+<!-- =================================================================== -->
+<h2>Open Items I Could Not Resolve by Inspection</h2>
+
+<p>Per the architect-code-audit protocol, items below need synthesis or operator input
+because they cannot be answered by reading code, specs, or the discovery report alone.
+None blocks this report — they propagate to the synthesis stage.</p>
+
+<table>
+<tr><th>#</th><th>Open item</th><th>Why I can't resolve it alone</th></tr>
+<tr>
+  <td>I1</td>
+  <td>Whether the operator wants <code>AeroFightersHarness</code> stripped from CI
+      runner Shipping builds or compiled (slower) so screenshot-diff baselines are
+      generated by the same binary that ships.</td>
+  <td>Test-strategy tradeoff; game-tester's domain. My recommendation: ship-time
+      Harness adds risk (live editor module in Shipping); CI-time Harness is correct.</td>
+</tr>
+<tr>
+  <td>I2</td>
+  <td>Whether Niagara is in or out of MVP for cannon-hit FX and aircraft contrail.</td>
+  <td>Niagara has measurable perf cost on the 3060 budget. If out, fall back to
+      Cascade or simple SpawnDecal/StaticMesh. Game-developer + game-designer decision.</td>
+</tr>
+<tr>
+  <td>I3</td>
+  <td>Whether the project uses Enhanced Input System (UE 5.1+ idiom) or legacy
+      <code>InputComponent</code> binding.</td>
+  <td>Recommend Enhanced Input — game-developer's call. Architecture impact is zero
+      either way.</td>
+</tr>
+</table>
+
+<!-- =================================================================== -->
+<h2>One-line summary</h2>
+
+<div class="ok">
+<b>Seven game modules with Cesium isolated in exactly one (<code>AeroFightersGeoref</code>),
+C++ for the flight + cannon + projectile hot paths with BP-exposed tuning, slim 4-state
+sortie machine ported from v1, Observer via UE delegates for cross-actor events, and
+four documented concessions (rolled Audio/HUD into Gameplay, no custom plugins, no
+Strategy yet) — gated by an executable if-slip rule that drops Linux or swaps Cesium
+for a baked-tile adapter without rewriting gameplay because of the georef seam.</b>
+</div>
+
+<p style="margin-top:3em; color:#666; font-size:0.85em; text-align:center;">
+Generated by <code>software-architect</code> · workflow
+<code>game-spec-definition</code> stage <code>arch_review</code> ·
+2026-05-17T06:15:46Z · sidecar <code>.handoff.json</code> emitted adjacent.
+</p>
+
+</body>
+</html>

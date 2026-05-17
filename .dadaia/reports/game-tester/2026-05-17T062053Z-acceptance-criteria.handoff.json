@@ -1,0 +1,54 @@
+{
+  "schema_version": "handoff-v1",
+  "agent": "game-developer",
+  "context": "tauan-games",
+  "produced_at": "2026-05-17T06:20:53Z",
+  "release_id": "aero-fighters-v2-photorealistic-inhauma-v1",
+  "artifact": {
+    "type": "report",
+    "path": "repos/tauan-games/.dadaia/reports/game-tester/2026-05-17T062053Z-acceptance-criteria.html",
+    "content_hash": "a721591e0bd892f00394a4b5d74025d8b280fd3370072bf539f674d0fa81c339"
+  },
+  "findings": [
+    {
+      "severity": "HIGH",
+      "message": "Cesium for Unreal v2.21.1 is the LAST release supporting UE 5.4; v2.22.0+ requires UE 5.5+. Project is pinned to a legacy Cesium version from day one — recommend evaluating UE 5.5 upgrade before implementation starts."
+    },
+    {
+      "severity": "HIGH",
+      "message": "Screenshot-diff SSIM thresholds (0.72 per-camera / 0.78 mean) are provisional; must be empirically calibrated from 3+ captures before SPEC lock. game-designer aesthetic sign-off required (Conflict C3)."
+    },
+    {
+      "severity": "MEDIUM",
+      "message": "Lumen screen-space temporal artifacts in PIE and first frames will cause false screenshot-diff failures unless testMode disables TAA accumulation and adds a 2-second settle period after tile-load gate."
+    },
+    {
+      "severity": "MEDIUM",
+      "message": "GitHub-hosted Linux runners have no GPU; screenshot-diff (AC-V2-18) and perf gate (AC-V2-17) require self-hosted RTX 3060 runner for tag-only CI jobs."
+    },
+    {
+      "severity": "MEDIUM",
+      "message": "Tile-load gate implementation is required before any screenshot-diff test can be meaningful: poll ACesium3DTileset::GetTotalNumberOfTilesCurrentlyLoading() == 0 with 30s timeout."
+    },
+    {
+      "severity": "INFO",
+      "message": "Recommended primary test stack: UE5 Functional Test Framework (BP-authored) for functional ACs + Python PIE screenshot-diff harness + Python perf harness + Playwright v1 suite (unchanged, separate CI lane)."
+    },
+    {
+      "severity": "INFO",
+      "message": "20 ACs proposed (AC-V2-01..20), extending product-engineer draft AC-V2-01..12 with 8 new ACs covering: tile-load timeout, testMode determinism, throttle physics, AA gun destruction, and Windows/Linux artifact checksums."
+    }
+  ],
+  "decisions_required": [
+    "OQ-01: game-designer must validate or counter the proposed SSIM thresholds (0.72 per-camera / 0.78 mean) before SPEC lock (Conflict C3).",
+    "OQ-06: Google Earth reference imagery license for private CI repo baselines — provisional approval for private use only; replace with OpenAerialMap if repo becomes public.",
+    "OQ-07: Time-of-day locked to noon (CesiumSunSky.SolarTime=12.0) in testMode — game-developer must confirm implementation feasibility.",
+    "OQ-08: Operator must register RTX 3060 machine as self-hosted GitHub Actions runner (label: gpu-rtx3060) before screenshot-diff CI is active.",
+    "D1 re-check: Given Cesium v2.21.1 ceiling, product-engineer and software-architect should evaluate UE 5.5 upgrade before SPEC is locked."
+  ],
+  "next_handoff": {
+    "agent": "product-engineer",
+    "context": "tauan-games",
+    "expected_artifact_type": "spec"
+  }
+}

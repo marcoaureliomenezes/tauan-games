@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QA Criteria — aero-fighters-v2 Acceptance Criteria</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 1100px; margin: 2em auto; padding: 0 1.5em;
+    line-height: 1.6; color: #1d1f23; background: #fafafa;
+  }
+  h1 { border-bottom: 3px solid #1a3a5c; padding-bottom: 0.4em; color: #1a3a5c; }
+  h2 { border-bottom: 1.5px solid #b0bec5; padding-bottom: 0.25em;
+       margin-top: 2.5em; color: #1a3a5c; }
+  h3 { color: #2a4a7c; margin-top: 1.6em; }
+  h4 { color: #3b3b3b; margin-bottom: 0.3em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0;
+          background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th, td { border: 1px solid #cdd2da; padding: 0.55em 0.75em;
+           vertical-align: top; text-align: left; }
+  th { background: #eef1f6; font-weight: 600; }
+  tr:nth-child(even) td { background: #f7f9fc; }
+  code { background: #eef0f3; padding: 0.1em 0.4em; border-radius: 3px;
+         font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.9em; }
+  pre { background: #1d1f23; color: #f3f3f3; padding: 1em; border-radius: 4px;
+        overflow-x: auto; font-size: 0.88em; line-height: 1.5; }
+  .meta { background: #eef4ff; border-left: 4px solid #2a4a8a;
+          padding: 0.65em 1em; margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .warn { background: #fff8ec; border-left: 4px solid #e67e22;
+          padding: 0.65em 1em; margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .danger { background: #fdecec; border-left: 4px solid #c0392b;
+            padding: 0.65em 1em; margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .ok { background: #ecf7ee; border-left: 4px solid #2e8b57;
+        padding: 0.65em 1em; margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .info { background: #f0f4ff; border-left: 4px solid #3498db;
+          padding: 0.65em 1em; margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .ac-id { font-weight: 700; color: #1a3a5c;
+           font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .tag { display: inline-block; padding: 0.05em 0.55em; border-radius: 10px;
+         font-size: 0.78em; font-weight: 600; margin-right: 0.3em; }
+  .auto { background: #2e8b57; color: #fff; }
+  .manual { background: #8e44ad; color: #fff; }
+  .hybrid { background: #2980b9; color: #fff; }
+  .devops { background: #e67e22; color: #fff; }
+  .risk-high { background: #c0392b; color: #fff; }
+  .risk-med { background: #e67e22; color: #fff; }
+  .risk-low { background: #27ae60; color: #fff; }
+  ul.compact li { margin: 0.2em 0; }
+  .hat-note { font-size: 0.82em; color: #555; font-style: italic;
+              border: 1px solid #ccc; padding: 0.4em 0.8em;
+              border-radius: 3px; background: #f9f9f9; margin-bottom: 1.5em; }
+</style>
+</head>
+<body>
+
+<h1>QA Criteria Report — aero-fighters-v2</h1>
+<h3 style="margin-top:0;color:#666;">Photorealistic Inhauma MG — UE5.4 + Cesium for Unreal</h3>
+
+<p class="hat-note">Authored under the <strong>game-tester hat</strong> by the
+<code>game-developer</code> agent due to harness gap — workspace fallback per workflow
+plan.md. All decisions in this invocation are test-strategy decisions; no gameplay
+implementation code is produced.</p>
+
+<div class="meta">
+  <b>Workflow stage:</b> <code>qa_criteria</code> (game-spec-definition.workflow.md v0.1.0)<br>
+  <b>Spec context:</b> <code>tauan-games</code><br>
+  <b>Release codename:</b> <code>aero-fighters-v2-photorealistic-inhauma-v1</code><br>
+  <b>Author:</b> <code>game-developer</code> wearing <code>game-tester</code> hat<br>
+  <b>Produced at (UTC):</b> <code>2026-05-17T062053Z</code><br>
+  <b>Primary input:</b>
+  <code>.dadaia/reports/product-engineer/2026-05-17T060824Z-game-discovery.html</code><br>
+  <b>AC numbering scheme:</b> <code>AC-V2-01</code> through <code>AC-V2-20</code>
+  (extends product-engineer draft AC-V2-01..12)<br>
+  <b>Next stage:</b> <code>synthesis</code> — product-engineer composes SPEC.md from
+  all five specialist reports
+</div>
+
+<p>This report proposes the complete test strategy, per-AC pass conditions, screenshot-diff
+baseline design, tile-streaming determinism approach, known UE5 risks, CI runtime budget,
+and DevOps inputs for the aero-fighters-v2 MVP. The synthesis stage may refine AC wording
+and numbering.</p>
+
+<!-- ================================================================= -->
+<h2>UE5 Test Strategy</h2>
+
+<p>Four candidate frameworks were evaluated against the specific constraints of this
+project: Cesium tile non-determinism, Blueprint-first hot paths, solo operator, no
+server-side GPU on standard CI runners, 4-week timeline.</p>
+
+<h3>Candidate A — UE5 Functional Test Framework (FTF)</h3>
+
+<table>
+<tr><th>Aspect</th><th>Assessment</th></tr>
+<tr><td>Mechanism</td><td>Blueprint or C++ test actors placed in a dedicated map; driven by the
+  Automation Tool via <code>-ExecCmds "Automation RunAll"</code> or <code>-RunAutomationTests</code>
+  commandlet. Each functional test is a self-contained level actor with
+  <code>PrepareTest / IsReady / StartTest / OnTimeout</code> lifecycle.</td></tr>
+<tr><td>Blueprint support</td><td>Native. Test logic can live entirely in BP without any C++;
+  aligns with D12 (BP-first). Individual tests can call gameplay functions, tick the game,
+  and assert on state through the Automation Spec runner.</td></tr>
+<tr><td>Screenshot comparison</td><td>Built-in via <code>TakeAutomationScreenshot</code> node
+  (Blueprint) or <code>AutomationCommon::TakeScreenshot</code> (C++). Supports pixel-level
+  comparison against a "ground truth" image baked into the project's
+  <code>Test/Screenshots</code> directory. Result is pass/fail with a diff image written
+  to the output directory.</td></tr>
+<tr><td>Headless / CI</td><td>Runs in <code>-nullrhi</code> mode for pure logic tests, but
+  screenshot comparison requires a RHI-enabled (GPU) context. Must use
+  <code>-RHI=Vulkan</code> on Linux. Works well with self-hosted GPU runners.</td></tr>
+<tr><td>Cesium tile non-determinism</td><td>Tiles load asynchronously; FTF has no built-in
+  "wait-for-tile-load" gate. A custom <code>ATileLoadGate</code> actor or
+  <code>UCesiumTileset::GetTotalNumberOfTilesCurrentlyNeeded()</code> poll is required.
+  See Determinism section below.</td></tr>
+<tr><td>Timeline fit</td><td>Good. No external tooling needed; entirely within UE5 project.
+  Learning curve is low for Blueprint-first team. Test maps can be authored incrementally.</td></tr>
+<tr><td>Solo operator</td><td>Excellent. No shared infrastructure; tests live in the project.</td></tr>
+</table>
+
+<h3>Candidate B — Gauntlet Automation Framework</h3>
+
+<table>
+<tr><th>Aspect</th><th>Assessment</th></tr>
+<tr><td>Mechanism</td><td>External Python/C# controller launches a packaged game on a remote
+  device, monitors it via telemetry, and validates exit code + metrics. Designed for
+  large teams with device farms. Requires build packaging and device provisioning.</td></tr>
+<tr><td>Blueprint support</td><td>Indirect. Gauntlet tests observe the game process; in-game
+  logic still requires C++ event hooks or console command responders. Higher plumbing cost.</td></tr>
+<tr><td>Timeline fit</td><td>Poor for 4-week timeline. Setup cost of Gauntlet controller,
+  device management, and metric collectors is non-trivial and mis-sized for a solo team.</td></tr>
+<tr><td>Solo operator</td><td>Over-engineered. Gauntlet assumes device-farm topology.</td></tr>
+<tr><td>Verdict</td><td><span class="tag risk-med">NOT RECOMMENDED</span> for this MVP. Revisit
+  for v2.1+ if multi-platform device testing becomes a requirement.</td></tr>
+</table>
+
+<h3>Candidate C — PIE Screenshot Diff (Manual or Scripted)</h3>
+
+<table>
+<tr><th>Aspect</th><th>Assessment</th></tr>
+<tr><td>Mechanism</td><td>Play-In-Editor mode with <code>-Game</code> or packaged build launched
+  with fixed render settings. Screenshot taken via console command
+  <code>HighResShot 1920x1080</code> or <code>Shot</code>. Diff done offline with Python
+  (SSIM via scikit-image or ImageMagick).</td></tr>
+<tr><td>Integration</td><td>Requires an external Python wrapper script to orchestrate: launch
+  game, set camera pose, wait for tile load, take shot, exit. Useful for the
+  screenshot-diff baseline plan.</td></tr>
+<tr><td>Determinism</td><td>Lumen + screen-space effects are non-deterministic frame-to-frame.
+  Fixed seed, time-of-day lock, TAA sample count, and tile-load gate are all required
+  before the shot is taken. See Determinism section.</td></tr>
+<tr><td>Timeline fit</td><td>Moderate. The harness is not complex but does require a Python
+  wrapper and CI integration. Suitable as the screenshot-diff layer on top of FTF.</td></tr>
+</table>
+
+<h3>Candidate D — Playwright (v1 pattern extended)</h3>
+
+<div class="warn">
+<b>Out of scope for v2 in-game tests.</b> Playwright operates on a browser DOM; UE5 native
+builds expose no HTTP/DOM surface. Playwright remains authoritative for the <em>v1
+Three.js game</em> (AC-V2-11) and must not be extended to drive UE5 tests. A thin
+Playwright wrapper that drives a locally-launched UE5 process via console sockets is
+architecturally possible but unjustified at this timeline.
+</div>
+
+<h3>Recommended Stack</h3>
+
+<div class="ok">
+<b>Primary:</b> <strong>UE5 Functional Test Framework (FTF)</strong> with Blueprint-authored
+tests in a dedicated test map (<code>Levels/TestMap_QA</code>). Covers functional ACs,
+state machine assertions, cannon fire rate, hit detection, crash detection, and
+georeferencing correctness.<br><br>
+<b>Layer 2:</b> <strong>PIE Screenshot Diff</strong> — packaged build launched with fixed
+camera poses, tile-load gate, time-of-day lock; Python wrapper performs SSIM comparison
+against frozen Google Earth references. Covers AC-V2-18 (photoreal screenshot-diff).<br><br>
+<b>Layer 3:</b> <strong>Python perf harness</strong> — launches packaged build, runs a
+60-second flight loop above Inhauma, samples FPS via <code>stat FPS</code> console command
+redirected to a log file, validates 99th-percentile frame time. Covers AC-V2-17.<br><br>
+<b>Layer 4:</b> <strong>Playwright v1 suite</strong> — unchanged, run in parallel in its
+own CI lane. Covers AC-V2-20 (v1 suite green).
+</div>
+
+<!-- ================================================================= -->
+<h2>Screenshot-Diff Baseline Plan</h2>
+
+<h3>1. Reference Capture Protocol</h3>
+
+<p>The operator must capture Google Earth reference images <em>before</em> the first CI
+screenshot-diff run. This is a one-time manual step that freezes the "ground truth".</p>
+
+<table>
+<tr><th>Step</th><th>Details</th></tr>
+<tr><td>Tool</td><td>Google Earth Pro desktop (free). <b>Not</b> the web version —
+  Google Earth Pro allows precise coordinate entry and altitude-above-terrain mode,
+  and its imagery can be saved as JPEG/PNG at screen resolution.</td></tr>
+<tr><td>Camera specification</td><td>For each reference camera (see table below), enter the
+  exact WGS84 lat/lon/altitude in the "Fly to" box. Set heading and tilt manually.
+  Record the <em>exact</em> values in
+  <code>tests/aero-fighters-v2/screenshot-diff/cameras.json</code>.</td></tr>
+<tr><td>Capture settings</td><td>1920x1080, imagery date pinned to the most recent
+  available. Save in <code>tests/aero-fighters-v2/screenshot-diff/references/</code>
+  as <code>cam-01-inhauma-center.png</code>, etc.</td></tr>
+<tr><td>License note</td><td>Google Earth imagery is for personal, non-commercial use.
+  Storing screenshots in a private CI repo for automated quality-gate purposes is a grey
+  area in Google's Terms. <b>Recommendation:</b> use the screenshots internally only;
+  do not publish or distribute them. If the project ever becomes public, replace with
+  equivalent imagery from OpenAerialMap or Bing Maps (both allow derivative works).</td></tr>
+<tr><td>Freeze</td><td>Reference images must be committed to the repo (via Git LFS, see
+  storage section below) and tagged at the same git tag as the first passing build.
+  They are <b>not</b> re-captured automatically; only re-captured when the operator
+  explicitly decides to update the photoreal baseline.</td></tr>
+</table>
+
+<h4>Reference Camera Definitions</h4>
+
+<table>
+<tr>
+  <th>Camera ID</th><th>Lat</th><th>Lon</th><th>Alt (m AGL)</th>
+  <th>Heading (deg)</th><th>Tilt (deg from vertical)</th><th>What it tests</th>
+</tr>
+<tr>
+  <td><code>cam-01</code></td><td>-19.47</td><td>-44.46</td><td>2500</td>
+  <td>0 (North)</td><td>30</td>
+  <td>Inhauma city centre from high altitude — primary georef check</td>
+</tr>
+<tr>
+  <td><code>cam-02</code></td><td>-19.468</td><td>-44.455</td><td>800</td>
+  <td>90 (East)</td><td>60</td>
+  <td>Low-altitude lateral pass — LOD and tile resolution at flight altitude</td>
+</tr>
+<tr>
+  <td><code>cam-03</code></td><td>-19.48</td><td>-44.47</td><td>1500</td>
+  <td>315 (NW)</td><td>45</td>
+  <td>Diagonal view including Inhauma aerodrome — AA gun area visibility</td>
+</tr>
+<tr>
+  <td><code>cam-04</code></td><td>-19.45</td><td>-44.43</td><td>3500</td>
+  <td>180 (South)</td><td>20</td>
+  <td>Wide-area 20 km radius extent — confirms tile streaming coverage boundary</td>
+</tr>
+</table>
+
+<h3>2. Test-Time Camera Setup</h3>
+
+<p>In the UE5 test, fixed camera poses are applied programmatically:</p>
+
+<pre>
+-- Blueprint pseudocode for each reference camera pose --
+
+1. Set CesiumGeoreference.OriginLatitude  = -19.47
+   Set CesiumGeoreference.OriginLongitude = -44.46
+   Set CesiumGeoreference.OriginHeight    = 800.0
+
+2. For each camera entry in cameras.json:
+   a. Convert (lat, lon, alt) → UE world position via
+      CesiumGeoreference.TransformLongitudeLatitudeHeightToUnreal()
+   b. Set CameraActor.SetActorLocationAndRotation(uePos, ueRot)
+   c. Disable all player pawns (no aircraft in shot — terrain only)
+   d. Lock time-of-day: set CesiumSunSky.SolarTime = 12.0 (noon)
+   e. Disable TAA temporal accumulation: r.TemporalAASamples 1
+   f. Wait for tile-load gate (see Determinism section)
+   g. Execute: HighResShot 1920x1080 Filename=cam-01-current.png
+   h. Exit PIE / packaged game
+
+3. Python post-process: compute SSIM(reference, current) per camera
+</pre>
+
+<h3>3. Diff Algorithm and Thresholds</h3>
+
+<div class="info">
+<b>Recommended metric:</b> SSIM (Structural Similarity Index Measure) as the primary gate,
+with perceptual hash (pHash) as a secondary early-rejection filter.
+</div>
+
+<table>
+<tr><th>Metric</th><th>Library</th><th>Threshold</th><th>Rationale</th></tr>
+<tr><td>pHash (early reject)</td><td><code>imagehash</code> (Python)</td>
+  <td>Hamming distance &le; 20 / 64 bits</td>
+  <td>Fast O(1) filter. If pHash distance &gt; 20, the images are structurally different
+  (e.g., wrong location entirely). Run before SSIM to fail fast without GPU cost.</td></tr>
+<tr><td>SSIM (primary gate)</td><td><code>scikit-image.metrics.structural_similarity</code></td>
+  <td><b>Fail if SSIM &lt; 0.72</b> on any single camera<br>
+  <b>Fail if mean SSIM across all 4 cameras &lt; 0.78</b></td>
+  <td>SSIM 0.72 is intentionally permissive at the per-camera level to tolerate
+  tile-streaming variation, Lumen GI indirect lighting differences, and sky colour
+  shift from different GPU implementations. Mean 0.78 catches systematic drift.
+  Thresholds are <b>provisional</b> and should be empirically calibrated from 3+
+  captures on the operator's dev machine before locking in SPEC.</td></tr>
+<tr><td>Diff image output</td><td>Generate <code>diff-cam-01.png</code> per camera
+  showing pixel-wise delta heatmap</td>
+  <td>Archived as CI artifact for operator eyeball review regardless of pass/fail.</td></tr>
+</table>
+
+<div class="warn">
+<b>Open Question OQ-01 status:</b> The thresholds above (SSIM 0.72 / 0.78) are the
+game-tester's provisional proposal. The game-designer hat must validate that these
+thresholds do not permit visually unacceptable drift before SPEC approval (per
+Conflict Prediction C3 in the discovery report). If the game-designer objects with
+visual evidence, the synthesis stage must arbitrate.
+</div>
+
+<h3>4. Tolerance for Tile-Streaming Non-Determinism</h3>
+
+<p>This is the hardest problem in the screenshot-diff plan. Cesium tiles load
+asynchronously over HTTP. Without a tile-load gate, screenshots will contain partially
+loaded tiles (grey/black placeholders), producing SSIM values far below any reasonable
+threshold.</p>
+
+<div class="ok">
+<b>Recommended tile-load gate:</b> Poll
+<code>ACesium3DTileset::GetTotalNumberOfTilesCurrentlyNeeded()</code> and
+<code>ACesium3DTileset::GetTotalNumberOfTilesCurrentlyLoading()</code>.
+Wait until <code>tilesCurrentlyLoading == 0 &amp;&amp; tilesNeeded > 0</code> for
+at least 2 consecutive frames (200ms). Additionally, enforce a hard maximum wait of
+<code>30 seconds</code> from camera placement. If tiles do not fully load in 30 seconds,
+the test fails with <code>TILE_LOAD_TIMEOUT</code> rather than a false screenshot diff.
+</div>
+
+<p>In offline tile-cache mode (dev workflow, cost control), all tiles should be cached
+locally and load in &lt;2 seconds. The 30-second timeout is a CI safety net.</p>
+
+<h3>5. Reference Image Storage</h3>
+
+<table>
+<tr><th>Concern</th><th>Recommendation</th></tr>
+<tr><td>Binary storage</td><td>Use <b>Git LFS</b> for the reference PNG files.
+  Track <code>*.png</code> and <code>*.jpg</code> in <code>tests/aero-fighters-v2/screenshot-diff/references/</code>
+  via <code>.gitattributes</code>. Each reference is ~5 MB; 4 cameras = ~20 MB total — within
+  free Git LFS tier (1 GB).</td></tr>
+<tr><td>Versioning</td><td>Reference images are tagged with the same git tag as the build
+  (e.g., <code>aero-v2-0.1.0</code>). A new baseline is captured only when the
+  operator explicitly runs <code>make update-screenshot-baselines</code>.</td></tr>
+<tr><td>CI access</td><td>Git LFS pointers are resolved automatically by the GitHub Actions
+  LFS extension on the GPU runner. No separate object storage needed.</td></tr>
+</table>
+
+<h3>6. Per-Camera Failure Report Format</h3>
+
+<p>On any camera failure, the CI step emits a structured JSON artifact
+<code>screenshot-diff-report.json</code> plus PNG diffs:</p>
+
+<pre>
+{
+  "run_timestamp": "2026-05-17T062053Z",
+  "build_tag": "aero-v2-0.1.0",
+  "cameras": [
+    {
+      "id": "cam-01",
+      "reference": "references/cam-01-inhauma-center.png",
+      "captured": "captures/cam-01-current.png",
+      "diff_image": "diffs/diff-cam-01.png",
+      "phash_distance": 8,
+      "ssim": 0.84,
+      "passed": true
+    },
+    {
+      "id": "cam-02",
+      "reference": "references/cam-02-low-altitude.png",
+      "captured": "captures/cam-02-current.png",
+      "diff_image": "diffs/diff-cam-02.png",
+      "phash_distance": 31,
+      "ssim": 0.61,
+      "passed": false,
+      "failure_reason": "SSIM 0.61 below per-camera threshold 0.72"
+    }
+  ],
+  "mean_ssim": 0.74,
+  "overall_passed": false
+}
+</pre>
+
+<!-- ================================================================= -->
+<h2>Determinism for Tile-Streaming Tests</h2>
+
+<h3>Problem Statement</h3>
+
+<p>v1 (Three.js) achieves test determinism via <code>?testMode=1&amp;seed=...</code> URL
+parameters that freeze the PRNG and skip time-dependent animations. UE5 + Cesium does
+not have this mechanism by default. We need an equivalent.</p>
+
+<h3>Option A — testMode Console Variable</h3>
+
+<div class="info">
+<b>Recommended</b> — direct analogue of v1's <code>window.game.testMode</code>.
+</div>
+
+<p>Expose a UE5 console variable <code>aero.testMode 1</code> (or a dedicated
+<code>-aero_test_mode</code> command-line argument) that, when set:</p>
+
+<ul class="compact">
+  <li>Locks time-of-day: <code>CesiumSunSky.SolarTime = 12.0</code> (sun directly overhead,
+    minimal shadow variation)</li>
+  <li>Disables TAA temporal accumulation: <code>r.TemporalAASamples 1</code></li>
+  <li>Disables Lumen screen-space noise: <code>r.Lumen.ScreenProbeGather.TemporalFilter 0</code></li>
+  <li>Disables motion blur: <code>r.MotionBlur.Amount 0</code></li>
+  <li>Fixes camera at a documented pose (for screenshot tests)</li>
+  <li>Enables verbose tile-load telemetry logging</li>
+  <li>Shrinks service-scene animations (analogue of v1's 30-40s → 5s in testMode)</li>
+</ul>
+
+<table>
+<tr><th>Criterion</th><th>Assessment</th></tr>
+<tr><td>Cost</td><td>Low. All console variables are already available in UE5.4.
+  Blueprint-accessible via <code>Execute Console Command</code> node.</td></tr>
+<tr><td>Benefit</td><td>High. Eliminates lighting/shadow non-determinism between runs.
+  Does not eliminate tile-streaming non-determinism but reduces it to the tile-load
+  wait gate.</td></tr>
+<tr><td>Risk</td><td>Disabling TAA and Lumen temporal filter changes the visual output
+  slightly versus production. Screenshot baselines must be captured <em>with testMode
+  enabled</em> to avoid systematic SSIM bias.</td></tr>
+</table>
+
+<h3>Option B — Mock the Cesium Tile Request Layer (HTTP Intercept)</h3>
+
+<table>
+<tr><th>Criterion</th><th>Assessment</th></tr>
+<tr><td>Mechanism</td><td>Run a local HTTP proxy (e.g., mitmproxy or a simple Python
+  <code>http.server</code>) that serves pre-cached tiles from disk instead of forwarding
+  to the Google Tiles API.</td></tr>
+<tr><td>Benefit</td><td>Eliminates both tile-streaming latency and API cost during CI tests.
+  Every CI run uses exactly the same tiles, removing the SSIM variance from
+  tile-version changes on Google's side.</td></tr>
+<tr><td>Cost</td><td>Medium. Requires: (a) a tile snapshot for the 4 reference camera
+  frustums, (b) a local proxy process started before the test, (c) overriding the
+  Cesium tile server URL via <code>GCP_TILE_PROXY_URL</code> env var. Tile snapshots
+  need to be Git LFS-stored (potentially large — 100–500 MB for 4 camera frusta at
+  full LOD).</td></tr>
+<tr><td>Risk</td><td>Tile caching must be refreshed when Google updates the Inhauma
+  imagery (typically yearly). Stale tiles = stale baselines = false passes.</td></tr>
+<tr><td>Recommendation</td><td><span class="tag risk-med">PHASE 2</span> — implement for
+  v2.0.1 after MVP proves the screenshot-diff harness works. Too much setup cost for
+  4-week timeline.</td></tr>
+</table>
+
+<h3>Option C — Pre-Cached Tile Snapshots in Test Data</h3>
+
+<table>
+<tr><th>Criterion</th><th>Assessment</th></tr>
+<tr><td>Mechanism</td><td>Cesium for Unreal supports a "cache" directory (<code>CesiumCache/</code>)
+  that stores downloaded tiles. Pre-populate this cache, commit to Git LFS, and
+  configure the test runner to use it. The game then reads tiles from disk without
+  any HTTP request.</td></tr>
+<tr><td>Benefit</td><td>Zero API cost in CI; fully deterministic tile content.</td></tr>
+<tr><td>Cost</td><td>The Cesium disk cache format is not guaranteed stable across plugin
+  versions. Cache invalidation on Cesium upgrade requires full re-capture. Storage
+  size: 200–800 MB depending on frustum count.</td></tr>
+<tr><td>Recommendation</td><td><span class="tag risk-med">PHASE 2</span> — same as B.
+  Evaluate after MVP.</td></tr>
+</table>
+
+<h3>MVP Determinism Recommendation</h3>
+
+<div class="ok">
+<b>For MVP (4-week timeline):</b> implement Option A (<code>testMode</code> console
+variable) for lighting/rendering determinism. Use the tile-load gate (poll
+<code>tilesCurrentlyLoading == 0</code>) for streaming determinism. Accept
+~5-10 % SSIM variance across runs from tile-version differences; calibrate thresholds
+from 3+ sample runs before declaring baselines final.
+</div>
+
+<!-- ================================================================= -->
+<h2>Acceptance Criteria</h2>
+
+<p>The table below extends and refines the product-engineer's draft AC-V2-01..12.
+New ACs V2-13..20 cover gaps identified during this analysis. Pass conditions are
+written from the test-automation perspective — each is either
+<span class="tag auto">AUTO</span> (can run headless in CI without human review),
+<span class="tag manual">MANUAL</span> (requires operator eyeball), or
+<span class="tag hybrid">HYBRID</span> (automated gate + manual sign-off).</p>
+
+<table>
+<tr>
+  <th>ID</th><th>Acceptance Criterion</th><th>Pass Condition (refined)</th>
+  <th>Method</th><th>Owner</th>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-01</span></td>
+  <td>Cesium tiles stream within the 20 km radius around Inhauma MG within 30 seconds.</td>
+  <td>After launching the build and positioning the player pawn at
+  <code>(-19.47, -44.46, 2000 m)</code>, polling
+  <code>ACesium3DTileset::GetTotalNumberOfTilesCurrentlyLoading()</code> reaches
+  <code>0</code> (with tiles loaded &gt; 0) within 30 seconds. Test fails with
+  <code>TILE_LOAD_TIMEOUT</code> if not completed. No placeholder (solid grey/black)
+  tiles visible in a <code>HighResShot</code> taken immediately after the gate.</td>
+  <td><span class="tag auto">AUTO</span> (FTF + screenshot)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-02</span></td>
+  <td>CesiumGeoreference origin is exactly the Inhauma reference point.</td>
+  <td>FTF assertion: <code>CesiumGeoreference.OriginLatitude == -19.47 ± 0.0001</code>,
+  <code>OriginLongitude == -44.46 ± 0.0001</code>, <code>OriginHeight == 800.0 ± 0.1</code>.
+  Round-trip: <code>UE(0,0,0)</code> → <code>TransformUnrealToLongitudeLatitudeHeight()</code>
+  returns <code>(-19.47 ± 0.001, -44.46 ± 0.001, 800 ± 5)</code>.
+  Test must run against the committed level file, not runtime-set values.</td>
+  <td><span class="tag auto">AUTO</span> (FTF BP assertion)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-03</span></td>
+  <td>F-35 spawns at or above 2000 m altitude above terrain.</td>
+  <td>FTF: immediately after spawn (first tick after
+  <code>BeginPlay</code>), read <code>PlayerPawn.GetActorLocation().Z</code>
+  converted to WGS84 altitude via CesiumGeoreference. Assert
+  <code>altitude_above_terrain &ge; 2000 m</code>.
+  Also assert <code>altitude_above_terrain &le; 5000 m</code> (not placed in orbit).</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-04</span></td>
+  <td>Arcade flight controls (throttle, pitch, roll, yaw) respond with input-to-effect
+  latency &le; 1 frame.</td>
+  <td>FTF: apply full-throttle input for 3 simulated seconds (using
+  <code>UWorld::Exec("tick 3")</code> or tick injection). Assert speed increases
+  monotonically. Apply max-pitch-up input; assert pitch angle increases within
+  the <em>same</em> tick. No input buffering across frames.
+  <b>Parity check:</b> compare pitch/roll rate constants against v1 manifest
+  (<code>PITCH_RATE</code>, <code>ROLL_RATE</code>) — v2 values must be within
+  ±20% or a deliberate deviation must be documented.</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-05</span></td>
+  <td>Cannon fires at 12.5 rounds per second ± 2%.</td>
+  <td>FTF: hold fire input for exactly 10 simulated seconds (deterministic tick).
+  Count projectile spawn events via <code>OnProjectileSpawned</code> delegate.
+  Assert count is in range <code>[120, 130]</code> (12.0–13.0 r/s over 10 s).
+  Secondary check: inter-spawn interval must be <code>80 ms ± 5 ms</code> for at least
+  95% of intervals (jitter gate).</td>
+  <td><span class="tag auto">AUTO</span> (FTF tick-based)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-06</span></td>
+  <td>One AA gun static placement is consistent and reproducible.</td>
+  <td>FTF: load the MVP level. Assert exactly one
+  <code>AAAGunActor</code> present in the world. Assert its WGS84 position is within
+  <code>± 10 m</code> of the documented placement coordinate (from
+  <code>specs/releases/.../AAGun-placement.json</code>). Assert it is above terrain
+  (not clipped below ground). Run on both Windows and Linux builds; positions must
+  match within floating-point tolerance.</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-07</span></td>
+  <td>Cannon projectile hits AA gun: hit detection registers.</td>
+  <td>FTF: position cannon projectile 1 m from AA gun collision box, fire with
+  deterministic velocity toward it. Assert <code>AAAGunActor.OnHit</code> fires within
+  1 frame. Assert AA gun health decrements. Assert projectile is destroyed on impact
+  (no ghost projectiles). Repeat 100 times; 100/100 must register.</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-08</span></td>
+  <td>Terrain collision triggers aircraft crash state.</td>
+  <td>FTF: teleport player pawn directly into Cesium terrain mesh. Assert
+  <code>APlayerPawn.State == CRASHED</code> within 200 ms (2 physics ticks at 60 Hz).
+  Assert crash particle effect spawned. Assert player input is disabled post-crash.
+  Do not test at speed = 0 (special case); test at speed &ge; 50 m/s.</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-09</span></td>
+  <td>Windows x64 native binary: builds, launches, and passes smoke test.</td>
+  <td>CI pipeline on tag <code>aero-v2-*</code> produces
+  <code>aero-fighters-v2-win64-vX.Y.Z.zip</code> attached to GitHub Release with
+  SHA-256 checksum file. The zip, when extracted on a clean Windows 11 x64 machine,
+  launches without installer prerequisites. Game reaches main menu within 60 seconds.
+  No crash dump produced on startup.</td>
+  <td><span class="tag hybrid">HYBRID</span> (CI build auto + operator launch manual)</td>
+  <td>devops-engineer (build) + game-tester (smoke)</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-10</span></td>
+  <td>Linux x64 native binary: builds, launches, and passes smoke test.</td>
+  <td>Same as AC-V2-09 but for Linux. Artifact name:
+  <code>aero-fighters-v2-linux64-vX.Y.Z.zip</code>. Launch test on Ubuntu 24.04.
+  Binary must not require Proton or Wine. <b>Subject to D17 if-slip rule:</b> if Cesium
+  tiles fail to render at 60 FPS on Linux by end of week 3, this AC is suspended and
+  documented as "deferred to v2.0.1" in CLOSURE.</td>
+  <td><span class="tag hybrid">HYBRID</span></td>
+  <td>devops-engineer + game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-11</span></td>
+  <td>Both binaries are checksummed and attached to the GitHub Release.</td>
+  <td>GitHub Release for tag <code>aero-v2-vX.Y.Z</code> contains:
+  <code>aero-fighters-v2-win64-vX.Y.Z.zip</code>,
+  <code>aero-fighters-v2-linux64-vX.Y.Z.zip</code> (or Linux-deferred note),
+  and corresponding <code>*.sha256</code> files. CI must fail if any artifact is
+  missing or checksum does not match re-computed hash.</td>
+  <td><span class="tag auto">AUTO</span> (CI pipeline validation)</td>
+  <td>devops-engineer</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-12</span></td>
+  <td>Google Maps Tiles API spend does not exceed USD 20 / month.</td>
+  <td>GCP billing alerts configured at 50%, 80%, 100% of cap before first CI run that
+  uses live tiles. Operator confirms alert delivery via email test.
+  Dev workflow defaults to offline tile cache (or <code>testMode</code>
+  HTTP proxy) — live tile fetch is opt-in via env var <code>AERO_LIVE_TILES=1</code>.</td>
+  <td><span class="tag manual">MANUAL</span> (GCP console verification)</td>
+  <td>devops-engineer</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-13</span></td>
+  <td>Tile streaming load completes within 30 s timeout (tile-load gate).</td>
+  <td>Automated FTF test: place camera at each of the 4 reference poses, start
+  polling <code>tilesCurrentlyLoading</code>. Gate passes when loading == 0 within
+  30 s. Test fails if timeout fires. Logged telemetry: tile count, load time,
+  peak concurrent tile requests.</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-14</span></td>
+  <td><code>testMode</code> console variable is available and produces deterministic
+  rendering state.</td>
+  <td>FTF: execute <code>aero.testMode 1</code> via console. Assert:
+  <code>r.TemporalAASamples == 1</code>, <code>CesiumSunSky.SolarTime == 12.0</code>,
+  <code>r.MotionBlur.Amount == 0</code>. Two consecutive screenshots taken 500 ms apart
+  in testMode with no camera movement and tiles fully loaded must have SSIM &ge; 0.99
+  (verifying rendering stability).</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-15</span></td>
+  <td>Throttle physics: speed increases monotonically from 0 to max-throttle over
+  10 simulated seconds without oscillation.</td>
+  <td>FTF: sample <code>PlayerPawn.CurrentSpeed</code> every 100 ms for 10 s of full
+  throttle. Assert every consecutive pair has <code>speed[i+1] &ge; speed[i] - 0.5</code>
+  (allowing 0.5 m/s floating-point noise but no large oscillations). Assert final speed
+  &ge; <code>SPEED_MAX * 0.85</code>.</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-16</span></td>
+  <td>AA gun destruction: after sufficient cannon hits, AA gun is destroyed and
+  removed from gameplay.</td>
+  <td>FTF: deal damage equal to AA gun max health via
+  <code>AAAGunActor.TakeDamage()</code> calls. Assert actor is destroyed
+  (<code>IsValid(AAGunActor) == false</code>) or enters <code>DESTROYED</code> state.
+  Assert destruction particle effect plays. Assert no further AI tick occurs after
+  destruction (no targeting after death).</td>
+  <td><span class="tag auto">AUTO</span> (FTF)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-17</span></td>
+  <td>Performance floor: RTX 3060 @ 1080p sustains &ge; 60 FPS averaged over 60 s
+  flight loop, frame-time 99th percentile &le; 18.5 ms.</td>
+  <td>Python perf harness: launch packaged Shipping build (no logging overhead) on
+  RTX 3060 hardware (operator's dev machine or equivalent CI GPU runner). Execute a
+  scripted 60-second flight loop above Inhauma (constant throttle, gentle banking
+  to traverse the area). Sample <code>stat FPS</code> output from engine log.
+  Assert <code>mean_fps &ge; 60</code> and <code>p99_frame_ms &le; 18.5</code>.
+  Must run on Windows build; Linux build tested separately if AC-V2-10 is not
+  deferred.</td>
+  <td><span class="tag hybrid">HYBRID</span> (automated harness on operator GPU hardware)</td>
+  <td>game-tester + devops-engineer (GPU runner)</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-18</span></td>
+  <td>Screenshot-diff vs Google Earth references: all 4 cameras pass SSIM and pHash
+  thresholds.</td>
+  <td>Python screenshot-diff harness: launch packaged build with testMode, load
+  level, position camera at each of cam-01..cam-04, wait for tile-load gate, take
+  <code>HighResShot 1920x1080</code>. For each camera:
+  <code>phash_distance &le; 20</code> AND <code>ssim &ge; 0.72</code>.
+  Mean SSIM across all 4 cameras &ge; 0.78. Produce <code>screenshot-diff-report.json</code>
+  and diff PNGs as CI artifacts. Thresholds are provisional — calibrate from 3+ captures
+  before SPEC lock.</td>
+  <td><span class="tag hybrid">HYBRID</span> (auto gate + operator sign-off on first baseline)</td>
+  <td>game-tester</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-19</span></td>
+  <td>BP-to-C++ migration trigger is documented and evidence attached at closure.</td>
+  <td>SPEC carries the µs/frame threshold defined in OQ-02. At MVP CLOSURE, the
+  operator attaches a UE5 Insights (or stat unit) profile capture from a representative
+  60-second flight session. For any BP tick group exceeding the threshold, evidence
+  shows either: (a) it was promoted to C++ with a profiler re-capture showing
+  improvement, or (b) a documented decision to defer with rationale.</td>
+  <td><span class="tag manual">MANUAL</span> (profiler review at CLOSURE)</td>
+  <td>software-architect + game-developer</td>
+</tr>
+
+<tr>
+  <td><span class="ac-id">AC-V2-20</span></td>
+  <td>v1 (Three.js) Playwright suite remains entirely green throughout v2 development.</td>
+  <td>CI workflow for the v2 branch must also run
+  <code>npx playwright test tests/aero-fighters/</code> (all existing specs including
+  smoke, sortie, landing, ejection, camera, nuclear-fx, inhauma-fidelity). All tests
+  must exit zero. No flake increase of more than 1 test per 20 runs attributable to
+  v2-branch changes. Monitored via CI matrix (separate lane per
+  Conflict Prediction C3 / D9).</td>
+  <td><span class="tag auto">AUTO</span> (existing Playwright suite, separate CI lane)</td>
+  <td>devops-engineer (CI lane) + game-tester (no-regression policy)</td>
+</tr>
+
+</table>
+
+<!-- ================================================================= -->
+<h2>Known UE5 Risks</h2>
+
+<h3>Risk R-01 — Cesium for Unreal Version Ceiling at v2.21.1 for UE 5.4</h3>
+
+<div class="danger">
+<b>Severity: HIGH</b><br>
+Research finding (May 2026): Cesium for Unreal v2.21.1 is the <em>last release</em>
+to support UE 5.4. All subsequent versions (v2.22.0+) require UE 5.5+. This creates
+an immediate risk: any Cesium bug discovered in v2.21.1 that is fixed in v2.22.0 cannot
+be backported to UE 5.4 without a manual patch. The project is pinned to a
+<em>legacy Cesium version from day one</em>.
+</div>
+
+<p><b>Mitigation recommendations:</b></p>
+<ul class="compact">
+  <li>Evaluate upgrading to UE 5.5 before implementation starts (the latest Cesium
+  versions would then be available). If D1 (UE 5.4 pin) is firm, accept the risk
+  and document it in the SPEC risk register.</li>
+  <li>Pin exactly to <code>CesiumForUnreal-v2.21.1</code> in the UE project's
+  <code>Plugins/</code> directory. Commit the plugin source or binary; do not rely
+  on Marketplace auto-update.</li>
+  <li>Monitor CesiumGS/cesium-unreal issue tracker for bugs affecting v2.21.1 /
+  UE 5.4 combinations — especially tile streaming and Linux Vulkan.</li>
+</ul>
+
+<h3>Risk R-02 — UE 5.4 + Lumen Screen-Space Artifacts in PIE and First Frames</h3>
+
+<div class="warn">
+<b>Severity: MEDIUM</b><br>
+Lumen's screen-space global illumination and reflection captures are temporally
+accumulated. In PIE (Play-In-Editor) mode and in the first 2–3 seconds of a packaged
+game launch, Lumen GI is partially converged, producing visible dark splotches,
+bright halos, and flickering reflections. These are not bugs in the game — they are
+intended Lumen behaviour — but they will cause false screenshot-diff failures if
+screenshots are taken before convergence.
+</div>
+
+<p><b>Mitigation:</b></p>
+<ul class="compact">
+  <li>In <code>testMode</code>, add a 2-second settle period after tile-load gate
+  before taking any screenshot.</li>
+  <li>Consider disabling Lumen entirely in test map and using Baked Lighting
+  for the 4 reference cameras — this eliminates temporal noise entirely at the
+  cost of losing the real-time GI look. Screenshot baselines would then be
+  captured with Baked Lighting too.</li>
+  <li>Alternative: set <code>r.Lumen.ScreenProbeGather.TemporalFilter 0</code> in
+  testMode to get a single-frame Lumen sample (noisier but deterministic per frame).</li>
+</ul>
+
+<h3>Risk R-03 — Functional Test Framework + Blueprint Nativization Quirks</h3>
+
+<div class="warn">
+<b>Severity: MEDIUM</b><br>
+When Blueprint Nativization is enabled in Shipping builds (recommended in D12 for
+performance), the generated C++ nativized code can diverge from PIE Blueprint behaviour.
+Functional Tests that pass in PIE against non-nativized BP may fail in Shipping builds
+where the same logic runs as nativized C++. Known edge cases: floating-point comparison
+rounding differences, event dispatch order, and null-check semantics.
+</div>
+
+<p><b>Mitigation:</b></p>
+<ul class="compact">
+  <li>Run the FTF suite in both Development build (non-nativized) and Shipping build
+  (nativized) before tagging a release.</li>
+  <li>Avoid relying on exact floating-point equality in FTF assertions; use tolerances
+  (e.g., <code>SSIM &ge; 0.72</code>, not <code>== 0.847231</code>).</li>
+  <li>Gate AC-V2-05 (cannon fire rate) with a jitter tolerance (±5 ms inter-spawn
+  interval) rather than an exact count, since nativization may reorder event dispatch
+  by 1 tick.</li>
+</ul>
+
+<h3>Risk R-04 — Headless CI Rendering on Linux (No GPU on GitHub-Hosted Runners)</h3>
+
+<div class="warn">
+<b>Severity: MEDIUM-HIGH for screenshot tests</b><br>
+GitHub-hosted Linux runners do not have a physical GPU. UE5 screenshot tests and perf
+tests require GPU rendering (Vulkan on Linux). The options are: (a) self-hosted GPU
+runner (operator's machine), (b) cloud GPU VM (Azure NV-series or AWS g4dn), or (c)
+limit screenshot tests to Windows CI only.
+</div>
+
+<p><b>Mitigation (input to DevOps — see DevOps Inputs section):</b></p>
+<ul class="compact">
+  <li>Recommend self-hosted GitHub Actions runner on operator's dev machine (RTX 3060)
+  for screenshot-diff and perf tests. This satisfies both the GPU requirement and the
+  AC-V2-17 "RTX 3060" perf gate simultaneously.</li>
+  <li>Functional tests that do not require GPU (state machine, fire rate, hit detection)
+  CAN run headless via <code>-nullrhi</code> on standard GitHub-hosted runners.</li>
+</ul>
+
+<h3>Risk R-05 — Cesium World Bounds Checks Conflicting with UE5 Origin Rebasing</h3>
+
+<div class="warn">
+<b>Severity: MEDIUM</b><br>
+UE5's "Enable World Bounds Checks" will attempt to teleport any pawn that strays far
+from the origin back toward origin — conflicting with Cesium's coordinate system where
+world positions corresponding to real-world coordinates can be very large numbers.
+This must be disabled. If not disabled, the aircraft will be teleported unexpectedly
+when flying at the edges of the 20 km radius, causing false crash detections.
+</div>
+
+<p><b>Mitigation:</b></p>
+<ul class="compact">
+  <li>Add an FTF assertion: <code>WorldSettings.bEnableWorldBoundsChecks == false</code>.</li>
+  <li>Document in the SPEC "Platform Prerequisites" section.</li>
+</ul>
+
+<h3>Risk R-06 — Cesium Tile Streaming Cost Spike During CI Screenshot Tests</h3>
+
+<div class="warn">
+<b>Severity: MEDIUM</b><br>
+Each CI screenshot-diff run that uses live Google Maps Tiles API will stream tiles for
+4 camera frusta. At high LOD, this may consume significant API quota. With a hard cap
+of USD 20/month, an unguarded CI run frequency (e.g., every PR) could exhaust the
+budget within days.
+</div>
+
+<p><b>Mitigation:</b></p>
+<ul class="compact">
+  <li>Screenshot-diff tests run only on tag CI (not on every PR). PR CI uses
+  <code>-nullrhi</code> functional tests only.</li>
+  <li>Implement an offline tile-cache warm-up (Option C from Determinism section) for
+  Phase 2. For MVP: accept live tile costs on tag CI only (estimated &lt; 5 tag runs
+  per month).</li>
+</ul>
+
+<h3>Risk R-07 — Google Earth Imagery License for CI Baselines</h3>
+
+<div class="warn">
+<b>Severity: LOW for private repo, MEDIUM if ever published</b><br>
+Google Earth imagery screenshots are covered by Google's ToS for personal
+non-commercial use. Storing them in a private CI repo as automation baselines is a grey
+area. Google explicitly permits "printing" screenshots but restricts redistribution.
+</div>
+
+<p><b>Mitigation:</b></p>
+<ul class="compact">
+  <li>Keep reference screenshots in a private repository (not in the public
+  tauan-games repo if it becomes public).</li>
+  <li>Alternative source: Bing Maps tiles (permissive license for derivative works)
+  or OpenAerialMap (CC-BY). These cover the Inhauma area adequately. Validate image
+  quality before committing to an alternative source.</li>
+</ul>
+
+<!-- ================================================================= -->
+<h2>CI Runtime Budget</h2>
+
+<h3>Target: Total CI walltime &lt; 25 minutes on tag (Release) builds</h3>
+
+<p>On the 4-week timeline, CI must be fast enough that the operator can iterate on
+the same day a build is tagged. A 25-minute target is aggressive but achievable if
+GPU-dependent tests are parallelized onto a GPU runner and non-GPU tests run on
+standard runners.</p>
+
+<table>
+<tr>
+  <th>Test Group</th><th>Tests</th><th>Runner Type</th>
+  <th>Estimated Walltime</th><th>Parallelizable</th>
+</tr>
+<tr>
+  <td>UE5 FTF non-GPU (functional logic)</td>
+  <td>AC-V2-02, 03, 04, 05, 06, 07, 08, 13, 14, 15, 16, 19</td>
+  <td>GitHub-hosted Linux (no GPU, <code>-nullrhi</code>)</td>
+  <td>~8 min (UE5 startup 3 min + 12 tests × 30 s)</td>
+  <td>No (UE5 single-instance)</td>
+</tr>
+<tr>
+  <td>UE5 screenshot-diff (AC-V2-18)</td>
+  <td>AC-V2-18, AC-V2-01, AC-V2-13, AC-V2-14</td>
+  <td>Self-hosted GPU runner (RTX 3060, Windows or Linux)</td>
+  <td>~10 min (startup 3 min + 4 cameras × 30 s load + Python diff)</td>
+  <td>Parallel with v1 Playwright lane</td>
+</tr>
+<tr>
+  <td>UE5 perf gate (AC-V2-17)</td>
+  <td>AC-V2-17</td>
+  <td>Self-hosted GPU runner (RTX 3060)</td>
+  <td>~5 min (60 s flight loop + startup)</td>
+  <td>Sequential after screenshot-diff (same GPU runner)</td>
+</tr>
+<tr>
+  <td>v1 Playwright suite (AC-V2-20)</td>
+  <td>All aero-fighters/ specs (18 ACs)</td>
+  <td>GitHub-hosted Linux (Chromium headless)</td>
+  <td>~6 min (existing suite runtime)</td>
+  <td>Parallel with GPU lanes</td>
+</tr>
+<tr>
+  <td>Build + package (Windows + Linux)</td>
+  <td>AC-V2-09, AC-V2-10, AC-V2-11</td>
+  <td>Dedicated build runner (Windows + Linux native)</td>
+  <td>~15–25 min (UE5 incremental Shipping build)</td>
+  <td>Parallel with test lanes</td>
+</tr>
+</table>
+
+<div class="ok">
+<b>Realistic end-to-end estimate (tag CI):</b>
+Build (15–25 min, parallel) + Tests (max(8+5, 10+5, 6) = 15 min) = ~25 min.
+This is feasible if build and test lanes run in parallel. If build is sequential
+before tests, total becomes ~40–50 min — still acceptable for a tag (not a PR gate).
+</div>
+
+<div class="warn">
+<b>PR gate budget target: &lt; 10 minutes.</b> On every PR (not tag), run only:
+v1 Playwright suite (6 min, parallel) + UE5 FTF non-GPU logic tests (8 min, parallel).
+Screenshot-diff and perf tests are tag-only to protect the tile API budget and GPU
+runner time.
+</div>
+
+<h3>Per-Test Cost Estimates</h3>
+
+<table>
+<tr><th>AC</th><th>Estimated test walltime</th><th>Notes</th></tr>
+<tr><td>AC-V2-02 (georef)</td><td>30 s</td><td>FTF assertion, no GPU</td></tr>
+<tr><td>AC-V2-04 (controls)</td><td>45 s</td><td>3 s simulated time × safety margin</td></tr>
+<tr><td>AC-V2-05 (fire rate)</td><td>60 s</td><td>10 s simulated time + startup</td></tr>
+<tr><td>AC-V2-07 (hit detection)</td><td>20 s</td><td>100 repetitions, fast</td></tr>
+<tr><td>AC-V2-08 (crash)</td><td>15 s</td><td>Single teleport + state check</td></tr>
+<tr><td>AC-V2-13 (tile load gate)</td><td>60–90 s</td><td>4 cameras × up to 30 s wait</td></tr>
+<tr><td>AC-V2-17 (perf)</td><td>120 s</td><td>60 s flight + startup</td></tr>
+<tr><td>AC-V2-18 (screenshot-diff)</td><td>4–8 min</td><td>4 cameras with tile-load gate each</td></tr>
+</table>
+
+<!-- ================================================================= -->
+<h2>Inputs to DevOps</h2>
+
+<p>The following items are informational requirements that the
+<code>devops-engineer</code> must accommodate. These are not objections from the
+game-tester role — they are constraints the test infrastructure must satisfy.</p>
+
+<div class="meta">
+<b>Input DevOps-1 — Self-hosted GPU runner required for screenshot-diff and perf tests.</b><br>
+AC-V2-17 (60 FPS @ RTX 3060) and AC-V2-18 (screenshot-diff) require a physical GPU.
+GitHub-hosted runners are GPU-less on Linux. Recommendation: register the operator's
+dev machine (RTX 3060, Windows or Linux) as a self-hosted GitHub Actions runner.
+Label: <code>gpu-rtx3060</code>. Tag-only CI jobs (screenshot-diff, perf) must specify
+<code>runs-on: [self-hosted, gpu-rtx3060]</code>.
+</div>
+
+<div class="meta">
+<b>Input DevOps-2 — Google Maps Tiles API secret in CI.</b><br>
+The screenshot-diff test (AC-V2-18) and tile-load gate test (AC-V2-13) require the
+GCP Tile API key in CI. Store as GitHub Actions secret
+<code>GCP_TILE_API_KEY</code> (injected as env var). Do NOT expose in PR-triggered
+workflows (only tag-triggered). The key is the same one documented in D3 / OQ-03.
+</div>
+
+<div class="meta">
+<b>Input DevOps-3 — Git LFS for reference screenshots.</b><br>
+Approximately 20 MB of PNG reference images (4 cameras × ~5 MB) will be stored in
+<code>tests/aero-fighters-v2/screenshot-diff/references/</code> via Git LFS. The
+CI runner must have LFS configured. GitHub Actions LFS support is built-in; verify
+the self-hosted runner also has <code>git-lfs</code> installed.
+</div>
+
+<div class="meta">
+<b>Input DevOps-4 — CI matrix: two parallel lanes (v1 Playwright + v2 UE5).</b><br>
+Per D9 (parallel v1 evolution), the v1 Playwright suite must run in a separate CI
+lane from the v2 UE5 tests. Both must complete on the same tag CI run. Suggested
+GitHub Actions structure: two jobs in the same workflow — <code>v1-playwright</code>
+(GitHub-hosted Linux, Chromium) and <code>v2-ue5</code> (self-hosted GPU runner).
+Tag naming convention must distinguish v1 and v2: <code>aero-v1-X.Y.Z</code> for v1
+releases, <code>aero-v2-X.Y.Z</code> for v2.
+</div>
+
+<div class="meta">
+<b>Input DevOps-5 — Python test harness dependencies.</b><br>
+The screenshot-diff and perf harness require Python 3.10+ with packages:
+<code>scikit-image</code> (SSIM), <code>imagehash</code> (pHash), <code>Pillow</code>,
+<code>numpy</code>. These should be installed on the self-hosted GPU runner or via a
+<code>pip install -r requirements-test.txt</code> step in CI.
+</div>
+
+<div class="meta">
+<b>Input DevOps-6 — UE5 commandlet for non-GPU FTF.</b><br>
+Functional tests that don't need GPU (state machine, fire rate, georef assertions)
+must run via UE5 automation commandlet with <code>-nullrhi -unattended</code> flags.
+The exact invocation is:
+<code>UE4Editor-Cmd.exe AeroFightersV2 -ExecCmds="Automation RunAll;Quit"
+-unattended -nullrhi -log -logfile=ftf-results.txt</code>
+(Windows) or equivalent on Linux. DevOps must configure this step in the
+non-GPU CI job. FTF results file must be parsed and test counts validated.
+</div>
+
+<!-- ================================================================= -->
+<h2>Objections (Cross-Domain)</h2>
+
+<p>Items that fall outside the game-tester domain. Each is flagged with the correct
+agent and a brief rationale.</p>
+
+<div class="warn">
+<b>OBJECTION OBJ-01 — Game mechanics implementation (game-developer domain)</b><br>
+This report does not specify how the arcade flight model, cannon firing, AA gun AI, or
+crash detection are implemented. Those decisions belong exclusively to the
+<code>game-developer</code> agent (gameplay hat, separate invocation). The ACs in this
+report define observable pass conditions, not implementation details.
+</div>
+
+<div class="warn">
+<b>OBJECTION OBJ-02 — Asset art direction (game-designer domain)</b><br>
+Aircraft 3D model, AA gun visual design, and Cesium tile artistic quality are
+out of scope for this report. The screenshot-diff thresholds (SSIM 0.72 / 0.78) are
+a test-strategy proposal subject to game-designer aesthetic sign-off per Conflict C3
+in the discovery report.
+</div>
+
+<div class="warn">
+<b>OBJECTION OBJ-03 — CI runner provisioning (devops-engineer domain)</b><br>
+The "Inputs to DevOps" section above describes what tests need; it does not provision,
+configure, or manage the actual CI infrastructure. Runner setup, secrets storage, and
+workflow YAML authoring are devops-engineer responsibilities.
+</div>
+
+<div class="warn">
+<b>OBJECTION OBJ-04 — Architecture module layout (software-architect domain)</b><br>
+This report does not specify how the UE5 project should be structured internally
+(module boundaries, C++ headers, BP class hierarchy). Those decisions belong to
+<code>software-architect</code>. The test contract depends on observable interfaces
+(delegates, console variables, actor state) but does not dictate internal architecture.
+</div>
+
+<div class="warn">
+<b>OBJECTION OBJ-05 — UE 5.4 vs 5.5 upgrade decision</b><br>
+Risk R-01 surfaces a significant concern: Cesium for Unreal v2.21.1 is the last release
+supporting UE 5.4. This is an architecture/product decision, not a test decision.
+The game-tester <em>records</em> the risk; the <code>product-engineer</code> and
+<code>software-architect</code> must decide whether to accept D1 (UE 5.4 pin) or
+amend it to UE 5.5 before implementation starts. This is flagged as a
+<b>high-priority input to the synthesis stage</b>.
+</div>
+
+<!-- ================================================================= -->
+<h2>Summary: Top-3 Known UE5 Risks for This Project</h2>
+
+<table>
+<tr><th>#</th><th>Risk</th><th>Severity</th><th>Mitigation Summary</th></tr>
+<tr>
+  <td>1</td>
+  <td>Cesium for Unreal capped at v2.21.1 for UE 5.4 — legacy support from day one,
+  no future Cesium bug fixes available.</td>
+  <td><span class="tag risk-high">HIGH</span></td>
+  <td>Evaluate UE 5.5 upgrade before implementation. If D1 is firm, pin v2.21.1,
+  monitor issue tracker, accept risk in SPEC.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Lumen screen-space temporal artifacts in PIE and Shipping build first frames
+  cause false screenshot-diff failures.</td>
+  <td><span class="tag risk-med">MEDIUM</span></td>
+  <td>2-second settle period in testMode after tile-load gate before screenshot.
+  Disable Lumen temporal filter in testMode (<code>r.Lumen.ScreenProbeGather.TemporalFilter 0</code>).</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Headless CI on Linux GitHub-hosted runners has no GPU — screenshot-diff and perf
+  tests cannot run on standard CI without a self-hosted GPU runner.</td>
+  <td><span class="tag risk-med">MEDIUM</span></td>
+  <td>Register operator's RTX 3060 machine as self-hosted GitHub Actions runner for
+  tag-only GPU test jobs. PR gate uses non-GPU FTF only.</td>
+</tr>
+</table>
+
+<!-- ================================================================= -->
+<h2>Screenshot-Diff Threshold Recommendation (Summary)</h2>
+
+<table>
+<tr><th>Metric</th><th>Threshold</th><th>Status</th></tr>
+<tr><td>pHash Hamming distance (early reject)</td><td>&le; 20 / 64 bits</td>
+  <td>Provisional — firm after first 3 captures</td></tr>
+<tr><td>SSIM per-camera minimum</td><td>&ge; 0.72</td>
+  <td>Provisional — requires game-designer aesthetic sign-off (Conflict C3)</td></tr>
+<tr><td>SSIM mean across 4 cameras</td><td>&ge; 0.78</td>
+  <td>Provisional — calibrate from 3+ independent runs before SPEC lock</td></tr>
+</table>
+
+<!-- ================================================================= -->
+<p style="margin-top:3em;color:#666;font-size:0.85em;text-align:center;">
+Generated by <code>game-developer</code> agent wearing <code>game-tester</code> hat ·
+workflow <code>game-spec-definition</code> stage <code>qa_criteria</code> ·
+<code>2026-05-17T062053Z</code> · sidecar <code>.handoff.json</code> emitted adjacent.
+</p>
+
+</body>
+</html>

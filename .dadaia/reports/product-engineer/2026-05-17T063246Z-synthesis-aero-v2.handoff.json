@@ -1,0 +1,78 @@
+{
+  "schema_version": "handoff-v1",
+  "agent": "product-engineer",
+  "context": "tauan-games",
+  "produced_at": "2026-05-17T06:32:46Z",
+  "release_id": "aero-fighters-v2-photorealistic-inhauma-v1",
+  "artifact": {
+    "type": "report",
+    "path": "repos/tauan-games/.dadaia/reports/product-engineer/2026-05-17T063246Z-synthesis-aero-v2.html",
+    "content_hash": "99886d0a65286c687f3b72282bb2486d28cc41e3e7fd9a0ad67935509edca9ee"
+  },
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "message": "RR-01: UE 5.4 pin freezes Cesium for Unreal at v2.21.1 (Dec 2025), the last UE5.4-compatible release. Three independent specialists (gameplay, design, qa) surfaced this. Resolution requires Phase 4 grill Q1; synthesis recommends amending D1 to UE 5.5."
+    },
+    {
+      "severity": "CRITICAL",
+      "message": "RR-02: 4-week timeline is unanimous specialist concern. Each of the 5 specialists named specific cuts or concessions required. Resolution requires Phase 4 grill Q3 between (A) 4 weeks with cuts, (B) 6-8 weeks complete, or (C) split MVP-1 / MVP-2."
+    },
+    {
+      "severity": "CRITICAL",
+      "message": "RR-03: Distributing Google Photorealistic 3D Tiles in a .exe is a ToS gray-area. Resolution requires Phase 4 grill Q2; synthesis recommends Option B (Cesium World Terrain + Bing as primary tile source) since the georef seam makes this a Build.cs swap, not code."
+    },
+    {
+      "severity": "CRITICAL",
+      "message": "C3 auto-resolved without grill: spawn altitude 800m WGS84 was a unit-error (~7m AGL = underground). Synthesis corrects to 2095m WGS84 ellipsoidal height (~1283m AGL); CesiumGeoreference origin altitude 800m stays as the chart anchor (LD-04)."
+    },
+    {
+      "severity": "HIGH",
+      "message": "RR-04: Georef seam violation kills the if-slip rule. Mitigated by LD-15 (CI lint failing build if Cesium imports leak outside AeroFightersGeoref module) + AC-V2-14 round-trip cm-equality test."
+    },
+    {
+      "severity": "HIGH",
+      "message": "C2 auto-resolved: BP-first policy (D12) held over architect's C++ flight-tick recommendation. Game-developer wins matrix tiebreaker (UE5-specific). Compromise = arch's threshold values (0.30ms/class, 2.0ms aggregate) accepted as the promotion-trigger gate (LD-02)."
+    },
+    {
+      "severity": "HIGH",
+      "message": "C6 auto-resolved: screenshot-diff CI runs ONLY on git tags + nightly cron with budget gate. Per-PR screenshot-diff would exhaust $20/month cap in days. Devops wins matrix tiebreaker (cost / CI). Encoded in LD-10."
+    },
+    {
+      "severity": "HIGH",
+      "message": "C7 auto-resolved: if-slip becomes a 3-gate decision tree (Week 1 runner online, Week 2 flight visible, Week 3 60 FPS on at least one platform). Devops Week-1 gate + arch Week-3 gate stand additively (LD-21)."
+    },
+    {
+      "severity": "MEDIUM",
+      "message": "C12 (new conflict discovered during synthesis): architect's 7-module layout vs own concession to 5 modules. Auto-resolved in favor of 5 modules for MVP (Core, Georef, Gameplay-with-Audio-HUD, Combat, Harness) per architect's own §Concessions (LD-01)."
+    },
+    {
+      "severity": "MEDIUM",
+      "message": "C11 (new conflict discovered during synthesis): screenshot-diff threshold SSIM 0.92 (architect O1) vs 0.72/0.78 (qa proposal). Auto-resolved in favor of qa (matrix: game-tester wins test strategy); per-platform baselines eliminate the cross-platform shader-precision concern that motivated architect's tighter value (LD-14)."
+    },
+    {
+      "severity": "MEDIUM",
+      "message": "C10 (new conflict discovered during synthesis): CWT+Bing as fallback vs primary tile source. Folded into C4 / Q2; same operator decision resolves both."
+    },
+    {
+      "severity": "INFO",
+      "message": "C9 noted out-of-scope: dadaia-handoff-emitter SKILL.md disagrees with handoff-v1.schema.json on field names (summary vs message, sha256: prefix vs bare hex, input vs context+expected_artifact_type). Flagged for dadaia-workspace product-engineer to address; this synthesis follows the SCHEMA not the skill examples."
+    },
+    {
+      "severity": "INFO",
+      "message": "Total: 5 conflicts auto-resolved by matrix tiebreaker (C2, C6, C7, C11, C12); 1 auto-resolved as conditional-on-Q1 (C8); 4 escalated to Phase 4 grill (C1 Q1, C4 Q2, C5 Q3, plus new Q4 on F-35 likeness); 13 single-specialist critical findings folded into Locked Decisions or Risk Register without re-grilling."
+    }
+  ],
+  "decisions_required": [
+    "Q1 (Phase 4 grill, highest priority): Engine version - hold UE 5.4 (Option A, pin Cesium v2.21.1 + accept EOL risk) or amend D1 to UE 5.5 (Option B, take latest Cesium, gain upstream support). Synthesis recommends Option B.",
+    "Q2 (Phase 4 grill): Tile distribution legality - seek Google written authorization (Option A, ~1-3 week lifecycle), make CWT+Bing the primary tile source for distributed builds (Option B, no ToS risk, zero arch cost due to georef seam), or MVP is operator-only no public distribution (Option C). Synthesis recommends Option B.",
+    "Q3 (Phase 4 grill): Timeline + scope - accept unanimous cuts at 4 weeks Windows-only (Option A), extend to 6-8 weeks for full MVP (Option B), or split into MVP-1 flight only at 4 weeks + MVP-2 combat+CI+Linux at 8 weeks (Option C). Synthesis recommends Option A if Q1=B, Option C if combat-feel is operator priority.",
+    "Q4 (Phase 4 grill, lower priority): Aircraft IP - F-35-shaped procedural primitive (v1-style port, tiny IP risk on public distribution) or generic delta-wing fighter (zero IP risk, visual identity shift). Synthesis recommends F-35-shaped (Option A).",
+    "After Phase 4 grill: SPEC-authoring stage composes specs/releases/aero-fighters-v2-photorealistic-inhauma-v1/SPEC.md using the SPEC Skeleton in this synthesis + discovery D1-D18 + synthesis LD-01-LD-26 + Risk Register Draft RR-01-RR-10 + Q1-Q4 grill outcomes."
+  ],
+  "next_handoff": {
+    "agent": "product-engineer",
+    "context": "tauan-games",
+    "expected_artifact_type": "report"
+  }
+}

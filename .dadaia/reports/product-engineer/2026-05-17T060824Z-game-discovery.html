@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Discovery Report — aero-fighters-v2 (Photorealistic Inhaúma v1)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         max-width: 1100px; margin: 2em auto; padding: 0 1.5em; line-height: 1.55;
+         color: #1d1f23; background: #fafafa; }
+  h1 { border-bottom: 3px solid #234; padding-bottom: 0.35em; }
+  h2 { border-bottom: 1px solid #ccd; padding-bottom: 0.25em; margin-top: 2.2em;
+       color: #18305c; }
+  h3 { color: #2a4a8a; margin-top: 1.5em; }
+  h4 { color: #3b3b3b; margin-bottom: 0.3em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0;
+          background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  th, td { border: 1px solid #cdd2da; padding: 0.55em 0.75em; vertical-align: top;
+           text-align: left; }
+  th { background: #eef1f6; font-weight: 600; }
+  tr:nth-child(even) td { background: #f7f9fc; }
+  code { background: #eef0f3; padding: 0.1em 0.4em; border-radius: 3px;
+         font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; }
+  pre { background: #1d1f23; color: #f3f3f3; padding: 1em; border-radius: 4px;
+        overflow-x: auto; font-size: 0.9em; }
+  .meta { background: #eef4ff; border-left: 4px solid #2a4a8a; padding: 0.6em 1em;
+          margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .risk { background: #fff6ec; border-left: 4px solid #d2691e; padding: 0.6em 1em;
+          margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .danger { background: #fdecec; border-left: 4px solid #c0392b; padding: 0.6em 1em;
+            margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .ok { background: #ecf7ee; border-left: 4px solid #2e8b57; padding: 0.6em 1em;
+        margin: 1em 0; border-radius: 0 3px 3px 0; }
+  .tag { display: inline-block; padding: 0.05em 0.55em; border-radius: 10px;
+         font-size: 0.78em; font-weight: 600; margin-right: 0.3em; }
+  .tag-locked { background: #2e8b57; color: #fff; }
+  .tag-defer { background: #d2691e; color: #fff; }
+  .tag-risk { background: #c0392b; color: #fff; }
+  .tag-src { background: #2a4a8a; color: #fff; }
+  ul.compact li { margin: 0.15em 0; }
+  .ac-id { font-weight: 700; color: #18305c; font-family: "SF Mono", Menlo, monospace; }
+</style>
+</head>
+<body>
+
+<h1>Discovery Report — aero-fighters-v2</h1>
+<h3 style="margin-top:0; color:#666;">Photorealistic Inhaúma MG — UE5.4 + Cesium for Unreal — MVP v1</h3>
+
+<div class="meta">
+  <b>Workflow stage:</b> <code>discovery</code> (game-spec-definition.workflow.md v0.1.0)<br>
+  <b>Spec context:</b> <code>tauan-games</code><br>
+  <b>Release codename:</b> <code>aero-fighters-v2-photorealistic-inhauma-v1</code><br>
+  <b>Author:</b> <code>product-engineer</code><br>
+  <b>Produced at (UTC):</b> <code>2026-05-17T06:08:24Z</code><br>
+  <b>Engine ladder transition:</b> Degrau 2 (Three.js) → Degrau 3 (UE5) per
+  <code>specs/foundation/SPEC.md</code><br>
+  <b>Target site:</b> Inhaúma, MG — lat <code>-19.47</code>, lon <code>-44.46</code>, altitude reference <code>800 m</code><br>
+  <b>Next stage gate:</b> operator-approval before parallel specialist dispatch
+</div>
+
+<p>This report is the canonical input that the five downstream specialists
+(<code>software-architect</code>, <code>devops-engineer</code>, <code>game-developer</code>,
+<code>game-designer</code>, <code>game-tester</code>) will consume during the parallel analysis
+phase. It encodes every decision locked by the operator during the grill session, the open
+items deferred to PLAN, the explicit tensions surfaced, and the preliminary AC-V2-XX list
+that the synthesis stage will refine into the formal SPEC.md.</p>
+
+<p>This is <b>not</b> the SPEC. The SPEC is produced in the <code>synthesis</code> stage
+after all five specialists submit their reports.</p>
+
+<!-- =================================================================== -->
+<h2>Findings</h2>
+
+<h3>F1. Engine ladder transition is legitimate and authorized</h3>
+
+<p>The repository's <code>specs/foundation/SPEC.md</code> explicitly anticipates a Degrau 3
+(UE5) jogo named <code>aero-fighters-v2/</code> in the ladder table (line 30). This release
+is therefore <b>not</b> a foundation amendment — it executes a slot already reserved by the
+constitution. No foundation rewrite needed.</p>
+
+<table>
+  <tr><th>Foundation slot</th><th>This release fills it with</th></tr>
+  <tr><td>Degrau 3 engine</td><td>Unreal Engine 5.4 (Blueprints + C++)</td></tr>
+  <tr><td>Degrau 3 game directory</td><td><code>repos/tauan-games/aero-fighters-v2/</code> (NOT to be created in discovery)</td></tr>
+  <tr><td>Distribution policy gap</td>
+      <td>Foundation says "build pipeline ainda a definir" — this release closes it
+      (GitHub Releases zip, CI-built .exe + Linux binary, attached to git tag).</td></tr>
+</table>
+
+<h3>F2. Scope is "minimum-viable-combat", not "flight-only"</h3>
+
+<p>Grill answers Q1 and Q9 jointly redefine the MVP. Q1 said "flight + cannon + 1 AA gun"
+which contradicts a literal "flight-only" reading. The reconciled scope:</p>
+
+<div class="ok">
+<b>MVP scope (locked):</b> Photoreal flight over 20 km radius around Inhaúma MG +
+cannon (12.5 rounds/sec, ported from v1) + exactly one enemy archetype (static AA gun,
+ported from v1 design). Full arcade-combat surface (multiple enemy types, missiles,
+bombs, mission system) deferred to v2.1+.
+</div>
+
+<h3>F3. v1 (Three.js) and v2 (UE5) evolve in parallel — this is a CI concern</h3>
+
+<p>Grill answer Q10 locks <b>parallel evolution</b>: v1 keeps receiving features while v2
+is built. The existing Playwright suite (18 ACs for v1 per
+<code>repos/tauan-games/AGENTS.md</code>) must remain green throughout the entire v2
+development cycle. This creates a CI matrix obligation:</p>
+
+<ul class="compact">
+  <li>v1 lane: Node + Playwright on <code>aero-fighters/</code> — unchanged</li>
+  <li>v2 lane: UE5.4 headless + Cesium plugin + screenshot-diff tooling — new</li>
+  <li>Shared CI runner constraints: GPU availability for UE5 builds vs. CPU-only for Playwright</li>
+</ul>
+
+<h3>F4. Geographic + tile streaming budget = single largest external dependency</h3>
+
+<p>Grill Q3 + Q4 fix the playable region (20 km radius around <code>(-19.47, -44.46)</code>)
+and the Google Maps Tiles API spend cap (<b>USD 20 / month, hard</b>). The combination
+defines the photoreal acceptance bar's economic ceiling and forces an offline tile-cache
+strategy for dev workflow.</p>
+
+<div class="risk">
+<b>F4 implication:</b> tile cost is per-byte-served, not per-request. The dev cache,
+CI runs (screenshot-diff in F8), and operator playtesting all draw from the same budget.
+Cost-control telemetry must be in place before week 1 of implementation, not after.
+</div>
+
+<h3>F5. Flight model is intentionally arcade for MVP</h3>
+
+<p>Grill Q5: hybrid policy. MVP uses v1-style arcade physics (throttle / pitch / roll
+with fixed coefficients, no aerodynamic surfaces, no fuel model, no atmospheric density).
+JSBSim FDM integration is <b>explicitly deferred</b> to a later release — out of MVP scope.
+This is a major risk-reducer: it means no Cesium-Georeferencing-to-FDM coordinate
+transformation work in MVP.</p>
+
+<h3>F6. Dual primary platform commitment doubles CI/test work</h3>
+
+<p>Grill Q6: both Windows x64 native and Linux x64 native are <b>primary</b> targets, not
+"Linux best-effort via Proton". This decision substantially increases scope:</p>
+
+<ul class="compact">
+  <li>Two binary artifacts per tag (.exe and Linux ELF)</li>
+  <li>Cesium for Unreal supports Linux but with smaller test coverage than Windows</li>
+  <li>Screenshot-diff baselines must be generated and validated on both platforms (text
+      rendering, shader compiler differences, driver path differences)</li>
+  <li>CI must have both a Windows runner with a GPU and a Linux runner with a GPU</li>
+</ul>
+
+<h3>F7. Performance floor is a public commitment</h3>
+
+<p>Grill Q7: RTX 3060 @ 60 FPS @ 1080p is the <b>public floor</b>. This becomes a Non-Functional
+Requirement enforced by automated perf tests, not a soft target. The 3060 has 12 GB VRAM
+and Ampere architecture — UE5.4 + Lumen + Cesium tiles + Niagara FX should fit, but the
+budget needs explicit modeling by the architect.</p>
+
+<h3>F8. Acceptance bar for "photorealism" is objective (screenshot-diff)</h3>
+
+<p>Grill Q8: photoreal quality is gated by <b>automated screenshot-diff vs Google Earth
+reference imagery</b>. This is unusual and strong — it means:</p>
+
+<ul class="compact">
+  <li>Reference imagery must be captured and frozen (license/derivation status needs review)</li>
+  <li>Diff tolerance (per-pixel %, perceptual hash, SSIM threshold) is undefined — deferred to PLAN</li>
+  <li>The diff harness lives in <code>tests/</code> and must run on both Windows and Linux CI</li>
+  <li>The harness is itself a feature with non-trivial scope (rendering at fixed geo-poses,
+      shader determinism, sky/lighting time-of-day fix)</li>
+</ul>
+
+<h3>F9. Solo team, BP-first policy, 4-week timeline — these compound</h3>
+
+<p>Grill Q11 (4 weeks), Q14 (BP-first), Q15 (solo) combine into the single largest delivery
+risk on this release. See "Tensions" subsection below for explicit recommendations.</p>
+
+<h3>F10. Tensions explicitly surfaced</h3>
+
+<h4>Tension T1 — Scope vs identity (Q1 vs Q2)</h4>
+<p>Q1 framed MVP as "flight-only refined to cannon + 1 AA gun". Q2 stated long-term
+identity is "arcade combat (v1 style)". The risk is that "MVP is flight-only" gets quoted
+in isolation downstream. <b>Resolution</b>: SPEC and all specialist reports must consistently
+say <i>"MVP is the minimum-viable-combat slice of the arcade-combat long-term identity"</i>.
+No specialist may treat MVP as flight-only.</p>
+
+<h4>Tension T2 — Timeline aggression (Q11)</h4>
+<p>Four weeks from zero to a playable demo that includes: first-ever UE5 project for the
+operator, first-ever Cesium plugin integration, Linux + Windows native binary CI, and an
+automated photoreal screenshot-diff harness. This is <b>aggressive to the point of being a
+risk-on commitment</b>.</p>
+<div class="danger">
+<b>Recommendation to synthesis stage:</b> SPEC must include an explicit "if-slip" decision
+rule. Suggested wording: <i>"If by end of week 3 Cesium tiles do not render at 60 FPS on
+Linux, drop Linux from MVP and ship Windows-only; revisit Linux in v2.0.1."</i> The operator
+should validate this fallback or supply a stricter rule before SPEC approval.
+</div>
+
+<h4>Tension T3 — Parallel v1 evolution introduces CI matrix work (Q10)</h4>
+<p>Continuing to evolve v1 while building v2 means the existing Playwright suite must stay
+green throughout. devops-engineer must explicitly plan: shared workflow vs. split workflows,
+shared runner pool vs. separate, secrets isolation (the GCP key is v2-only), and tag-naming
+convention that distinguishes v1 from v2 builds (e.g., <code>aero-v1-*</code> vs
+<code>aero-v2-*</code>).</p>
+
+<!-- =================================================================== -->
+<h2>Decisões necessárias</h2>
+
+<p>The table below restructures the operator's grill answers into actionable decisions,
+each annotated with the specialist(s) who consume it. <span class="tag tag-locked">LOCKED</span>
+= operator decision, downstream may not override. <span class="tag tag-defer">DEFER</span>
+= deferred to PLAN or to a specialist. <span class="tag tag-risk">RISK</span> = flagged for
+risk register. <span class="tag tag-src">Q#</span> = grill answer source.</p>
+
+<table>
+<tr>
+  <th>#</th><th>Decision</th><th>Status</th><th>Consumed by</th><th>Source</th>
+</tr>
+<tr>
+  <td>D1</td>
+  <td><b>Engine and version</b>: UE 5.4 (most stable Cesium for Unreal support today).
+  No 5.3, no 5.5 prerelease.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>software-architect, devops-engineer, game-developer</td>
+  <td><span class="tag tag-src">Q13</span></td>
+</tr>
+<tr>
+  <td>D2</td>
+  <td><b>Tile streaming source</b>: Google Photorealistic 3D Tiles via Cesium for Unreal,
+  centered on Inhaúma MG <code>(-19.47, -44.46, 800m)</code>, 20 km playable radius.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>software-architect, game-developer, game-designer</td>
+  <td><span class="tag tag-src">Q3, Q4</span></td>
+</tr>
+<tr>
+  <td>D3</td>
+  <td><b>API key + cost</b>: operator's personal GCP project; hard cap
+  <b>USD 20 / month</b>; key in operator env + 1Password (item ID TBD in PLAN);
+  dev workflow uses an offline tile cache wherever feasible.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>devops-engineer, software-architect</td>
+  <td><span class="tag tag-src">Q4</span></td>
+</tr>
+<tr>
+  <td>D4</td>
+  <td><b>Flight model (MVP)</b>: arcade physics (v1-style throttle/pitch/roll), no
+  aerodynamic surfaces, no atmospheric model, no fuel model. JSBSim FDM <b>deferred</b>
+  beyond MVP.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>game-developer, software-architect</td>
+  <td><span class="tag tag-src">Q5</span></td>
+</tr>
+<tr>
+  <td>D5</td>
+  <td><b>Target platforms</b>: Windows x64 native AND Linux x64 native, both primary.
+  No macOS, no Proton dependency.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>devops-engineer, game-tester</td>
+  <td><span class="tag tag-src">Q6</span></td>
+</tr>
+<tr>
+  <td>D6</td>
+  <td><b>Performance floor</b>: RTX 3060 @ 60 FPS @ 1080p — public commitment. Automated
+  perf regression test required in CI.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>game-tester, software-architect, game-developer</td>
+  <td><span class="tag tag-src">Q7</span></td>
+</tr>
+<tr>
+  <td>D7</td>
+  <td><b>Photoreal acceptance bar</b>: objective screenshot-diff vs Google Earth references,
+  automated in the test suite.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>game-tester, game-designer</td>
+  <td><span class="tag tag-src">Q8</span></td>
+</tr>
+<tr>
+  <td>D8</td>
+  <td><b>MVP combat surface</b>: cannon at 12.5 rounds/sec (port from v1) + exactly one
+  enemy archetype (static AA gun, port from v1 design). No missiles, no bombs, no
+  air-to-air, no convoys, no nukes in MVP.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>game-developer, game-designer, game-tester</td>
+  <td><span class="tag tag-src">Q9</span></td>
+</tr>
+<tr>
+  <td>D9</td>
+  <td><b>v1 (Three.js) parallel evolution</b>: v1 keeps receiving features during v2 dev.
+  Test-suite isolation and CI matrix isolation required.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>devops-engineer, game-tester</td>
+  <td><span class="tag tag-src">Q10</span></td>
+</tr>
+<tr>
+  <td>D10</td>
+  <td><b>Timeline</b>: 4 weeks to playable MVP demo. <b>Risk-on commitment</b>; explicit
+  if-slip rule required in SPEC.</td>
+  <td><span class="tag tag-locked">LOCKED</span> <span class="tag tag-risk">RISK</span></td>
+  <td>product-engineer (synthesis), all specialists</td>
+  <td><span class="tag tag-src">Q11</span></td>
+</tr>
+<tr>
+  <td>D11</td>
+  <td><b>Distribution</b>: GitHub Releases zip. CI builds .exe + Linux binary, attaches
+  to git tag. No itch.io, no Steam, no store account for MVP.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>devops-engineer</td>
+  <td><span class="tag tag-src">Q12</span></td>
+</tr>
+<tr>
+  <td>D12</td>
+  <td><b>C++ vs Blueprints policy</b>: BP-first prototyping; promote hot paths to C++
+  when profiler shows BP overhead. SPEC must document the migration trigger.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>software-architect, game-developer</td>
+  <td><span class="tag tag-src">Q14</span></td>
+</tr>
+<tr>
+  <td>D13</td>
+  <td><b>Team composition</b>: solo (operator + Claude agents only). Simplifies
+  CI/secret-management; no shared-runner contention assumption.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>devops-engineer, product-engineer</td>
+  <td><span class="tag tag-src">Q15</span></td>
+</tr>
+<tr>
+  <td>D14</td>
+  <td><b>Long-term game identity</b>: arcade combat (v1 style). MVP is the minimum slice;
+  full combat lands in v2.1+. No simulator-trajectory ambiguity.</td>
+  <td><span class="tag tag-locked">LOCKED</span></td>
+  <td>all specialists (anti-drift framing)</td>
+  <td><span class="tag tag-src">Q2</span></td>
+</tr>
+<tr>
+  <td>D15</td>
+  <td><b>BP-to-C++ migration trigger threshold</b>: needs concrete profiler metric
+  (e.g., "if BP execution exceeds X µs/frame for any tick group, promote").</td>
+  <td><span class="tag tag-defer">DEFER</span></td>
+  <td>software-architect (define) + game-developer (validate)</td>
+  <td>derived from <span class="tag tag-src">Q14</span></td>
+</tr>
+<tr>
+  <td>D16</td>
+  <td><b>Screenshot-diff tolerance</b>: per-pixel %, perceptual hash, or SSIM threshold —
+  exact value undefined.</td>
+  <td><span class="tag tag-defer">DEFER</span></td>
+  <td>game-tester (propose) + game-designer (validate aesthetic acceptability)</td>
+  <td>derived from <span class="tag tag-src">Q8</span></td>
+</tr>
+<tr>
+  <td>D17</td>
+  <td><b>If-slip rule</b>: explicit fallback if Cesium tiles do not render at 60 FPS on
+  Linux by end of week 3.</td>
+  <td><span class="tag tag-defer">DEFER</span> <span class="tag tag-risk">RISK</span></td>
+  <td>product-engineer (synthesis) + operator (final wording)</td>
+  <td>derived from <span class="tag tag-src">Q5, Q6, Q11</span></td>
+</tr>
+<tr>
+  <td>D18</td>
+  <td><b>1Password item ID</b> for the GCP Tile API key.</td>
+  <td><span class="tag tag-defer">DEFER</span></td>
+  <td>devops-engineer (consumes during PLAN)</td>
+  <td>derived from <span class="tag tag-src">Q4</span></td>
+</tr>
+</table>
+
+<!-- =================================================================== -->
+<h2>Acceptance Criteria Draft</h2>
+
+<p>Preliminary <code>AC-V2-XX</code> list. The synthesis stage will refine these into the
+formal SPEC.md Section 7 — exact phrasing, pass conditions, and test ownership may shift
+after specialist input. Twelve ACs proposed covering all locked decisions.</p>
+
+<table>
+<tr>
+  <th>ID</th><th>Acceptance criterion</th><th>Pass condition (preliminary)</th><th>Owner (initial)</th>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-01</span></td>
+  <td>Cesium for Unreal streams Google Photorealistic 3D Tiles in the 20 km radius
+      around Inhaúma MG.</td>
+  <td>Launching the MVP build and standing the aircraft above
+      <code>(-19.47, -44.46, 800m)</code> shows recognizable photoreal terrain within
+      5 seconds; no missing tile placeholders at default LOD.</td>
+  <td>game-developer + game-tester</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-02</span></td>
+  <td>Georeferenced origin is exactly the Inhaúma reference point.</td>
+  <td>The CesiumGeoreference actor reports
+      <code>(-19.47, -44.46, 800.0)</code> in <code>OriginLatitude</code>,
+      <code>OriginLongitude</code>, <code>OriginHeight</code>. Aircraft world position
+      <code>(0,0,0)</code> maps back to that geo-coordinate via inverse transform.</td>
+  <td>game-tester (automated geo-coord assertion)</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-03</span></td>
+  <td>Arcade flight model with v1-style controls (throttle, pitch, roll, yaw).</td>
+  <td>Bound inputs match v1's binding manifest (port). Speed, altitude, attitude all
+      respond within one frame of input. No JSBSim integration present in MVP build.</td>
+  <td>game-developer</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-04</span></td>
+  <td>Cannon fires at 12.5 rounds per second.</td>
+  <td>Over a 10-second sustained-fire test, projectile-spawn-count is
+      <code>125 ± 2</code>. Projectile lifetime, muzzle position, and aim cone match v1.</td>
+  <td>game-developer + game-tester</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-05</span></td>
+  <td>One AA gun enemy archetype is placed and behaves as in v1's design.</td>
+  <td>One static AA gun is spawned at a documented map position; it tracks the player
+      within range, fires within v1 design parameters, and is destroyable by cannon fire.</td>
+  <td>game-developer + game-designer</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-06</span></td>
+  <td>Photoreal acceptance: screenshot-diff vs Google Earth references passes
+      tolerance threshold.</td>
+  <td>At a documented set of fixed geo-poses (≥ 4), engine renders match a frozen
+      reference set within the diff tolerance defined by D16. Tolerance and metric
+      (per-pixel / SSIM / perceptual hash) are PLAN deliverables.</td>
+  <td>game-tester (harness) + game-designer (aesthetic sign-off)</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-07</span></td>
+  <td>Performance floor: RTX 3060 @ 1080p @ 60 FPS.</td>
+  <td>Headless perf test on RTX 3060 hardware (or documented equivalent in CI) sustains
+      ≥ 60 FPS averaged over a 60-second flight loop above Inhaúma. Frame-time 99th
+      percentile ≤ 18.5 ms.</td>
+  <td>game-tester + software-architect (budget) + game-developer (Lumen/Niagara tuning)</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-08</span></td>
+  <td>Windows x64 native binary builds and runs.</td>
+  <td>CI on a git tag produces <code>aero-fighters-v2-win64-vX.Y.Z.zip</code> attached
+      to the GitHub Release. The .exe launches on a clean Windows 11 machine without
+      runtime installer prerequisites beyond what UE5.4 documents as standard.</td>
+  <td>devops-engineer</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-09</span></td>
+  <td>Linux x64 native binary builds and runs.</td>
+  <td>CI on a git tag produces <code>aero-fighters-v2-linux64-vX.Y.Z.zip</code> attached
+      to the GitHub Release. The binary launches on a clean Ubuntu 24.04 machine without
+      Proton or Wine. <b>Subject to D17 if-slip rule.</b></td>
+  <td>devops-engineer</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-10</span></td>
+  <td>Google Maps Tiles API monthly spend stays within USD 20 hard cap.</td>
+  <td>GCP billing alert configured at 50 %, 80 %, and 100 % of the cap. Operator
+      receives email on each tier. Dev workflow defaults to offline tile cache when the
+      cache is populated.</td>
+  <td>devops-engineer</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-11</span></td>
+  <td>v1 (Three.js) Playwright suite continues to pass.</td>
+  <td>The existing 18 Aero Strike / 8 T-Rex Playwright ACs (per <code>AGENTS.md</code>)
+      run in CI on the same git tag and exit zero. No flake increase attributable to
+      v2 work.</td>
+  <td>game-tester + devops-engineer</td>
+</tr>
+<tr>
+  <td><span class="ac-id">AC-V2-12</span></td>
+  <td>BP-to-C++ migration trigger is documented and observed.</td>
+  <td>SPEC carries the trigger rule defined in D15. At MVP closure, profiler evidence
+      is attached for any hot path that crossed the threshold and was (or was not)
+      promoted, with rationale.</td>
+  <td>software-architect + game-developer</td>
+</tr>
+</table>
+
+<!-- =================================================================== -->
+<h2>Open Questions Deferred to PLAN</h2>
+
+<p>Items the operator did <b>not</b> resolve during the grill, either by design (because a
+specialist must propose first) or by oversight. The synthesis stage must surface each one
+so the PLAN explicitly closes it.</p>
+
+<table>
+<tr>
+  <th>#</th><th>Open question</th><th>Owner to propose answer</th><th>Why deferred</th>
+</tr>
+<tr>
+  <td>OQ-01</td>
+  <td>Screenshot-diff tolerance metric and threshold (per-pixel %? SSIM ≥ ?? Perceptual hash?)</td>
+  <td>game-tester (harness) + game-designer (aesthetic ceiling)</td>
+  <td>Requires technical and aesthetic experimentation; cannot be guessed in discovery.</td>
+</tr>
+<tr>
+  <td>OQ-02</td>
+  <td>BP-to-C++ migration trigger threshold (concrete µs/frame or % CPU value)</td>
+  <td>software-architect (propose) + game-developer (validate against early prototype)</td>
+  <td>Needs a baseline measurement on Lumen + Cesium combined cost before a number is meaningful.</td>
+</tr>
+<tr>
+  <td>OQ-03</td>
+  <td>1Password item ID for the GCP Tile API key</td>
+  <td>operator (provide) → devops-engineer (consume)</td>
+  <td>Not yet created; trivial to resolve once 1Password vault is opened.</td>
+</tr>
+<tr>
+  <td>OQ-04</td>
+  <td>If-slip decision rule: exact text and exact thresholds (week 3? tiles not rendering vs not at 60 FPS? Linux only or also Cesium pinning?)</td>
+  <td>product-engineer (synthesis draft) + operator (approve)</td>
+  <td>Operator must own the wording; synthesis can propose phrasing.</td>
+</tr>
+<tr>
+  <td>OQ-05</td>
+  <td>Offline tile cache strategy: filesystem layout, size cap, eviction policy, populate command</td>
+  <td>devops-engineer + software-architect</td>
+  <td>Cost-driven design — needs concrete tile-volume measurements.</td>
+</tr>
+<tr>
+  <td>OQ-06</td>
+  <td>Reference imagery provenance and license for screenshot-diff baselines</td>
+  <td>game-tester + product-engineer (legal-adjacent)</td>
+  <td>Google Earth imagery has license terms; whether internal CI baselines are permitted
+      use is non-trivial.</td>
+</tr>
+<tr>
+  <td>OQ-07</td>
+  <td>Time-of-day / sun position fix for screenshot-diff determinism</td>
+  <td>game-developer + game-tester</td>
+  <td>Photoreal tiles bake some lighting; engine-side sky must be locked or shots will
+      always diff.</td>
+</tr>
+<tr>
+  <td>OQ-08</td>
+  <td>CI runner specification (which GPU? which OS images? self-hosted vs GitHub-hosted?)</td>
+  <td>devops-engineer</td>
+  <td>UE5.4 + Cesium plus a 3060 perf gate constrains the runner; GitHub-hosted Linux
+      runners don't ship GPUs.</td>
+</tr>
+<tr>
+  <td>OQ-09</td>
+  <td>Mod/asset budget for the AA gun and aircraft (procedural vs imported FBX vs Quixel)</td>
+  <td>game-designer</td>
+  <td>Foundation forbids external assets in web games; UE5 game policy is silent —
+      needs explicit choice.</td>
+</tr>
+<tr>
+  <td>OQ-10</td>
+  <td>Cesium for Unreal plugin version pin (commit / release tag)</td>
+  <td>software-architect + devops-engineer</td>
+  <td>Cesium ships frequent releases; UE 5.4 compat matrix must be pinned for reproducible builds.</td>
+</tr>
+<tr>
+  <td>OQ-11</td>
+  <td>Aircraft model source (port v1's geometry, use a generic UE5 sample, or commission)</td>
+  <td>game-designer + game-developer</td>
+  <td>v1 aircraft is procedural Three.js geometry — not directly portable to UE5.</td>
+</tr>
+<tr>
+  <td>OQ-12</td>
+  <td>Map coordinate system for AA gun placement (geo-coord JSON? in-editor placement? Both?)</td>
+  <td>game-designer + game-developer</td>
+  <td>Affects whether the AA gun position is data or hand-placed; impacts test reproducibility.</td>
+</tr>
+<tr>
+  <td>OQ-13</td>
+  <td>Tag/branch naming to distinguish v1 and v2 builds (e.g., <code>aero-v1-1.2.0</code>
+      vs <code>aero-v2-0.1.0</code>)</td>
+  <td>devops-engineer</td>
+  <td>Required to keep CI matrix unambiguous during parallel evolution (D9).</td>
+</tr>
+</table>
+
+<!-- =================================================================== -->
+<h2>Specialists to Dispatch</h2>
+
+<p>Per the <code>game-spec-definition</code> workflow (<code>parallel_group: specialists</code>),
+five specialists run in parallel after this discovery report is approved. Each gets this
+HTML as input plus the focused brief below.</p>
+
+<h3>1. software-architect</h3>
+<div class="meta">
+<b>Expected output:</b> <code>.dadaia/reports/tauan-games/software-architect/&lt;ts&gt;-game-arch.html</code><br>
+<b>Focused inputs from this report:</b>
+<ul class="compact">
+  <li>D1 (UE 5.4 pin) — validate against current Cesium for Unreal compat matrix; objection allowed with evidence per coordination matrix.</li>
+  <li>D2 + D7 (georeferenced 20 km + photoreal bar) — define module boundaries: who owns CesiumGeoreference, who owns the screenshot-diff harness integration.</li>
+  <li>D4 (arcade flight model) — propose the flight-control module API and where it sits relative to UE5 Pawn vs Character base.</li>
+  <li>D6 (60 FPS @ 1080p on 3060) — produce a preliminary GPU budget table (Cesium tiles X ms, Lumen Y ms, Niagara Z ms, headroom).</li>
+  <li>D12 + D15 (BP-first, migration trigger) — propose concrete µs/frame trigger value for OQ-02.</li>
+  <li>Tension T2 — opine on whether the 4-week timeline is architecturally feasible given D6.</li>
+</ul>
+</div>
+
+<h3>2. devops-engineer</h3>
+<div class="meta">
+<b>Expected output:</b> <code>.dadaia/reports/tauan-games/devops-engineer/&lt;ts&gt;-game-devops.html</code><br>
+<b>Focused inputs from this report:</b>
+<ul class="compact">
+  <li>D3 + D11 + OQ-08 — propose CI runner topology (Windows + Linux + GPU), secret storage for the GCP key, GitHub Release packaging workflow.</li>
+  <li>D5 (dual primary platforms) — propose how Linux native binary is packaged and verified.</li>
+  <li>D9 + OQ-13 (parallel v1 evolution) — propose tag/branch naming, separate-vs-shared workflows, CI matrix.</li>
+  <li>D10 + Tension T2 — propose risk-mitigation for 4-week timeline at the build-pipeline level (cache strategies, prebuilt UE5 engine binaries, etc.).</li>
+  <li>OQ-05 (offline tile cache strategy) — propose layout, size cap, populate command.</li>
+  <li>OQ-10 (Cesium plugin pin) — propose exact version + lockfile mechanism.</li>
+</ul>
+</div>
+
+<h3>3. game-developer</h3>
+<div class="meta">
+<b>Expected output:</b> <code>.dadaia/reports/tauan-games/game-developer/&lt;ts&gt;-gameplay-analysis.html</code><br>
+<b>Required sections per workflow:</b> "Mechanic Viability", "JSBSim Feasibility"<br>
+<b>Focused inputs from this report:</b>
+<ul class="compact">
+  <li>D4 — confirm arcade flight model is implementable in BP within timeline; "JSBSim Feasibility" section must note deferral per D4 and articulate why JSBSim is not in MVP scope.</li>
+  <li>D8 — confirm cannon + AA gun port from v1 is technically viable; note any UE5 idiom changes vs Three.js (projectile pooling, hitscan vs physics, etc.).</li>
+  <li>D12 — opine on BP-first as a working policy; propose any hot-path candidates already visible at design time.</li>
+  <li>OQ-07 + OQ-11 + OQ-12 — feed back proposed answers from a gameplay-implementation lens.</li>
+</ul>
+</div>
+
+<h3>4. game-designer</h3>
+<div class="meta">
+<b>Expected output:</b> <code>.dadaia/reports/tauan-games/game-designer/&lt;ts&gt;-design-analysis.html</code><br>
+<b>Required sections per workflow:</b> "Map Feasibility", "Asset Pipeline", "Research Findings"<br>
+<b>Focused inputs from this report:</b>
+<ul class="compact">
+  <li>D2 (Inhaúma 20 km radius) — "Map Feasibility": does the 20 km radius contain enough recognizable photoreal landmarks to make the MVP feel like Inhaúma? Are there license-sensitive structures inside the radius?</li>
+  <li>D7 — propose aesthetic acceptability ceiling for OQ-01 (screenshot-diff tolerance).</li>
+  <li>OQ-06 — research Google Earth imagery licensing for use as CI baselines.</li>
+  <li>OQ-09 + OQ-11 — "Asset Pipeline": propose source(s) for aircraft and AA gun assets given the foundation's no-external-assets bias.</li>
+  <li>D8 + D14 — confirm visual identity is consistent with v1's arcade-combat feel.</li>
+</ul>
+</div>
+
+<h3>5. game-tester</h3>
+<div class="meta">
+<b>Expected output:</b> <code>.dadaia/reports/tauan-games/game-tester/&lt;ts&gt;-acceptance-criteria.html</code><br>
+<b>Required sections per workflow:</b> "Acceptance Criteria", "Known UE5 Risks"<br>
+<b>Focused inputs from this report:</b>
+<ul class="compact">
+  <li>The AC-V2-01 through AC-V2-12 draft above — refine pass conditions, propose any missing ACs, opine on which are CI-automatable vs operator-eyeball.</li>
+  <li>D7 + OQ-01 — propose tolerance metric and threshold for screenshot-diff (this is the single largest test-strategy decision).</li>
+  <li>D6 + AC-V2-07 — propose perf-gate test methodology (headless? actual GPU? synthetic flight path?).</li>
+  <li>D9 + AC-V2-11 — propose CI matrix that keeps v1 Playwright and v2 UE5 harness both green.</li>
+  <li>"Known UE5 Risks" — list known UE5.4 + Cesium pitfalls relevant to MVP scope (LOD popping, shader compile stutter, Linux Vulkan vs OpenGL quirks, etc.).</li>
+</ul>
+</div>
+
+<!-- =================================================================== -->
+<h2>Conflict Predictions</h2>
+
+<p>Applying the Decision Authority Matrix (<code>game-agents-coordination.md</code>) to the
+locked decisions above, the following conflicts are <b>predictable</b> during synthesis and
+should be pre-anticipated by the product-engineer.</p>
+
+<table>
+<tr>
+  <th>#</th><th>Predicted conflict</th><th>Parties</th>
+  <th>Matrix tie-breaker</th><th>Pre-mitigation</th>
+</tr>
+<tr>
+  <td>C1</td>
+  <td><b>BP-first vs C++-first.</b> software-architect is likely to argue for C++-first
+  on the flight-tick hot path to make D6 (60 FPS) defensible. game-developer is bound by
+  D12 (BP-first) and will resist.</td>
+  <td>software-architect ↔ game-developer</td>
+  <td>game-developer wins on UE5-specific decisions per matrix.</td>
+  <td>Synthesis SPEC must crisply quote D12 and OQ-02; architect's role is to propose
+  the trigger threshold, not to overturn the policy.</td>
+</tr>
+<tr>
+  <td>C2</td>
+  <td><b>Cesium plugin version pin.</b> software-architect picks for compat; devops-engineer
+  picks for build reproducibility; both will reasonably propose different commits.</td>
+  <td>software-architect ↔ devops-engineer</td>
+  <td>devops-engineer wins on CI/build per matrix.</td>
+  <td>Synthesis SPEC defers to devops on the exact pin; architect documents the compat
+  envelope.</td>
+</tr>
+<tr>
+  <td>C3</td>
+  <td><b>Screenshot-diff tolerance ceiling.</b> game-tester wants a tight tolerance to make
+  D7 meaningful; game-designer wants slack so legitimate lighting/cloud variation does not
+  fail builds.</td>
+  <td>game-tester ↔ game-designer</td>
+  <td>game-tester wins on test strategy per matrix; game-designer's objection has weight
+  only with concrete visual evidence (per "objeção sem evidência" rule).</td>
+  <td>Synthesis SPEC mandates the tolerance be empirically derived from N reference
+  captures over X days, not picked a priori.</td>
+</tr>
+<tr>
+  <td>C4</td>
+  <td><b>Linux as primary vs Windows-only fallback.</b> When the if-slip rule (OQ-04 /
+  D17) fires, devops-engineer may push to drop Linux to ship on time; product-engineer
+  owns the call.</td>
+  <td>devops-engineer ↔ product-engineer (and operator)</td>
+  <td>product-engineer (operator) has final word on scope per matrix.</td>
+  <td>Synthesis SPEC must encode the if-slip rule and name the decision-maker (operator)
+  so the call is not made unilaterally at week 3.</td>
+</tr>
+<tr>
+  <td>C5</td>
+  <td><b>Asset source for AA gun and aircraft.</b> Foundation forbids external assets in
+  web games but is silent on UE5. game-designer may propose Quixel/Marketplace; game-developer
+  may prefer simple primitives for timeline; product-engineer must rule.</td>
+  <td>game-designer ↔ game-developer</td>
+  <td>game-designer wins on visual/asset choices per matrix; game-developer's objection
+  needs timeline evidence to be considered.</td>
+  <td>Synthesis SPEC adds an explicit "asset policy for UE5" subsection (new vs
+  foundation's web-asset rule).</td>
+</tr>
+<tr>
+  <td>C6</td>
+  <td><b>Perf-gate test methodology.</b> game-tester may want a headless gate; game-developer
+  may argue headless UE5 hides shader-compile costs that matter at runtime.</td>
+  <td>game-tester ↔ game-developer</td>
+  <td>game-tester wins on test strategy; game-developer's objection has weight with
+  profiler evidence.</td>
+  <td>Synthesis SPEC requires a two-tier perf gate: cheap headless lane in PR CI, full
+  windowed run on tag CI.</td>
+</tr>
+<tr>
+  <td>C7</td>
+  <td><b>Cost cap enforcement vs developer ergonomics.</b> devops-engineer will enforce
+  the USD 20 cap with alerts; game-developer may want unrestricted dev iteration. The
+  cache strategy (OQ-05) is the negotiation point.</td>
+  <td>devops-engineer ↔ game-developer</td>
+  <td>devops-engineer wins on CI/cost per matrix.</td>
+  <td>Synthesis SPEC mandates the offline cache as the default dev workflow; live tile
+  fetch is opt-in with a documented runtime flag.</td>
+</tr>
+</table>
+
+<!-- =================================================================== -->
+<h2>Traceability Index</h2>
+
+<p>Each locked decision and acceptance criterion above is annotated with its grill-answer
+source (<code>Q#</code>) so downstream agents can audit provenance. Decisions deferred to
+PLAN are tagged <span class="tag tag-defer">DEFER</span> and listed in
+"Open Questions Deferred to PLAN" with named owners.</p>
+
+<p>Risk items flagged for the SPEC risk register: <b>D10</b> (timeline aggression),
+<b>D17</b> (if-slip rule), and the compound risk in Finding F9 (solo + BP-first + 4 weeks).</p>
+
+<!-- =================================================================== -->
+<h2>Next Stage Trigger</h2>
+
+<div class="meta">
+After operator approval of this report (workflow gate
+<code>kind: operator-approval</code>), the orchestrator dispatches the five specialists
+in parallel per <code>game-spec-definition.workflow.md</code>. Their reports feed back into
+the <code>synthesis</code> stage where this product-engineer composes
+<code>specs/releases/aero-fighters-v2-photorealistic-inhauma-v1/SPEC.md</code>.
+</div>
+
+<p style="margin-top:3em; color:#666; font-size:0.85em; text-align:center;">
+Generated by <code>product-engineer</code> · workflow <code>game-spec-definition</code> stage
+<code>discovery</code> · 2026-05-17T06:08:24Z · sidecar
+<code>.handoff.json</code> emitted adjacent.
+</p>
+
+</body>
+</html>
