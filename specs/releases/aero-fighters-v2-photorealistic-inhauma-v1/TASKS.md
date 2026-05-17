@@ -91,8 +91,9 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
 - **T-013 [x] DONE — Author UE5 .gitignore (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/.gitignore`. Standard UE5 ignore list (Binaries/, DerivedDataCache/, Intermediate/, Saved/, etc.).
   Closure: Epic canonical UE5 entries + .env.local / *-tile-cache / Python venv / StagedBuilds / timestamped report artifacts. All entries commented.
 
-- **T-014 [-] IN PROGRESS — Pre-author repo .gitattributes for git-lfs (paper).**
+- **T-014 [x] DONE — Pre-author repo .gitattributes for git-lfs (paper).**
   Owner: `game-developer` (ops hat). Path: `.gitattributes` (repo root of tauan-games). Tracks binary asset types via LFS so future agents don't have to remember per-file.
+  Closure: Patterns scoped to aero-fighters-v2/** only; v1 trees unaffected.
 
 ---
 
