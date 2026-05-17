@@ -1,0 +1,117 @@
+# T-002 — aero-fighters-v2-photorealistic-inhauma-v1
+# Self-hosted runner healthcheck probe. Dispatched manually by the operator
+# after completing physical runner registration (see
+# aero-fighters-v2/docs/runner-setup-linux.md).
+# Trigger: workflow_dispatch ONLY — this is a manual probe, never auto-run.
+# DO NOT add push/pr triggers; this workflow is a one-shot verification tool.
+
+name: aero-v2 runner healthcheck
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  healthcheck:
+    name: Runner Healthcheck
+    runs-on: [self-hosted, gpu-rtx3060, ue5-builder]
+
+    env:
+      # Presence check only — value is never logged.
+      # Wires the secret so GitHub validates the binding even though
+      # this workflow does not consume the key.
+      GOOGLE_MAPS_TILES_API_KEY: ${{ secrets.GOOGLE_MAPS_TILES_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── GPU detection ────────────────────────────────────────────────────────
+      - name: GPU info (Linux)
+        if: runner.os == 'Linux'
+        continue-on-error: false
+        run: nvidia-smi
+
+      - name: GPU info (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: false
+        shell: pwsh
+        run: Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion | Format-Table -AutoSize
+
+      # ── UE5 install path (informational) ─────────────────────────────────────
+      - name: UE5 install path (Linux/macOS)
+        if: runner.os != 'Windows'
+        continue-on-error: false
+        run: |
+          echo "UE_INSTALL_PATH=${UE_INSTALL_PATH:-<not set — expected before Phase 2>}"
+
+      - name: UE5 install path (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: false
+        shell: pwsh
+        run: |
+          $val = if ($Env:UE_INSTALL_PATH) { $Env:UE_INSTALL_PATH } else { "<not set — expected before Phase 2>" }
+          Write-Output "UE_INSTALL_PATH=$val"
+
+      # ── Runner identity ───────────────────────────────────────────────────────
+      - name: Runner identity
+        continue-on-error: false
+        run: echo "Runner name= ${{ runner.name }}"
+
+      # ── CUDA toolkit version (informational, non-blocking) ──────────────────
+      - name: NVCC version (Linux)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: nvcc --version || echo "nvcc not found — CUDA toolkit not required for UE5 runtime"
+
+      - name: NVCC version (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          try { nvcc --version } catch { Write-Output "nvcc not found — CUDA toolkit not required for UE5 runtime" }
+
+      # ── Secret presence check (boolean only — value NEVER logged) ────────────
+      - name: Google Maps Tiles API key presence
+        continue-on-error: false
+        run: |
+          if [ -n "$GOOGLE_MAPS_TILES_API_KEY" ]; then
+            echo "GOOGLE_MAPS_TILES_API_KEY: PRESENT"
+          else
+            echo "GOOGLE_MAPS_TILES_API_KEY: ABSENT — add the GitHub Secret before nightly harness runs"
+          fi
+        shell: bash
+
+      # ── Collect healthcheck log for artifact upload ───────────────────────────
+      - name: Write healthcheck log
+        continue-on-error: false
+        shell: bash
+        run: |
+          LOG_FILE="runner-healthcheck.log"
+          {
+            echo "=== aero-v2 runner healthcheck ==="
+            echo "Date:        $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo "Runner name: ${{ runner.name }}"
+            echo "Runner OS:   ${{ runner.os }}"
+            echo "Run ID:      ${{ github.run_id }}"
+            echo ""
+            echo "GPU:"
+            if command -v nvidia-smi &>/dev/null; then nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>&1; else echo "nvidia-smi not on PATH"; fi
+            echo ""
+            echo "UE_INSTALL_PATH: ${UE_INSTALL_PATH:-<not set>}"
+            echo ""
+            echo "NVCC:"
+            if command -v nvcc &>/dev/null; then nvcc --version 2>&1; else echo "nvcc not found"; fi
+            echo ""
+            if [ -n "$GOOGLE_MAPS_TILES_API_KEY" ]; then echo "GOOGLE_MAPS_TILES_API_KEY: PRESENT"; else echo "GOOGLE_MAPS_TILES_API_KEY: ABSENT"; fi
+          } > "$LOG_FILE"
+          cat "$LOG_FILE"
+
+      - name: Upload healthcheck artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-healthcheck-${{ github.run_id }}
+          path: runner-healthcheck.log
+          retention-days: 14
