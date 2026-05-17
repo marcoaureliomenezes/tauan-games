@@ -70,11 +70,14 @@ the first-wave dependencies that will unblock Phase 1 of the PLAN.
   Owner: `game-developer` (lint hat). Authors `aero-fighters-v2/Tools/lint-cesium-isolation.sh` enforcing LD-15 / SPEC §10. CI wiring lands in Wave 2.
   Closure: Vacuous-pass verified. Wave 2 wires into .github/workflows/aero-v2-ci.yml.
 
-- **T-007 [-] IN PROGRESS — Author AC-V2 traceability matrix (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tests/AcceptanceCriteria.md`. Maps every AC-V2-XX to test path + method (FTF / Python harness / manual). Filled per Wave by the wave-owning agent.
+- **T-007 [x] DONE — Author AC-V2 traceability matrix (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tests/AcceptanceCriteria.md`. Maps every AC-V2-XX to test path + method (FTF / Python harness / manual). Filled per Wave by the wave-owning agent.
+  Closure: 17 AC rows mapped (AC-V2-01..20 + LOC-W/L), all placeholder Test names for wave-owning agents to fill. Commit a24da73.
 
-- **T-008 [-] IN PROGRESS — Pre-author screenshot-diff harness skeleton (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tools/screenshot-diff-harness.py`. Implements SSIM + pHash core, UE5 launch parameterized. Wired into CI in Wave 7.
+- **T-008 [x] DONE — Pre-author screenshot-diff harness skeleton (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tools/screenshot-diff-harness.py`. Implements SSIM + pHash core, UE5 launch parameterized. Wired into CI in Wave 7.
+  Closure: compute_ssim/compute_phash_distance/score_pair/aggregate_results/write_html_report fully implemented; launch_shipping_build_and_capture() stubbed (NotImplementedError, Wave 5). --self-check exits 2 (missing deps) with install instructions. py_compile OK. Commit a24da73.
 
-- **T-009 [-] IN PROGRESS — Pre-author perf harness skeleton (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tools/perf-harness.py`. Frame-time series + percentile assertion. UE5 launch parameterized.
+- **T-009 [x] DONE — Pre-author perf harness skeleton (paper).** Owner: `game-developer` (tester hat). Path: `aero-fighters-v2/Tools/perf-harness.py`. Frame-time series + percentile assertion. UE5 launch parameterized.
+  Closure: parse_frame_times_csv/compute_mean_fps/compute_percentile/assert_ac_v2_17/write_html_report fully implemented; run_scripted_flight_and_capture() stubbed (NotImplementedError, Wave 6). --self-check exits 0 (stdlib only, no external deps). py_compile OK. Commit a24da73.
 
 - **T-010 [-] IN PROGRESS — Pre-author tile-cache populate skeleton (paper).** Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/Tools/tile-cache-populate.py`. Hits Google Map Tiles API for the 20km radius around Inhaúma; populates the offline cache per LD-22 / RR-V2-07. Auth-stubbed until operator key lands.
 
