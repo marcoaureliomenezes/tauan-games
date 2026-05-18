@@ -103,7 +103,7 @@ new-task-id mappings.
   headless Godot run in this workflow yet (deferred to Wave 5 if
   RR-V2-G-09 verification passes).
 
-- **T-G-04 [ ] OPEN — Stand up Godot 4 project + scene tree skeleton.**
+- **T-G-04 [-] IN PROGRESS — Stand up Godot 4 project + scene tree skeleton.**
   Owner: `game-developer`. Create `aero-fighters-v2/project.godot` via
   Godot project manager (Forward+ renderer, MSAA 2×, physics tick 60,
   window 1920×1080). Scaffold scene tree per SPEC §10: `Main.tscn`,
