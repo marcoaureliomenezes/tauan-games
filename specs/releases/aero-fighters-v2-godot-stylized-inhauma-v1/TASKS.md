@@ -315,6 +315,16 @@ new-task-id mappings.
   Consumed by T-G-08's Python driver. Verifies RR-V2-G-09 (Godot
   headless on `ubuntu-latest` GH-hosted runner).
 
+- **T-G-24 [-] IN PROGRESS — Wave 3 pawn + flight + cameras + HUD (FR-V2-G-03/04/09/10).**
+  Owner: `game-developer`. Implements: `scripts/flight_arcade.gd` (RigidBody3D arcade
+  flight model per OQ-V2-G-08 + FR-V2-G-04), `scripts/player_controller.gd` (spawn +
+  initial velocity), `scripts/camera_controller.gd` (Chase SpringArm3D + Cockpit
+  Camera3D + cycle_camera action), `scripts/hud.gd` (8 HUD elements wired to live data
+  per FR-V2-G-10). Updates `scenes/Player.tscn` (adds SpringArm3D + cameras + scripts)
+  and `scenes/HUD.tscn` (wires hud.gd). Adds Player + HUD instances to `scenes/Main.tscn`.
+  Flight constants ported from v1 config.js PLAYER block via GameConfig.tres.
+  Depends on T-G-04 + T-G-05 (both DONE).
+
 - **T-G-23 [ ] OPEN — Perf-capture GDScript driver.**
   Owner: `game-developer` (tester hat). Path:
   `aero-fighters-v2/Tools/perf_capture.gd`. Invoked via
