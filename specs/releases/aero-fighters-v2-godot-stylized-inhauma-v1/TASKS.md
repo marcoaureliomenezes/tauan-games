@@ -265,7 +265,7 @@ new-task-id mappings.
   RR-V2-G-03. Verify ≥ 90% of OSM downtown buildings present
   (AC-V2-G-15). Depends on T-G-04 + T-G-06 + T-G-16.
 
-- **T-G-18 [ ] OPEN — Foliage scatter via GDScript + MultiMeshInstance3D.**
+- **T-G-18 [-] IN PROGRESS — Foliage scatter via GDScript + MultiMeshInstance3D.**
   Owner: `game-developer`. Implement `scripts/foliage_spawner.gd`
   (Autoload) that reads `Content/World/inhauma-landuse.json` (from
   T-G-06) and scatters hand-modeled cel-friendly low-poly tree + bush
