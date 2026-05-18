@@ -1,4 +1,8 @@
-[gd_scene load_steps=1 format=3 uid="uid://main_scene"]
+[gd_scene load_steps=4 format=3 uid="uid://main_scene"]
+
+[ext_resource type="PackedScene" uid="uid://cel_shader_pass" path="res://scenes/CelShaderPass.tscn" id="1_cel_pass"]
+[ext_resource type="PackedScene" uid="uid://player_scene" path="res://scenes/Player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://hud_scene" path="res://scenes/HUD.tscn" id="3_hud"]
 
 [node name="Main" type="Node3D"]
 
@@ -9,17 +13,25 @@ rotation_degrees = Vector3(-45.0, 45.0, 0.0)
 light_energy = 1.3
 shadow_enabled = true
 
-; Camera3D placeholder — replaced by Player chase/cockpit cameras at runtime
+; Camera3D fallback — inactive; Player's chase camera takes current=true on _ready
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 80, 200)
+current = false
 
-; --- Future children (added in later waves) ---
-; Player (Player.tscn instance) — added in T-G-10/T-G-15 (Wave 3)
-; Terrain3D node — added in T-G-16 (Wave 2)
-; BuildingsRoot (MultiMeshInstance3D) — added in T-G-17 (Wave 2)
-; FoliageRoot (MultiMeshInstance3D) — added in T-G-18 (Wave 2)
+; Player aircraft — RigidBody3D with flight_arcade.gd + camera_controller.gd.
+; Spawns at 2095 m above world origin per AC-V2-G-03 (player_controller._ready).
+[node name="Player" parent="." instance=ExtResource("2_player")]
+
+; HUD CanvasLayer — 8 elements per FR-V2-G-10; hud.gd polls Player each _process.
+[node name="HUD" parent="." instance=ExtResource("3_hud")]
+
+; CelShaderPass: fullscreen CanvasLayer (T-G-10 lane — do not touch)
+[node name="CelShaderPass" parent="." instance=ExtResource("1_cel_pass")]
+
+; --- Future children ---
+; Terrain3D node — operator finishes import in editor (T-G-16, Wave 2 DONE)
+; BuildingsRoot (MultiMeshInstance3D) — added in T-G-17 (Wave 4)
+; FoliageRoot (MultiMeshInstance3D) — added in T-G-18 (Wave 4)
 ; Factory target (Targets/Factory.tscn) — added in T-G-20 (Wave 4)
 ; Base target (Targets/Base.tscn) — added in T-G-20 (Wave 4)
 ; AAGunCluster target (Targets/AAGunCluster.tscn) — added in T-G-20 (Wave 4)
-; HUD (HUD.tscn CanvasLayer) — added in Wave 3
-; CelShaderPass (CelShaderPass.tscn CanvasLayer) — added in T-G-10 (Wave 3)
