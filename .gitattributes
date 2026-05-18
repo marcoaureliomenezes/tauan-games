@@ -1,13 +1,11 @@
 # aero-fighters-v2 — binary asset tracking via git-lfs.
 # Scoped to aero-fighters-v2/** to avoid disturbing v1 (aero-fighters/, tauan-trex/) trees.
 # Release: aero-fighters-v2-godot-stylized-inhauma-v1
-
 # ---------------------------------------------------------------------------
 # 3D mesh source files — Godot-native import formats
 # ---------------------------------------------------------------------------
 aero-fighters-v2/**/*.gltf filter=lfs diff=lfs merge=lfs -text
 aero-fighters-v2/**/*.glb  filter=lfs diff=lfs merge=lfs -text
-
 # ---------------------------------------------------------------------------
 # Heightmaps and textures
 # .png: heightmap 16-bit PNGs (Content/World/inhauma-heightmap.png) +
@@ -17,24 +15,24 @@ aero-fighters-v2/**/*.glb  filter=lfs diff=lfs merge=lfs -text
 # ---------------------------------------------------------------------------
 aero-fighters-v2/**/*.png filter=lfs diff=lfs merge=lfs -text
 aero-fighters-v2/**/*.tif filter=lfs diff=lfs merge=lfs -text
-
 # ---------------------------------------------------------------------------
 # Audio — CC0 SFX and jet engine drone (FR-V2-G-14)
 # ---------------------------------------------------------------------------
 aero-fighters-v2/**/*.ogg filter=lfs diff=lfs merge=lfs -text
 aero-fighters-v2/**/*.wav filter=lfs diff=lfs merge=lfs -text
-
+# ---------------------------------------------------------------------------
+# OSM extract — binary protobuf; too large for regular git objects
+# ---------------------------------------------------------------------------
+aero-fighters-v2/**/*.pbf filter=lfs diff=lfs merge=lfs -text
 # ---------------------------------------------------------------------------
 # Test baselines — cel-shaded screenshot references (AC-V2-G-19)
 # Explicit path to avoid matching any stray PNGs outside the baseline set.
 # ---------------------------------------------------------------------------
 aero-fighters-v2/Tests/Baselines/**/*.png filter=lfs diff=lfs merge=lfs -text
-
 # ---------------------------------------------------------------------------
 # Closure demo capture (AC-V2-MVP-SUMMARY)
 # ---------------------------------------------------------------------------
 aero-fighters-v2/Reports/closure/*.mp4 filter=lfs diff=lfs merge=lfs -text
-
 # ---------------------------------------------------------------------------
 # Notes on what is intentionally NOT in LFS:
 #
