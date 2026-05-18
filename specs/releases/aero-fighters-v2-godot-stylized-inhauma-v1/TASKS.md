@@ -210,7 +210,7 @@ new-task-id mappings.
   GH-hosted lint-only. Reference SPEC §10. File currently tagged
   `<!-- REWRITE PENDING -->` from prior pivot.
 
-- **T-G-13 [ ] OPEN — Godot-shaped `.gitignore`.**
+- **T-G-13 [-] IN PROGRESS — Godot-shaped `.gitignore`.**
   Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/.gitignore`.
   Replace UE5-shaped patterns with Godot patterns: `.godot/`,
   `*.import`, `*.uid`, `*.translation.csv.import`, `addons/*/cache/`,
