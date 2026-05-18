@@ -181,7 +181,7 @@ new-task-id mappings.
   message to cite Godot 4 + Iris Xe G7 80EU @ 1920×1080 native (no
   upscale). Thresholds unchanged: mean ≥ 60 FPS + p99 ≤ 18.5 ms.
 
-- **T-G-10 [ ] OPEN — Cel-shader: screen-space CanvasLayer pass + per-mesh Toon material.**
+- **T-G-10 [-] IN PROGRESS — Cel-shader: screen-space CanvasLayer pass + per-mesh Toon material.**
   Owner: `game-developer`. Create `scenes/CelShaderPass.tscn` +
   `shaders/cel_screen_space.gdshader`. Implement per FR-V2-G-11: diffuse
   step-quantization (3 bands), Sobel-edge outline on depth + normal,
