@@ -103,7 +103,7 @@ new-task-id mappings.
   headless Godot run in this workflow yet (deferred to Wave 5 if
   RR-V2-G-09 verification passes).
 
-- **T-G-04 [-] IN PROGRESS — Stand up Godot 4 project + scene tree skeleton.**
+- **T-G-04 [x] DONE — Stand up Godot 4 project + scene tree skeleton.**
   Owner: `game-developer`. Create `aero-fighters-v2/project.godot` via
   Godot project manager (Forward+ renderer, MSAA 2×, physics tick 60,
   window 1920×1080). Scaffold scene tree per SPEC §10: `Main.tscn`,
@@ -191,7 +191,7 @@ new-task-id mappings.
   `StandardMaterial3D` with Toon shading enabled for the aircraft +
   buildings + targets (used by T-G-15, T-G-17, T-G-20).
 
-- **T-G-11 [-] IN PROGRESS — Rewrite `.env.local.example` for Godot.**
+- **T-G-11 [ ] OPEN — Rewrite `.env.local.example` for Godot.**
   Owner: `game-developer` (ops hat). Path:
   `aero-fighters-v2/.env.local.example`. Drop all UE5-related
   (UE_INSTALL_PATH), Cesium (CESIUM_OFFLINE_TILES, CESIUM_TILE_CACHE_DIR),

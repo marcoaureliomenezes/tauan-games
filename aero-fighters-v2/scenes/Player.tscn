@@ -1,0 +1,27 @@
+[gd_scene load_steps=1 format=3 uid="uid://player_scene"]
+
+; Player aircraft pawn.
+; Root is RigidBody3D per OQ-V2-G-08 resolution in SPEC — provides physics-driven
+; flight response. Scripts attached in T-G-10/T-G-15 (Wave 3): flight_arcade.gd,
+; cannon.gd, crash_detector.gd, camera_controller.gd.
+
+[node name="Player" type="RigidBody3D"]
+gravity_scale = 0.0
+
+; Aircraft mesh placeholder — replaced with hand-modeled .gltf in T-G-15 (Wave 3)
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+
+; Collision shape placeholder — sized to aircraft bounding box in T-G-15
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+
+; Cannon muzzle mount — cannon.gd fires bullets from this position
+[node name="MuzzleSocket" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -3)
+
+; Chase camera anchor — SpringArm3D + Camera3D attached in T-G-10/camera_controller.gd
+[node name="ChaseCamSocket" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 8)
+
+; Cockpit / nose camera anchor — forward-looking Camera3D for cannon aim
+[node name="CockpitCamSocket" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -2.5)

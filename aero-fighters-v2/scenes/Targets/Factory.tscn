@@ -1,0 +1,7 @@
+[gd_scene load_steps=1 format=3 uid="uid://factory_scene"]
+
+; Factory target — HP 20, static, smokestack GPUParticles3D pre-hit.
+; Script factory.gd attached in T-G-20 (Wave 4).
+; Destruction: mega-explosion layered GPUParticles3D (fireball + smoke + debris), 4 s.
+
+[node name="Factory" type="StaticBody3D"]

@@ -1,0 +1,121 @@
+[gd_scene load_steps=1 format=3 uid="uid://hud_scene"]
+
+; HUD — 8 Control elements per FR-V2-G-10.
+; Wired to live data in Wave 3 (T-G-10 / camera_controller / flight_arcade).
+
+[node name="HUD" type="CanvasLayer"]
+layer = 10
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+; 1. Airspeed (m/s)
+[node name="Airspeed" type="Label" parent="Control"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 44.0
+text = "SPD: 0 m/s"
+
+; 2. Altitude AGL (from Terrain3D sample)
+[node name="AltitudeAGL" type="Label" parent="Control"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 50.0
+offset_right = 220.0
+offset_bottom = 74.0
+text = "ALT: 0 m AGL"
+
+; 3. Throttle %
+[node name="Throttle" type="Label" parent="Control"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 80.0
+offset_right = 200.0
+offset_bottom = 104.0
+text = "THR: 0%"
+
+; 4. Cannon ammo
+[node name="Ammo" type="Label" parent="Control"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 110.0
+offset_right = 200.0
+offset_bottom = 134.0
+text = "AMMO: INF"
+
+; 5. Crosshair (cel-friendly vector style)
+[node name="Crosshair" type="Control" parent="Control"]
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -16.0
+offset_top = -16.0
+offset_right = 16.0
+offset_bottom = 16.0
+
+; 6. Score
+[node name="Score" type="Label" parent="Control"]
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -200.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 44.0
+text = "SCORE: 0"
+horizontal_alignment = 2
+
+; 7. Mission progress (3 target icons + Mission N counter)
+[node name="MissionProgress" type="Control" parent="Control"]
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -200.0
+offset_top = 50.0
+offset_right = -20.0
+offset_bottom = 130.0
+
+[node name="MissionN" type="Label" parent="Control/MissionProgress"]
+layout_mode = 0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 180.0
+offset_bottom = 24.0
+text = "Mission 1"
+horizontal_alignment = 2
+
+[node name="TargetIcons" type="Label" parent="Control/MissionProgress"]
+layout_mode = 0
+offset_left = 0.0
+offset_top = 30.0
+offset_right = 180.0
+offset_bottom = 54.0
+text = "[F] [B] [AA]"
+horizontal_alignment = 2
+
+; 8. Boundary warning (shown at 18 km from origin per FR-V2-G-19)
+[node name="BoundaryWarning" type="Label" parent="Control"]
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.0
+anchor_right = 0.5
+anchor_bottom = 0.0
+offset_left = -150.0
+offset_top = 20.0
+offset_right = 150.0
+offset_bottom = 44.0
+text = "RESTRICTED ZONE"
+modulate = Color(1, 0.1, 0.1, 1)
+visible = false
+horizontal_alignment = 1

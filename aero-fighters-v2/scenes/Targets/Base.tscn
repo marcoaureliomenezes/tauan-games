@@ -1,0 +1,7 @@
+[gd_scene load_steps=1 format=3 uid="uid://base_scene"]
+
+; Base target — HP 28, static, radar dish AnimationPlayer + barracks geometry.
+; Script base.gd attached in T-G-20 (Wave 4).
+; Destruction: multi-stage — radar destroyed first at HP 8, main building at HP 0.
+
+[node name="Base" type="StaticBody3D"]

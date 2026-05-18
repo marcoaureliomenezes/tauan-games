@@ -1,0 +1,25 @@
+[gd_scene load_steps=1 format=3 uid="uid://main_scene"]
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-45.0, 45.0, 0.0)
+light_energy = 1.3
+shadow_enabled = true
+
+; Camera3D placeholder — replaced by Player chase/cockpit cameras at runtime
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 80, 200)
+
+; --- Future children (added in later waves) ---
+; Player (Player.tscn instance) — added in T-G-10/T-G-15 (Wave 3)
+; Terrain3D node — added in T-G-16 (Wave 2)
+; BuildingsRoot (MultiMeshInstance3D) — added in T-G-17 (Wave 2)
+; FoliageRoot (MultiMeshInstance3D) — added in T-G-18 (Wave 2)
+; Factory target (Targets/Factory.tscn) — added in T-G-20 (Wave 4)
+; Base target (Targets/Base.tscn) — added in T-G-20 (Wave 4)
+; AAGunCluster target (Targets/AAGunCluster.tscn) — added in T-G-20 (Wave 4)
+; HUD (HUD.tscn CanvasLayer) — added in Wave 3
+; CelShaderPass (CelShaderPass.tscn CanvasLayer) — added in T-G-10 (Wave 3)

@@ -1,0 +1,16 @@
+[gd_scene load_steps=1 format=3 uid="uid://aa_cluster_scene"]
+
+; AA Gun Cluster target — 3 guns, HP 6 each, fires back at player.
+; Script aa_cluster.gd attached in T-G-20 (Wave 4).
+; Base interval: 1.7 s, range: 220 m. Cluster destroyed when all 3 guns gone.
+
+[node name="AAGunCluster" type="Node3D"]
+
+[node name="AAGun1" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0, 0)
+
+[node name="AAGun2" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="AAGun3" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 0, 0)
