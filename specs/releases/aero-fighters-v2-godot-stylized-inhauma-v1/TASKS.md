@@ -226,7 +226,7 @@ new-task-id mappings.
   `Content/World/inhauma-heightmap.png` explicit). Drop any UE5-asset-
   specific patterns (`*.uasset`, `*.umap`) if present.
 
-- **T-G-15 [ ] OPEN — Hand-modeled aircraft → cel-friendly Godot material.**
+- **T-G-15 [-] IN PROGRESS — Hand-modeled aircraft → cel-friendly Godot material.**
   Owner: `game-developer` + `game-designer` (hat). Depends on T-G-10.
   The hand-modeled delta-wing geometry from `Content/Aircraft/HandModeled.md`
   (carried unchanged from T-S-03 / T-003) imports into Godot as
