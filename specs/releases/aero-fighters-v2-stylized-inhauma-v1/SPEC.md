@@ -648,6 +648,8 @@ Cross-references for the PLAN author:
 | OQ-V2-S-07 | MVP-2 demo-script: which Inhaúma flight path showcases the topology for the operator showcase? Pass over downtown grid + church + AA cluster engagement is the candidate. | game-designer hat + operator |
 | OQ-V2-S-08 | Path-forward decision document for Windows + macOS builds (out of scope here; future-release input). | product-engineer (future release) |
 | OQ-V2-S-09 | Inhaúma personal-anchor narrative: operator did not state connection. SPEC treats it as "operator's chosen anchor" without sentiment attribution. If meaningful, operator may amend. | operator |
+| OQ-V2-S-10 | Future Cesium-for-Unreal transition path documented 2026-05-17. Order: (1) Scenario A — Cesium for georef math only (no tile streaming, $0, anytime); (2) Scenario B — Cesium World Terrain mesh + own buildings (Cesium ion free tier, anytime); (3) Scenario D — Full Cesium Photoreal + Lumen (only when RTX 3060 or cloud GPU is in play). Scenario C (Photoreal at low LOD + cel-shader) explicitly skipped due to aesthetic mix. Decision deferred to a future v2.X release. | product-engineer (future release) |
+| OQ-V2-S-11 | Cloud GPU rental (RunPod / Vast.ai / Hyperstack at ~$0.20/hr for RTX 3060 class) is a documented option to unblock Cesium photoreal in the future. Streaming-based workflow: code locally on Inspiron, run UE5 editor + builds on rented box via Parsec/Moonlight. ~$5/mo (CI-only) to ~$30/mo (daily dev) range. Operator deferred 2026-05-17 in favor of "start simple, transition later". Capture in v2.1 planning if Cesium revival is desired. | product-engineer (future release) |
 
 ---
 
