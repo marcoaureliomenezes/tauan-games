@@ -236,7 +236,7 @@ new-task-id mappings.
   `StandardMaterial3D` with Toon shading enabled (paired with the
   `CelShaderPass`). License unchanged (own-work).
 
-- **T-G-16 [ ] OPEN — Install Terrain3D addon + import SRTM heightmap.**
+- **T-G-16 [-] IN PROGRESS — Install Terrain3D addon + import SRTM heightmap.**
   Owner: `game-developer`. Download Terrain3D addon (latest stable from
   godot-asset-library or GitHub release); verify CC0 or MIT license per
   RR-V2-G-05 before commit. Place under `aero-fighters-v2/addons/terrain_3d/`.
