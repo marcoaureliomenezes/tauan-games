@@ -1,0 +1,222 @@
+# aero-fighters-v2 — Godot CI (lint-only, GH-hosted)
+#
+# What this workflow does:
+#   1. gdscript-lint   — gdtoolkit gdlint on all .gd files under aero-fighters-v2/
+#   2. scene-validity  — Godot 4.4 headless --quit: verifies project.godot + scenes parse
+#   3. python-lint     — flake8 + black --check on aero-fighters-v2/Tools/
+#   4. lfs-verify      — confirms Git LFS pointers resolve (no dangling pointer-only files)
+#
+# Why no perf/visual gate:
+#   Per ADR-V2-G-01 + ADR-V2-G-02 (carryover of cancelled stylized-v1 ADR-V2-S-06),
+#   S1 CI strategy is lint-only on GH-hosted ubuntu-latest. Visual + perf gates run
+#   on the operator's Iris Xe G7 locally pre-commit. Headless Godot scene export is
+#   deferred to Wave 5 (T-G-22) pending RR-V2-G-09 verification.
+#
+# Build target: Linux x64 only.
+
+name: aero-fighters-v2 Godot CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aero-fighters-v2/**"
+      - ".github/workflows/aero-v2-godot-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "aero-fighters-v2/**"
+      - ".github/workflows/aero-v2-godot-ci.yml"
+
+concurrency:
+  group: aero-v2-godot-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1 — GDScript lint via gdtoolkit
+  # Estimated run time: < 1 min (pip install + gdlint on .gd files)
+  # ---------------------------------------------------------------------------
+  gdscript-lint:
+    name: GDScript Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-gdtoolkit-4.3.3
+          restore-keys: |
+            ${{ runner.os }}-pip-gdtoolkit-
+
+      - name: Install gdtoolkit
+        run: pip install gdtoolkit==4.3.3
+
+      - name: Find .gd files
+        id: find-gd
+        run: |
+          count=$(find aero-fighters-v2 -name "*.gd" 2>/dev/null | wc -l)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Run gdlint
+        if: steps.find-gd.outputs.count != '0'
+        run: |
+          find aero-fighters-v2 -name "*.gd" -print0 \
+            | xargs -0 gdlint
+        # continue-on-error is NOT set — lint errors fail the job.
+        # Warnings are allowed; only errors (exit code != 0) block the PR.
+
+      - name: No .gd files yet (skip)
+        if: steps.find-gd.outputs.count == '0'
+        run: echo "No .gd files found under aero-fighters-v2/ — skipping gdlint."
+
+  # ---------------------------------------------------------------------------
+  # Job 2 — Scene validity: Godot 4.4 headless --quit
+  # Estimated run time: ~1 min (cached binary download + headless boot)
+  # ---------------------------------------------------------------------------
+  scene-validity:
+    name: Scene Validity (Godot 4.4 headless)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Check for project.godot
+        id: has-project
+        run: |
+          if [ -f "aero-fighters-v2/project.godot" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cache Godot 4.4 binary
+        if: steps.has-project.outputs.present == 'true'
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/godot
+          key: godot-4.4-stable-linux-x64
+
+      - name: Download Godot 4.4 stable headless
+        if: >-
+          steps.has-project.outputs.present == 'true' &&
+          steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.local/bin
+          wget -q \
+            https://github.com/godotengine/godot/releases/download/4.4-stable/Godot_v4.4-stable_linux.x86_64.zip \
+            -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-extract
+          mv /tmp/godot-extract/Godot_v4.4-stable_linux.x86_64 ~/.local/bin/godot
+          chmod +x ~/.local/bin/godot
+
+      - name: Verify Godot binary
+        if: steps.has-project.outputs.present == 'true'
+        run: ~/.local/bin/godot --version
+
+      - name: Run scene validity check
+        if: steps.has-project.outputs.present == 'true'
+        run: |
+          # --headless --quit asks Godot to load the project and immediately exit.
+          # A non-zero exit code means project.godot or a referenced scene failed to parse.
+          ~/.local/bin/godot \
+            --headless \
+            --quit \
+            --path aero-fighters-v2/
+        # Godot may emit non-fatal stderr lines; we only care about exit code.
+
+      - name: No project.godot yet (skip)
+        if: steps.has-project.outputs.present != 'true'
+        run: echo "aero-fighters-v2/project.godot not committed yet — skipping scene validity."
+
+  # ---------------------------------------------------------------------------
+  # Job 3 — Python lint: flake8 + black --check on Tools/
+  # Estimated run time: < 1 min
+  # ---------------------------------------------------------------------------
+  python-lint:
+    name: Python Lint (Tools/)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-flake8-black-7.1.0-24.4.2
+          restore-keys: |
+            ${{ runner.os }}-pip-flake8-black-
+
+      - name: Install linters
+        run: pip install flake8==7.1.0 black==24.4.2
+
+      - name: Check for Python files in Tools/
+        id: has-tools
+        run: |
+          count=$(find aero-fighters-v2/Tools -name "*.py" 2>/dev/null | wc -l)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Run flake8
+        if: steps.has-tools.outputs.count != '0'
+        run: |
+          flake8 aero-fighters-v2/Tools/ \
+            --max-line-length=100 \
+            --extend-ignore=E203
+
+      - name: Run black (check mode)
+        if: steps.has-tools.outputs.count != '0'
+        run: |
+          black --check --line-length=100 aero-fighters-v2/Tools/
+
+      - name: No Python files in Tools/ (skip)
+        if: steps.has-tools.outputs.count == '0'
+        run: echo "No .py files found under aero-fighters-v2/Tools/ — skipping python-lint."
+
+  # ---------------------------------------------------------------------------
+  # Job 4 — LFS verify: confirm all LFS pointers resolve
+  # Estimated run time: < 1 min
+  # ---------------------------------------------------------------------------
+  lfs-verify:
+    name: LFS Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout with LFS
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Check LFS pointer resolution
+        run: |
+          # git lfs ls-files lists all LFS-tracked files.
+          # Files that failed to fetch will show as "-" (pointer-only) in
+          # the output instead of "*" (smudged/resolved).
+          # We fail if any pointer-only entries remain after checkout with lfs:true.
+          pointer_only=$(git lfs ls-files --long 2>/dev/null | grep "^-" || true)
+          if [ -n "$pointer_only" ]; then
+            echo "::error::The following LFS files are pointer-only (not resolved):"
+            echo "$pointer_only"
+            exit 1
+          fi
+          total=$(git lfs ls-files 2>/dev/null | wc -l)
+          echo "LFS files resolved: $total"

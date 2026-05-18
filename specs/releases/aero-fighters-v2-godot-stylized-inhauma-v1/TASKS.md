@@ -94,7 +94,7 @@ new-task-id mappings.
   keep the C# promotion path open (NFR-V2-G-05). Blocks all subsequent
   work.
 
-- **T-G-02 [-] IN PROGRESS — Create lint-only GH-hosted CI workflow for Godot release.**
+- **T-G-02 [x] DONE — Create lint-only GH-hosted CI workflow for Godot release.**
   Owner: `devops-engineer`. Path: `.github/workflows/aero-v2-godot-ci.yml`.
   Runs on `ubuntu-latest`: gdlint + gdformat check on `scripts/` and
   `autoload/`, scene-file validity check (Python script that loads each
