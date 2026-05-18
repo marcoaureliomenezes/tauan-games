@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- last amended 2026-05-18 — foundation amendment for ADR-V2-G-02 (4-degrau ladder, Godot 3, UE5 4) -->
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -26,23 +27,23 @@
 <body>
 
 <h1>Architecture Memory — tauan-games</h1>
-<p class="meta">Última atualização: 2026-05-17 · Derivado de: <code>specs/foundation/SPEC.md</code></p>
+<p class="meta">Última atualização: 2026-05-18 · Derivado de: <code>specs/foundation/SPEC.md</code></p>
 
 <section id="overview">
   <h2>Visão geral</h2>
   <p>O repositório <code>tauan-games</code> é um portfólio de jogos independentes, organizados por
-  uma <strong>ladder de três engines</strong> de complexidade crescente. Cada jogo vive em uma pasta
+  uma <strong>ladder de quatro engines</strong> de complexidade crescente. Cada jogo vive em uma pasta
   isolada na raiz do repo e compartilha apenas a infraestrutura transversal de testes
   Playwright (<code>tests/</code> + <code>package.json</code>) e o diretório de libs vendoradas
   (<code>vendor/</code>). A arquitetura não tem servidor, build pipeline ou orquestração runtime —
-  os artefatos são <code>index.html</code> + JS estático servidos por <code>npx serve</code> e,
-  no futuro, executáveis UE5 standalone.</p>
+  os artefatos são <code>index.html</code> + JS estático servidos por <code>npx serve</code>,
+  binários Godot 4 standalone e, no futuro, executáveis UE5 standalone.</p>
 </section>
 
 <section id="engine-ladder">
-  <h2>Ladder das três engines</h2>
-  <p>Toda novidade de jogo é classificada em um destes três degraus. Pular degraus ou introduzir
-  uma quarta engine exige decisão explícita do operador via <code>product-engineer</code>.</p>
+  <h2>Ladder das quatro engines</h2>
+  <p>Toda novidade de jogo é classificada em um destes quatro degraus. Pular degraus ou introduzir
+  uma quinta engine exige decisão explícita do operador via <code>product-engineer</code>.</p>
   <table>
     <thead>
       <tr><th>Degrau</th><th>Engine</th><th>Versão</th><th>Tipo</th><th>Jogo de referência</th></tr>
@@ -50,11 +51,20 @@
     <tbody>
       <tr><td>1</td><td>Phaser.js</td><td>3.60 (CDN, sem build)</td><td>2D web</td><td><code>tauan-trex/</code></td></tr>
       <tr><td>2</td><td>Three.js</td><td>r165 (vendor local ES module)</td><td>3D web</td><td><code>aero-fighters/</code></td></tr>
-      <tr><td>3</td><td>Unreal Engine 5</td><td>Blueprints + C++</td><td>3D desktop</td><td><code>aero-fighters-v2/</code> (futuro)</td></tr>
+      <tr><td>3</td><td><strong>Godot 4</strong> (NOVO 2026-05-18)</td><td>4.x stable point release</td><td>3D desktop indie</td><td><code>aero-fighters-v2/</code> (UE5 deferred to future release; foundation amended 2026-05-18 per ADR-V2-G-02; hardware-forced from photoreal → stylized → Godot pivot chain)</td></tr>
+      <tr><td>4</td><td>Unreal Engine 5</td><td>Blueprints + C++</td><td>3D desktop AAA</td><td>reservado para futuro release quando hardware permitir (RTX 3060 ou cloud GPU rental)</td></tr>
     </tbody>
   </table>
   <p>A ladder é didática: cada degrau ensina conceitos que o anterior não cobre
-  (loop/input/física 2D → modularização 3D + materiais PBR → pipeline industrial de produção).</p>
+  (loop/input/física 2D → modularização 3D + materiais PBR → scene-graph + scripting +
+  signals + export pipeline indie → pipeline industrial AAA).</p>
+  <p><strong>Emenda 2026-05-18 (ADR-V2-G-02):</strong> Ladder ampliada de 3 para 4 degraus.
+  Drive: UE 5.5 source build no Ubuntu 24.04 + Iris Xe é fundamentalmente hostil
+  (clang-18/libicu74 incompatibilidades, DotNet bundled quebrado, GitDependencies
+  droppando binários Linux x86_64 sistematicamente). Godot 4 entra como Degrau 3
+  (indie 3D desktop) entre Three.js e UE5. UE5 não foi removido; foi deferido para
+  futuro jogo/release. Ver
+  <code>.dadaia/reports/tauan-games/product-engineer/2026-05-18T005834Z-godot-pivot.html</code>.</p>
 </section>
 
 <section id="repo-structure">
@@ -69,7 +79,7 @@ tauan-games/
 ├── vendor/                          ← libs versionadas (Phaser, Three.js)
 ├── tauan-trex/                      ← Degrau 1 — Phaser
 ├── aero-fighters/                   ← Degrau 2 — Three.js
-├── aero-fighters-v2/                ← Degrau 3 — UE5 (futuro)
+├── aero-fighters-v2/                ← Degrau 3 — Godot 4 (UE5 Degrau 4 reservado p/ futuro)
 └── specs/                           ← governance SDD
     ├── constitution.md
     ├── foundation/SPEC.md
@@ -94,8 +104,16 @@ tauan-games/
   <code>sortie-state.js</code>, <code>camera-modes.js</code>, <code>service-scene.js</code>,
   <code>ejection.js</code>, <code>nuclear-fx.js</code>, <code>debug.js</code>). Vendor local de Three.js
   em <code>vendor/three.module.min.js</code>.</div>
-  <div class="layer"><strong>Degrau 3 (UE5):</strong> ainda não materializado. Pipeline esperado:
-  Blueprints + C++, build standalone, distribuído via README link.</div>
+  <div class="layer"><strong>Degrau 3 (Godot 4):</strong> <code>aero-fighters-v2/</code>.
+  Pipeline: scene tree (<code>scenes/*.tscn</code>) + scripts GDScript (com promoção a C# sob
+  triggers de performance) + Resource files (<code>.tres</code>) para config; Autoload singletons
+  para managers globais (<code>MissionManager.gd</code>, <code>GameConfig.gd</code>,
+  <code>Telemetry.gd</code>); Terrain3D addon para heightmap SRTM; export Linux x64 via Godot CLI.
+  Renderer Forward+ (cabe em Iris Xe @ 1080p nativo). Build standalone, distribuído via README link.</div>
+  <div class="layer"><strong>Degrau 4 (UE5):</strong> reservado para futuro release.
+  Pipeline esperado: Blueprints + C++, build standalone, distribuído via README link.
+  Bloqueado hoje por restrição de hardware (Ubuntu 24.04 + Iris Xe). Será adotado quando
+  hardware permitir (RTX 3060 ou cloud GPU rental).</div>
 </section>
 
 <section id="agent-authority">
@@ -128,11 +146,13 @@ flowchart TB
     vendor[vendor/ libs]
     trex[tauan-trex/]
     aero[aero-fighters/]
-    aerov2[aero-fighters-v2/ UE5 futuro]
+    aerov2[aero-fighters-v2/ Godot 4]
+    ue5[UE5 futuro release]
     tests --> trex
     tests --> aero
     tests -.future.-> aerov2
     vendor --> aero
+    aerov2 -.deferred.-> ue5
   </pre>
   <p><strong>Proibido:</strong> um jogo depender de outro jogo (acoplamento horizontal entre pastas
   de projeto). <strong>Permitido:</strong> jogos consumirem <code>vendor/</code> e
@@ -156,8 +176,11 @@ phase: &lt;draft|aprovado|in-progress|closure&gt;</pre>
   <ul>
     <li><strong>Jogos web (degraus 1 e 2):</strong> servidos localmente por <code>npx serve</code>;
     deploy alvo é GitHub Pages (branch <code>gh-pages</code>, cada jogo em subpasta).</li>
-    <li><strong>Jogos UE5 (degrau 3):</strong> build pipeline a definir; alvo é executável
-    standalone linkado no README do projeto.</li>
+    <li><strong>Jogos Godot 4 (degrau 3):</strong> export Linux x64 via <code>godot --export-release</code>;
+    binário standalone único; distribuído via README link. Operator-only local runs em v2
+    (sem GitHub Releases, itch.io ou Steam).</li>
+    <li><strong>Jogos UE5 (degrau 4, futuro):</strong> build pipeline a definir; alvo é executável
+    standalone linkado no README do projeto. Bloqueado por hardware atual.</li>
   </ul>
 </section>
 
@@ -170,7 +193,7 @@ phase: &lt;draft|aprovado|in-progress|closure&gt;</pre>
     <li>Nenhum agente fora do trio <code>game-*</code> escreve em <code>repos/tauan-games/</code>
     (exceto <code>product-engineer</code> em <code>specs/</code>).</li>
     <li>Toda release passa pela harness Playwright antes de ser considerada CLOSURE.</li>
-    <li>A ladder das três engines é o único conjunto autorizado — quarta engine exige promoção
+    <li>A ladder das quatro engines é o único conjunto autorizado — quinta engine exige promoção
     via <code>product-engineer</code> e edição da foundation.</li>
   </ol>
 </section>

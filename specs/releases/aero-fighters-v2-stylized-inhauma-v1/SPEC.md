@@ -1,6 +1,10 @@
 # SPEC: Aero Fighters v2 — Stylized Inhaúma (MVP-2)
 
-> **Status:** Aprovado — 2026-05-17 (aprovado pelo operador após dadaia-grill-me session; substitui aero-fighters-v2-photorealistic-inhauma-v1)
+> **Status:** CANCELLED — 2026-05-18 (hardware-forced second pivot; superseded by aero-fighters-v2-godot-stylized-inhauma-v1)
+> **Cancellation reason:** UE 5.5 source build on operator's Ubuntu 24.04 + Iris Xe environment is fundamentally hostile (clang-18/libicu74 incompatibilities, broken bundled DotNet, GitDependencies systematic Linux library gaps). 2h of stacked fixes did not produce a working editor. Operator pivoted to Godot 4 via Foundation amendment ADR-V2-G-02. Aesthetic, scope, setting, perf target, and CI strategy all carry over to the new release; engine and engine-specific infrastructure are replaced. See specs/releases/aero-fighters-v2-godot-stylized-inhauma-v1/SPEC.md and report .dadaia/reports/tauan-games/product-engineer/2026-05-18T005834Z-godot-pivot.html.
+> **Original approval:** below (preserved for historical reference)
+>
+> **Original Status:** Aprovado — 2026-05-17 (aprovado pelo operador após dadaia-grill-me session; substitui aero-fighters-v2-photorealistic-inhauma-v1)
 > **Release id:** aero-fighters-v2-stylized-inhauma-v1
 > **Engine ladder slot:** Degrau 3 (Unreal Engine 5) — foundation-immutable
 > **Supersedes:** aero-fighters-v2-photorealistic-inhauma-v1 (cancelled 2026-05-17 — hardware constraint)

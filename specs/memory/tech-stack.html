@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- last amended 2026-05-18 — foundation amendment for ADR-V2-G-02 (Godot 4 added as Degrau 3, UE5 deferred to Degrau 4) -->
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -22,7 +23,7 @@
 <body>
 
 <h1>Tech Stack Memory — tauan-games</h1>
-<p class="meta">Última atualização: 2026-05-17</p>
+<p class="meta">Última atualização: 2026-05-18</p>
 
 <section id="committed-stack">
   <h2>Stack comprometida por jogo</h2>
@@ -33,15 +34,28 @@
     <tbody>
       <tr>
         <td><code>tauan-trex</code></td>
-        <td>Phaser.js</td>
+        <td>Phaser.js (Degrau 1)</td>
         <td>3.60 (CDN)</td>
         <td>Handles canvas, input e physics loop out-of-the-box; docs robustas; zero build step.</td>
       </tr>
       <tr>
         <td><code>aero-fighters</code></td>
-        <td>Three.js</td>
+        <td>Three.js (Degrau 2)</td>
         <td>r165 (<code>vendor/three.module.min.js</code>, ES module build)</td>
         <td>3D em browser; ES module habilita modularização do jogo em ~15 módulos <code>src/*.js</code>.</td>
+      </tr>
+      <tr>
+        <td><code>aero-fighters-v2</code></td>
+        <td>Godot 4 (Degrau 3, NOVO 2026-05-18)</td>
+        <td>4.x stable point release (4.3 ou 4.4 ao impl start)</td>
+        <td>3D desktop indie; renderer Forward+ cabe em Iris Xe @ 1080p nativo; GDScript-first com promoção a C# sob triggers de performance; export Linux x64 single-binary via Godot CLI. Substituiu UE5 (deferred to Degrau 4) por restrição de hardware (Ubuntu 24.04 + Iris Xe incompatíveis com UE 5.5 source build). Ver
+        <code>.dadaia/reports/tauan-games/product-engineer/2026-05-18T005834Z-godot-pivot.html</code>.</td>
+      </tr>
+      <tr>
+        <td>—</td>
+        <td>Unreal Engine 5 (Degrau 4)</td>
+        <td>5.5 stable</td>
+        <td>Reservado para futuro release. Bloqueado por hardware atual; será adotado quando RTX 3060 ou cloud GPU rental estiver disponível.</td>
       </tr>
     </tbody>
   </table>
@@ -79,8 +93,11 @@
 <section id="deploy">
   <h2>Padrão de deploy</h2>
   <ul>
-    <li><strong>Jogos web:</strong> GitHub Pages (branch <code>gh-pages</code>, cada jogo em subpasta).</li>
-    <li><strong>Jogos desktop (UE5, futuro):</strong> executável buildado e linkado no README.</li>
+    <li><strong>Jogos web (degraus 1 e 2):</strong> GitHub Pages (branch <code>gh-pages</code>, cada jogo em subpasta).</li>
+    <li><strong>Jogos Godot 4 (degrau 3):</strong> binário Linux x64 via <code>godot --export-release</code>;
+    distribuído via README link. Operator-only local runs em <code>aero-fighters-v2/</code> (sem GitHub
+    Releases, itch.io ou Steam).</li>
+    <li><strong>Jogos UE5 (degrau 4, futuro):</strong> executável buildado e linkado no README. Bloqueado por hardware atual.</li>
   </ul>
 </section>
 

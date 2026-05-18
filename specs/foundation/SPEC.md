@@ -18,21 +18,32 @@ divergentes ou por agentes não-autorizados modificando código de jogo.
 
 ---
 
-## Ladder das três engines
+## Ladder das quatro engines
 
-Este repositório opera em três degraus de complexidade crescente. Um jogo nunca pode
+Este repositório opera em quatro degraus de complexidade crescente. Um jogo nunca pode
 saltar degraus sem decisão explícita do operador.
 
 | Degrau | Engine | Jogo de referência | Tipo |
-|---|---|---|---|
-| 1 | Phaser.js 3.60 (CDN, sem build step) | `tauan-trex/` | 2D web |
-| 2 | Three.js r165 (vendor local `vendor/three.module.min.js`, ES module) | `aero-fighters/` | 3D web |
-| 3 | Unreal Engine 5 (Blueprints + C++) | `aero-fighters-v2/` (futuro) | 3D desktop |
+|--------|--------|---------------------|------|
+| 1 | Phaser.js | `tauan-trex/` | 2D browser |
+| 2 | Three.js | `aero-fighters/` (v1) | 3D browser |
+| 3 | Godot 4 | `aero-fighters-v2/` | 3D desktop indie (NOVO 2026-05-18) |
+| 4 | Unreal Engine 5 (Blueprints + C++) | reservado para futuro | 3D desktop AAA |
 
 Justificativa da ladder: cada degrau ensina conceitos que o anterior não cobre
-(loop/input/física → modularização 3D + materiais PBR → pipeline industrial). Jogos novos
-escolhem o degrau adequado ao escopo, mas o repositório nunca terá um quarto degrau
-"flutuante" — qualquer engine fora desta lista exige promoção via product-engineer.
+(loop/input/física 2D → modularização 3D + materiais PBR → scene-graph + scripting +
+signals + export pipeline indie → pipeline industrial AAA). Jogos novos escolhem o
+degrau adequado ao escopo, mas o repositório nunca terá um quinto degrau "flutuante" —
+qualquer engine fora desta lista exige promoção via product-engineer.
+
+> **Emenda 2026-05-18 (ADR-V2-G-02):** Ladder ampliada de 3 para 4 degraus para
+> acomodar Godot 4 como ponto intermediário entre Three.js (3D browser puro) e
+> UE5 (AAA desktop). Drive: incompatibilidade Ubuntu 24.04 + Iris Xe com o
+> source-build do UE 5.5 (clang-18/libicu74 mismatches; bundled DotNet quebrado;
+> GitDependencies droppando binários Linux x86_64 sistematicamente). UE5 não foi
+> removido; foi deferido para futuro jogo/release quando hardware permitir
+> (RTX 3060 ou cloud GPU rental). Decisão operador via product-engineer.
+> Ver `.dadaia/reports/tauan-games/product-engineer/2026-05-18T005834Z-godot-pivot.html`.
 
 ---
 
