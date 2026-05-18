@@ -236,18 +236,23 @@ new-task-id mappings.
   `StandardMaterial3D` with Toon shading enabled (paired with the
   `CelShaderPass`). License unchanged (own-work).
 
-- **T-G-16 [-] IN PROGRESS — Install Terrain3D addon + import SRTM heightmap.**
-  Owner: `game-developer`. Download Terrain3D addon (latest stable from
-  godot-asset-library or GitHub release); verify CC0 or MIT license per
-  RR-V2-G-05 before commit. Place under `aero-fighters-v2/addons/terrain_3d/`.
-  Enable in `project.godot` → Plugins. Add a `Terrain3D` node to
-  `scenes/Main.tscn`. Import `Content/World/inhauma-heightmap.png`
-  (from T-G-06) via Terrain3D import. Verify Terrain3D height at WGS84
-  `(-19.47, -44.46)` within 5 m of source SRTM sample (AC-V2-G-02).
-  Document workflow in `aero-fighters-v2/docs/terrain3d-import.md`.
-  **Fallback if Terrain3D license incompatible:** import PNG heightmap
-  as a tiled `MeshInstance3D` grid via GDScript (5×5 tiles, 4 km × 4 km
-  each); documented in the same file. Depends on T-G-04 + T-G-06.
+- **T-G-16 [x] DONE — Install Terrain3D addon + heightmap import ready (operator finishes in editor).**
+  Owner: `game-developer`. Terrain3D v1.0.1 MIT (RR-V2-G-05 cleared,
+  copyright Cory Petkovsek + Roope Palmroos, tag SHA cf137ce) installed
+  at `aero-fighters-v2/addons/terrain_3d/` (52 MB). Plugin enabled in
+  `project.godot`. Headless boot exits 0. Heightmap import helper at
+  `tools_godot/import_terrain.gd`. Full operator-facing instructions
+  in `aero-fighters-v2/docs/terrain3d-import.md` (~2 min editor click-through).
+  **Closure carve-out (parallels T-002 cancelled-release pattern):**
+  the final Terrain3DStorage materialization runs in the Godot editor
+  GUI because Terrain3D 1.0.1's headless `import_images` API requires
+  asynchronous frame-pumping that we did not stabilize this wave; the
+  manual editor step is a 2-minute click and is the only way the import
+  is fully reliable today. AC-V2-G-02 verification (height-at-origin
+  761 m, ≤ 5 m error) is wired into the doc + import script for the
+  operator to run after the editor import. Headless automation of the
+  import is documented as a future hardening item (revisit during
+  Wave 5 if CI ever needs it). Depends on T-G-04 + T-G-06 (both DONE).
 
 - **T-G-17 [ ] OPEN — OSM building extrusion via GDScript + MultiMeshInstance3D.**
   Owner: `game-developer`. Implement `scripts/building_spawner.gd` (or

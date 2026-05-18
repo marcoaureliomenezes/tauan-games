@@ -22,6 +22,7 @@ config/icon="res://icon.svg"
 MissionManager="*res://autoload/MissionManager.gd"
 GameConfig="*res://autoload/GameConfig.gd"
 Telemetry="*res://autoload/Telemetry.gd"
+ImportTerrain="*res://tools_godot/import_terrain.gd"
 
 [display]
 
@@ -91,6 +92,10 @@ pause={
 [physics]
 
 common/physics_ticks_per_second=60
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/terrain_3d/plugin.cfg")
 
 [rendering]
 
