@@ -1,8 +1,14 @@
-[gd_scene load_steps=4 format=3 uid="uid://main_scene"]
+[gd_scene load_steps=10 format=3 uid="uid://main_scene"]
 
 [ext_resource type="PackedScene" uid="uid://cel_shader_pass" path="res://scenes/CelShaderPass.tscn" id="1_cel_pass"]
 [ext_resource type="PackedScene" uid="uid://player_scene" path="res://scenes/Player.tscn" id="2_player"]
 [ext_resource type="PackedScene" uid="uid://hud_scene" path="res://scenes/HUD.tscn" id="3_hud"]
+[ext_resource type="PackedScene" uid="uid://inhauma_buildings" path="res://scenes/InhaumaBuildings.tscn" id="4_buildings"]
+[ext_resource type="PackedScene" uid="uid://inhauma_foliage" path="res://scenes/InhaumaFoliage.tscn" id="5_foliage"]
+[ext_resource type="Script" path="res://scripts/target_spawner.gd" id="6_target_spawner"]
+[ext_resource type="PackedScene" uid="uid://factory_scene" path="res://scenes/Targets/Factory.tscn" id="7_factory"]
+[ext_resource type="PackedScene" uid="uid://base_scene" path="res://scenes/Targets/Base.tscn" id="8_base"]
+[ext_resource type="PackedScene" uid="uid://aa_cluster_scene" path="res://scenes/Targets/AAGunCluster.tscn" id="9_aa_cluster"]
 
 [node name="Main" type="Node3D"]
 
@@ -28,10 +34,31 @@ current = false
 ; CelShaderPass: fullscreen CanvasLayer (T-G-10 lane — do not touch)
 [node name="CelShaderPass" parent="." instance=ExtResource("1_cel_pass")]
 
-; --- Future children ---
+; Buildings: OSM building extrusion via MultiMeshInstance3D (T-G-17)
+[node name="Buildings" parent="." instance=ExtResource("4_buildings")]
+
+; Foliage: OSM landuse scatter via MultiMeshInstance3D (T-G-18)
+[node name="Foliage" parent="." instance=ExtResource("5_foliage")]
+
+; Targets container — T-G-20 adds factory/base/aa_cluster instances under this node.
+; TargetSpawner registers children with MissionManager on _ready + handles cycle respawn.
+[node name="Targets" type="Node3D" parent="."]
+
+; --- Factory (T-G-20) — placeholder position, real WGS84 wired by MissionManager later ---
+[node name="Factory" parent="Targets" instance=ExtResource("7_factory")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 0, 100)
+
+; --- Base (T-G-20) — placeholder position ---
+[node name="Base" parent="Targets" instance=ExtResource("8_base")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -100, 0, 50)
+
+; --- AA Gun Cluster (T-G-20) — placeholder position ---
+[node name="AAGunCluster" parent="Targets" instance=ExtResource("9_aa_cluster")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 200)
+
+; TargetSpawner — finds Targets children, registers with MissionManager (T-G-19).
+[node name="TargetSpawner" type="Node" parent="."]
+script = ExtResource("6_target_spawner")
+
+; --- Wave 2 / future children ---
 ; Terrain3D node — operator finishes import in editor (T-G-16, Wave 2 DONE)
-; BuildingsRoot (MultiMeshInstance3D) — added in T-G-17 (Wave 4)
-; FoliageRoot (MultiMeshInstance3D) — added in T-G-18 (Wave 4)
-; Factory target (Targets/Factory.tscn) — added in T-G-20 (Wave 4)
-; Base target (Targets/Base.tscn) — added in T-G-20 (Wave 4)
-; AAGunCluster target (Targets/AAGunCluster.tscn) — added in T-G-20 (Wave 4)

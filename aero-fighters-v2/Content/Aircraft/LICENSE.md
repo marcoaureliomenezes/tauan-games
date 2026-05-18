@@ -24,6 +24,18 @@ imported. Foundation rule CV-08 (no external assets beyond CC0 audio) is
 honored. No Sketchfab, no Fab, no Quixel, no Megascans, no third-party FBX,
 glTF, or OBJ.
 
+## World Geometry — Buildings + Foliage (T-G-17, T-G-18)
+
+| Asset | Origin | License | Date | Author |
+|---|---|---|---|---|
+| `Content/Materials/M_CelBuilding.tres` | Own-work — Godot 4 `StandardMaterial3D` resource. Warm sandy/concrete albedo (0.7, 0.65, 0.55), matte (roughness 0.85, metallic 0.0). | Same as project (MIT) | 2026-05-18 | game-developer, T-G-17 |
+| `Content/Materials/M_CelFoliage.tres` | Own-work — Godot 4 `StandardMaterial3D` resource. Matte forest green albedo (0.32, 0.55, 0.28). | Same as project (MIT) | 2026-05-18 | game-developer, T-G-18 |
+| `scripts/building_spawner.gd` | Own-work — GDScript MultiMeshInstance3D scatter from OSM building polygons. | Same as project (MIT) | 2026-05-18 | game-developer, T-G-17 |
+| `scripts/foliage_spawner.gd` | Own-work — GDScript MultiMeshInstance3D scatter from OSM landuse polygons. Deterministic RNG seed 42. Low-poly tree mesh generated via SurfaceTool. | Same as project (MIT) | 2026-05-18 | game-developer, T-G-18 |
+| Tree mesh (procedural) | Own-work via Godot 4 SurfaceTool (hexagonal cylinder trunk + octahedral canopy). No external mesh. | Same as project (MIT) | 2026-05-18 | game-developer, T-G-18 |
+| Building footprint data | Derived from OpenStreetMap `inhauma-buildings.json` (T-G-06 output). | ODbL 1.0 — © OpenStreetMap contributors. Attribution required. See `Content/World/SOURCES.md`. | 2026-05-18 | T-G-06 data pipeline |
+| Landuse polygon data | Derived from OpenStreetMap `inhauma-landuse.json` (T-G-06 output). | ODbL 1.0 — © OpenStreetMap contributors. Attribution required. See `Content/World/SOURCES.md`. | 2026-05-18 | T-G-06 data pipeline |
+
 ## Future entries
 
 When Wave 4 lands cannon muzzle flash + hit FX + jet engine drone audio,
