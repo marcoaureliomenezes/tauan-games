@@ -112,7 +112,7 @@ new-task-id mappings.
   autoloads `MissionManager`, `GameConfig`, `Telemetry` in `project.godot`.
   Blocks all gameplay/combat/terrain work.
 
-- **T-G-05 [-] IN PROGRESS — Create `GameConfig.tres` + `MissionConfig.tres` Godot Resource files.**
+- **T-G-05 [x] DONE — Create `GameConfig.tres` + `MissionConfig.tres` Godot Resource files.**
   Owner: `game-developer`. Define custom Resource subclasses (Resource
   scripts `GameConfig.gd` + `MissionConfig.gd`) and instantiate as
   `.tres` files under `resources/`. Fields:
