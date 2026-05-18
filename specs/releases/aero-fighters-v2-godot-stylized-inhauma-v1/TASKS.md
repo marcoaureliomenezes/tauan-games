@@ -128,13 +128,15 @@ new-task-id mappings.
 
 - **T-G-06 [ ] OPEN — OSM + SRTM fetch tool (`Tools/inhauma-data-fetch.py`).**
   Owner: `game-developer` (ops hat). Python tool that:
-  - Downloads Brazil-southeast `.osm.pbf` from Geofabrik (or equivalent
-    CC-mirror).
+  - Downloads Brazil-southeast `.osm.pbf` from Geofabrik (anonymous CC mirror).
   - Clips to Inhaúma bbox via `osmconvert` or `osmium-tool`.
   - Exports building polygons (capped at top 5,000 by area per
     RR-V2-G-03) + landuse polygons to JSON for GDScript consumption.
-  - Downloads NASA SRTM 30 m tiles via NASA EarthData credentials
-    (creds read from `aero-fighters-v2/.env.local`).
+  - **Downloads SRTM 30 m tiles from AWS Open Data mirror**
+    `https://elevation-tiles-prod.s3.amazonaws.com/skadi/{S20}/{S20W045}.hgt.gz`
+    (anonymous, no NASA URS auth needed). Same SRTMGL1 v003 bytes as NASA.
+    **Amended 2026-05-18** (was: NASA EarthData URS — pivoted to AWS Open
+    Data after NASA CMR probe 401'd and AWS probe 200'd; see SPEC §8).
   - Assembles tiles into a single GeoTIFF via `gdal_merge.py`.
   - Reprojects to UTM zone 23S.
   - Emits 16-bit PNG (`gdal_translate -ot UInt16 -scale 0 1500 0 65535`)
@@ -144,8 +146,8 @@ new-task-id mappings.
     `inhauma-heightmap.png`.
   - Idempotent + deterministic for fixed bbox + fixed source revisions.
   - Records exact source revisions in `Content/World/SOURCES.md`.
-  Engine-agnostic — survives the UE5 → Godot pivot intact in spirit
-  (output formats adjusted for Terrain3D consumption).
+  Engine-agnostic — survives the UE5 → Godot pivot intact in spirit.
+  Zero secrets in the critical path post-amendment.
 
 - **T-G-07 [ ] OPEN — New AC-V2-G traceability matrix.**
   Owner: `game-developer` (tester hat). Path:

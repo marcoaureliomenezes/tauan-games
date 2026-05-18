@@ -36,7 +36,7 @@ ledger in TASKS.md.
 
 | Wave | Phase | Tasks | Calendar |
 |---|---|---|---|
-| 0 | Operator bootstrap | Godot 4 install + NASA creds verify + git lfs verify | week 0 |
+| 0 | Operator bootstrap | Godot 4 install + git lfs verify (no secrets needed post-AWS-pivot) | week 0 |
 | 1 | Project skeleton + config + CI | T-G-01, T-G-02, T-G-04, T-G-05, T-G-11, T-G-13, T-G-14 | week 1 |
 | 2 | Inhaúma data pipeline + Terrain3D | T-G-06, T-G-16, T-G-12 | week 2 |
 | 3 | Pawn + flight + cel-shader | T-G-10, T-G-15 + FR-V2-G-03/04/09/10 | week 3 |
@@ -53,11 +53,10 @@ Operator-driven; no agents fire until all green.
   <https://godotengine.org/download/linux>, unzip to
   `~/godot/Godot_v4.x-stable_mono_linux_x86_64/`. Verify
   `<bin> --version` exits 0.
-- [ ] NASA EarthData creds in `.env.local` (pre-placed 2026-05-17).
-  Verify both vars present:
-  `grep -E "^NASA_EARTHDATA_(USERNAME|PASSWORD)=" .../aero-fighters-v2/.env.local | wc -l` → 2.
-- [ ] NASA EarthData email confirmation (pending from prior pivot) —
-  T-G-06 first run is the real validator.
+- [x] **SRTM source: AWS Open Data mirror (no auth needed)** — amended
+  2026-05-18. NASA EarthData creds remain in `.env.local` but are
+  optional and not in MVP-2 critical path; reserved for future
+  MODIS/Landsat workflows.
 - [ ] `git lfs version` exits 0.
 
 All green → Wave 1 spawns.
@@ -97,7 +96,9 @@ UE5 vars and adds GODOT_BIN_PATH. All green → Wave 2.
 **`game-developer` (ops hat)** — T-G-06: rewrite
 `Tools/inhauma-data-fetch.py`. Clip Brazil-southeast PBF (Geofabrik) to
 Inhaúma bbox; export buildings JSON (cap top 5,000 by area per RR-V2-G-03)
-+ landuse JSON; download SRTM via NASA EarthData; merge + reproject UTM 23S;
++ landuse JSON; download SRTM tiles from AWS Open Data mirror
+(`elevation-tiles-prod.s3.amazonaws.com/skadi/`, no auth, amended
+2026-05-18 per SPEC §8); merge + reproject UTM 23S;
 emit 16-bit PNG ready for Terrain3D import; record source revisions in
 `Content/World/SOURCES.md`.
 
@@ -109,8 +110,9 @@ heightmap. Verify Terrain3D height at origin within 5 m of source SRTM
 tiled `MeshInstance3D` 5×5 grid (4 km × 4 km each).
 
 **`game-developer` (ops hat)** — T-G-12: rewrite `README.md` for Godot 4.
-Drop all UE5/Cesium/GCP/Google content. Add Godot 4 install, NASA setup,
-OSM ODbL attribution, Linux-only export instructions, scene-tree
+Drop all UE5/Cesium/GCP/Google/NASA-EarthData-as-required content. Add
+Godot 4 install, OSM ODbL attribution, AWS Open Data SRTM attribution
+(no auth needed), Linux-only export instructions, scene-tree
 architecture overview, cel-shader notes.
 
 **Verification:** fetch script runs; heightmap PNG + TIF + buildings JSON

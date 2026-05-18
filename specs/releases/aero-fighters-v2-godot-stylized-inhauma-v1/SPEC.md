@@ -573,33 +573,31 @@ path open without re-pinning the engine binary later.
 
 ## 8. Secret & Key Management
 
-- **NASA EarthData credentials:** free account creds for the SRTM tile
-  download in FR-V2-G-01.
-  - **Canonical storage (simple path, default):** plaintext in
-    `aero-fighters-v2/.env.local` (gitignored) as
-    `NASA_EARTHDATA_USERNAME=…` + `NASA_EARTHDATA_PASSWORD=…`. The file
-    is read by the Python fetch tool directly. **Already in place per
-    operator setup 2026-05-17** (creds survive both pivots; the file is
-    gitignored and was not affected by either engine swap). This matches
-    the Foundation's "Simplicidade primeiro" principle and fits the
-    single-operator threat model for a free read-only-public-dataset
-    credential.
-  - **Optional upgrade path (defer until paranoid):** 1Password item
-    `aero-fighters-v2/nasa-earthdata` with a small wrapper script that
-    materializes `.env.local` from `op item get …` on demand. Not
-    required for MVP-2; documented for future-release adoption.
-- **Risk envelope:** NASA EarthData creds are equivalent in stakes to a
-  free newsletter signup — no payment data, no PII beyond email, scope
-  is read-only public datasets. The gitignored `.env.local` storage
-  matches the actual risk.
-- **CI consumption:** not required for MVP-2. The OSM + SRTM extract is
-  run by the operator once; outputs are committed via Git LFS to
-  `Content/World/`.
-- **No Google Map Tiles API key, no GCP project.** The cancelled SPEC's
-  GCP-key management section is moot in this release. No UE5 license
-  key (UE5 is freely available; not used here regardless).
-- **Rotation cadence:** NASA EarthData creds rotated annually or on
-  suspected leak (low-risk: scope is read-only public datasets).
+- **No secrets required for MVP-2.** SRTM tiles are fetched from the
+  **AWS Open Data SRTM mirror** at
+  `https://elevation-tiles-prod.s3.amazonaws.com/skadi/` — same
+  SRTMGL1 v003 data NASA distributes, pre-packaged as `.hgt.gz` by
+  Mapzen, hosted on S3 with anonymous public read. OSM extracts are
+  fetched from Geofabrik (also anonymous). No URS account, no LP DAAC
+  app authorization, no Google Maps Tiles API key, no GCP project, no
+  UE5 license key.
+  - **Amendment 2026-05-18:** SRTM source pivoted from NASA EarthData
+    URS to AWS Open Data mirror after the auth probe to NASA CMR
+    returned 401 (likely email-confirmation pending) while the AWS
+    mirror returned 200 with no auth. AWS path is friction-free and
+    serves identical SRTMGL1 v003 bytes.
+- **NASA EarthData credentials (optional, kept for future workflows):**
+  `aero-fighters-v2/.env.local` (gitignored) still holds
+  `NASA_EARTHDATA_USERNAME` + `NASA_EARTHDATA_PASSWORD` from the prior
+  setup. They are **not required** for MVP-2 — MODIS/Landsat or other
+  NASA-restricted datasets in a future v2.X may use them.
+- **OSM bounding box configuration:** `OSM_BBOX_NORTH/SOUTH/EAST/WEST`
+  in `aero-fighters-v2/.env.local` defaults to ±0.20° around Inhaúma
+  origin. Not secret — just configuration.
+- **CI consumption:** zero secrets needed. The OSM + SRTM extract runs
+  once on the operator's machine; outputs commit via Git LFS to
+  `Content/World/`. CI just lints.
+- **Rotation cadence:** N/A (no secrets in critical path).
 
 ---
 
