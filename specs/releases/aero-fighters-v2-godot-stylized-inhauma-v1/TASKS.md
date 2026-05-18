@@ -94,7 +94,7 @@ new-task-id mappings.
   keep the C# promotion path open (NFR-V2-G-05). Blocks all subsequent
   work.
 
-- **T-G-02 [ ] OPEN — Create lint-only GH-hosted CI workflow for Godot release.**
+- **T-G-02 [-] IN PROGRESS — Create lint-only GH-hosted CI workflow for Godot release.**
   Owner: `devops-engineer`. Path: `.github/workflows/aero-v2-godot-ci.yml`.
   Runs on `ubuntu-latest`: gdlint + gdformat check on `scripts/` and
   `autoload/`, scene-file validity check (Python script that loads each
@@ -191,7 +191,7 @@ new-task-id mappings.
   `StandardMaterial3D` with Toon shading enabled for the aircraft +
   buildings + targets (used by T-G-15, T-G-17, T-G-20).
 
-- **T-G-11 [ ] OPEN — Rewrite `.env.local.example` for Godot.**
+- **T-G-11 [-] IN PROGRESS — Rewrite `.env.local.example` for Godot.**
   Owner: `game-developer` (ops hat). Path:
   `aero-fighters-v2/.env.local.example`. Drop all UE5-related
   (UE_INSTALL_PATH), Cesium (CESIUM_OFFLINE_TILES, CESIUM_TILE_CACHE_DIR),
