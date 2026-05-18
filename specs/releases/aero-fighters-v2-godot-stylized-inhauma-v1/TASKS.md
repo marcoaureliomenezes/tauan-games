@@ -85,7 +85,7 @@ new-task-id mappings.
 
 ## Seed tasks (ordered by dependency)
 
-- **T-G-01 [-] IN PROGRESS — Pin Godot 4 stable Mono build; install + document version.**
+- **T-G-01 [x] DONE — Pin Godot 4 stable Mono build; install + document version.**
   Owner: `game-developer`. Download Godot 4 stable Mono build from
   <https://godotengine.org/download/linux> (single `.zip`, ~80MB). Unzip
   under `~/godot/Godot_v4.x-stable_mono_linux_x86_64/`. Record exact
