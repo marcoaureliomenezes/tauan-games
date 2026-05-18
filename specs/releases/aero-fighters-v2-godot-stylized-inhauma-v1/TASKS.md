@@ -315,7 +315,7 @@ new-task-id mappings.
   Consumed by T-G-08's Python driver. Verifies RR-V2-G-09 (Godot
   headless on `ubuntu-latest` GH-hosted runner).
 
-- **T-G-24 [-] IN PROGRESS — Wave 3 pawn + flight + cameras + HUD (FR-V2-G-03/04/09/10).**
+- **T-G-24 [x] DONE — Wave 3 pawn + flight + cameras + HUD (FR-V2-G-03/04/09/10).**
   Owner: `game-developer`. Implements: `scripts/flight_arcade.gd` (RigidBody3D arcade
   flight model per OQ-V2-G-08 + FR-V2-G-04), `scripts/player_controller.gd` (spawn +
   initial velocity), `scripts/camera_controller.gd` (Chase SpringArm3D + Cockpit
