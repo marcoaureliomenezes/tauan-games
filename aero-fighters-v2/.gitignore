@@ -88,3 +88,6 @@ Thumbs.db
 .idea/
 .vscode/extensions.json
 .vscode/launch.json
+
+# Runtime cache from Tools/inhauma-data-fetch.py (T-G-06)
+Tools/.cache/

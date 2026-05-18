@@ -36,7 +36,31 @@ glTF, or OBJ.
 | Building footprint data | Derived from OpenStreetMap `inhauma-buildings.json` (T-G-06 output). | ODbL 1.0 — © OpenStreetMap contributors. Attribution required. See `Content/World/SOURCES.md`. | 2026-05-18 | T-G-06 data pipeline |
 | Landuse polygon data | Derived from OpenStreetMap `inhauma-landuse.json` (T-G-06 output). | ODbL 1.0 — © OpenStreetMap contributors. Attribution required. See `Content/World/SOURCES.md`. | 2026-05-18 | T-G-06 data pipeline |
 
+## Target Geometry — Factory + Base + AA Cluster (T-G-20)
+
+| Asset | Origin | License | Date | Author |
+|---|---|---|---|---|
+| `scenes/Targets/Factory.tscn` | Own-work — hand-modeled in Godot 4 primitives (BoxMesh + CylinderMesh): industrial slab + 3 smokestacks + annex. 5 MeshInstance3D nodes, ≈ 312 tris. | Same as project (MIT — operator review pending per T-G-12) | 2026-05-18 | game-designer hat agent, release `aero-fighters-v2-godot-stylized-inhauma-v1` T-G-20 |
+| `scenes/Targets/Base.tscn` | Own-work — hand-modeled in Godot 4 primitives (BoxMesh + CylinderMesh + SphereMesh): barracks + radar dish on post + flagpole + 4 perimeter walls. 9 MeshInstance3D nodes, ≈ 460 tris. | Same as project (MIT — operator review pending per T-G-12) | 2026-05-18 | game-designer hat agent, T-G-20 |
+| `scenes/Targets/AAGunCluster.tscn` | Own-work — hand-modeled in Godot 4 primitives (BoxMesh + CylinderMesh): concrete platform + 3 turret bodies + 3 barrels (one per sub-gun). 7 MeshInstance3D nodes total, ≈ 264 tris. | Same as project (MIT — operator review pending per T-G-12) | 2026-05-18 | game-designer hat agent, T-G-20 |
+| `Content/Materials/M_CelTarget.tres` | Own-work — Godot 4 `StandardMaterial3D` resource. Industrial slate-grey cel base for static ground targets (factory main slab + base barracks + AA platform/turrets). Procedural; no external textures. | Same as project (MIT) | 2026-05-18 | game-designer hat agent, T-G-20 |
+| `Content/Materials/M_CelMetallic.tres` | Own-work — Godot 4 `StandardMaterial3D` resource. Cooler grey + small metallic kick (metallic 0.4, roughness 0.5) for radar dishes + AA barrels. Procedural; no external textures. | Same as project (MIT) | 2026-05-18 | game-designer hat agent, T-G-20 |
+| `scripts/target_base.gd` + `scripts/targets/*.gd` | Own-work — GDScript base class (StaticBody3D + take_damage/destroyed contract) + factory + military-base + AA cluster orchestrator + StaticBody3D bridge for AA gun sub-targets. | Same as project (MIT) | 2026-05-18 | game-designer hat agent, T-G-20 |
+
+## Attestation — Target assets
+
+Target meshes are **own-work**, hand-modeled in Godot 4 primitives
+(BoxMesh, CylinderMesh, SphereMesh) on 2026-05-18. No Sketchfab, no Fab,
+no Quixel, no Megascans, no third-party FBX, glTF, or OBJ. Foundation
+rule CV-08 honored.
+
+License: MIT (operator review pending per T-G-12).
+Author: orchestrator + game-designer hat agent for
+`aero-fighters-v2-godot-stylized-inhauma-v1`.
+
 ## Future entries
 
 When Wave 4 lands cannon muzzle flash + hit FX + jet engine drone audio,
-those entries will be added below with their CC0 attribution.
+those entries will be added below with their CC0 attribution. Wave 5 will
+add the GPUParticles3D destruction FX assets for the three targets
+(factory fireball + base radar sub-event + AA gun smoke).

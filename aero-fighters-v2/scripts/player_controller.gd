@@ -36,9 +36,20 @@ func _ready() -> void:
 	# Godot forward is -Z; apply initial velocity so pawn moves forward
 	linear_velocity = Vector3(0.0, 0.0, -initial_speed)
 
+	# Wire crash_detector.crashed → HUD.show_crashed
+	var crash_det: Node = find_child("CrashDetector", true, false)
+	if crash_det and crash_det.has_signal("crashed"):
+		crash_det.crashed.connect(_on_crashed)
+
 	print("[player_controller] spawned at h=%.1f m — initial_vel=%.1f m/s forward" % [
 		spawn_h, initial_speed
 	])
+
+
+func _on_crashed(_reason: String) -> void:
+	var hud: Node = get_tree().root.find_child("HUD", true, false)
+	if hud and hud.has_method("show_crashed"):
+		hud.show_crashed()
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:

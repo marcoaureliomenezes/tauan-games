@@ -1,0 +1,15 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://m_cel_target"]
+
+; M_CelTarget — cel-friendly base material for static ground targets
+; (factory, base, AA cluster sub-guns). Industrial slate-grey reads well
+; under the screen-space cel-shader pass (T-G-10) after 3-band quantization.
+;
+; Per FR-V2-G-11 / FR-V2-G-07. No external textures — fully procedural.
+; Foundation rule CV-08 (no external assets beyond CC0 audio) honored.
+
+[resource]
+shading_mode = 2
+albedo_color = Color(0.45, 0.42, 0.4, 1)
+metallic = 0.0
+roughness = 0.8
+cull_mode = 0

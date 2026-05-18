@@ -1,9 +1,11 @@
-[gd_scene load_steps=4 format=3 uid="uid://player_scene"]
+[gd_scene load_steps=6 format=3 uid="uid://player_scene"]
 
 [ext_resource type="Script" path="res://scripts/player_controller.gd" id="1_player_ctrl"]
 [ext_resource type="Script" path="res://scripts/flight_arcade.gd" id="2_flight"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="3_cam_ctrl"]
 [ext_resource type="PackedScene" uid="uid://aircraft_scene" path="res://Content/Aircraft/aircraft.tscn" id="4_aircraft"]
+[ext_resource type="Script" path="res://scripts/cannon.gd" id="5_cannon"]
+[ext_resource type="Script" path="res://scripts/crash_detector.gd" id="6_crash"]
 
 ; Player aircraft pawn.
 ; Root is RigidBody3D per OQ-V2-G-08 resolution — physics-driven arcade flight.
@@ -19,6 +21,10 @@
 ;     CollisionShape3D sized 9 × 1.5 × 7 m covering the assembly, and 4 Marker3D
 ;     sockets (MuzzleSocket / ChaseCamSocket / CockpitCamSocket / EngineFXSocket).
 ;   - Sockets are now reachable via $Aircraft/<SocketName> from this scene's scripts.
+;
+; T-G-19 update (Wave 4, game-developer lane):
+;   - Added "Cannon" child Node3D with cannon.gd (FR-V2-G-05).
+;   - Added "CrashDetector" child Node3D with crash_detector.gd (FR-V2-G-08).
 
 [node name="Player" type="RigidBody3D" groups=["player"]]
 script = ExtResource("1_player_ctrl")
@@ -58,3 +64,11 @@ fov = 70.0
 position = Vector3(0.0, 0.6, -0.8)
 current = false
 fov = 80.0
+
+; Cannon — object pool (30 bullets), fires at 12.5 r/s on fire_cannon action (FR-V2-G-05).
+[node name="Cannon" type="Node3D" parent="."]
+script = ExtResource("5_cannon")
+
+; CrashDetector — downward ray query, crash at AGL < 5 m, R key respawn (FR-V2-G-08).
+[node name="CrashDetector" type="Node3D" parent="."]
+script = ExtResource("6_crash")

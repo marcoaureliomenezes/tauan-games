@@ -1,7 +1,110 @@
-[gd_scene load_steps=1 format=3 uid="uid://base_scene"]
+[gd_scene load_steps=12 format=3 uid="uid://base_scene"]
 
-; Base target — HP 28, static, radar dish AnimationPlayer + barracks geometry.
-; Script base.gd attached in T-G-20 (Wave 4).
-; Destruction: multi-stage — radar destroyed first at HP 8, main building at HP 0.
+; Base target — HP 28, multi-stage destruction.
+; Geometry (own-work, hand-modeled in Godot primitives, T-G-20 Wave 4):
+;   - Barracks      BoxMesh        12 × 4 × 6 m
+;   - RadarPost     CylinderMesh   h=5 m, r=0.3 m   (named for multi-stage)
+;   - RadarDish     SphereMesh     scaled (2.0, 0.3, 2.0)  (named for multi-stage)
+;   - Flagpole      CylinderMesh   h=8 m, r=0.2 m
+;   - 4 × WallN/E/S/W  thin BoxMesh perimeter walls
+; Collision: single BoxShape3D covering the compound.
+; Materials:
+;   - M_CelTarget.tres on barracks + flagpole + walls
+;   - M_CelMetallic.tres on RadarPost + RadarDish (slightly metallic toon band)
+; Script: scripts/targets/base.gd (extends TargetBase). Multi-stage destruction
+; frees RadarPost + RadarDish at HP ≤ 50%, then full assembly at HP ≤ 0.
+;
+; Approx tri count (Godot primitive defaults):
+;   BoxMesh ≈ 12 tris × 5 (barracks + 4 walls)       = 60
+;   CylinderMesh (radial=12, rings=2) ≈ 72 × 2       = 144
+;   SphereMesh (rings=8, radial=16) ≈ 256             = 256
+;   Total ≈ 460 tris  — well within budget.
+
+[ext_resource type="Material" uid="uid://m_cel_target" path="res://Content/Materials/M_CelTarget.tres" id="1_celmat"]
+[ext_resource type="Material" uid="uid://m_cel_metallic" path="res://Content/Materials/M_CelMetallic.tres" id="2_celmetal"]
+[ext_resource type="Script" path="res://scripts/targets/base.gd" id="3_base_gd"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_barracks"]
+size = Vector3(12, 4, 6)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_radar_post"]
+top_radius = 0.3
+bottom_radius = 0.3
+height = 5.0
+radial_segments = 12
+rings = 2
+
+[sub_resource type="SphereMesh" id="SphereMesh_dish"]
+radial_segments = 16
+rings = 8
+radius = 1.0
+height = 2.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_flagpole"]
+top_radius = 0.2
+bottom_radius = 0.2
+height = 8.0
+radial_segments = 12
+rings = 2
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall_ns"]
+size = Vector3(20, 1.5, 0.3)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall_ew"]
+size = Vector3(0.3, 1.5, 12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_base"]
+size = Vector3(20, 9, 14)
 
 [node name="Base" type="StaticBody3D"]
+script = ExtResource("3_base_gd")
+
+; --- Barracks (main building) ---
+[node name="Barracks" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("BoxMesh_barracks")
+surface_material_override/0 = ExtResource("1_celmat")
+
+; --- RadarPost (named so base.gd can free it on multi-stage damage) ---
+[node name="RadarPost" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 2.5, 4)
+mesh = SubResource("CylinderMesh_radar_post")
+surface_material_override/0 = ExtResource("2_celmetal")
+
+; --- RadarDish (scaled SphereMesh produces an ellipsoid dish shape) ---
+[node name="RadarDish" type="MeshInstance3D" parent="."]
+transform = Transform3D(2, 0, 0, 0, 0.3, 0, 0, 0, 2, -4, 5.2, 4)
+mesh = SubResource("SphereMesh_dish")
+surface_material_override/0 = ExtResource("2_celmetal")
+
+; --- Flagpole ---
+[node name="Flagpole" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 4, -2)
+mesh = SubResource("CylinderMesh_flagpole")
+surface_material_override/0 = ExtResource("1_celmat")
+
+; --- Compound walls (4 thin BoxMesh walls around the perimeter) ---
+[node name="WallNorth" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, -6)
+mesh = SubResource("BoxMesh_wall_ns")
+surface_material_override/0 = ExtResource("1_celmat")
+
+[node name="WallSouth" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 6)
+mesh = SubResource("BoxMesh_wall_ns")
+surface_material_override/0 = ExtResource("1_celmat")
+
+[node name="WallEast" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.75, 0)
+mesh = SubResource("BoxMesh_wall_ew")
+surface_material_override/0 = ExtResource("1_celmat")
+
+[node name="WallWest" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.75, 0)
+mesh = SubResource("BoxMesh_wall_ew")
+surface_material_override/0 = ExtResource("1_celmat")
+
+; --- Single bounding collision hull ---
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 0)
+shape = SubResource("BoxShape3D_base")

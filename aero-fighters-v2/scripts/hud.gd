@@ -43,7 +43,7 @@ func _ready() -> void:
 		if MissionManager.has_signal("cycle_advanced"):
 			MissionManager.cycle_advanced.connect(_on_cycle_advanced)
 		if MissionManager.has_signal("mission_complete"):
-			MissionManager.mission_complete.connect(_on_mission_complete)
+			MissionManager.mission_complete.connect(_on_mission_complete_with_score)
 
 	_update_target_icons()
 	print("[hud] ready — 8 elements wired")
@@ -81,12 +81,15 @@ func _poll_player(_delta: float) -> void:
 		if throttle_label:
 			throttle_label.text = "THR: %.0f%%" % (thr * 100.0)
 
-	# Altitude AGL — world Y position is used as placeholder until Terrain3D is queried
-	# Real AGL (Terrain3D sample) added in Wave 4 crash_detector integration.
-	if player_node is RigidBody3D or player_node is Node3D:
-		var world_y: float = (player_node as Node3D).global_position.y
-		if altitude_label:
-			altitude_label.text = "ALT: %.0f m" % world_y
+	# Altitude AGL — prefer crash_detector.get_agl() for terrain-relative altitude.
+	var agl: float = 0.0
+	var crash_det: Node = player_node.find_child("CrashDetector", true, false)
+	if crash_det and crash_det.has_method("get_agl"):
+		agl = crash_det.get_agl()
+	elif player_node is Node3D:
+		agl = (player_node as Node3D).global_position.y
+	if altitude_label:
+		altitude_label.text = "ALT: %.0f m" % agl
 
 	# Boundary warning distance (horizontal distance from origin)
 	var pos_3d: Vector3 = Vector3.ZERO
@@ -113,15 +116,15 @@ func _update_boundary_flash(delta: float) -> void:
 # MissionManager signal handlers
 # ────────────────────────────────────────────────────────────────────────────────
 
-func _on_target_destroyed(target_type: String) -> void:
+func _on_target_destroyed(target_type: String, score_value: int) -> void:
 	match target_type:
 		"factory":
 			_factory_alive = false
 		"base":
 			_base_alive = false
-		"aa_cluster":
+		"aa_gun", "aa_cluster":
 			_aa_alive = false
-	_score += 600  # placeholder score increment; full scoring in T-G-19
+	_score += score_value
 	_update_target_icons()
 	if score_label:
 		score_label.text = "SCORE: %d" % _score
@@ -135,11 +138,21 @@ func _on_cycle_advanced(cycle: int) -> void:
 	_update_target_icons()
 	if mission_n_label:
 		mission_n_label.text = "Mission %d" % _mission_cycle
+	# Update score display to reflect cumulative score from MissionManager
+	if score_label:
+		score_label.text = "SCORE: %d" % MissionManager.total_score
 
 
-func _on_mission_complete() -> void:
+func _on_mission_complete_with_score(cycle: int, total_score: int) -> void:
 	if mission_n_label:
-		mission_n_label.text = "MISSION COMPLETE"
+		mission_n_label.text = "MISSION %d COMPLETE" % cycle
+	if score_label:
+		score_label.text = "SCORE: %d" % total_score
+
+
+func show_crashed() -> void:
+	if mission_n_label:
+		mission_n_label.text = "CRASHED — Press R"
 
 
 # ────────────────────────────────────────────────────────────────────────────────

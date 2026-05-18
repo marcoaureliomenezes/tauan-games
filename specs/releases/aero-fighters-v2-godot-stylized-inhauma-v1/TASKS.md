@@ -283,7 +283,7 @@ new-task-id mappings.
   widget → 3 s pause → spawn next cycle with scaled difficulty.
   Depends on T-G-04 + T-G-05.
 
-- **T-G-20 [-] IN PROGRESS — Three target scenes (factory, base, AA cluster).**
+- **T-G-20 [x] DONE — Three target scenes (factory, base, AA cluster).**
   Owner: `game-developer`. Create PackedScenes + scripts:
   - `scenes/Targets/factory.tscn` + `scripts/targets/factory.gd` — HP 20,
     mega-explosion via layered GPUParticles3D.
