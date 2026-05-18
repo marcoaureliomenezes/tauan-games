@@ -126,7 +126,7 @@ new-task-id mappings.
   Wire into GDScript test fixtures for AC-V2-G-02, AC-V2-G-03,
   AC-V2-G-06, AC-V2-G-07, AC-V2-G-08.
 
-- **T-G-06 [ ] OPEN — OSM + SRTM fetch tool (`Tools/inhauma-data-fetch.py`).**
+- **T-G-06 [-] IN PROGRESS — OSM + SRTM fetch tool (`Tools/inhauma-data-fetch.py`).**
   Owner: `game-developer` (ops hat). Python tool that:
   - Downloads Brazil-southeast `.osm.pbf` from Geofabrik (anonymous CC mirror).
   - Clips to Inhaúma bbox via `osmconvert` or `osmium-tool`.
