@@ -474,13 +474,22 @@ BP-first prototyping is the working policy. Promotion to C++ when any of:
 ## 8. Secret & Key Management
 
 - **NASA EarthData credentials:** free account creds for the SRTM tile
-  download in FR-V2-S-01. Storage: 1Password item
-  `aero-fighters-v2/nasa-earthdata` (operator creates before first
-  `Tools/inhauma-data-fetch.py` run). Canonical fetch:
-  `op item get "aero-fighters-v2/nasa-earthdata" --field credential`.
-- **Local consumption:** written to `aero-fighters-v2/.env.local`
-  (gitignored) as `NASA_EARTHDATA_USERNAME=…` + `NASA_EARTHDATA_PASSWORD=…`.
-  Used by the Python fetch tool only.
+  download in FR-V2-S-01.
+  - **Canonical storage (simple path, default):** plaintext in
+    `aero-fighters-v2/.env.local` (gitignored) as
+    `NASA_EARTHDATA_USERNAME=…` + `NASA_EARTHDATA_PASSWORD=…`. The file
+    is read by the Python fetch tool directly. This matches the
+    Foundation's "Simplicidade primeiro" principle and fits the
+    single-operator threat model for a free read-only-public-dataset
+    credential.
+  - **Optional upgrade path (defer until paranoid):** 1Password item
+    `aero-fighters-v2/nasa-earthdata` with a small wrapper script that
+    materializes `.env.local` from `op item get …` on demand. Not
+    required for MVP-2; documented for future-release adoption.
+- **Risk envelope:** NASA EarthData creds are equivalent in stakes to a
+  free newsletter signup — no payment data, no PII beyond email, scope is
+  read-only public datasets. The gitignored `.env.local` storage matches
+  the actual risk.
 - **CI consumption:** not required for MVP-2. The OSM + SRTM extract is run
   by the operator once; outputs are committed via Git LFS to
   `Content/World/`.

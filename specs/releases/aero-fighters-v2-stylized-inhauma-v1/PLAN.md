@@ -62,7 +62,8 @@ Verification commands run before Wave 1 fires:
 
 ```bash
 ~/UnrealEngine-5.5/Engine/Binaries/Linux/UnrealEditor --version
-op item get "aero-fighters-v2/nasa-earthdata" --field username >/dev/null
+grep -E "^NASA_EARTHDATA_(USERNAME|PASSWORD)=" \
+  repos/tauan-games/aero-fighters-v2/.env.local | wc -l   # expect 2
 git lfs version
 ```
 
