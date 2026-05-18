@@ -216,7 +216,7 @@ new-task-id mappings.
   `*.import`, `*.uid`, `*.translation.csv.import`, `addons/*/cache/`,
   `StagedBuilds/`, `.env.local`, `__pycache__/`, `*.pyc`.
 
-- **T-G-14 [-] IN PROGRESS — Godot-shaped LFS `.gitattributes`.**
+- **T-G-14 [x] DONE — Godot-shaped LFS `.gitattributes`.**
   Owner: `game-developer` (ops hat). Path: repo-root `.gitattributes`.
   Update LFS patterns scoped to `aero-fighters-v2/**`: `*.gltf`,
   `*.png` (under `Content/`, `Tests/baselines/`, `Content/World/`),
