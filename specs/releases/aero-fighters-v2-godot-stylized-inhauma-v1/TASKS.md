@@ -201,7 +201,7 @@ new-task-id mappings.
   bbox vars. Add `GODOT_BIN_PATH=~/godot/Godot_v4.x-stable_mono_linux_x86_64/Godot_v4.x-stable_mono_linux.x86_64`.
   File currently tagged `# REWRITE PENDING` from prior pivot.
 
-- **T-G-12 [ ] OPEN — Rewrite `README.md` for Godot 4 + Inhaúma stylized scope.**
+- **T-G-12 [-] IN PROGRESS — Rewrite `README.md` for Godot 4 + Inhaúma stylized scope.**
   Owner: `game-developer` (ops hat). Path: `aero-fighters-v2/README.md`.
   Update title + description to "Stylized cel-shaded flight game over
   Inhaúma MG, Godot 4 + OSM + SRTM". Strip all UE5, Cesium, GCP,
