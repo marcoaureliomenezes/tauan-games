@@ -273,7 +273,7 @@ new-task-id mappings.
   trees/ha forest, ~10/ha grass. Total ≤ 12,000 MultiMesh instances
   budget. Depends on T-G-17.
 
-- **T-G-19 [ ] OPEN — Mission system Autoload (1-cycle loop, 3 targets, win-condition, +1 difficulty).**
+- **T-G-19 [-] IN PROGRESS — Mission system Autoload (1-cycle loop, 3 targets, win-condition, +1 difficulty).**
   Owner: `game-developer`. Implement `autoload/MissionManager.gd`
   (Godot Autoload singleton) per FR-V2-G-07/18. State: current cycle
   counter (int), alive-target list (`Array[Node]`), HP multiplier
