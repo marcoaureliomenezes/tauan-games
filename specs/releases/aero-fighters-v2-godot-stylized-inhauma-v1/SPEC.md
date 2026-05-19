@@ -467,6 +467,53 @@ no installer, no Releases packaging. Build outputs land in
 `aero-fighters-v2/StagedBuilds/` and are run directly. Windows and macOS
 exports are out of scope.
 
+### FR-V2-G-21 — Terrain materialized (map-fidelity amendment 2026-05-19)
+
+Terrain3D heightmap is materialized as `Content/World/inhauma-terrain.res`
+and loaded by `Main.tscn` at startup. Source:
+`Content/World/inhauma-heightmap.png` (16-bit, 3000×3000). Heightmap-to-world
+scale: 1 px = 1 m horizontal, full uint16 range → 0–2095 m altitude (Inhaúma
+valley floor at ~645 m, peak nearby ~1100 m). The materialized `.res` is the
+runtime artifact loaded headlessly; the editor-side import step that produces
+it is documented in `aero-fighters-v2/docs/terrain3d-import.md` and is the
+only Terrain3D operation that requires the editor GUI (carve-out from T-G-16).
+
+### FR-V2-G-22 — Roads rendered (map-fidelity amendment 2026-05-19)
+
+OSM `highway=*` ways within the ±0.20° bbox render as flat ribbon meshes
+via a single `MultiMeshInstance3D`. No AI traffic, no road signs — visual
+fidelity only. Width by class:
+
+| `highway=` class | Ribbon width |
+|---|---:|
+| `motorway`, `trunk` | 12 m |
+| `primary` | 10 m |
+| `secondary` | 8 m |
+| `tertiary` | 6 m |
+| `residential`, `unclassified` | 4 m |
+
+Single dark-grey cel material (consistent with the cel-shader screen-space
+pass per FR-V2-G-11). Source JSON: `Content/World/inhauma-roads.json`,
+produced by an `osmium tags-filter` pass in `Tools/inhauma-data-fetch.py`
+(T-G-25).
+
+### FR-V2-G-23 — Named places labeled (map-fidelity amendment 2026-05-19)
+
+OSM `place=town|village|hamlet|suburb` nodes within the bbox render as
+visible spire markers (tall thin mesh, ~150 m above ground) with a
+`Label3D` showing the place name. **Minimum 5 spires:** Inhaúma,
+Sete Lagoas, Cachoeira da Prata, Capim Branco, Prudente de Morais. The
+spire+label combination must be readable from cockpit altitude
+(200–600 m AGL). Source JSON: `Content/World/inhauma-places.json` (T-G-25).
+
+### FR-V2-G-24 — Hydrography (map-fidelity amendment 2026-05-19)
+
+OSM `waterway=river` ways + `natural=water` polygons within the bbox render
+as a single flat plane per body at heightmap-sampled elevation. Tinted blue
+cel material (paired with the cel-shader screen-space pass per FR-V2-G-11).
+**At least Rio das Velhas must be visible threading the valley.** Source
+JSON: `Content/World/inhauma-hydro.json` (T-G-25).
+
 ---
 
 ## 6. Non-Functional Requirements
@@ -628,6 +675,10 @@ path open without re-pinning the engine binary later.
 | AC-V2-G-21 | v1 Three.js Playwright suite remains entirely green | `ci-v1.yml` runs the full v1 spec set on every commit affecting `aero-fighters/`; all existing v1 ACs pass. | Playwright CI |
 | AC-V2-G-22 | Linux x64 export runs on operator hardware | `godot --export-release "Linux/X11" …` produces a launchable Linux binary on Iris Xe Inspiron; manual smoke: launches, reaches MENU, transitions to AIRBORNE, exits clean. | Manual |
 | AC-V2-G-23 | GH-hosted lint-only CI is green | `aero-v2-godot-ci.yml` on `ubuntu-latest`: gdlint check, scene-file validity script, Python flake8 on Tools/, LFS verify. | GH Actions |
+| AC-V2-G-24 | Terrain `.res` materialized + loaded at boot (amendment FR-V2-G-21) | Headless boot prints `[terrain] loaded inhauma-terrain.res — <X>×<Y>` with non-zero dimensions. | `godot --headless --quit --path aero-fighters-v2/ 2>&1 \| grep '\[terrain\]'` |
+| AC-V2-G-25 | OSM roads rendered (amendment FR-V2-G-22) | Headless boot prints `[road_spawner] rendered N road segments` with N ≥ 200. | Same headless boot grep |
+| AC-V2-G-26 | Named places labeled (amendment FR-V2-G-23) | Headless boot prints `[poi_spawner] placed N named places` with N ≥ 5; labels include Inhaúma, Sete Lagoas, Cachoeira da Prata, Capim Branco, Prudente de Morais. | Headless boot grep + visual screenshot evidence in `Reports/map-fidelity/` (T-G-29) |
+| AC-V2-G-27 | Hydrography rendered (amendment FR-V2-G-24) | Headless boot prints `[hydro_spawner] rendered N water bodies` with N ≥ 1; Rio das Velhas visible in editor screenshot. | Same headless boot grep + screenshot (T-G-29) |
 
 ---
 
@@ -815,3 +866,17 @@ Cross-references for the PLAN author:
 ## 15. Approval
 
 - [x] **Status:** Aprovado — 2026-05-18 (operator pre-approved during grill session 2026-05-18T005834Z)
+
+---
+
+## 16. Changelog
+
+### 2026-05-19 — Map Fidelity Amendment
+
+Added FR-V2-G-21..24 and AC-V2-G-24..27 for geographically faithful map
+rendering (terrain materialization, OSM roads, named place labels,
+hydrography). Operator decision recorded in
+`.claude/plans/we-need-to-evolve-tranquil-dragon.md`. Scope = within-release
+amendment (no new release ID; ACTIVE.md phase unchanged). Implementation
+tasks T-G-25..T-G-30 appended to TASKS.md. PLAN.md gains a Wave 4.5 between
+Wave 4 and Wave 5 (3-agent parallel; file-set walls).

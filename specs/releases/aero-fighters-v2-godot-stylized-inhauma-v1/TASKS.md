@@ -337,6 +337,21 @@ new-task-id mappings.
 
 ---
 
+## Map Fidelity Amendment tasks (2026-05-19)
+
+Within-release amendment per approved plan
+`.claude/plans/we-need-to-evolve-tranquil-dragon.md` §Phase B and SPEC §16.
+ACTIVE.md phase unchanged (release stays IMPLEMENTATION).
+
+- [ ] T-G-25 — Extend `Tools/inhauma-data-fetch.py` with 3 new osmium tags-filter passes → write `Content/World/inhauma-{roads,places,hydro}.json`. Re-run script; commit JSON via LFS. Owner: game-designer.
+- [ ] T-G-26 — New `scripts/road_spawner.gd` rendering OSM highways via MultiMeshInstance3D ribbons. Owner: game-developer.
+- [ ] T-G-27 — New `scripts/poi_spawner.gd` rendering named place spires with Label3D. Owner: game-developer.
+- [ ] T-G-28 — New `scripts/hydro_spawner.gd` rendering water bodies as cel-tinted flat planes. Owner: game-developer.
+- [ ] T-G-29 — Visual verification: editor screenshot from cockpit at WGS84 (-19.49, -44.38) facing east + OSM zoom-13 reference. Commit both to `Reports/map-fidelity/`. Owner: game-tester.
+- [ ] T-G-30 — Append amendment closure evidence to SPEC.md §16 with commits referenced. Owner: product-engineer.
+
+---
+
 ## Conventions
 
 - One `[-]` IN PROGRESS at a time per this file. Pick a task with

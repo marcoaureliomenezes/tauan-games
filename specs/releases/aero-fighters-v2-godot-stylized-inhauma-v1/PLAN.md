@@ -180,7 +180,40 @@ factory/base/AA cluster meshes.
 
 **Verification:** three target scenes present; MissionManager autoload
 present; operator PIE: 3 targets → MISSION COMPLETE → next cycle spawns.
-All green → Wave 5.
+All green → Wave 4.5.
+
+---
+
+## 7b. Wave 4.5 — Map Fidelity Amendment (2026-05-19)
+
+**Tasks:** T-G-25, T-G-26, T-G-27, T-G-28, T-G-29, T-G-30. **Calendar:**
+mid-week 5 (inserted between Wave 4 closure and Wave 5 harness work).
+Within-release amendment per approved plan
+`.claude/plans/we-need-to-evolve-tranquil-dragon.md` §Phase B. ACTIVE.md
+phase unchanged (release stays IMPLEMENTATION); CLOSURE happens once Wave 5
+also closes.
+
+**3-agent parallel structure (single wave) with strict file-set walls:**
+
+- **`game-designer`** — T-G-25. Writes only `Tools/inhauma-data-fetch.py`
+  (extend with 3 new `osmium tags-filter` passes) and emits
+  `Content/World/inhauma-{roads,places,hydro}.json`. Commits JSON via LFS.
+- **`game-developer` (dev-A)** — T-G-26. Writes only
+  `scripts/road_spawner.gd` and the road MultiMeshInstance3D node added to
+  `scenes/Main.tscn`. No POI / hydro touch.
+- **`game-developer` (dev-B)** — T-G-27 + T-G-28. Writes only
+  `scripts/poi_spawner.gd`, `scripts/hydro_spawner.gd`, and the POI + hydro
+  nodes in `scenes/Main.tscn` (different node names from dev-A's road
+  node, no collision).
+
+After the 3-agent wave: `game-tester` runs T-G-29 (visual verification
+screenshots committed to `Reports/map-fidelity/`); `product-engineer`
+runs T-G-30 (final amendment evidence appended to SPEC §16 with commits).
+Closes FR-V2-G-21..24 and AC-V2-G-24..27.
+
+**Verification:** headless boot grep matches `[(terrain|road|poi|hydro)_spawner]`
+prints; AC counts hit floors (roads ≥ 200, places ≥ 5, hydro ≥ 1). All
+green → Wave 5.
 
 ---
 
