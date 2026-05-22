@@ -5,10 +5,11 @@
 // Para mover ou trocar ilhas: edite ISLAND_DEFS em config.js.
 
 import * as THREE from '../../vendor/three.module.min.js';
-import { scene } from './scene.js';
+import { scene, HEADLESS } from './scene.js';
 import { game } from './state.js';
 import { ISLAND_DEFS, WORLD, COLORS, PLAYER } from './config.js';
 import { explosion } from './fx.js';
+import { classifyGroundContact } from './landing-zones.js';
 
 // ─── Oceano ──────────────────────────────────────────────────────────────────
 const oceanCanvas = document.createElement('canvas');
@@ -45,7 +46,7 @@ oceanTex.wrapS = oceanTex.wrapT = THREE.RepeatWrapping;
 oceanTex.repeat.set(50, 50);
 
 // Geometria de oceano com vértices animados (64×64 segmentos = 4225 vértices)
-const oceanGeom = new THREE.PlaneGeometry(WORLD.OCEAN_SIZE, WORLD.OCEAN_SIZE, 64, 64);
+const oceanGeom = new THREE.PlaneGeometry(WORLD.OCEAN_SIZE, WORLD.OCEAN_SIZE, HEADLESS ? 8 : 64, HEADLESS ? 8 : 64);
 oceanGeom.rotateX(-Math.PI / 2);
 // Salva as posições originais para usar como base nas ondas
 const oceanBase = new Float32Array(oceanGeom.attributes.position.array);
@@ -87,7 +88,7 @@ function updateOceanWaves() {
 
 // ─── Ilhas ───────────────────────────────────────────────────────────────────
 function createIsland(cx, cz, radius, peakHeight) {
-  const seg = 44;
+  const seg = HEADLESS ? 16 : 44;
   const geo = new THREE.PlaneGeometry(radius * 2, radius * 2, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
@@ -139,6 +140,9 @@ let _activeHeightFn = islandHeightAt;
 /** Define a função de altura do mapa ativo. Chamado por main.js ao trocar de mapa. */
 export function setActiveHeightFn(fn) { _activeHeightFn = fn; }
 
+/** Retorna a função de altura ativa para diagnósticos/testes. */
+export function getActiveHeightFn() { return _activeHeightFn; }
+
 /** Anel de espuma branca em volta de cada ilha (no waterline). */
 function createFoamRing(cx, cz, radius) {
   const ring = new THREE.Mesh(
@@ -178,6 +182,12 @@ export function islandHeightAt(isl, dx, dz) {
 
 /** Checa colisão do avião com terreno. @returns {'SEA'|'MOUNTAIN'|null} */
 export function checkTerrainCollision(jetPosition) {
+  const contact = classifyGroundContact(
+    { x: jetPosition.x, y: jetPosition.y, z: jetPosition.z },
+    game.activeMap,
+    0,
+  );
+  if (contact.safe && jetPosition.y < contact.height + 5) return null;
   if (jetPosition.y < 3) return 'SEA';
   for (const isl of game.islands) {
     const dx = jetPosition.x - isl.cx;
@@ -198,7 +208,7 @@ export const clouds = [];
 const cloudMats = [];
 
 // Camadas: [altMin, altMax, count, radiusMin, radiusMax, sphereCountMin, sphereCountMax]
-const CLOUD_LAYERS = [
+const CLOUD_LAYERS = HEADLESS ? [] : [
   [80,  130, 20,  8, 18, 15, 25],   // Baixa
   [220, 380, 25, 12, 25, 15, 28],   // Média
   [500, 750, 15, 20, 40, 12, 20],   // Alta (cirrus — mais esparsas)

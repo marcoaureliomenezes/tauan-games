@@ -1,8 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://target_base"]
-
-[ext_resource type="Script" path="res://scripts/target_base.gd" id="1_base"]
-
-[node name="Base" type="StaticBody3D"]
-script = ExtResource("1_base")
-collision_layer = 4
-collision_mask = 2

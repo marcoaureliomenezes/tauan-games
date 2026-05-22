@@ -36,14 +36,19 @@ export function updateHUD() {
   if (heavyEl && game.player.heavyMissiles !== _h.hvy) { heavyEl.textContent = 'HVY: ' + game.player.heavyMissiles; _h.hvy = game.player.heavyMissiles; }
   if (nuclearEl && game.player.nuclearMissiles !== _h.nuk) {
     _h.nuk = game.player.nuclearMissiles;
-    nuclearEl.textContent = '☢ NUK: ' + _h.nuk;
+    nuclearEl.textContent = 'T NUK: ' + _h.nuk;
     nuclearEl.style.color = _h.nuk > 0 ? '#00ff44' : '#444444';
   }
   const alt = Math.max(0, Math.floor(game.player.y * 10));
   if (alt !== _h.alt) { altEl.textContent = 'ALT: ' + alt + 'm'; _h.alt = alt; }
   const tgt = `ALVOS: ${game.targetsDestroyed}/${game.targetsTotal}`;
   if (tgt !== _h.tgt && targetsEl) { targetsEl.textContent = tgt; _h.tgt = tgt; }
-  if (game.cycle !== _h.mis && missionEl) { missionEl.textContent = 'MISSÃO ' + game.cycle; _h.mis = game.cycle; }
+  const sortie = game.missionRealism?.sortie?.state;
+  const missionText = sortie === 'RETURN_TO_BASE' ? 'RETORNE AO AEROPORTO' :
+    sortie === 'SERVICE_SCENE' ? 'SERVIÇO' :
+    sortie === 'TAXI_OUT' ? 'TAXI' :
+    'MISSÃO ' + game.cycle;
+  if (missionText !== _h.mis && missionEl) { missionEl.textContent = missionText; _h.mis = missionText; }
   const spd = Math.round(game.player.speed);
   if (spd !== _h.spd) { speedEl.textContent = 'SPD: ' + spd; _h.spd = spd; }
   const thr = Math.round(game.player.throttle * 100);

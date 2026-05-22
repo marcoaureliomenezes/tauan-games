@@ -11,6 +11,7 @@ import { megaExplosion, scheduleDelayed } from './fx.js';
 import { jet, respawnJet } from './player.js';
 import { audio } from './audio.js';
 import { showOverlay, hideOverlay } from './hud.js';
+import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 
 /** Quantos alvos a missão N tem. Missão 1=8, 2=12, 3+=16. */
 export function targetCountForMission(m) {
@@ -47,6 +48,12 @@ export function startGame() {
   if (game.running) return;
   // CONTRATO: writer de game.running
   game.running = true;
+  if (game.missionRealism?.enabled) {
+    if (game.missionRealism.sortie.state === SortieState.MENU) {
+      transitionSortie(game.missionRealism.sortie, SortieEvent.START, {}, game.time);
+    }
+    if (!game.runtime?.map) game.activeMap = 'desert';
+  }
   hideOverlay();
   audio.startEngine();
   if (game.targets.length === 0) spawnMission(game.cycle);
@@ -76,6 +83,14 @@ export function restartGame() {
   game.flags.mayday = false;
   game.flags.maydayTimer = 0;
   game.flags.damageSmoke = 0;
+  if (game.missionRealism?.enabled) {
+    game.missionRealism.sortie.state = SortieState.TAXI_OUT;
+    game.missionRealism.sortie.history.push({ from: null, event: 'restart', to: SortieState.TAXI_OUT, at: game.time });
+    game.missionRealism.service.active = false;
+    game.missionRealism.service.phase = 'idle';
+    game.missionRealism.ejection.active = false;
+    if (!game.runtime?.map) game.activeMap = 'desert';
+  }
   respawnJet();
   game.running = true;
   hideOverlay();
@@ -105,6 +120,11 @@ export function crashAndDie(where) {
 
 /** Avança para a próxima missão. */
 export function nextMission() {
+  if (game.missionRealism?.enabled) {
+    transitionSortie(game.missionRealism.sortie, SortieEvent.ALL_TARGETS_DESTROYED, {}, game.time);
+    showOverlay('RETORNE AO AEROPORTO', 'pouse na pista e taxe até a área de serviço', MISSION.NEXT_OVERLAY_MS);
+    return;
+  }
   game.cycle += 1;
   showOverlay('MISSÃO COMPLETA', `Missão ${game.cycle - 1} cumprida — preparando próxima zona`, MISSION.NEXT_OVERLAY_MS);
   scheduleDelayed(MISSION.COMPLETE_DELAY_MS / 1000, () => {

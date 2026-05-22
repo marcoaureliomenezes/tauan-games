@@ -36,6 +36,17 @@ function createMesa(mDef, scene) {
   for (let i = 0; i < posAttr.count; i++) {
     const x = posAttr.getX(i);
     const z = posAttr.getZ(i);
+
+    // Airport flatten: qualquer vértice sobre superfície do aeroporto vai a y=0
+    const worldX = cx + x;
+    const worldZ = cz + z;
+    if (airportSurface({ x: worldX, z: worldZ }) !== 'none') {
+      posAttr.setY(i, desertAirport.elevation);
+      // Cor de areia neutra na área do aeroporto (sem argila/rocha)
+      colArr[i * 3] = 0.88; colArr[i * 3 + 1] = 0.72; colArr[i * 3 + 2] = 0.38;
+      continue;
+    }
+
     const dist = Math.sqrt(x * x + z * z);
     const t = dist / radius;
 

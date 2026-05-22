@@ -11,8 +11,11 @@ import { audio } from './audio.js';
 import { game } from './state.js';
 import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, COLORS } from './config.js';
 import { explosion, spawnMissileSmoke, nuclearExplosion } from './fx.js';
+import { spawnNuclearFx } from './nuclear-fx.js';
+import { startCinematicCamera } from './camera-modes.js';
 import { damageTarget } from './targets.js';
 import { deformTerrainNuclear } from './world.js';
+import { transitionSortie, SortieEvent } from './sortie-state.js';
 
 // ─── Balas ───────────────────────────────────────────────────────────────────
 // Tracer estilo M61 Vulcan: cilindro alongado amarelo brilhante, trilhando atrás da bala
@@ -226,7 +229,7 @@ export function updatePickups(dt, jetPos) {
     p.mesh.position.y += Math.sin(performance.now() * 0.005) * dt * 0.5;
     if (p.mesh.position.distanceTo(jetPos) < 3) {
       // CONTRATO: writer de game.player.missiles
-      game.player.missiles = Math.min(game.player.missiles + 10, MISSILES.MAX);
+      game.player.missiles = Math.min(game.player.missiles + 10, MISSILES_LIGHT.MAX);
       scene.remove(p.mesh); pickups.splice(i, 1); continue;
     }
     if (p.life <= 0) { scene.remove(p.mesh); pickups.splice(i, 1); }
@@ -292,13 +295,24 @@ function applyNuclearShockwave(epicenter) {
       damageTarget(t, dmg);
     }
   }
-  // Player damage check
+  // Player damage check — use MAYDAY for dramatic visual instead of instant life deduction
   const playerPos = new THREE.Vector3(game.player.x, game.player.y, game.player.pz || 0);
   const pd = epicenter.distanceTo(playerPos);
-  if (pd < MISSILES_NUCLEAR.PLAYER_KILL_RADIUS) {
-    game.player.lives = 0;
-  } else if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS) {
-    game.player.lives = Math.max(0, game.player.lives - 1);
+  if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS && !game.flags.mayday) {
+    if (pd < MISSILES_NUCLEAR.PLAYER_KILL_RADIUS) {
+      // Lethal range → force MAYDAY (plane falls on fire, then instant death after timer)
+      game.flags.mayday = true;
+      game.flags.maydayTimer = 0;
+      game.player.hp = 0;
+      game.player.lives = 1; // will be decremented to 0 in _ejectAndRespawn
+      if (game.missionRealism?.enabled) {
+        transitionSortie(game.missionRealism.sortie, SortieEvent.CRITICAL_DAMAGE, {}, game.time);
+      }
+      audio.explosion(1.5, epicenter);
+    } else {
+      // Damage range → lose 1 life; if already dead, trigger MAYDAY
+      game.player.lives = Math.max(0, game.player.lives - 1);
+    }
   }
   // Shake forte em toda a área de dano (proporcional à distância)
   if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS) {
@@ -352,6 +366,11 @@ export function updateNuclears(dt) {
 
     if (hitTarget || groundHit || expired) {
       nuclearExplosion(n.mesh.position.clone());
+      spawnNuclearFx(n.mesh.position.clone());
+      if (game.missionRealism?.camera) {
+        const _jetPos = new THREE.Vector3(game.player.x, game.player.y, game.player.pz || 0);
+        startCinematicCamera(game.missionRealism.camera, n.mesh.position, _jetPos, game.runtime?.testMode ? 1.4 : 4.0);
+      }
       applyNuclearShockwave(n.mesh.position.clone());
       audio.explosion(1.5, n.mesh.position);
       scene.remove(n.mesh);
