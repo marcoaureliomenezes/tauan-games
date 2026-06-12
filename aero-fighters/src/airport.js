@@ -129,8 +129,9 @@ function addGroundLabel(group, airport, labelText = AIRPORT_TEXT) {
   return { mesh, lights };
 }
 
-/** Luzes de pista + marcações de centerline para qualquer aeroporto. */
+/** Luzes de pista + marcações de centerline + PAPI para qualquer aeroporto. */
 function addRunwayFurniture(group, airport, lightCount = 5, markCount = 4) {
+  addPapi(group, airport);
   const e = airport.elevation;
   const r = airport.runway;
   const lightStep = Math.floor(r.length / (lightCount * 2 + 1) / 2) * 2;
@@ -144,6 +145,17 @@ function addRunwayFurniture(group, airport, lightCount = 5, markCount = 4) {
   }
 }
 
+/** PAPI (WS-4): fileira 2 brancas + 2 vermelhas ao lado da zona de toque. */
+function addPapi(group, airport) {
+  const tz = airport.touchdownZone;
+  const e = airport.elevation;
+  const px = tz.center.x - tz.width / 2 - 9;
+  for (let i = 0; i < 4; i++) {
+    const color = i < 2 ? 0xffffff : 0xff3030;
+    addBox(group, px, e, tz.center.z - 12 + i * 8, 2.4, 1.6, 2.4, color);
+  }
+}
+
 export function createDesertAirport(scene) {
   if (airportGroups.has('desert')) return airportGroups.get('desert');
   const airport = desertAirport;
@@ -154,6 +166,7 @@ export function createDesertAirport(scene) {
   addPavement(group, airport.taxiway.center, airport.taxiway.width, airport.taxiway.length, 0x2b2c2c);
   addPavement(group, airport.serviceZone.center, airport.serviceZone.width, airport.serviceZone.length, 0x343434);
 
+  addPapi(group, airport);
   for (let i = -5; i <= 5; i++) {
     addBox(group, airport.runway.center.x - airport.runway.width * 0.42, 0, airport.runway.center.z + i * 62, 2, 1.2, 2, 0x88ffcc);
     addBox(group, airport.runway.center.x + airport.runway.width * 0.42, 0, airport.runway.center.z + i * 62, 2, 1.2, 2, 0x88ffcc);
@@ -191,6 +204,7 @@ export function createInhaumaAirport(scene) {
   addPavement(group, airport.taxiway.center, airport.taxiway.width, airport.taxiway.length, 0x303332);
   addPavement(group, airport.serviceZone.center, airport.serviceZone.width, airport.serviceZone.length, 0x3b3a33);
 
+  addPapi(group, airport);
   for (let i = -4; i <= 4; i++) {
     addBox(group, airport.runway.center.x - airport.runway.width * 0.42, 0, airport.runway.center.z + i * 58, 1.8, 1.0, 1.8, 0x88ffcc);
     addBox(group, airport.runway.center.x + airport.runway.width * 0.42, 0, airport.runway.center.z + i * 58, 1.8, 1.0, 1.8, 0x88ffcc);

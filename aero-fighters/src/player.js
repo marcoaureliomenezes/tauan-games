@@ -154,7 +154,42 @@ function buildJet() {
   g.userData.navRed   = navRed;
   g.userData.strobe   = strobe;
 
+  // Trem de pouso (WS-4): 3 pernas com roda — retrai/estende por altura
+  const gear = new THREE.Group();
+  const strutMat = new THREE.MeshLambertMaterial({ color: 0x9aa0a8 });
+  const tireMat  = new THREE.MeshLambertMaterial({ color: 0x101012 });
+  const makeLeg = (x, z, len) => {
+    const leg = new THREE.Group();
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, len, 6), strutMat);
+    strut.position.y = -len / 2;
+    leg.add(strut);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 10), tireMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.y = -len;
+    leg.add(wheel);
+    leg.position.set(x, -0.22, z);
+    return leg;
+  };
+  gear.add(makeLeg(0, -1.0, 0.52));     // nariz
+  gear.add(makeLeg(-0.55, 0.6, 0.55));  // principal esquerda
+  gear.add(makeLeg(0.55, 0.6, 0.55));   // principal direita
+  gear.userData.k = 1;                  // 1 = baixado, 0 = recolhido
+  g.add(gear);
+  g.userData.gear = gear;
+
   return g;
+}
+
+/** Anima o trem de pouso: baixa no chão/aproximação, recolhe em voo. */
+function updateGearVisual(wantDeployed, dt) {
+  const gear = jet.userData.gear;
+  if (!gear) return;
+  const target = wantDeployed ? 1 : 0;
+  gear.userData.k += (target - gear.userData.k) * Math.min(1, dt * 3.2);
+  const k = gear.userData.k;
+  gear.scale.y = Math.max(0.04, k);
+  gear.position.y = (1 - k) * 0.34; // pernas recolhem para dentro da fuselagem
+  gear.visible = k > 0.07;
 }
 
 /** Cria meshes visuais de mísseis nas asas e sob fuselagem. */
@@ -356,10 +391,11 @@ export function updatePlayer(dt, input, onCrash) {
     // Smooth liftoff: gate on runway contact + V_ROTATE speed + rotation input.
     // Applies ROTATE_LIFT force gradually; no teleport. Transitions to AIRBORNE
     // only when height > 4m above airport elevation AND vertical speed > 0.
+    // ADR-U1: no solo a intenção "subir" é inequívoca — ↑ OU ↓ rotacionam.
     if (sortie.state === SortieState.TAKEOFF_ROLL &&
         contact.type === 'runway' &&
         game.player.speed >= PLAYER.V_ROTATE &&
-        input.pitchDown) {
+        (input.pitchDown || input.pitchUp)) {
       if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
       _pitchQ.setFromAxisAngle(_lPitch, PLAYER.PITCH_RATE * 0.35 * dt);
       jet.quaternion.multiply(_pitchQ);
@@ -383,6 +419,19 @@ export function updatePlayer(dt, input, onCrash) {
     }
     if ((sortie.state === SortieState.LANDING_ROLL || sortie.state === SortieState.TAXI_IN) && contact.type === 'service' && game.player.speed < 10) {
       transitionSortie(sortie, SortieEvent.SERVICE_ZONE_REACHED, {}, game.time);
+    }
+
+    updateGearVisual(true, dt);
+    // Rumble + poeira de roda na corrida de decolagem (T-U-10)
+    if (sortie.state === SortieState.TAKEOFF_ROLL && game.player.speed > 15) {
+      game.flags.cameraShake = { intensity: Math.min(0.55, game.player.speed / 110), duration: 0.08 };
+      jet.userData._dustT = (jet.userData._dustT || 0) - dt;
+      if (jet.userData._dustT <= 0) {
+        jet.userData._dustT = 0.14;
+        firePosition(_maydayPos, -2.6);
+        _maydayPos.y = contact.height + 0.4;
+        spawnMissileSmoke(_maydayPos);
+      }
     }
 
     game.player.x = jet.position.x;
@@ -436,25 +485,50 @@ export function updatePlayer(dt, input, onCrash) {
   if (input.throttleUp)   game.player.throttle = Math.min(1.0, game.player.throttle + dt * PLAYER.THROTTLE_UP_RATE);
   if (input.throttleDown) game.player.throttle = Math.max(0.05, game.player.throttle - dt * PLAYER.THROTTLE_DN_RATE);
 
-  // Speed converge — usa game.player.throttle já atualizado acima
-  const tgtSpd = PLAYER.MIN_SPD + game.player.throttle * (PLAYER.MAX_SPD - PLAYER.MIN_SPD);
+  // WS-3: MODELO DE ENERGIA — subir drena velocidade, mergulhar devolve;
+  // empuxo cai acima do teto prático; stall derruba o nariz e amolece comandos.
+  const fwdPre = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
+  let tgtSpd = PLAYER.MIN_SPD + game.player.throttle * (PLAYER.MAX_SPD - PLAYER.MIN_SPD);
+  tgtSpd -= fwdPre.y * PLAYER.CLIMB_TRADE;
+  if (jet.position.y > PLAYER.CEILING) {
+    tgtSpd *= Math.max(0.35, 1 - (jet.position.y - PLAYER.CEILING) / 500);
+  }
+  tgtSpd = Math.min(tgtSpd, PLAYER.MAX_SPD * PLAYER.DIVE_OVERSPEED);
   game.player.speed += (tgtSpd - game.player.speed) * Math.min(1, dt * PLAYER.CONVERGE_RATE);
   game.player.speed = Math.max(2, game.player.speed);
   game.player.stalled = game.player.speed < PLAYER.STALL_SPD;
 
+  // Stall: nariz cai sozinho até o mergulho devolver velocidade
+  const ctl = game.player.stalled ? PLAYER.STALL_CTL : 1;
+  if (game.player.stalled) {
+    _pitchQ.setFromAxisAngle(_lPitch, -PLAYER.STALL_NOSE_DROP * dt);
+    jet.quaternion.multiply(_pitchQ);
+    clampPitchAttitude();
+  }
+
   // Pitch INVERTIDO (estilo simulador)
-  if (input.pitchUp)   { _pitchQ.setFromAxisAngle(_lPitch, -PLAYER.PITCH_RATE * dt); jet.quaternion.multiply(_pitchQ); }
-  if (input.pitchDown) { _pitchQ.setFromAxisAngle(_lPitch,  PLAYER.PITCH_RATE * dt); jet.quaternion.multiply(_pitchQ); }
+  if (input.pitchUp)   { _pitchQ.setFromAxisAngle(_lPitch, -PLAYER.PITCH_RATE * ctl * dt); jet.quaternion.multiply(_pitchQ); }
+  if (input.pitchDown) { _pitchQ.setFromAxisAngle(_lPitch,  PLAYER.PITCH_RATE * ctl * dt); jet.quaternion.multiply(_pitchQ); }
   if (input.pitchUp || input.pitchDown) clampPitchAttitude();
+
+  // Auto-trim (WS-3): sem input de pitch, a atitude decai suavemente para nivelado —
+  // elimina o "sobe para sempre" de atitude residual.
+  if (!input.pitchUp && !input.pitchDown && !game.player.stalled && game.flags.rollTimer <= 0) {
+    _attitudeEuler.setFromQuaternion(jet.quaternion, 'YXZ');
+    if (Math.abs(_attitudeEuler.x) > 0.005) {
+      _attitudeEuler.x *= Math.max(0, 1 - PLAYER.TRIM_RATE * dt);
+      jet.quaternion.setFromEuler(_attitudeEuler);
+    }
+  }
 
   // Roll + yaw coordenado
   if (input.rollLeft) {
-    _rollQ.setFromAxisAngle(_lRoll, PLAYER.ROLL_RATE * dt);  jet.quaternion.multiply(_rollQ);
-    _yawQ.setFromAxisAngle(_worldUp, PLAYER.YAW_RATE * dt);  jet.quaternion.premultiply(_yawQ);
+    _rollQ.setFromAxisAngle(_lRoll, PLAYER.ROLL_RATE * ctl * dt);  jet.quaternion.multiply(_rollQ);
+    _yawQ.setFromAxisAngle(_worldUp, PLAYER.YAW_RATE * ctl * dt);  jet.quaternion.premultiply(_yawQ);
   }
   if (input.rollRight) {
-    _rollQ.setFromAxisAngle(_lRoll, -PLAYER.ROLL_RATE * dt); jet.quaternion.multiply(_rollQ);
-    _yawQ.setFromAxisAngle(_worldUp, -PLAYER.YAW_RATE * dt); jet.quaternion.premultiply(_yawQ);
+    _rollQ.setFromAxisAngle(_lRoll, -PLAYER.ROLL_RATE * ctl * dt); jet.quaternion.multiply(_rollQ);
+    _yawQ.setFromAxisAngle(_worldUp, -PLAYER.YAW_RATE * ctl * dt); jet.quaternion.premultiply(_yawQ);
   }
   // Rudder (yaw puro)
   if (input.yawLeft)  { _yawQ.setFromAxisAngle(_worldUp,  PLAYER.YAW_RATE * PLAYER.RUDDER_FACTOR * dt); jet.quaternion.premultiply(_yawQ); }
@@ -502,6 +576,10 @@ export function updatePlayer(dt, input, onCrash) {
   }
 
   audio.setEngineRPM(game.player.speed, game.player.throttle);
+
+  // Trem de pouso: estende abaixo de 16 m sobre a superfície local (WS-4)
+  const _gearSurf = surfaceInfoAt(jet.position.x, jet.position.z);
+  updateGearVisual(jet.position.y - _gearSurf.height < 16, dt);
 
   // Afterburner: glow + flame escalam com throttle (0.6x parado, 1.6x full)
   const burn = 0.55 + game.player.throttle * 1.05;

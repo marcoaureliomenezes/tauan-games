@@ -66,22 +66,24 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     expect(yAfter).toBeGreaterThan(yBefore);
   });
 
-  // AC-5: ArrowUp does not crash during ground roll / early rotation
-  test('AC-5: ArrowUp remains controllable and does not lift off during takeoff roll', async ({ page }) => {
+  // AC-5 (ADR-U1, aero-fighters-uplift-v1): no SOLO a intenção "subir" é inequívoca —
+  // ↑ OU ↓ rotacionam e decolam. (Substitui o contrato antigo em que ↑ não decolava.)
+  test('AC-5: ArrowUp rotates and lifts off during takeoff roll (ADR-U1)', async ({ page }) => {
     await startGame(page);
     const yBefore = await page.evaluate(() => window.game.player.y);
     await page.keyboard.down('KeyW');
+    // espera ganhar velocidade de rotação antes de puxar
+    await page.waitForTimeout(2600);
     await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(3600);
+    await page.waitForTimeout(1400);
     await page.keyboard.up('ArrowUp');
     await page.keyboard.up('KeyW');
     const result = await page.evaluate(() => ({
       running: window.game.running && !window.game.player.dead,
       y: window.game.player.y,
     }));
-    expect(result.y).toBeLessThanOrEqual(yBefore + 0.5);
-    const running = result.running;
-    expect(running).toBe(true);
+    expect(result.y).toBeGreaterThan(yBefore + 2);
+    expect(result.running).toBe(true);
   });
 
   // AC-6: jet can take off and survive initial climb

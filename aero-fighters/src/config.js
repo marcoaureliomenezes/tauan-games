@@ -6,8 +6,14 @@
 export const PLAYER = {
   MAX_SPD: 80,        // m/s — velocidade máxima com throttle 100%
   MIN_SPD: 8,         // m/s — abaixo disso o avião perde sustentação
-  STALL_SPD: 10,      // m/s — limiar para HUD piscar "STALL"
+  STALL_SPD: 14,      // m/s — abaixo disso o nariz cai e os comandos amolecem (WS-3)
   GRAVITY: 14,        // m/s² — puxa o avião para baixo todo frame
+  CLIMB_TRADE: 35,    // m/s de velocidade trocados por atitude (subir drena, mergulhar devolve)
+  DIVE_OVERSPEED: 1.3,// multiplicador de MAX_SPD permitido em mergulho
+  CEILING: 650,       // m — acima disso o empuxo cai (teto prático ~1.000 m)
+  TRIM_RATE: 0.35,    // 1/s — auto-trim do pitch para 0 sem input (WS-3)
+  STALL_NOSE_DROP: 0.45, // rad/s — queda de nariz em stall
+  STALL_CTL: 0.45,    // autoridade de comando durante stall
   PITCH_RATE: 1.45,   // rad/s — quão rápido o nariz sobe/desce
   PITCH_UP_LIMIT: 0.58,   // rad — impede subida vertical/descontrole após decolagem
   PITCH_DOWN_LIMIT: -0.70, // rad — impede mergulho invertido por input sustentado

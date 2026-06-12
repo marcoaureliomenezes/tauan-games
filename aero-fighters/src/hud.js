@@ -3,6 +3,7 @@
 // Para adicionar widget novo: adicione span no index.html + campo em _h + linha em updateHUD.
 
 import { game } from './state.js';
+import { getAirportForMap } from './airport.js';
 
 const livesEl     = document.getElementById('lives');
 const damageBarEl = document.getElementById('damage-bar');
@@ -17,8 +18,9 @@ const overlayEl  = document.getElementById('overlay');
 const speedEl    = document.getElementById('speed');
 const throttleEl = document.getElementById('throttle');
 const stallEl    = document.getElementById('stall-warn');
+const approachEl = document.getElementById('approach');
 
-const _h = { lives:-1, hp:-1, score:-1, msls:-1, hvy:-1, nuk:-1, alt:-1, tgt:'', mis:-1, spd:-1, thr:-1, stall:null };
+const _h = { lives:-1, hp:-1, score:-1, msls:-1, hvy:-1, nuk:-1, alt:-1, tgt:'', mis:-1, spd:-1, thr:-1, stall:null, guide:'' };
 
 /** Atualiza HUD lendo de `game.player` e flags. Mudanças só renderizam o que mudou. */
 export function updateHUD() {
@@ -39,7 +41,8 @@ export function updateHUD() {
     nuclearEl.textContent = 'T NUK: ' + _h.nuk;
     nuclearEl.style.color = _h.nuk > 0 ? '#00ff44' : '#444444';
   }
-  const alt = Math.max(0, Math.floor(game.player.y * 10));
+  // Altímetro honesto (WS-3): metros reais, sem fator x10
+  const alt = Math.max(0, Math.floor(game.player.y));
   if (alt !== _h.alt) { altEl.textContent = 'ALT: ' + alt + 'm'; _h.alt = alt; }
   const tgt = `ALVOS: ${game.targetsDestroyed}/${game.targetsTotal}`;
   if (tgt !== _h.tgt && targetsEl) { targetsEl.textContent = tgt; _h.tgt = tgt; }
@@ -55,6 +58,28 @@ export function updateHUD() {
   if (thr !== _h.thr) { throttleEl.textContent = 'THR: ' + thr + '%'; _h.thr = thr; }
   const stalled = game.player.stalled;
   if (stalled !== _h.stall) { stallEl.style.display = stalled ? 'inline-block' : 'none'; _h.stall = stalled; }
+
+  // Guia de aproximação (WS-4): visível em RETURN_TO_BASE — distância, alinhamento e rampa
+  if (approachEl) {
+    const showGuide = sortie === 'RETURN_TO_BASE';
+    let guide = '';
+    if (showGuide) {
+      const airport = getAirportForMap(game.activeMap);
+      const r = airport.runway;
+      const dx = game.player.x - r.center.x;
+      const dz = game.player.pz - r.center.z;
+      const dist = Math.round(Math.hypot(dx, dz));
+      const align = Math.abs(dx) <= r.width * 0.45 ? 'ALINHADO' : (dx > 0 ? '← ESQUERDA' : 'DIREITA →');
+      const aboveRunway = game.player.y - airport.elevation;
+      const slope = aboveRunway > dist * 0.18 + 12 ? 'DESÇA' : aboveRunway < 6 ? 'RASANTE' : 'RAMPA OK';
+      guide = `▼ PISTA ${dist}m | ${align} | ${slope}`;
+    }
+    if (guide !== _h.guide) {
+      approachEl.textContent = guide;
+      approachEl.style.display = guide ? 'inline-block' : 'none';
+      _h.guide = guide;
+    }
+  }
 }
 
 let overlayTimer = 0;

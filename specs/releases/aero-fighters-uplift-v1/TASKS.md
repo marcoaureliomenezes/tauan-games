@@ -25,28 +25,28 @@
 
 ## Wave 3 — Decolagem/pouso (WS-4)
 
-- [-] T-U-06: rotação no solo com ↑ OU ↓ (ADR-U1) (`player.js`).
-- [-] T-U-07: trem de pouso visível com retração/extensão por altura (`player.js`).
-- [-] T-U-08: PAPI na cabeceira + guia de aproximação no HUD + pista no minimapa.
-- [-] T-U-09: touchdown contínuo (sem teleporte) + fumaça de pneu + rollout
+- [x] T-U-06: rotação no solo com ↑ OU ↓ (ADR-U1) (`player.js`).
+- [x] T-U-07: trem de pouso visível com retração/extensão por altura (`player.js`).
+- [x] T-U-08: PAPI na cabeceira + guia de aproximação no HUD + pista no minimapa.
+- [x] T-U-09: touchdown contínuo (sem teleporte) + fumaça de pneu + rollout
       progressivo; hard-landing em pista = bounce + 1 hp.
-- [-] T-U-10: rumble/poeira na corrida de decolagem.
+- [x] T-U-10: rumble/poeira na corrida de decolagem.
 
 ## Wave 4 — Voo com energia (WS-3)
 
-- [ ] T-U-11: acoplamento atitude×velocidade + drag + auto-trim + stall com queda
+- [x] T-U-11: acoplamento atitude×velocidade + drag + auto-trim + stall com queda
       de nariz + teto prático (`player.js`, `config.js`).
-- [ ] T-U-12: altímetro honesto (m reais) no HUD.
+- [x] T-U-12: altímetro honesto (m reais) no HUD.
 
 ## Wave 5 — Mortes + Nuke (WS-5/WS-6)
 
-- [ ] T-U-13: scorch decal compartilhado + crash de terra com explosão+cicatriz;
+- [-] T-U-13: scorch decal compartilhado + crash de terra com explosão+cicatriz;
       crash de água com splash+afundamento e câmera baixa (`fx.js`, `missions.js`,
       `player.js`).
-- [ ] T-U-14: nuke cinematic sempre ativa, wide-shot baixo com dolly
+- [-] T-U-14: nuke cinematic sempre ativa, wide-shot baixo com dolly
       (`camera-modes.js`); slow-mo dt global 0.35×/1.5 s com guardas (ADR-U4)
       (`main.js`).
-- [ ] T-U-15: shake na chegada do anel (delay dist/340) + PointLight transitória +
+- [-] T-U-15: shake na chegada do anel (delay dist/340) + PointLight transitória +
       cratera/scorch em qualquer piso + fumaça residual 60 s (`projectiles.js`,
       `fx.js`, `nuclear-fx.js`).
 
