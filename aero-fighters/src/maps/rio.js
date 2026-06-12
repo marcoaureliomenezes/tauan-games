@@ -5,7 +5,7 @@
 import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
 import { airportSurface } from '../landing-zones.js';
-import { desertAirport } from '../airport.js';
+import { rioAirport } from '../airport.js';
 
 let _scene = null;
 
@@ -219,8 +219,8 @@ export function updateRioWorld(dt, playerPos) {
 export function rioHeightAt(isl, dx, dz) {
   const worldX = isl.cx + dx;
   const worldZ = isl.cz + dz;
-  if (airportSurface({ x: worldX, z: worldZ }) !== 'none') {
-    return desertAirport.elevation;
+  if (airportSurface({ x: worldX, z: worldZ }, 'rio') !== 'none') {
+    return rioAirport.elevation;
   }
   const t = Math.sqrt(dx * dx + dz * dz) / isl.radius;
   if (t >= 1.0) return 0;

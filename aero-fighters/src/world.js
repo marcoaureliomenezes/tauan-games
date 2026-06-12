@@ -9,7 +9,8 @@ import { scene, HEADLESS } from './scene.js';
 import { game } from './state.js';
 import { ISLAND_DEFS, WORLD, COLORS, PLAYER } from './config.js';
 import { explosion } from './fx.js';
-import { classifyGroundContact } from './landing-zones.js';
+import { airportSurface } from './landing-zones.js';
+import { getAirportForMap } from './airport.js';
 
 // ─── Oceano ──────────────────────────────────────────────────────────────────
 const oceanCanvas = document.createElement('canvas');
@@ -180,25 +181,41 @@ export function islandHeightAt(isl, dx, dz) {
   return Math.max(0, (1 - dist * dist * 1.35) * isl.peakHeight + noise);
 }
 
-/** Checa colisão do avião com terreno. @returns {'SEA'|'MOUNTAIN'|null} */
-export function checkTerrainCollision(jetPosition) {
-  const contact = classifyGroundContact(
-    { x: jetPosition.x, y: jetPosition.y, z: jetPosition.z },
-    game.activeMap,
-    0,
-  );
-  if (contact.safe && jetPosition.y < contact.height + 5) return null;
-  if (jetPosition.y < 3) return 'SEA';
+/** VERDADE DE SUPERFÍCIE (WS-1) — única fonte para colisão, pouso e HUD.
+ *  Devolve { height, kind } com kind ∈ 'water'|'land'|'mountain'|'runway'|'taxiway'|'service'.
+ *  Água só existe onde o mapa tem água: islands (mar aberto) e rio (além da praia). */
+export function surfaceInfoAt(x, z) {
+  const surf = airportSurface({ x, z }, game.activeMap);
+  if (surf !== 'none') {
+    return { height: getAirportForMap(game.activeMap).elevation, kind: surf };
+  }
+  let h = 0;
   for (const isl of game.islands) {
-    const dx = jetPosition.x - isl.cx;
-    const dz = jetPosition.z - isl.cz;
-    const r2 = dx * dx + dz * dz;
-    if (r2 < isl.radius * isl.radius) {
+    const dx = x - isl.cx;
+    const dz = z - isl.cz;
+    if (dx * dx + dz * dz < isl.radius * isl.radius) {
       const localH = _activeHeightFn(isl, dx, dz);
-      if (jetPosition.y < localH + PLAYER.MOUNTAIN_BUFFER) return 'MOUNTAIN';
+      if (localH > h) h = localH;
     }
   }
-  return null;
+  if (h > 2.5) return { height: h, kind: 'mountain' };
+  const mapKey = game.activeMap || 'islands';
+  if (mapKey === 'islands') return { height: Math.max(h, 0), kind: h > 0.5 ? 'land' : 'water' };
+  if (mapKey === 'rio') return { height: h, kind: z < -230 && h <= 0.5 ? 'water' : 'land' };
+  return { height: h, kind: 'land' };
+}
+
+/** Checa colisão do avião com terreno via surfaceInfoAt.
+ *  @returns {'WATER'|'GROUND'|'MOUNTAIN'|null} — pavimento nunca colide aqui
+ *  (a máquina de contato em player.js trata pouso/hard-landing). */
+export function checkTerrainCollision(jetPosition) {
+  const s = surfaceInfoAt(jetPosition.x, jetPosition.z);
+  if (s.kind === 'runway' || s.kind === 'taxiway' || s.kind === 'service') return null;
+  if (s.kind === 'mountain') {
+    return jetPosition.y < s.height + PLAYER.MOUNTAIN_BUFFER ? 'MOUNTAIN' : null;
+  }
+  if (s.kind === 'water') return jetPosition.y < 1.5 ? 'WATER' : null;
+  return jetPosition.y < s.height + 1.2 ? 'GROUND' : null;
 }
 
 // ─── Nuvens Volumétricas ──────────────────────────────────────────────────────

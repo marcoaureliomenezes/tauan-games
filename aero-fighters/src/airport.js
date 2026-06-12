@@ -26,10 +26,40 @@ export const inhaumaAirport = Object.freeze({
   text: { value: INHAUMA_AIRPORT_TEXT, center: { x: -500, z: 450 }, width: 260, depth: 36 },
 });
 
+export const ISLANDS_AIRPORT_TEXT = 'BASE AERONAVAL DO TAUAN';
+
+// Pista costeira (ADR-U2): atol artificial em mar aberto, elevation acima das ondas.
+export const islandsAirport = Object.freeze({
+  id: 'tauan-atoll-islands',
+  map: 'islands',
+  elevation: 2.0,
+  runway: { center: { x: -160, z: 120 }, heading: 0, length: 760, width: 58 },
+  touchdownZone: { center: { x: -160, z: -130 }, length: 180, width: 48 },
+  taxiway: { center: { x: -160, z: 260 }, length: 180, width: 34 },
+  serviceZone: { center: { x: -160, z: 350 }, length: 86, width: 70 },
+  text: { value: ISLANDS_AIRPORT_TEXT, center: { x: 20, z: 170 }, width: 360, depth: 42 },
+});
+
+export const RIO_AIRPORT_TEXT = 'AEROPORTO SANTOS DUMONT';
+
+// Pista no aterro, a leste da malha urbana (prédios param em x=450).
+export const rioAirport = Object.freeze({
+  id: 'santos-dumont-rio',
+  map: 'rio',
+  elevation: 0.45,
+  runway: { center: { x: 560, z: 200 }, heading: 0, length: 620, width: 52 },
+  touchdownZone: { center: { x: 560, z: 20 }, length: 160, width: 44 },
+  taxiway: { center: { x: 560, z: 440 }, length: 140, width: 30 },
+  serviceZone: { center: { x: 560, z: 560 }, length: 86, width: 70 },
+  text: { value: RIO_AIRPORT_TEXT, center: { x: 640, z: 480 }, width: 280, depth: 38 },
+});
+
 const airportGroups = new Map();
 
+const AIRPORT_REGISTRY = { desert: desertAirport, inhauma: inhaumaAirport, islands: islandsAirport, rio: rioAirport };
+
 export function getAirportForMap(map = 'desert') {
-  return map === 'inhauma' ? inhaumaAirport : desertAirport;
+  return AIRPORT_REGISTRY[map] ?? desertAirport;
 }
 
 function addBox(group, x, y, z, sx, sy, sz, color) {
@@ -44,7 +74,7 @@ function addBox(group, x, y, z, sx, sy, sz, color) {
   return mesh;
 }
 
-function addPavement(group, center, width, length, color) {
+function addPavement(group, center, width, length, color, elevation = 0) {
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(width, length),
     new THREE.MeshLambertMaterial({
@@ -56,7 +86,7 @@ function addPavement(group, center, width, length, color) {
     }),
   );
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set(center.x, 0, center.z);
+  mesh.position.set(center.x, elevation + 0.12, center.z);
   mesh.receiveShadow = true;
   group.add(mesh);
   return mesh;
@@ -78,7 +108,7 @@ function addGroundLabel(group, airport, labelText = AIRPORT_TEXT) {
   const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(airport.text.width, airport.text.depth), mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set(airport.text.center.x, 0.09, airport.text.center.z);
+  mesh.position.set(airport.text.center.x, airport.elevation + 0.21, airport.text.center.z);
   group.add(mesh);
 
   const lightMat = new THREE.MeshBasicMaterial({ color: 0xfff6a0 });
@@ -89,7 +119,7 @@ function addGroundLabel(group, airport, labelText = AIRPORT_TEXT) {
       const l = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 6), lightMat);
       l.position.set(
         airport.text.center.x - airport.text.width / 2 + airport.text.width * t,
-        0.7,
+        airport.elevation + 0.7,
         airport.text.center.z + side * airport.text.depth * 0.68,
       );
       group.add(l);
@@ -97,6 +127,21 @@ function addGroundLabel(group, airport, labelText = AIRPORT_TEXT) {
     }
   }
   return { mesh, lights };
+}
+
+/** Luzes de pista + marcações de centerline para qualquer aeroporto. */
+function addRunwayFurniture(group, airport, lightCount = 5, markCount = 4) {
+  const e = airport.elevation;
+  const r = airport.runway;
+  const lightStep = Math.floor(r.length / (lightCount * 2 + 1) / 2) * 2;
+  for (let i = -lightCount; i <= lightCount; i++) {
+    addBox(group, r.center.x - r.width * 0.42, e, r.center.z + i * lightStep, 2, 1.2, 2, 0x88ffcc);
+    addBox(group, r.center.x + r.width * 0.42, e, r.center.z + i * lightStep, 2, 1.2, 2, 0x88ffcc);
+  }
+  const markStep = Math.floor(r.length / (markCount * 2 + 1) / 2) * 2;
+  for (let i = -markCount; i <= markCount; i++) {
+    addBox(group, r.center.x, e, r.center.z + i * markStep, 3, 0.2, 30, 0xe8e8d0);
+  }
 }
 
 export function createDesertAirport(scene) {
@@ -165,6 +210,86 @@ export function createInhaumaAirport(scene) {
   scene.add(group);
   airportGroups.set('inhauma', group);
   return group;
+}
+
+/** Pista costeira islands (ADR-U2): atol-plataforma de areia + pavimentos elevados. */
+export function createIslandsAirport(scene) {
+  if (airportGroups.has('islands')) return airportGroups.get('islands');
+  const airport = islandsAirport;
+  const group = new THREE.Group();
+  group.name = 'tauan-atoll-airport';
+
+  // Plataforma de areia sob todo o complexo (atol artificial acima das ondas)
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(airport.runway.width + 70, 2.4, airport.runway.length + 220),
+    new THREE.MeshLambertMaterial({ color: 0xd8c690 }),
+  );
+  base.position.set(airport.runway.center.x + 10, airport.elevation - 1.25, airport.runway.center.z + 60);
+  base.receiveShadow = true;
+  group.add(base);
+
+  addPavement(group, airport.runway.center, airport.runway.width, airport.runway.length, 0x24282b, airport.elevation);
+  addPavement(group, airport.taxiway.center, airport.taxiway.width, airport.taxiway.length, 0x2e302f, airport.elevation);
+  addPavement(group, airport.serviceZone.center, airport.serviceZone.width, airport.serviceZone.length, 0x383735, airport.elevation);
+  addRunwayFurniture(group, airport);
+
+  // Hangar e torre modestos na plataforma
+  addBox(group, -260, airport.elevation, 330, 42, 14, 30, 0x6e7477);
+  addBox(group, -230, airport.elevation, 395, 14, 8, 14, 0x506068);
+
+  const label = addGroundLabel(group, airport, ISLANDS_AIRPORT_TEXT);
+  group.userData.airport = airport;
+  group.userData.airportText = label;
+  scene.add(group);
+  airportGroups.set('islands', group);
+  return group;
+}
+
+/** Pista Santos Dumont (rio): aterro a leste da malha urbana. */
+export function createRioAirport(scene) {
+  if (airportGroups.has('rio')) return airportGroups.get('rio');
+  const airport = rioAirport;
+  const group = new THREE.Group();
+  group.name = 'santos-dumont-airport';
+
+  // Aterro claro sob os pavimentos
+  const fill = new THREE.Mesh(
+    new THREE.BoxGeometry(airport.runway.width + 60, 0.5, airport.runway.length + 200),
+    new THREE.MeshLambertMaterial({ color: 0x9d9789 }),
+  );
+  fill.position.set(airport.runway.center.x + 14, airport.elevation - 0.3, airport.runway.center.z + 70);
+  fill.receiveShadow = true;
+  group.add(fill);
+
+  addPavement(group, airport.runway.center, airport.runway.width, airport.runway.length, 0x202326, airport.elevation);
+  addPavement(group, airport.taxiway.center, airport.taxiway.width, airport.taxiway.length, 0x2b2c2c, airport.elevation);
+  addPavement(group, airport.serviceZone.center, airport.serviceZone.width, airport.serviceZone.length, 0x343434, airport.elevation);
+  addRunwayFurniture(group, airport);
+
+  // Terminal compacto estilo aeroporto urbano
+  addBox(group, 660, airport.elevation, 540, 50, 16, 34, 0x8d97a3);
+  addBox(group, 660, airport.elevation + 16, 540, 54, 5, 38, 0x49525c);
+  addBox(group, 630, airport.elevation, 600, 18, 9, 18, 0x6a7682);
+
+  const label = addGroundLabel(group, airport, RIO_AIRPORT_TEXT);
+  group.userData.airport = airport;
+  group.userData.airportText = label;
+  scene.add(group);
+  airportGroups.set('rio', group);
+  return group;
+}
+
+const AIRPORT_BUILDERS = {
+  desert: createDesertAirport,
+  inhauma: createInhaumaAirport,
+  islands: createIslandsAirport,
+  rio: createRioAirport,
+};
+
+/** Cria (idempotente) o aeroporto do mapa dado. Todo mapa tem um (WS-2). */
+export function createAirportFor(mapKey, scene) {
+  const builder = AIRPORT_BUILDERS[mapKey] ?? createDesertAirport;
+  return builder(scene);
 }
 
 export function getAirportDiagnostics(map = 'desert') {

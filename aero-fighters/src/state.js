@@ -13,7 +13,9 @@ const runtimeConfig = parseRuntimeConfig(typeof window !== 'undefined' ? window.
 const runtimeRng = createRng(runtimeConfig.seed);
 
 function initialPlayerPosition(mapKey) {
+  // Zona de serviço do aeroporto de cada mapa (WS-2)
   if (mapKey === 'inhauma') return { x: -560, y: 0.9, pz: 475 };
+  if (mapKey === 'rio') return { x: 560, y: 1.35, pz: 560 };
   return { x: -160, y: 0.9, pz: 350 };
 }
 

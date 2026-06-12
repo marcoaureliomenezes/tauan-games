@@ -52,7 +52,6 @@ export function startGame() {
     if (game.missionRealism.sortie.state === SortieState.MENU) {
       transitionSortie(game.missionRealism.sortie, SortieEvent.START, {}, game.time);
     }
-    if (!game.runtime?.map) game.activeMap = 'desert';
   }
   hideOverlay();
   audio.startEngine();
@@ -89,7 +88,6 @@ export function restartGame() {
     game.missionRealism.service.active = false;
     game.missionRealism.service.phase = 'idle';
     game.missionRealism.ejection.active = false;
-    if (!game.runtime?.map) game.activeMap = 'desert';
   }
   respawnJet();
   game.running = true;
@@ -108,14 +106,20 @@ export function gameOver(reason = '') {
   showOverlay(reason || 'MISSÃO FALHOU', 'pressione Espaço para reiniciar', 0);
 }
 
-/** Crash imediato em terreno: mega-explosão + game over após pequena pausa. */
+/** Crash imediato em terreno: roteado por tipo de superfície (WS-1/WS-5).
+ *  'WATER' → splash (sem fireball debaixo d'água); 'GROUND'/'MOUNTAIN' → explosão. */
 export function crashAndDie(where) {
   if (game.flags.missionFailed) return;
-  megaExplosion(jet.position.clone(), 'crash');
-  jet.visible = false;
-  game.flags.crashFreezeTime = 2.5;
-  const label = where === 'SEA' ? 'IMPACTO NO MAR' : 'COLISÃO COM TERRENO';
-  scheduleDelayed(0.1, () => gameOver(`AERONAVE DESTRUÍDA\n${label}`));
+  const isWater = where === 'WATER' || where === 'SEA';
+  if (isWater) {
+    game.flags.crashFreezeTime = 2.5;
+    scheduleDelayed(0.1, () => gameOver('AERONAVE PERDIDA\nIMPACTO NA ÁGUA'));
+  } else {
+    megaExplosion(jet.position.clone(), 'crash');
+    jet.visible = false;
+    game.flags.crashFreezeTime = 2.5;
+    scheduleDelayed(0.1, () => gameOver('AERONAVE DESTRUÍDA\nCOLISÃO COM O TERRENO'));
+  }
 }
 
 /** Avança para a próxima missão. */

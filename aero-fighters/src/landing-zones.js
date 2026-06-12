@@ -20,12 +20,11 @@ export function airportHeightAt(x, z, fallbackHeight = 0, activeMap = 'desert') 
 }
 
 export function classifyGroundContact(pos, activeMap = 'desert', terrainHeight = 0, terrainKind = null) {
-  if (activeMap === 'desert' || activeMap === 'inhauma') {
-    const airport = getAirportForMap(activeMap);
-    const surface = airportSurface(pos, activeMap);
-    if (surface !== 'none') {
-      return { type: surface, safe: true, height: airport.elevation, reason: 'airport-pavement' };
-    }
+  // Todo mapa tem aeroporto (WS-2) — pavimento é sempre a 1ª classificação.
+  const airport = getAirportForMap(activeMap);
+  const surface = airportSurface(pos, activeMap);
+  if (surface !== 'none') {
+    return { type: surface, safe: true, height: airport.elevation, reason: 'airport-pavement' };
   }
   if (terrainKind === 'mountain') return { type: 'mountain', safe: false, height: terrainHeight, reason: 'mountain-contact' };
   if (pos.y <= 2 && activeMap === 'islands') return { type: 'water', safe: false, height: 0, reason: 'water-impact' };

@@ -12,7 +12,7 @@ import { audio } from './audio.js';
 import { game } from './state.js';
 import { PLAYER, ROLL, COLORS } from './config.js';
 import { explosion, megaExplosion, spawnMissileSmoke } from './fx.js';
-import { checkTerrainCollision } from './world.js';
+import { checkTerrainCollision, surfaceInfoAt } from './world.js';
 import { classifyGroundContact, airportSurface } from './landing-zones.js';
 import { getAirportForMap } from './airport.js';
 import { syncFlightGroundDiagnostics, updateGroundRoll } from './ground-physics.js';
@@ -349,6 +349,10 @@ export function updatePlayer(dt, input, onCrash) {
     if (sortie.state === SortieState.TAKEOFF_ROLL && game.player.speed >= 38) {
       transitionSortie(sortie, SortieEvent.TAKEOFF_SPEED_REACHED, {}, game.time);
     }
+    // Re-decolagem após pouso oportunista: throttle alto + velocidade de roll
+    if (sortie.state === SortieState.LANDING_ROLL && game.player.throttle > 0.8 && game.player.speed >= 38) {
+      transitionSortie(sortie, SortieEvent.TAKEOFF_SPEED_REACHED, {}, game.time);
+    }
     // Smooth liftoff: gate on runway contact + V_ROTATE speed + rotation input.
     // Applies ROTATE_LIFT force gradually; no teleport. Transitions to AIRBORNE
     // only when height > 4m above airport elevation AND vertical speed > 0.
@@ -406,12 +410,21 @@ export function updatePlayer(dt, input, onCrash) {
     const fwdM = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
     jet.position.addScaledVector(fwdM, game.player.speed * dt);
     jet.position.y -= (PLAYER.GRAVITY * 4.0) * dt;
+    // Sem tunneling: ao alcançar o chão antes dos 2 s mínimos de queda (T-BF04),
+    // o avião DESLIZA em chamas na superfície até o timer liberar a explosão.
+    const _maydaySurf = surfaceInfoAt(jet.position.x, jet.position.z);
+    let _maydayGrounded = false;
+    if (jet.position.y <= _maydaySurf.height + 0.6) {
+      jet.position.y = _maydaySurf.height + 0.6;
+      _maydayGrounded = true;
+      game.player.speed = Math.max(6, game.player.speed - 35 * dt); // atrito do skid
+    }
     game.player.y = jet.position.y;
     // Impacto no solo — mega explosão e então ejeção/respawn.
     // Mínimo de 2 s de queda visível antes de disparar o crash (T-BF04).
     // jet.visible permanece true durante toda a queda; ocultado dentro de _ejectAndRespawn.
     game.flags.maydayTimer = (game.flags.maydayTimer || 0) + dt;
-    const impact = checkTerrainCollision(jet.position);
+    const impact = checkTerrainCollision(jet.position) || _maydayGrounded;
     if (impact && game.flags.maydayTimer >= 2.0) {
       megaExplosion(jet.position.clone(), 'crash');
       _ejectAndRespawn(onCrash);
@@ -515,19 +528,6 @@ export function updatePlayer(dt, input, onCrash) {
     }
   }
 
-  // Per-frame floor clamp (airborne physics path):
-  // If the jet is over an airport surface, ensure y never goes below contact.height + 0.9.
-  // This guard prevents the one-frame underground clip when gravity drives y < terrain.
-  if (mr?.enabled) {
-    const _floorContact = classifyGroundContact(
-      { x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
-    const _onAirportSurface = airportSurface({ x: jet.position.x, z: jet.position.z }, game.activeMap) !== 'none';
-    const _inGroundState = GROUND_STATES.has(mr?.sortie?.state);
-    if (_inGroundState || _onAirportSurface) {
-      jet.position.y = Math.max(jet.position.y, _floorContact.height + 0.9);
-    }
-  }
-
   // CONTRATO: writer de game.player.x/y/pitch/pz — escritos POR ÚLTIMO (após movimento do frame)
   // Intencional: refletem posição final do frame; HUD e tests sempre lêem valor corrente.
   game.player.x = jet.position.x;
@@ -549,22 +549,37 @@ export function updatePlayer(dt, input, onCrash) {
     });
     mr.groundContact = contact;
     mr.landingZoneStatus = contact;
-    const verticalSpeed = fwd.y * game.player.speed - PLAYER.GRAVITY;
-    if (mr.sortie.state === SortieState.RETURN_TO_BASE) {
-      // Touchdown with flare/hysteresis:
-      // - touchdownReady: altitude < FLARE_LO (0.5m) AND sink > -3 m/s AND not unsafe
-      // - Debounce: TOUCHDOWN_SAFE cannot fire within TOUCHDOWN_DEBOUNCE seconds of last fire
+    // MÁQUINA DE CONTATO (WS-1/WS-4): tocar pavimento em voo nunca é clamp silencioso.
+    // Em QUALQUER estado aéreo: envelope ok → touchdown (oportunista fora de RTB);
+    // atitude/sink ruins rente ao chão → hard landing (bounce + dano), não crash.
+    const onPavement = contact.type === 'runway' || contact.type === 'taxiway' || contact.type === 'service';
+    if (onPavement && altitudeAboveGround < PLAYER.FLARE_HI) {
       const lastTD = mr.sortie.lastTouchdownTime ?? -Infinity;
       const debounceOk = (game.time - lastTD) > PLAYER.TOUCHDOWN_DEBOUNCE;
       if (mr.ground.landingEnvelope.touchdownReady && debounceOk) {
+        // Touchdown contínuo: ajuste sub-métrico de altura, velocidade preservada,
+        // throttle cortado para idle (rollout desacelera via atrito de rolagem).
         jet.position.y = contact.height + 0.9;
-        mr.ground.groundSpeed = Math.max(12, game.player.speed * 0.62);
+        mr.ground.groundSpeed = game.player.speed;
+        game.player.throttle = 0.05;
         mr.sortie.lastTouchdownTime = game.time;
+        for (let i = 0; i < 4; i++) {
+          firePosition(_maydayPos, 1.2 - i * 0.8);
+          _maydayPos.y = contact.height + 0.4;
+          spawnMissileSmoke(_maydayPos);
+        }
         transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_SAFE, {}, game.time);
-      // Unsafe touchdown: bad attitude OR sink rate < SINK_MAX — evaluated at low altitude
-      } else if (altitudeAboveGround < PLAYER.FLARE_LO && mr.ground.landingEnvelope.unsafe) {
-        transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_UNSAFE, {}, game.time);
-        onCrash(contact.reason);
+      } else if (altitudeAboveGround < PLAYER.FLARE_LO && mr.ground.landingEnvelope.unsafe && debounceOk) {
+        // Hard landing em pavimento: bounce + 1 hp — pousar mal na pista não é
+        // "colisão com terreno".
+        jet.position.y = contact.height + 2.2;
+        mr.sortie.lastTouchdownTime = game.time;
+        game.flags.shakeTime = 0.5;
+        playerHit();
+      } else if (altitudeAboveGround < 0) {
+        // Entre bounces debounced: nunca atravessar o pavimento
+        jet.position.y = contact.height + 0.9;
+        game.player.y = jet.position.y;
       }
     }
   }

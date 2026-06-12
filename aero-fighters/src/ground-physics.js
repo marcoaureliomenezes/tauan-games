@@ -24,7 +24,10 @@ export function createGroundPhysicsState() {
 export function updateGroundRoll(state, input, dt, surface, throttle) {
   const accel = throttle * GroundConstants.GROUND_ACCEL;
   const braking = input.throttleDown ? GroundConstants.BRAKE_DECEL : GroundConstants.GROUND_FRICTION;
-  state.groundSpeed = Math.max(0, state.groundSpeed + (accel - braking) * dt);
+  // Arrasto quadrático de rolagem — velocidade terminal ~62 m/s no solo
+  // (18 = 4 + 0.0035·v² → v ≈ 63). Sem isso o roll acelerava sem limite.
+  const drag = 0.0035 * state.groundSpeed * state.groundSpeed;
+  state.groundSpeed = Math.max(0, state.groundSpeed + (accel - braking - drag) * dt);
   state.wheelContact = surface === 'runway' || surface === 'taxiway' || surface === 'service';
   state.gearState = state.wheelContact || state.groundSpeed < 54 ? 'DEPLOYED' : 'RETRACTED';
   return state;

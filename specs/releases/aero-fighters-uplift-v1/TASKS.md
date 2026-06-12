@@ -8,29 +8,29 @@
 
 ## Wave 1 — Verdade de superfície (WS-1)
 
-- [ ] T-U-01: `surfaceInfoAt(x,z)` em `world.js` — `{height, kind}` por mapa
+- [x] T-U-01: `surfaceInfoAt(x,z)` em `world.js` — `{height, kind}` por mapa
       (water só em islands/rio onde o mapa tem água); `checkTerrainCollision`
       passa a devolver `'WATER'|'GROUND'|'MOUNTAIN'|null` derivado dela.
-- [ ] T-U-02: máquina de contato em `player.js` — fim do floor-clamp silencioso;
+- [x] T-U-02: máquina de contato em `player.js` — fim do floor-clamp silencioso;
       tocar pista em voo = touchdown oportunista (sink baixo) ou hard contact;
       fora de pista = crash roteado por kind.
-- [ ] T-U-03: velocidade terminal no ground roll (`ground-physics.js`).
+- [x] T-U-03: velocidade terminal no ground roll (`ground-physics.js`).
 
 ## Wave 2 — Aeroportos por mapa (WS-2)
 
-- [ ] T-U-04: builder genérico de aeroporto + registro por mapa em `airport.js`;
+- [x] T-U-04: builder genérico de aeroporto + registro por mapa em `airport.js`;
       pista costeira islands (ADR-U2) + pista rio; flatten nos heightFns.
-- [ ] T-U-05: remover override `activeMap='desert'` de start/restart
+- [x] T-U-05: remover override `activeMap='desert'` de start/restart
       (`missions.js`) e posição inicial por mapa (`state.js`).
 
 ## Wave 3 — Decolagem/pouso (WS-4)
 
-- [ ] T-U-06: rotação no solo com ↑ OU ↓ (ADR-U1) (`player.js`).
-- [ ] T-U-07: trem de pouso visível com retração/extensão por altura (`player.js`).
-- [ ] T-U-08: PAPI na cabeceira + guia de aproximação no HUD + pista no minimapa.
-- [ ] T-U-09: touchdown contínuo (sem teleporte) + fumaça de pneu + rollout
+- [-] T-U-06: rotação no solo com ↑ OU ↓ (ADR-U1) (`player.js`).
+- [-] T-U-07: trem de pouso visível com retração/extensão por altura (`player.js`).
+- [-] T-U-08: PAPI na cabeceira + guia de aproximação no HUD + pista no minimapa.
+- [-] T-U-09: touchdown contínuo (sem teleporte) + fumaça de pneu + rollout
       progressivo; hard-landing em pista = bounce + 1 hp.
-- [ ] T-U-10: rumble/poeira na corrida de decolagem.
+- [-] T-U-10: rumble/poeira na corrida de decolagem.
 
 ## Wave 4 — Voo com energia (WS-3)
 

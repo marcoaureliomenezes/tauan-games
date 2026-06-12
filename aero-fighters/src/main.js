@@ -13,7 +13,7 @@ import { getActiveHeightFn } from './world.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
 import { input, installListeners, onAction } from './input.js';
-import { jet, updatePlayer, playerHit, barrelRoll, firePosition } from './player.js';
+import { jet, updatePlayer, playerHit, barrelRoll, firePosition, respawnJet } from './player.js';
 import { updateTargets } from './targets.js';
 import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups, spawnNuclearMissile, updateNuclears } from './projectiles.js';
 import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } from './hud.js';
@@ -23,7 +23,7 @@ import { initMinimap, updateMinimap } from './ui/minimap.js';
 import { MAPS, getMapHeightFn } from './maps/index.js';
 import { spawnWingmen, updateWingmen, clearWingmen } from './wingmen.js';
 import { installDebugApi, recordFrame } from './debug.js';
-import { createDesertAirport, createInhaumaAirport } from './airport.js';
+import { createAirportFor } from './airport.js';
 import { startService, updateService } from './service-scene.js';
 import { requestEjection, updateEjection, createPilotVisual } from './ejection.js';
 import { cycleCameraMode, updateCameraRig } from './camera-modes.js';
@@ -62,14 +62,12 @@ window.selectMap = function(mapKey) {
     if (mapDef) {
       mapDef.create(scene);
       if (mapKey === 'desert') {
-        const airport = createDesertAirport(scene);
+        const airport = createAirportFor('desert', scene);
         game.missionRealism.desertLandmarks = {
           roads: 2,
           hangars: 1,
           lights: airport.userData.airportText?.lights?.length ?? 0,
         };
-      } else if (mapKey === 'inhauma') {
-        createInhaumaAirport(scene);
       }
       _activeMapUpdate = mapDef.update;
       setActiveHeightFn(mapDef.heightAt);
@@ -78,8 +76,11 @@ window.selectMap = function(mapKey) {
     // Mapa ilhas: restaura a função de altura padrão
     setActiveHeightFn(getMapHeightFn('islands'));
   }
-  // Atualiza estado
+  // Atualiza estado ANTES de criar aeroporto/respawn (ambos leem game.activeMap)
   game.activeMap = mapKey;
+  // Todo mapa tem aeroporto (WS-2) — e o jato nasce na zona de serviço dele
+  createAirportFor(mapKey, scene);
+  respawnJet();
 
   // Aliados em formação — spawna após criar o mapa (game.islands já populado)
   spawnWingmen(scene, jet);

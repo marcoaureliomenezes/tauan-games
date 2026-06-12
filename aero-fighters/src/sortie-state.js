@@ -44,6 +44,11 @@ const TRANSITIONS = new Map([
   [`${SortieState.AIRBORNE}:${SortieEvent.ALL_TARGETS_DESTROYED}`, SortieState.RETURN_TO_BASE],
   [`${SortieState.MISSION_ACTIVE}:${SortieEvent.ALL_TARGETS_DESTROYED}`, SortieState.RETURN_TO_BASE],
   [`${SortieState.RETURN_TO_BASE}:${SortieEvent.TOUCHDOWN_SAFE}`, SortieState.LANDING_ROLL],
+  // Touchdown oportunista (WS-1): pousar com envelope ok fora de RTB é pouso, não limbo
+  [`${SortieState.AIRBORNE}:${SortieEvent.TOUCHDOWN_SAFE}`, SortieState.LANDING_ROLL],
+  [`${SortieState.MISSION_ACTIVE}:${SortieEvent.TOUCHDOWN_SAFE}`, SortieState.LANDING_ROLL],
+  // Re-decolagem após pouso oportunista: acelerar de novo re-entra em TAKEOFF_ROLL
+  [`${SortieState.LANDING_ROLL}:${SortieEvent.TAKEOFF_SPEED_REACHED}`, SortieState.TAKEOFF_ROLL],
   [`${SortieState.LANDING_ROLL}:${SortieEvent.SERVICE_ZONE_REACHED}`, SortieState.TAXI_IN],
   [`${SortieState.TAXI_IN}:${SortieEvent.SERVICE_ZONE_REACHED}`, SortieState.SERVICE_SCENE],
   [`${SortieState.SERVICE_SCENE}:${SortieEvent.SERVICE_COMPLETE}`, SortieState.NEXT_SORTIE_READY],
