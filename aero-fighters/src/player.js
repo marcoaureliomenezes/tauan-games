@@ -22,8 +22,8 @@ import { SortieEvent, SortieState, GROUND_STATES, transitionSortie } from './sor
 function buildJet() {
   const g = new THREE.Group();
   // PBR (MeshStandardMaterial) para o corpo — responde a luz, projeta sombra
-  const grey      = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.75, roughness: 0.35 });
-  const darkGrey  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.75, roughness: 0.35 });
+  const grey      = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.55, roughness: 0.42 });
+  const darkGrey  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.55, roughness: 0.42 });
   const panel     = new THREE.MeshStandardMaterial({ color: COLORS.jetPanel, metalness: 0.65, roughness: 0.45 });
   const canopy    = new THREE.MeshStandardMaterial({ color: COLORS.jetCanopy, metalness: 0.2, roughness: 0.15 });
   // Vidro do canopy: ainda translúcido (Basic + opacidade)
@@ -32,8 +32,8 @@ function buildJet() {
   const exhaustO  = new THREE.MeshBasicMaterial({ color: COLORS.exhaustOrange, transparent: true, opacity: 0.9 });
   const flameY    = new THREE.MeshBasicMaterial({ color: COLORS.flameYellow, transparent: true, opacity: 0.95 });
   // Asas com DoubleSide (BufferGeometry trapezoidal espelha normal por sinal)
-  const wingMat   = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide });
-  const wingDark  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide });
+  const wingMat   = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.55, roughness: 0.42, side: THREE.DoubleSide });
+  const wingDark  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.55, roughness: 0.42, side: THREE.DoubleSide });
 
   // Nariz facetado — 8 lados para perfil mais suave
   const nose = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.4, 8), grey);

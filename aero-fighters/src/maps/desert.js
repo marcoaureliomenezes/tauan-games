@@ -7,6 +7,74 @@ import { game } from '../state.js';
 import { airportSurface } from '../landing-zones.js';
 import { desertAirport } from '../airport.js';
 
+/** Textura procedural do piso: bandas de duna + speckle (WS-7). */
+function makeDesertTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 512;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#d4a44a'; ctx.fillRect(0, 0, 512, 512);
+  // bandas de duna suaves
+  for (let i = 0; i < 18; i++) {
+    const y = Math.random() * 512, h = 14 + Math.random() * 40;
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, 'rgba(190,140,60,0)');
+    g.addColorStop(0.5, `rgba(190,140,60,${0.10 + Math.random() * 0.12})`);
+    g.addColorStop(1, 'rgba(190,140,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, y, 512, h);
+  }
+  // speckle de pedrisco
+  for (let i = 0; i < 900; i++) {
+    const a = 0.05 + Math.random() * 0.12;
+    ctx.fillStyle = Math.random() < 0.5 ? `rgba(120,84,40,${a})` : `rgba(236,205,140,${a})`;
+    ctx.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(46, 46);
+  return tex;
+}
+
+/** Pedras + cactos espalhados no piso (WS-7) — InstancedMesh, fora do aeroporto/mesas. */
+function scatterDesertProps(scene) {
+  const rocks = [], cacti = [];
+  for (let i = 0; i < 320; i++) {
+    const x = game.rng.range(-2400, 2400);
+    const z = game.rng.range(-2400, 2400);
+    if (airportSurface({ x, z }) !== 'none') continue;
+    const onMesa = MESA_DEFS.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r * 1.1);
+    if (onMesa) continue;
+    if (game.rng.random() < 0.62) rocks.push({ x, z, s: game.rng.range(0.6, 2.6) });
+    else cacti.push({ x, z, s: game.rng.range(0.7, 1.5) });
+  }
+  const dummy = new THREE.Object3D();
+  if (rocks.length) {
+    const m = new THREE.InstancedMesh(
+      new THREE.DodecahedronGeometry(1, 0),
+      new THREE.MeshLambertMaterial({ color: 0x9a7848 }), rocks.length);
+    m.frustumCulled = false;
+    rocks.forEach((r, i) => {
+      dummy.position.set(r.x, r.s * 0.4, r.z);
+      dummy.scale.set(r.s, r.s * 0.7, r.s);
+      dummy.rotation.y = r.x * 0.31;
+      dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
+    });
+    scene.add(m);
+  }
+  if (cacti.length) {
+    const m = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.28, 0.34, 3.2, 6),
+      new THREE.MeshLambertMaterial({ color: 0x3f7a3a }), cacti.length);
+    m.frustumCulled = false;
+    cacti.forEach((c2, i) => {
+      dummy.position.set(c2.x, 1.6 * c2.s, c2.z);
+      dummy.scale.setScalar(c2.s);
+      dummy.rotation.y = 0;
+      dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
+    });
+    scene.add(m);
+  }
+}
+
 // HEADLESS guard: cena injetada via parâmetro
 let _scene = null;
 
@@ -93,8 +161,11 @@ function createMesa(mDef, scene) {
 export function createDesertWorld(scene, skyRef) {
   _scene = scene;
 
-  // Piso do deserto (substitui oceano)
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0xd4a44a });
+  // Piso do deserto (substitui oceano) — texturizado (WS-7)
+  const isHeadless = typeof navigator !== 'undefined' && navigator.webdriver === true;
+  const floorMat = isHeadless
+    ? new THREE.MeshLambertMaterial({ color: 0xd4a44a })
+    : new THREE.MeshLambertMaterial({ map: makeDesertTexture() });
   const desertFloor = new THREE.Mesh(
     new THREE.PlaneGeometry(12000, 12000, 1, 1),
     floorMat,
@@ -103,6 +174,7 @@ export function createDesertWorld(scene, skyRef) {
   desertFloor.position.y = -0.1;
   desertFloor.receiveShadow = true;
   scene.add(desertFloor);
+  if (!isHeadless) scatterDesertProps(scene);
 
   // Fog areia
   scene.fog = new THREE.Fog(0xd4a44a, 500, 1000);

@@ -128,6 +128,10 @@ for (let i = 0; i < 4; i++) {
 let _slFrame = 0;
 function updateSpeedLines() {
   if ((_slFrame++ & 1) !== 0) return;
+  // WS-7: streaks só fazem sentido em alta velocidade
+  const fast = game.player.speed > 60;
+  for (const l of speedLines) l.visible = fast;
+  if (!fast) return;
   const t = performance.now() * 0.01;
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + t * 0.5;

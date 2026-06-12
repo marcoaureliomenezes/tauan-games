@@ -1,6 +1,6 @@
 ---
 name: aero-startgame-forces-desert-activemap
-status: Open
+status: Closed
 severity: CRITICAL
 reported: 2026-06-12
 surface: aero-fighters — missions.js startGame / map selection UI
@@ -24,3 +24,5 @@ meio do mar; decolagem de pista fantasma.
 anteriores usaram `?map=` e por isso viram o soft-lock (bug
 `aero-islands-realism-softlock`) em vez deste split-brain. Fix → WS-2 do audit
 `specs/audits/2026-06-12T220815Z/` (registro por mapa; remover o override).
+
+**Fix (2026-06-12, release aero-fighters-uplift-v1):** Wave 2 (commit eb13fba): override removido de startGame/restartGame; activeMap segue o botão selecionado (U-AC-1 asserts map).

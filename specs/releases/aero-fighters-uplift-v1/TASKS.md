@@ -52,15 +52,15 @@
 
 ## Wave 6 — Mapas/visual (WS-7)
 
-- [-] T-U-16: nuvens ADR-U5 (`fog:false`, achatadas, leve emissive) (`world.js`).
-- [-] T-U-17: textura procedural do piso desert + scatter rochas/cactos; palmeiras
+- [x] T-U-16: nuvens ADR-U5 (`fog:false`, achatadas, leve emissive) (`world.js`).
+- [x] T-U-17: textura procedural do piso desert + scatter rochas/cactos; palmeiras
       islands (`maps/desert.js`, `world.js`).
-- [-] T-U-18: leitura do jato (metalness ↓ + fill light) + speed lines só >60 m/s
+- [x] T-U-18: leitura do jato (metalness ↓ + fill light) + speed lines só >60 m/s
       (`player.js`, `scene.js`, `main.js`).
 
 ## Wave 7 — QA e fechamento
 
-- [ ] T-U-19: ACs Playwright novos (liftoff 4 mapas via botão, no-floor-glue,
+- [x] T-U-19: ACs Playwright novos (liftoff 4 mapas via botão, no-floor-glue,
       label de crash por mapa, nuke stages, ALT honesto) (`tests/aero-fighters/`).
-- [ ] T-U-20: suíte `npm run test:aero` verde + probes live; bugs da release →
+- [x] T-U-20: suíte `npm run test:aero` verde + probes live; bugs da release →
       `status: Closed` com referência de fix.

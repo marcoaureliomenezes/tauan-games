@@ -1,6 +1,6 @@
 ---
 name: aero-sea-label-on-land
-status: Open
+status: Closed
 severity: HIGH
 reported: 2026-06-12
 surface: aero-fighters — world.js checkTerrainCollision
@@ -23,3 +23,5 @@ mas o caminho de crash não a consulta. Pedido explícito do operador (2026-06-1
 colisão com mar ≠ colisão com terra; avião deve cair com fumaça e explodir no solo,
 ou afundar no mar. Solução: WS-1 + WS-5 do audit
 `specs/audits/2026-06-12T220815Z/`.
+
+**Fix (2026-06-12, release aero-fighters-uplift-v1):** Waves 1+5: surfaceInfoAt roteia crash por kind (GROUND/WATER/MOUNTAIN); água afunda com splash, terra explode com cicatriz (U-AC-2, U-AC-4).

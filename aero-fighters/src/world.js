@@ -156,6 +156,36 @@ function createFoamRing(cx, cz, radius) {
   return ring;
 }
 
+/** Palmeiras nas faixas de praia das ilhas (WS-7) — 2 InstancedMesh (troncos+copas). */
+function scatterPalms() {
+  if (HEADLESS) return;
+  const spots = [];
+  for (const isl of game.islands) {
+    const n = Math.max(3, Math.floor(isl.radius / 12));
+    for (let i = 0; i < n; i++) {
+      const a = game.rng.range(0, Math.PI * 2);
+      const rr = isl.radius * game.rng.range(0.62, 0.88);
+      const dx = Math.cos(a) * rr, dz = Math.sin(a) * rr;
+      const h = islandHeightAt(isl, dx, dz);
+      if (h > 0.4 && h < 3.0) spots.push({ x: isl.cx + dx, y: h, z: isl.cz + dz, s: game.rng.range(0.8, 1.4) });
+    }
+  }
+  if (!spots.length) return;
+  const trunkGeo = new THREE.CylinderGeometry(0.16, 0.26, 5, 5);
+  const frondGeo = new THREE.ConeGeometry(2.2, 1.6, 6);
+  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: 0x8a6844 }), spots.length);
+  const fronds = new THREE.InstancedMesh(frondGeo, new THREE.MeshLambertMaterial({ color: 0x2f7a32 }), spots.length);
+  trunks.frustumCulled = false; fronds.frustumCulled = false;
+  const d = new THREE.Object3D();
+  spots.forEach((p, i) => {
+    d.position.set(p.x, p.y + 2.5 * p.s, p.z); d.scale.setScalar(p.s); d.rotation.y = p.x * 0.7;
+    d.updateMatrix(); trunks.setMatrixAt(i, d.matrix);
+    d.position.y = p.y + 5.2 * p.s;
+    d.updateMatrix(); fronds.setMatrixAt(i, d.matrix);
+  });
+  scene.add(trunks); scene.add(fronds);
+}
+
 /** Constrói todas as ilhas e popula game.islands com metadados para colisão. */
 export function createIslands() {
   for (const [cx, cz, r, h] of ISLAND_DEFS) {
@@ -164,6 +194,7 @@ export function createIslands() {
     // CONTRATO: writer de game.islands
     game.islands.push({ cx, cz, radius: r, peakHeight: h, mesh });
   }
+  scatterPalms();
 }
 
 /** Altura local de uma ilha em (dx, dz) relativos ao centro. Função pura.
@@ -234,7 +265,12 @@ const CLOUD_LAYERS = HEADLESS ? [] : [
 for (const [altMin, altMax, count, rMin, rMax, sMin, sMax] of CLOUD_LAYERS) {
   for (let i = 0; i < count; i++) {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.0 });
+    // ADR-U5: fog:false mata a tinta bege do fog do mapa; emissive leve dá leitura
+    // de nuvem (não rocha); cachos achatados em Y.
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: 0.95, metalness: 0.0,
+      emissive: 0x33363c, emissiveIntensity: 0.5, fog: false,
+    });
     cloudMats.push(mat);
     const n = sMin + Math.floor(Math.random() * (sMax - sMin + 1));
     const spread = rMax * 2.5;
@@ -253,6 +289,7 @@ for (const [altMin, altMax, count, rMin, rMax, sMin, sMax] of CLOUD_LAYERS) {
       altMin + Math.random() * (altMax - altMin),
       (Math.random() - 0.5) * 4000,
     );
+    g.scale.y = 0.55; // nuvens achatadas (ADR-U5)
     scene.add(g);
     clouds.push(g);
   }

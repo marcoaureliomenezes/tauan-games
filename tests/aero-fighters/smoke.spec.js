@@ -72,11 +72,17 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     await startGame(page);
     const yBefore = await page.evaluate(() => window.game.player.y);
     await page.keyboard.down('KeyW');
-    // espera ganhar velocidade de rotação antes de puxar
-    await page.waitForTimeout(2600);
+    // espera ganhar velocidade de rotação antes de puxar (mesma janela do AC-4)
+    await page.waitForTimeout(3600);
     await page.keyboard.down('ArrowUp');
-    await page.waitForTimeout(1400);
+    // solta ↑ no instante do liftoff: em VOO o esquema invertido vale (↑ = nariz
+    // para baixo) — segurar mergulharia de volta na pista
+    await page.waitForFunction(
+      () => window.game.missionRealism.sortie.state === 'AIRBORNE',
+      { timeout: 7000 },
+    );
     await page.keyboard.up('ArrowUp');
+    await page.waitForTimeout(600);
     await page.keyboard.up('KeyW');
     const result = await page.evaluate(() => ({
       running: window.game.running && !window.game.player.dead,

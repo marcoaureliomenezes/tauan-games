@@ -1,6 +1,6 @@
 ---
 name: aero-islands-realism-softlock
-status: Open
+status: Closed
 severity: CRITICAL
 reported: 2026-06-12
 surface: aero-fighters — sortie FSM / landing-zones / maps islands+rio
@@ -22,3 +22,5 @@ inhauma (`src/landing-zones.js:23-29`, `src/airport.js:31-33`). Rio é incoerent
 `rioHeightAt` consulta o aeroporto do desert. Agravante: `updateGroundRoll` não tem
 velocidade terminal (accel 18 > friction 4) — groundSpeed cresce sem limite.
 Solução proposta: WS-2 do audit `specs/audits/2026-06-12T220815Z/`.
+
+**Fix (2026-06-12, release aero-fighters-uplift-v1):** Wave 2 (commit eb13fba): pista costeira islands (ADR-U2) + registro de aeroportos por mapa + pista rio; liftoff verificado nos 4 mapas (U-AC-1).

@@ -56,7 +56,7 @@ dirLight.shadow.bias = -0.0008;
 scene.add(dirLight);
 scene.add(dirLight.target);
 
-export const fillLight = new THREE.DirectionalLight(0xaaccff, 0.3);
+export const fillLight = new THREE.DirectionalLight(0xaaccff, 0.5);
 fillLight.position.set(-100, 50, 200);
 scene.add(fillLight);
 

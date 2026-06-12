@@ -1,6 +1,6 @@
 ---
 name: aero-rotate-key-undiscoverable
-status: Open
+status: Closed
 severity: HIGH
 reported: 2026-06-12
 surface: aero-fighters — takeoff rotation input (player.js liftoff gate)
@@ -22,3 +22,5 @@ A dica existe só no overlay de texto inicial. Agravante: groundSpeed sem limite
 `specs/audits/2026-06-12T220815Z/`: aceitar ↑ ou ↓ para rotação no solo + callout
 "ROTATE" no HUD ao atingir V_ROTATE; grill: manter esquema invertido ou torná-lo
 opcional.
+
+**Fix (2026-06-12, release aero-fighters-uplift-v1):** Wave 3 (ADR-U1): no solo ↑ OU ↓ rotacionam (player.js liftoff gate); AC-5 atualizado e verde.

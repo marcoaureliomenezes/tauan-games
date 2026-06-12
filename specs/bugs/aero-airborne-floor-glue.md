@@ -1,6 +1,6 @@
 ---
 name: aero-airborne-floor-glue
-status: Open
+status: Closed
 severity: CRITICAL
 reported: 2026-06-12
 surface: aero-fighters — player.js floor clamp / checkTerrainCollision
@@ -22,3 +22,5 @@ fica "colado" deslizando no chão para sempre.
 `checkTerrainCollision` (`src/world.js:190`) devolve `null` quando `contact.safe`.
 Touchdown só é avaliado em `RETURN_TO_BASE` (`src/player.js:553`). Solução: máquina
 de contato única (WS-1 do audit `specs/audits/2026-06-12T220815Z/`).
+
+**Fix (2026-06-12, release aero-fighters-uplift-v1):** Wave 1 (commit eb13fba): máquina de contato em player.js — touchdown oportunista / hard-landing bounce / crash roteado; estado congelado impossível (U-AC-3).
