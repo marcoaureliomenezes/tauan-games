@@ -24,6 +24,7 @@ const smokeTrail    = [], smokeTrailPool   = [];
 const sparks        = [], sparksPool       = [];
 const fireGlowItems = [], fireGlowPool     = [];   // coluna de fogo sustentada
 const shockwaves    = [], flashes          = [];
+const scorchMarks   = [];   // cicatrizes de impacto/cratera (WS-5/WS-6)
 
 // Timers diferidos (substitui setTimeout — sincronizados com o game loop)
 const delayedCallbacks = [];
@@ -347,6 +348,47 @@ export function explosion(pos, scale = 1, color = COLORS.fireOrange) {
   }
 }
 
+/** Cicatriz queimada no chão (crash de terra, cratera nuclear). Persiste ~90 s. */
+export function spawnScorchMark(pos, radius = 12, opacity = 0.55) {
+  const geo = new THREE.CircleGeometry(radius, 24);
+  geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x0c0a08, transparent: true, opacity,
+    depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(pos.x, Math.max(pos.y, 0) + 0.18, pos.z);
+  scene.add(m);
+  scorchMarks.push({ mesh: m, mat, life: 90, max: 90, baseOpacity: opacity });
+}
+
+/** Splash de impacto na água (WS-5): coluna de spray + anel de espuma — sem fireball. */
+export function spawnWaterSplash(pos) {
+  const p0 = pos.clone(); p0.y = 0.6;
+  spawnShockwave(p0, 46, 0xe8f6ff);
+  spawnShockwave(p0, 24, 0xffffff);
+  const sprayN = 46;
+  for (let i = 0; i < sprayN; i++) {
+    const m = particlePool.pop(); if (!m) break;
+    m.material.color.setHex(0xd8eeff);
+    m.material.opacity = 0.95;
+    m.position.set(pos.x + (Math.random() - 0.5) * 5, 0.6, pos.z + (Math.random() - 0.5) * 5);
+    const initScale = 0.5 + Math.random() * 1.2;
+    m.scale.setScalar(initScale);
+    m.visible = true;
+    particles.push({
+      mesh: m,
+      vx: (Math.random() - 0.5) * 10,
+      vy: 9 + Math.random() * 16,
+      vz: (Math.random() - 0.5) * 10,
+      life: 0.8 + Math.random() * 0.5,
+      max: 1.3,
+      initScale,
+      growth: 1.2 + Math.random() * 0.6,
+    });
+  }
+}
+
 export function spawnShockwave(pos, maxR, color = COLORS.shockwave) {
   const mat = new THREE.MeshBasicMaterial({
     color, transparent: true, opacity: 0.9,
@@ -529,6 +571,13 @@ export function updateParticles(dt, playerPos = null) {
     sw.mesh.scale.set(r, 1, r);
     sw.mat.opacity = t * 0.9;
     if (sw.life <= 0) { scene.remove(sw.mesh); sw.mat.dispose(); shockwaves.splice(i, 1); }
+  }
+
+  // Cicatrizes — opacidade constante, fade nos últimos 20 s
+  for (let i = scorchMarks.length - 1; i >= 0; i--) {
+    const sm = scorchMarks[i]; sm.life -= dt;
+    if (sm.life < 20) sm.mat.opacity = sm.baseOpacity * (sm.life / 20);
+    if (sm.life <= 0) { scene.remove(sm.mesh); sm.mat.dispose(); scorchMarks.splice(i, 1); }
   }
 
   // Flashes

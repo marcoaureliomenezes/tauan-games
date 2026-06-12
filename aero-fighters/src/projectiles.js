@@ -10,11 +10,12 @@ import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
 import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, COLORS } from './config.js';
-import { explosion, spawnMissileSmoke, nuclearExplosion } from './fx.js';
+import { explosion, spawnMissileSmoke, nuclearExplosion, spawnScorchMark, scheduleDelayed as fxDelay } from './fx.js';
 import { spawnNuclearFx } from './nuclear-fx.js';
 import { startCinematicCamera } from './camera-modes.js';
 import { damageTarget } from './targets.js';
-import { deformTerrainNuclear } from './world.js';
+import { deformTerrainNuclear, surfaceInfoAt } from './world.js';
+import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { transitionSortie, SortieEvent } from './sortie-state.js';
 
 // ─── Balas ───────────────────────────────────────────────────────────────────
@@ -365,14 +366,39 @@ export function updateNuclears(dt) {
     const expired = n.life <= 0;
 
     if (hitTarget || groundHit || expired) {
-      nuclearExplosion(n.mesh.position.clone());
-      spawnNuclearFx(n.mesh.position.clone());
+      const ep = n.mesh.position.clone();
+      nuclearExplosion(ep.clone());
+      spawnNuclearFx(ep.clone());
       if (game.missionRealism?.camera) {
         const _jetPos = new THREE.Vector3(game.player.x, game.player.y, game.player.pz || 0);
-        startCinematicCamera(game.missionRealism.camera, n.mesh.position, _jetPos, game.runtime?.testMode ? 1.4 : 4.0);
+        startCinematicCamera(game.missionRealism.camera, ep, _jetPos, game.runtime?.testMode ? 1.4 : 5.5);
       }
-      applyNuclearShockwave(n.mesh.position.clone());
-      audio.explosion(1.5, n.mesh.position);
+      applyNuclearShockwave(ep.clone());
+
+      // ADR-U4: slow-mo global 0.35× por 1.5 s — nunca em testMode/webdriver
+      const _headless = typeof navigator !== 'undefined' && navigator.webdriver === true;
+      if (!game.runtime?.testMode && !_headless) game.flags.nukeSlowmo = 1.5;
+
+      // WS-6: onda de choque chega à câmera com delay físico (dist / 340 m/s)
+      const _pPos = new THREE.Vector3(game.player.x, game.player.y, game.player.pz || 0);
+      const _pd = ep.distanceTo(_pPos);
+      game.flags.nukeShockArrival = {
+        t: _pd / 340,
+        intensity: Math.max(2.5, 16 * Math.max(0.15, 1 - _pd / 1600)),
+      };
+
+      // WS-6: cratera/cicatriz em QUALQUER piso (não só deformação de ilhas)
+      const _surf = surfaceInfoAt(ep.x, ep.z);
+      const _gPos = ep.clone(); _gPos.y = Math.max(_surf.height, 0);
+      spawnScorchMark(_gPos, 120, 0.62);
+      spawnScorchMark(_gPos, 210, 0.24);
+
+      // WS-6: coluna de fumaça residual por 60 s no epicentro
+      const _smokeOwner = { isNukeResidual: true };
+      addSmokeEmitter(ep.x, _gPos.y + 10, ep.z, _smokeOwner);
+      fxDelay(60, () => removeSmokeEmittersOf(_smokeOwner));
+
+      audio.explosion(1.5, ep);
       scene.remove(n.mesh);
       nukes.splice(i, 1);
     }

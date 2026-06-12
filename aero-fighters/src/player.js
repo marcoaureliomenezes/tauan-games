@@ -11,7 +11,7 @@ import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
 import { PLAYER, ROLL, COLORS } from './config.js';
-import { explosion, megaExplosion, spawnMissileSmoke } from './fx.js';
+import { explosion, megaExplosion, spawnMissileSmoke, spawnScorchMark } from './fx.js';
 import { checkTerrainCollision, surfaceInfoAt } from './world.js';
 import { classifyGroundContact, airportSurface } from './landing-zones.js';
 import { getAirportForMap } from './airport.js';
@@ -441,6 +441,26 @@ export function updatePlayer(dt, input, onCrash) {
     return;
   }
 
+  // Afundando (WS-5): impacto na água — nariz mergulha, avião some sob a superfície
+  if (game.flags.sinking > 0) {
+    game.flags.sinking -= dt;
+    game.player.speed = Math.max(0, game.player.speed - 28 * dt);
+    const fwdW = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
+    jet.position.addScaledVector(fwdW, game.player.speed * dt * 0.35);
+    jet.position.y = Math.max(jet.position.y - 1.1 * dt, -3.4);
+    jet.rotateX(0.10 * dt); // nariz afundando primeiro
+    if (Math.random() < 0.25) {
+      firePosition(_maydayPos, -1.5);
+      _maydayPos.y = 0.7;
+      spawnMissileSmoke(_maydayPos); // vapor/spray na superfície
+    }
+    if (game.flags.sinking <= 0) jet.visible = false;
+    game.player.x = jet.position.x;
+    game.player.y = jet.position.y;
+    game.player.pz = jet.position.z;
+    return;
+  }
+
   // Mayday: sem controle — cai com wobble e fogo até impactar o solo
   if (game.flags.mayday) {
     game.flags.damageSmoke -= dt;
@@ -476,6 +496,8 @@ export function updatePlayer(dt, input, onCrash) {
     const impact = checkTerrainCollision(jet.position) || _maydayGrounded;
     if (impact && game.flags.maydayTimer >= 2.0) {
       megaExplosion(jet.position.clone(), 'crash');
+      const _scPos = jet.position.clone(); _scPos.y = _maydaySurf.height;
+      spawnScorchMark(_scPos, 13);
       _ejectAndRespawn(onCrash);
     }
     return;

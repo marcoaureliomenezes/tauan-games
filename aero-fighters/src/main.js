@@ -340,6 +340,22 @@ function tick() {
   if (dt > 0.1) dt = 0.1;
   recordFrame(dt);
 
+  // ADR-U4: slow-mo nuclear — dilatação GLOBAL de dt (0.35×) por 1.5 s reais.
+  // Decremento em tempo real; cancela se o player está em mayday (justiça > drama).
+  if (game.flags.nukeSlowmo > 0) {
+    game.flags.nukeSlowmo -= dt;
+    if (!game.flags.mayday) dt *= 0.35;
+  }
+  // WS-6: chegada da onda de choque nuclear (delay físico) — shake + boom
+  if (game.flags.nukeShockArrival) {
+    game.flags.nukeShockArrival.t -= dt / (game.flags.nukeSlowmo > 0 ? 0.35 : 1);
+    if (game.flags.nukeShockArrival.t <= 0) {
+      game.flags.cameraShake = { intensity: game.flags.nukeShockArrival.intensity, duration: 1.4 };
+      audio.distantExplosion();
+      game.flags.nukeShockArrival = null;
+    }
+  }
+
   if (game.running && !game.flags.paused && !game.flags.missionFailed) {
     cannonCooldown -= dt;
     game.flags.rollTimer    -= dt;

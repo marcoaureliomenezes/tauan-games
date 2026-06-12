@@ -7,7 +7,7 @@ import { TARGET_LAYOUT, MISSION } from './config.js';
 import { spawnTarget, clearTargets } from './targets.js';
 import { getTargetLayout, getMapHeightFn } from './maps/index.js';
 import { clearMissiles, clearPickups, recycleBullet } from './projectiles.js';
-import { megaExplosion, scheduleDelayed } from './fx.js';
+import { megaExplosion, scheduleDelayed, spawnScorchMark, spawnWaterSplash } from './fx.js';
 import { jet, respawnJet } from './player.js';
 import { audio } from './audio.js';
 import { showOverlay, hideOverlay } from './hud.js';
@@ -82,6 +82,9 @@ export function restartGame() {
   game.flags.mayday = false;
   game.flags.maydayTimer = 0;
   game.flags.damageSmoke = 0;
+  game.flags.sinking = 0;
+  game.flags.nukeSlowmo = 0;
+  game.flags.nukeShockArrival = null;
   if (game.missionRealism?.enabled) {
     game.missionRealism.sortie.state = SortieState.TAXI_OUT;
     game.missionRealism.sortie.history.push({ from: null, event: 'restart', to: SortieState.TAXI_OUT, at: game.time });
@@ -112,10 +115,16 @@ export function crashAndDie(where) {
   if (game.flags.missionFailed) return;
   const isWater = where === 'WATER' || where === 'SEA';
   if (isWater) {
-    game.flags.crashFreezeTime = 2.5;
-    scheduleDelayed(0.1, () => gameOver('AERONAVE PERDIDA\nIMPACTO NA ÁGUA'));
+    // Água (WS-5): splash sem fireball; o avião AFUNDA visível por ~4 s
+    // (animação em updatePlayer via flags.sinking) antes do game over.
+    spawnWaterSplash(jet.position.clone());
+    audio.explosion(0.35, jet.position);
+    game.flags.sinking = 4.2;
+    game.flags.crashFreezeTime = 4.6;
+    scheduleDelayed(4.3, () => gameOver('AERONAVE PERDIDA\nAFUNDOU NO MAR'));
   } else {
     megaExplosion(jet.position.clone(), 'crash');
+    spawnScorchMark(jet.position.clone(), 13);
     jet.visible = false;
     game.flags.crashFreezeTime = 2.5;
     scheduleDelayed(0.1, () => gameOver('AERONAVE DESTRUÍDA\nCOLISÃO COM O TERRENO'));

@@ -31,10 +31,13 @@ export function spawnNuclearFx(epicenter) {
     new THREE.MeshBasicMaterial({ color: 0xfff0aa, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
   );
   ring.rotation.x = -Math.PI / 2;
-  group.add(fire, stem, cap, ring);
+  // PointLight transitória (WS-6): a detonação ilumina o terreno ao redor
+  const light = new THREE.PointLight(0xffaa44, 7, 1800, 1.1);
+  light.position.set(0, 45, 0);
+  group.add(fire, stem, cap, ring, light);
   group.position.copy(epicenter);
   scene.add(group);
-  active.push({ group, fire, stem, cap, ring, t: 0 });
+  active.push({ group, fire, stem, cap, ring, light, t: 0 });
   nuclearFxState.active = true;
   nuclearFxState.stage = 'flash';
 }
@@ -55,6 +58,10 @@ export function updateNuclearFx(dt) {
     fx.cap.scale.set(28 + t * 10, 10 + t * 3, 28 + t * 10);
     fx.ring.scale.setScalar(shockR);
     fx.ring.material.opacity = Math.max(0, 0.8 - t * 0.16);
+    if (fx.light) fx.light.intensity = Math.max(0, 7 * (1 - t / 2.8));
+    // Vorticidade: cogumelo gira lentamente
+    fx.cap.rotation.y += dt * 0.22;
+    fx.stem.rotation.y -= dt * 0.12;
     nuclearFxState.stage = t < 0.25 ? 'flash' : t < 1.2 ? 'fireball' : t < 3.8 ? 'mushroom' : 'dissipating';
     nuclearFxState.fireballRadius = fireR;
     nuclearFxState.plumeHeight = plumeH;

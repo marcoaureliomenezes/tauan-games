@@ -19,45 +19,45 @@ export function startCinematicCamera(rig, explosionPos, jetPos, duration = 4) {
     duration,
     elapsed: 0,
     active: true,
-    _checked: false,
   };
 }
 
-const _frustum = new THREE.Frustum();
-const _projMat = new THREE.Matrix4();
-const _midpoint = new THREE.Vector3();
+const _camSide = new THREE.Vector3();
+const _camDesired = new THREE.Vector3();
+const _toJet = new THREE.Vector3();
 
 export function updateCameraRig(rig, dt, camera, jet, shake = null) {
   if (rig.cinematic?.active) {
-    rig.cinematic.elapsed += dt;
-    const t = Math.min(1, rig.cinematic.elapsed / rig.cinematic.duration);
-    const ep = rig.cinematic.explosionPos || jet.position;
+    const c = rig.cinematic;
+    c.elapsed += dt;
+    const t = Math.min(1, c.elapsed / c.duration);
+    const ep = c.explosionPos || jet.position;
 
-    // First frame: skip cinematic if explosion is already visible in current frustum
-    if (!rig.cinematic._checked) {
-      rig.cinematic._checked = true;
-      _projMat.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-      _frustum.setFromProjectionMatrix(_projMat);
-      if (_frustum.containsPoint(ep)) {
-        // Explosion already visible — keep current camera, no mode switch
-        rig.cinematic.active = false;
+    // WS-6/ADR: a cinematic SEMPRE assume — wide-shot lateral BAIXO, cogumelo
+    // contra o céu, dolly-out conforme a nuvem cresce.
+    if (!c._side) {
+      _toJet.copy(jet.position).sub(ep);
+      _toJet.y = 0;
+      const d = Math.max(_toJet.length(), 150);
+      c._dist = Math.min(520, Math.max(200, d * 0.9));
+      // perpendicular ao eixo avião↔epicentro (vista lateral)
+      if (_toJet.lengthSq() > 1) {
+        c._side = new THREE.Vector3(-_toJet.z, 0, _toJet.x).normalize();
+      } else {
+        c._side = new THREE.Vector3(1, 0, 0);
       }
     }
-
-    if (rig.cinematic?.active) {
-      // Frame both the current plane position and the explosion
-      _midpoint.lerpVectors(ep, jet.position, 0.5);
-      const dist = Math.max(60, ep.distanceTo(jet.position));
-      const elevation = Math.max(35, dist * 0.35);
-      const desired = new THREE.Vector3(_midpoint.x, _midpoint.y + elevation, _midpoint.z + dist * 0.4);
-      camera.position.lerp(desired, 0.08);
-      camera.lookAt(_midpoint.x, _midpoint.y + 10, _midpoint.z);
-      // Widen FOV progressively
-      camera.fov += (90 - camera.fov) * 0.06;
-      camera.updateProjectionMatrix();
-      if (t >= 1) rig.cinematic.active = false;
-      return;
-    }
+    const r = c._dist * (1 + 0.35 * t); // dolly-out
+    _camSide.copy(c._side).multiplyScalar(r);
+    _camDesired.set(ep.x + _camSide.x, ep.y + r * 0.40, ep.z + _camSide.z); // ~22° de elevação
+    camera.position.lerp(_camDesired, 0.14);
+    // Look-at sobe acompanhando o cogumelo (plume cresce até ~125 m)
+    const lookY = ep.y + 12 + 95 * Math.min(1, t * 1.4);
+    camera.lookAt(ep.x, lookY, ep.z);
+    camera.fov += (72 - camera.fov) * 0.06;
+    camera.updateProjectionMatrix();
+    if (t >= 1) c.active = false;
+    return;
   }
 
   const offsets = {

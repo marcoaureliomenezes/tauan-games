@@ -40,22 +40,22 @@
 
 ## Wave 5 — Mortes + Nuke (WS-5/WS-6)
 
-- [-] T-U-13: scorch decal compartilhado + crash de terra com explosão+cicatriz;
+- [x] T-U-13: scorch decal compartilhado + crash de terra com explosão+cicatriz;
       crash de água com splash+afundamento e câmera baixa (`fx.js`, `missions.js`,
       `player.js`).
-- [-] T-U-14: nuke cinematic sempre ativa, wide-shot baixo com dolly
+- [x] T-U-14: nuke cinematic sempre ativa, wide-shot baixo com dolly
       (`camera-modes.js`); slow-mo dt global 0.35×/1.5 s com guardas (ADR-U4)
       (`main.js`).
-- [-] T-U-15: shake na chegada do anel (delay dist/340) + PointLight transitória +
+- [x] T-U-15: shake na chegada do anel (delay dist/340) + PointLight transitória +
       cratera/scorch em qualquer piso + fumaça residual 60 s (`projectiles.js`,
       `fx.js`, `nuclear-fx.js`).
 
 ## Wave 6 — Mapas/visual (WS-7)
 
-- [ ] T-U-16: nuvens ADR-U5 (`fog:false`, achatadas, leve emissive) (`world.js`).
-- [ ] T-U-17: textura procedural do piso desert + scatter rochas/cactos; palmeiras
+- [-] T-U-16: nuvens ADR-U5 (`fog:false`, achatadas, leve emissive) (`world.js`).
+- [-] T-U-17: textura procedural do piso desert + scatter rochas/cactos; palmeiras
       islands (`maps/desert.js`, `world.js`).
-- [ ] T-U-18: leitura do jato (metalness ↓ + fill light) + speed lines só >60 m/s
+- [-] T-U-18: leitura do jato (metalness ↓ + fill light) + speed lines só >60 m/s
       (`player.js`, `scene.js`, `main.js`).
 
 ## Wave 7 — QA e fechamento

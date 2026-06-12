@@ -73,6 +73,9 @@ function createInitialState() {
       cameraShake: null,
       mayday: false,         // avião perdeu controle, caindo
       maydayTimer: 0,        // segundos restantes antes de ejetar
+      sinking: 0,            // segundos de afundamento na água (WS-5)
+      nukeSlowmo: 0,         // janela restante de slow-mo nuclear (ADR-U4)
+      nukeShockArrival: null,// chegada da onda de choque nuclear {t, intensity}
       damageSmoke: 0,        // timer de emissão de fumaça de dano
     },
   };
