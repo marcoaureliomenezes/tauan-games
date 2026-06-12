@@ -1,6 +1,7 @@
 # SPEC: Aero Fighters v2 — Godot Stylized Inhaúma (MVP-2)
 
-> **Status:** Aprovado — 2026-05-18 (operator pre-approved during grill session; substitui aero-fighters-v2-stylized-inhauma-v1)
+> **Status:** Aprovado
+> **Aprovação:** 2026-05-18 — operator pre-approved during grill session; substitui aero-fighters-v2-stylized-inhauma-v1. **PAUSADO 2026-06-12** — foco voltou ao aero-fighters web (aero-fighters-uplift-v1).
 > **Release id:** aero-fighters-v2-godot-stylized-inhauma-v1
 > **Engine ladder slot:** Degrau 3 (Godot 4) — foundation amended 2026-05-18 per ADR-V2-G-02
 > **Supersedes:** aero-fighters-v2-stylized-inhauma-v1 (cancelled 2026-05-18 — hardware constraint on UE5 source build)

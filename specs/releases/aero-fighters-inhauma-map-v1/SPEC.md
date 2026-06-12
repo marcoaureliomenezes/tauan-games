@@ -1,6 +1,7 @@
 # SPEC: Aero Fighters — Mapa Inhauma
 
-> **Status:** Aprovado — 2026-05-16 (aprovado pelo operador: "Aprovado.")
+> **Status:** Aprovado
+> **Aprovação:** 2026-05-16 — aprovado pelo operador: "Aprovado."
 > **Author:** Codex / dadaia Labs
 > **Created:** 2026-05-16
 > **Depends on:** `specs/features/aero-fighters/SPEC.md` [x] Approved

@@ -1,3 +1,6 @@
+---
+specs_pattern_version: 1
+---
 # Constitution: tauan-games
 
 > Leis imutáveis. Todo agente de IA trabalhando neste projeto DEVE seguir estas regras.

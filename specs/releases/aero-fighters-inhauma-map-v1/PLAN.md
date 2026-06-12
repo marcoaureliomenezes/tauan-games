@@ -1,6 +1,7 @@
 # PLAN: Aero Fighters — Mapa Inhauma
 
-> **Status:** Aprovado — 2026-05-16 (aprovado pelo operador: "Aproved")
+> **Status:** Aprovado
+> **Aprovação:** 2026-05-16 — aprovado pelo operador: "Aproved".
 > **SPEC:** `specs/features/aero-fighters-inhauma-map/SPEC.md` [Aprovado]
 > **Created:** 2026-05-16
 

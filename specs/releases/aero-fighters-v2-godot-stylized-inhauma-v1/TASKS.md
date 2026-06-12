@@ -1,6 +1,7 @@
 # TASKS: Aero Fighters v2 — Godot Stylized Inhaúma (MVP-2)
 
-> **Status:** Aprovado — 2026-05-18 (SPEC + PLAN both approved alongside this list during the pivot session)
+> **Status:** Aprovado
+> **Aprovação:** 2026-05-18 — SPEC + PLAN both approved alongside this list during the pivot session.
 > **Author:** product-engineer (dadaia Labs)
 > **Created:** 2026-05-18
 > **SPEC:** `specs/releases/aero-fighters-v2-godot-stylized-inhauma-v1/SPEC.md`

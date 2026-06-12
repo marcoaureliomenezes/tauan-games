@@ -1,6 +1,7 @@
 # PLAN: Aero Fighters v2 — Godot Stylized Inhaúma (MVP-2)
 
-> **Status:** Aprovado — 2026-05-18 (composed alongside approved SPEC after second grill-me pivot session; operator pre-approved during grill)
+> **Status:** Aprovado
+> **Aprovação:** 2026-05-18 — composed alongside approved SPEC after second grill-me pivot session; operator pre-approved during grill.
 > **Author:** product-engineer (dadaia Labs)
 > **Created:** 2026-05-18
 > **SPEC:** `specs/releases/aero-fighters-v2-godot-stylized-inhauma-v1/SPEC.md`
@@ -42,8 +43,6 @@ ledger in TASKS.md.
 | 3 | Pawn + flight + cel-shader | T-G-10, T-G-15 + FR-V2-G-03/04/09/10 | week 3 |
 | 4 | Combat + mission system + targets | T-G-17, T-G-18, T-G-19, T-G-20 + FR-V2-G-05/06/08 | week 4 |
 | 5 | Harness + perf + closure | T-G-07, T-G-08, T-G-09, T-G-21, T-G-22, T-G-23 | weeks 5–6 |
-
----
 
 ## 3. Wave 0 — Operator Bootstrap (BLOCKING)
 
@@ -292,19 +291,8 @@ written. All green → release CLOSURE complete.
 | RR-V2-G-10 — Aircraft cel material rework | LOW | 3 (T-G-15) |
 | RR-V2-G-11 — Iris Xe 60 FPS p99 @ 1080p | MEDIUM | 5 (fallback 1600×900) |
 
----
-
 ## 11. Sizing
 
-| Wave | Parallel agents | Sessions est. |
-|---|---:|---:|
-| 0 (operator) | 0 | 0 |
-| 1 | 3 | 1 |
-| 2 | 3 | 1 |
-| 3 | 3 | 1–2 |
-| 4 | 3 | 1–2 |
-| 5 | 1 | 1 |
-| **Total** | | **5–7 orchestrator sessions** |
-
-Unchanged from the cancelled stylized SPEC. Engine swap is rectilinear,
-not re-architecting.
+Waves 1–2: 3 agents paralelos, 1 sessão cada; waves 3–4: 3 agentes, 1–2 sessões;
+wave 5: 1 agente, 1 sessão — total **5–7 sessões de orquestração**. Unchanged from
+the cancelled stylized SPEC; engine swap is rectilinear, not re-architecting.
