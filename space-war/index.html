@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space War — Tauan Games</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: monospace; }
+    canvas { display: block; }
+    #hud {
+      position: fixed; top: 0; left: 0; width: 100%;
+      pointer-events: none; color: #cfe8ff; font-size: 13px;
+      padding: 8px 12px; text-shadow: 0 0 6px #04101f, 1px 1px 2px #000; z-index: 10;
+      display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+    }
+    #hud span { white-space: nowrap; }
+    #mission { color: #ffd24d; font-weight: bold; letter-spacing: 1px; width: 100%; }
+    #dominant { color: #7df; }
+    #gravity { color: #b8a0ff; }
+    #nukes { color: #66ff88; }
+    #hp { color: #ff8a8a; }
+    #warning {
+      position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+      color: #ff5560; font-weight: bold; font-size: 16px; letter-spacing: 1px;
+      text-shadow: 0 0 10px #500; display: none; z-index: 12;
+      animation: blink 0.6s step-start infinite;
+    }
+    @keyframes blink { 50% { opacity: 0.35; } }
+    #overlay {
+      position: fixed; inset: 0; flex-direction: column; align-items: center; justify-content: center;
+      color: #fff; font-size: 26px; text-align: center;
+      background: radial-gradient(ellipse at center, rgba(8,12,30,0.82), rgba(2,3,12,0.94));
+      display: none; z-index: 20; padding: 20px;
+    }
+    #overlay.visible { display: flex; }
+    #overlay .sub { font-size: 14px; margin-top: 18px; opacity: 0.9; line-height: 1.9; }
+    #toast {
+      position: fixed; bottom: 38px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: rgba(6,12,26,0.85); border: 1px solid #2a466a; border-radius: 6px;
+      color: #cfe8ff; font-size: 15px; padding: 10px 22px; z-index: 18;
+      opacity: 0; transition: opacity .35s, transform .35s; pointer-events: none; text-align: center;
+    }
+    #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #flash { position: fixed; inset: 0; background: #dfffe0; opacity: 0; pointer-events: none; z-index: 30; }
+    #navCanvas { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+    #mapCanvas { position: fixed; inset: 0; z-index: 16; display: none; }
+    #navtarget { color: #66ddff; font-weight: bold; }
+    #hint { position: fixed; bottom: 8px; left: 12px; color: #567; font-size: 11px; z-index: 10; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <span id="mission">MISSÃO</span>
+    <span id="dominant">—</span>
+    <span id="altitude"></span>
+    <span id="speed">VEL: 0</span>
+    <span id="throttle">THR: 0%</span>
+    <span id="gravity">G: 0</span>
+    <span id="hp">CASCO: 100%</span>
+    <span id="nukes">☢ NUKES: 4</span>
+    <span id="score">SCORE: 000000</span>
+    <span id="kills">ABATES: 0</span>
+    <span id="navtarget"></span>
+  </div>
+  <div id="warning"></div>
+  <canvas id="navCanvas"></canvas>
+  <canvas id="mapCanvas"></canvas>
+  <div id="toast"></div>
+  <div id="overlay"></div>
+  <div id="flash"></div>
+  <div id="hint">[T] trocar alvo · [C] apontar no alvo · [W] acelerar · [X] freio · [M] mapa · [P] pausa · clique trava o mouse</div>
+  <script type="module" src="/space-war/src/main.js"></script>
+</body>
+</html>
