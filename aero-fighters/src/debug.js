@@ -69,7 +69,8 @@ function targetDiagnostics() {
     const p = target.mesh.position;
     const ground = nearestGroundSample(p.x, p.z);
     const terrainHeight = terrainHeightAt(p.x, p.z);
-    const heightError = p.y - (target.type === 'warship' ? 0.6 : terrainHeight);
+    const expectedY = target.type === 'warship' ? 0.6 : terrainHeight + (target.airborneAltitude ?? 0);
+    const heightError = p.y - expectedY;
     return {
       id,
       type: target.type,
@@ -186,6 +187,8 @@ export function getMapDiagnostics() {
     cities: inhauma.cities ?? [],
     landmarks: inhauma.landmarks ?? [],
     roads: inhauma.roads ?? [],
+    roadGraph: inhauma.roadGraph ?? null,
+    traffic: inhauma.traffic ?? null,
     terrainRegions: inhauma.terrainRegions ?? [],
     airport: getAirportDiagnostics(game.activeMap),
   };

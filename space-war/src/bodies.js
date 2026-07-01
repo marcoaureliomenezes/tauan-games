@@ -2,9 +2,18 @@
 // atmosferas (fresnel) e anéis. Nada é carregado de fora: tudo pintado em canvas.
 
 import * as THREE from '../../vendor/three.module.min.js';
-import { SUN, PLANETS } from './config.js';
+import { SUN, PLANETS, BINARY, defaultGravReach } from './config.js';
 import { scene } from './scene.js';
 import { game } from './state.js';
+
+const ORIGIN = new THREE.Vector3(0, 0, 0);
+const BIN_CENTER = new THREE.Vector3(...BINARY.center);
+const BIN_CULL = 220_000;   // cada corpo binário aparece quando a nave chega a esta distância DELE
+// Hooks de animação por-frame dos corpos especiais (disco de acreção, jatos, pulso).
+const bodyFx = [];
+// Beacon: estrela brilhante sempre visível na posição do binário, pra você ENXERGAR
+// e mirar o destino de longe. Some quando o sistema detalhado aparece (ao se aproximar).
+let binBeacon = null;
 
 function hex(c) { return '#' + c.toString(16).padStart(6, '0'); }
 function rndSeed(s) {
@@ -13,7 +22,19 @@ function rndSeed(s) {
 }
 
 // ---- Texturas procedurais por tipo de corpo ------------------------------
+// Memoizadas por identidade visual: os planetas gêmeos do sistema binário
+// reaproveitam a textura do planeta original (corta 21 gerações de canvas no load
+// e compartilha memória de GPU — essencial para FPS em software-GL).
+const _texCache = new Map();
 function planetTexture(def) {
+  const cacheKey = `${def.kind}|${def.color}|${def.color2 || 0}|${def.radius}|${def.redspot ? 1 : 0}`;
+  const hit = _texCache.get(cacheKey);
+  if (hit) return hit;
+  const tex = buildPlanetTexture(def);
+  _texCache.set(cacheKey, tex);
+  return tex;
+}
+function buildPlanetTexture(def) {
   const W = 1024, H = 512;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
@@ -153,72 +174,305 @@ function makeSphere(radius, tex, emissive) {
   return new THREE.Mesh(new THREE.SphereGeometry(radius, seg, seg / 2), mat);
 }
 
+function reach(def) { return def.gravReach || defaultGravReach(def); }
+
+// Constrói um planeta (+ luas) e o registra. `orbitCenter` é o ponto que ele orbita
+// (origem no sistema solar, baricentro no binário). Reaproveitado pelos dois sistemas.
+function buildPlanetBody(def, parentBody, system, orbitCenter) {
+  const group = new THREE.Group();
+  const tex = planetTexture(def);
+  const mesh = makeSphere(def.radius, tex, false);
+  mesh.rotation.z = def.tilt || 0;
+  group.add(mesh);
+  if (def.hasAtmo || def.atmosphere) group.add(atmosphere(def.radius, def.atmosphere || 0x6fb6ff));
+  if (def.ring) group.add(ringMesh(def.ring));
+  const soiMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(def.soi, 24, 16),
+    new THREE.MeshBasicMaterial({ color: 0x4aa6e0, wireframe: true, transparent: true, opacity: 0.08, depthWrite: false }),
+  );
+  soiMesh.visible = false;
+  group.add(soiMesh);
+  scene.add(group);
+  const body = {
+    def, group, mesh, soiMesh, worldPos: new THREE.Vector3(), mu: def.mu, soi: def.soi,
+    gravReach: reach(def), system, orbitCenter,
+    isMoon: false, isSun: false, parent: parentBody, angle: Math.random() * Math.PI * 2,
+    orbit: def.orbit, period: null, spin: def.spin, moons: [],
+  };
+  game.bodies.push(body);
+
+  for (const m of (def.moons || [])) {
+    const mg = new THREE.Group();
+    const mtex = planetTexture({ ...m, kind: 'rock', color2: m.color });
+    const mmesh = makeSphere(m.radius, mtex, false);
+    mg.add(mmesh);
+    scene.add(mg);
+    const moon = {
+      def: m, group: mg, mesh: mmesh, worldPos: new THREE.Vector3(), mu: m.mu, soi: m.soi,
+      gravReach: reach(m), system, orbitCenter: null,   // luas seguem o pai dinamicamente
+      isMoon: true, isSun: false, parent: body, angle: Math.random() * Math.PI * 2,
+      orbit: m.orbit, period: m.period, spin: m.spin, retrograde: !!m.retrograde,
+    };
+    body.moons.push(moon);
+    game.bodies.push(moon);
+  }
+  return body;
+}
+
 export function buildSolarSystem() {
   // --- Sol ---
   const sunGroup = new THREE.Group();
   const sunTex = sunTexture();
   const sunMesh = makeSphere(SUN.radius, sunTex, true);
   sunGroup.add(sunMesh);
-  // Glow corona (sprite aditivo)
-  const glow = sunGlow(SUN.radius);
-  sunGroup.add(glow);
-  // Luz
-  const light = new THREE.PointLight(SUN.light, 3.2, 0, 0.0);
+  const corona = sunGlow(SUN.radius);
+  sunGroup.add(corona);
+  // Luz do Sol — alcance FINITO (1,4M) p/ cobrir o sistema solar mas NÃO o binário.
+  const light = new THREE.PointLight(SUN.light, 3.2, 1_400_000, 0.0);
   sunGroup.add(light);
   scene.add(sunGroup);
-  const sun = { def: SUN, group: sunGroup, mesh: sunMesh, worldPos: new THREE.Vector3(0, 0, 0), mu: SUN.mu, soi: SUN.soi, isMoon: false, isSun: true, parent: null, angle: 0 };
+  const sun = {
+    def: SUN, group: sunGroup, mesh: sunMesh, worldPos: new THREE.Vector3(0, 0, 0),
+    mu: SUN.mu, soi: SUN.soi, gravReach: reach(SUN), system: 'home', orbitCenter: ORIGIN,
+    isMoon: false, isSun: true, parent: null, angle: 0,
+  };
   game.sun = sun;
   game.bodies.push(sun);
+  // pulso solar (anima a corona única + a cor do disco — barato, sem fill extra)
+  bodyFx.push({ t: 0, update(dt) {
+    this.t += dt;
+    const p = 0.85 + Math.sin(this.t * 1.7) * 0.12;
+    corona.scale.setScalar(SUN.radius * (5.5 + Math.sin(this.t * 1.3) * 0.25));
+    sunMesh.material.color.setRGB(1, 0.92 * p + 0.05, 0.55 * p);
+  } });
 
-  // --- Planetas ---
-  for (const def of PLANETS) {
-    const group = new THREE.Group();
-    const tex = planetTexture(def);
-    const mesh = makeSphere(def.radius, tex, false);
-    mesh.rotation.z = def.tilt || 0;
-    group.add(mesh);
-    if (def.hasAtmo || def.atmosphere) group.add(atmosphere(def.radius, def.atmosphere || 0x6fb6ff));
-    if (def.ring) group.add(ringMesh(def.ring));
-    // Bolha do campo de influência (SOI) — visível só quando você se aproxima.
-    const soiMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(def.soi, 24, 16),
-      new THREE.MeshBasicMaterial({ color: 0x4aa6e0, wireframe: true, transparent: true, opacity: 0.08, depthWrite: false }),
-    );
-    soiMesh.visible = false;
-    group.add(soiMesh);
-    scene.add(group);
-    const body = {
-      def, group, mesh, soiMesh, worldPos: new THREE.Vector3(), mu: def.mu, soi: def.soi,
-      isMoon: false, parent: sun, angle: Math.random() * Math.PI * 2, orbit: def.orbit,
-      period: null, spin: def.spin, moons: [],
-    };
-    game.bodies.push(body);
+  // --- Planetas do sistema solar ---
+  for (const def of PLANETS) buildPlanetBody(def, sun, 'home', ORIGIN);
 
-    // --- Luas ---
-    for (const m of (def.moons || [])) {
-      const mg = new THREE.Group();
-      const mtex = planetTexture({ ...m, kind: 'rock', color2: m.color });
-      const mmesh = makeSphere(m.radius, mtex, false);
-      mg.add(mmesh);
-      scene.add(mg);
-      const moon = {
-        def: m, group: mg, mesh: mmesh, worldPos: new THREE.Vector3(), mu: m.mu, soi: m.soi,
-        isMoon: true, parent: body, angle: Math.random() * Math.PI * 2, orbit: m.orbit,
-        period: m.period, spin: m.spin, retrograde: !!m.retrograde,
-      };
-      body.moons.push(moon);
-      game.bodies.push(moon);
-    }
-  }
+  // --- Segundo sistema: binário buraco-negro + estrela-de-nêutrons ---
+  buildBinarySystem();
+
   return game.bodies;
 }
 
-// Mostra a bolha de SOI só quando a nave se aproxima (evita poluição visual + custo).
+// ===========================================================================
+// SISTEMA BINÁRIO
+// ===========================================================================
+function buildBinarySystem() {
+  const center = new THREE.Vector3(...BINARY.center);
+  const bh = BINARY.blackHole, ns = BINARY.neutronStar;
+
+  // Raios da dança binária ∝ inverso da massa (baricentro real).
+  const total = bh.mu + ns.mu;
+  const rBH = BINARY.separation * (ns.mu / total);
+  const rNS = BINARY.separation * (bh.mu / total);
+
+  // --- Buraco negro ---
+  const bhGroup = buildBlackHole(bh);
+  scene.add(bhGroup.group);
+  const bhBody = {
+    def: bh, group: bhGroup.group, mesh: bhGroup.horizon, worldPos: new THREE.Vector3(),
+    mu: bh.mu, soi: bh.soi, gravReach: reach(bh), system: 'binary',
+    isMoon: false, isSun: false, parent: null, binaryPair: true,
+    barycenter: center, pairRadius: rBH, pairPhase: 0, period: BINARY.pairPeriod,
+  };
+  game.bodies.push(bhBody);
+  bodyFx.push(bhGroup.fx);
+
+  // --- Estrela de nêutrons (pulsar) ---
+  const nsGroup = buildNeutronStar(ns);
+  scene.add(nsGroup.group);
+  const nsBody = {
+    def: ns, group: nsGroup.group, mesh: nsGroup.core, worldPos: new THREE.Vector3(),
+    mu: ns.mu, soi: ns.soi, gravReach: reach(ns), system: 'binary',
+    isMoon: false, isSun: false, parent: null, binaryPair: true,
+    barycenter: center, pairRadius: rNS, pairPhase: Math.PI, period: BINARY.pairPeriod,
+  };
+  game.bodies.push(nsBody);
+  bodyFx.push(nsGroup.fx);
+
+  // Luz azul-branca da estrela de nêutrons (ilumina os planetas gêmeos).
+  const nsLight = new THREE.PointLight(0xcfe0ff, 3.0, 900_000, 0.0);
+  nsGroup.group.add(nsLight);
+
+  // Beacon: ponto brilhante (branco-azul + tom púrpura do disco) visível do sistema
+  // solar inteiro. É o que você vê e mira de longe; some ao chegar perto (detalhe assume).
+  binBeacon = makeRadialSprite(['rgba(220,232,255,0.98)', 'rgba(150,185,255,0.55)', 'rgba(150,90,230,0.18)', 'rgba(0,0,0,0)']);
+  binBeacon.scale.setScalar(17000);
+  binBeacon.position.copy(center);
+  scene.add(binBeacon);
+
+  // --- Planetas gêmeos orbitando o baricentro, em ÓRBITAS COMPACTAS (50k–197k) ---
+  // Mantidos dentro do domínio do binário (SOI 230k) e fora da zona de não-retorno (~40k),
+  // pra NÃO vazarem para o SOI do Sol. É um sistema planetário aninhado no buraco negro.
+  PLANETS.forEach((def, i) => {
+    const twin = { ...def, key: def.key + '2', name: def.name + ' β', orbit: 50000 + i * 21000 };
+    if (def.moons) twin.moons = def.moons.map((m) => ({ ...m, name: m.name + ' β' }));
+    buildPlanetBody(twin, null, 'binary', center);
+  });
+}
+
+// ---- Buraco negro: horizonte + disco de acreção + anel de fótons ----------
+function buildBlackHole(def) {
+  const group = new THREE.Group();
+
+  // Horizonte de eventos: esfera preta absoluta (engole a luz).
+  const horizon = new THREE.Mesh(
+    new THREE.SphereGeometry(def.rs, 32, 20),
+    new THREE.MeshBasicMaterial({ color: 0x000000 }),
+  );
+  group.add(horizon);
+
+  // Anel de fótons: halo fino e brilhante rente ao horizonte (luz curvada).
+  const photon = new THREE.Mesh(
+    new THREE.TorusGeometry(def.photonRing, def.rs * 0.05, 10, 56),
+    new THREE.MeshBasicMaterial({ color: 0xffe6b0, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  photon.rotation.x = Math.PI / 2;
+  group.add(photon);
+
+  // Disco de acreção: corpo-negro radial (vermelho fora → branco-azulado dentro),
+  // com assimetria de brilho por Doppler beaming (um lado mais claro).
+  const disk = accretionDisk(def.disk.inner, def.disk.outer);
+  group.add(disk.mesh);
+
+  // Glow geral do disco (sprite aditivo) para vender o brilho intenso.
+  const glow = makeRadialSprite(['rgba(255,230,180,0.5)', 'rgba(255,150,80,0.22)', 'rgba(120,60,200,0.08)', 'rgba(0,0,0,0)']);
+  glow.scale.setScalar(def.disk.outer * 2.2);
+  group.add(glow);
+
+  const fx = { t: 0, update(dt) {
+    this.t += dt;
+    disk.mesh.rotation.z -= dt * 0.7;          // disco gira
+    disk.update(this.t);                        // anima o shimmer + Doppler
+    photon.material.opacity = 0.7 + Math.sin(this.t * 3) * 0.15;
+    glow.material.rotation += dt * 0.2;
+  } };
+  return { group, horizon, fx };
+}
+
+// Disco de acreção como malha de anel com cor por vértice (gradiente de corpo-negro)
+// e um shimmer animado via material.opacity + leve rotação de textura.
+function accretionDisk(inner, outer) {
+  const geo = new THREE.RingGeometry(inner, outer, 128, 6);
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const v = new THREE.Vector3().fromBufferAttribute(pos, i);
+    const r = (v.length() - inner) / (outer - inner);          // 0 dentro → 1 fora
+    const ang = Math.atan2(v.y, v.x);
+    // corpo-negro: quente (branco-azul) dentro → frio (vermelho) fora
+    const temp = 1 - r;
+    const doppler = 0.6 + 0.4 * Math.cos(ang);                 // um lado mais brilhante
+    c.setRGB(
+      (0.9 + temp * 0.1) * doppler,
+      (0.35 + temp * 0.6) * doppler,
+      (0.15 + temp * 0.85) * doppler,
+    );
+    colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.MeshBasicMaterial({
+    vertexColors: true, side: THREE.DoubleSide, transparent: true,
+    opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = Math.PI / 2 + 0.18;          // levemente inclinado
+  return { mesh, update(t) { mat.opacity = 0.8 + Math.sin(t * 5) * 0.12; } };
+}
+
+// ---- Estrela de nêutrons / pulsar: núcleo + jatos polares + campo magnético --
+function buildNeutronStar(def) {
+  const group = new THREE.Group();
+
+  // Núcleo: esfera pequena e ofuscante (azul-branco).
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(def.radius, 32, 24),
+    new THREE.MeshBasicMaterial({ color: 0xdfeaff }),
+  );
+  group.add(core);
+
+  // Halo ofuscante.
+  const halo = makeRadialSprite(['rgba(220,235,255,0.95)', 'rgba(150,190,255,0.5)', 'rgba(80,120,255,0.15)', 'rgba(0,0,0,0)']);
+  halo.scale.setScalar(def.radius * 9);
+  group.add(halo);
+
+  // Eixo magnético (inclinado vs rotação) → carrega os dois jatos polares = farol.
+  const axis = new THREE.Group();
+  axis.rotation.z = def.jetTilt;
+  group.add(axis);
+
+  const jetLen = def.radius * 60, jetR = def.radius * 2.6;
+  for (const s of [1, -1]) {
+    const jet = new THREE.Mesh(
+      new THREE.ConeGeometry(jetR, jetLen, 16, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    // cone aponta +Y por padrão; posiciona a base na estrela, ápice longe
+    jet.position.y = s * jetLen / 2;
+    jet.rotation.x = s > 0 ? 0 : Math.PI;
+    axis.add(jet);
+    // ponta brilhante do feixe
+    const tip = makeRadialSprite(['rgba(200,225,255,0.9)', 'rgba(120,170,255,0.3)', 'rgba(0,0,0,0)']);
+    tip.scale.setScalar(def.radius * 10);
+    tip.position.y = s * jetLen;
+    axis.add(tip);
+  }
+
+  // Linhas de campo magnético (toros concêntricos ao redor do eixo magnético).
+  for (let i = 1; i <= 3; i++) {
+    const ringR = def.radius * (2.5 + i * 2.2);
+    const loop = new THREE.Mesh(
+      new THREE.TorusGeometry(ringR, def.radius * 0.12, 6, 32),
+      new THREE.MeshBasicMaterial({ color: 0x77aaff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    axis.add(loop);
+  }
+
+  const fx = { t: 0, update(dt) {
+    this.t += dt;
+    // rotação ultrarrápida do pulsar (gira o conjunto inteiro → jatos varrem o céu)
+    group.rotation.y += dt * (Math.PI * 2 / def.spin);
+    // pulso de brilho
+    const p = 0.7 + Math.abs(Math.sin(this.t * (Math.PI * 2 / def.spin))) * 0.3;
+    core.material.color.setRGB(0.87 * p + 0.1, 0.92 * p + 0.06, 1.0);
+    halo.material.opacity = 0.6 + p * 0.35;
+  } };
+  return { group, core, fx };
+}
+
+// Sprite radial reutilizável a partir de uma lista de color-stops.
+function makeRadialSprite(stops) {
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 128;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 2, 64, 64, 64);
+  for (let i = 0; i < stops.length; i++) g.addColorStop(i / (stops.length - 1), stops[i]);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(cv);
+  const mat = new THREE.SpriteMaterial({ map: tex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+  return new THREE.Sprite(mat);
+}
+
+// Anima os corpos especiais (disco de acreção, jatos do pulsar, pulso solar).
+export function updateBodyFX(dt) {
+  for (const f of bodyFx) f.update(dt);
+}
+
+// Mostra a bolha de SOI só quando a nave se aproxima + CULL do sistema binário.
+// Quando a nave está longe do binário (jogo no sistema solar), todo o grupo binário
+// fica invisível → ZERO draw calls, FPS de volta ao baseline mesmo em software-GL.
 export function updateSOIView(shipPos) {
   for (const b of game.bodies) {
+    if (b.system === 'binary') {
+      const vis = shipPos.distanceTo(b.worldPos) < BIN_CULL;   // cull POR CORPO
+      if (b.group.visible !== vis) b.group.visible = vis;
+    }
     if (!b.soiMesh) continue;
     b.soiMesh.visible = shipPos.distanceTo(b.worldPos) < b.soi * 1.3;
   }
+  // Beacon (estrela brilhante do binário) visível enquanto o par compacto está longe.
+  if (binBeacon) binBeacon.visible = shipPos.distanceTo(BIN_CENTER) > BIN_CULL * 0.8;
 }
 
 // ---- Texturas/visuais do Sol ---------------------------------------------

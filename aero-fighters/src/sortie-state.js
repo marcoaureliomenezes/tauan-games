@@ -86,4 +86,5 @@ export const GROUND_STATES = new Set([
   SortieState.TAKEOFF_ROLL,
   SortieState.LANDING_ROLL,
   SortieState.TAXI_IN,
+  SortieState.NEXT_SORTIE_READY,
 ]);

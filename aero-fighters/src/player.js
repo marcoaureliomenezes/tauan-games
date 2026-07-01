@@ -318,6 +318,11 @@ const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _maydayPos = new THREE.Vector3();
 
+// Velocidade vertical REAL (dy/dt) — única fonte para a lógica de pouso.
+// (Antes o pouso usava fwd.y*speed - GRAVITY, que ignorava a sustentação e dava
+//  sempre ~-14 m/s em voo nivelado → todo pouso era classificado "inseguro" → explosão.)
+let _prevAltY = null;
+
 function clampPitchAttitude() {
   _attitudeEuler.setFromQuaternion(jet.quaternion, 'YXZ');
   _attitudeEuler.x = Math.max(PLAYER.PITCH_DOWN_LIMIT, Math.min(PLAYER.PITCH_UP_LIMIT, _attitudeEuler.x));
@@ -346,14 +351,7 @@ export function updatePlayer(dt, input, onCrash) {
   if (!game.running || game.flags.paused) return;
   const mr = game.missionRealism;
   const sortie = mr?.sortie;
-  const groundStates = new Set([
-    SortieState.TAXI_OUT,
-    SortieState.TAKEOFF_ROLL,
-    SortieState.LANDING_ROLL,
-    SortieState.TAXI_IN,
-    SortieState.NEXT_SORTIE_READY,
-  ]);
-  if (mr?.enabled && sortie && groundStates.has(sortie.state)) {
+  if (mr?.enabled && sortie && GROUND_STATES.has(sortie.state)) {
     const contact = classifyGroundContact({ x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
     mr.groundContact = contact;
     mr.landingZoneStatus = contact;
@@ -372,10 +370,13 @@ export function updatePlayer(dt, input, onCrash) {
     }
     const fwdG = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
     jet.position.addScaledVector(fwdG, game.player.speed * dt);
+    const movedContact = classifyGroundContact({ x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
+    const movedSurface = surfaceInfoAt(jet.position.x, jet.position.z);
+    const hardFloor = Math.max(movedContact.height, movedSurface.height) + 0.9;
     // Only snap to ground when NOT in active liftoff rotation.
     // Once liftoffVsp is accumulating, allow y to rise freely.
     if (!sortie.liftoffVsp || sortie.liftoffVsp <= 0) {
-      jet.position.y = contact.height + 0.9;
+      jet.position.y = hardFloor;
     }
 
     if (sortie.state === SortieState.TAXI_OUT && contact.type === 'runway') {
@@ -410,14 +411,14 @@ export function updatePlayer(dt, input, onCrash) {
     }
     // Per-frame floor clamp: never let the jet go underground while in ground states
     // or when sitting on an airport surface.
-    const floorClampHeight = contact.height + 0.9;
+    const floorClampHeight = hardFloor;
     if (GROUND_STATES.has(sortie.state) || airportSurface({ x: jet.position.x, z: jet.position.z }, game.activeMap) !== 'none') {
       jet.position.y = Math.max(jet.position.y, floorClampHeight);
     } else {
       // Still clamp to runway height if we're just barely off the ground during liftoff rotation
       jet.position.y = Math.max(jet.position.y, contact.height + 0.9);
     }
-    if ((sortie.state === SortieState.LANDING_ROLL || sortie.state === SortieState.TAXI_IN) && contact.type === 'service' && game.player.speed < 10) {
+    if ((sortie.state === SortieState.LANDING_ROLL || sortie.state === SortieState.TAXI_IN) && movedContact.type === 'service' && game.player.speed < 10) {
       transitionSortie(sortie, SortieEvent.SERVICE_ZONE_REACHED, {}, game.time);
     }
 
@@ -511,9 +512,11 @@ export function updatePlayer(dt, input, onCrash) {
   // empuxo cai acima do teto prático; stall derruba o nariz e amolece comandos.
   const fwdPre = _v1.set(0, 0, -1).applyQuaternion(jet.quaternion);
   let tgtSpd = PLAYER.MIN_SPD + game.player.throttle * (PLAYER.MAX_SPD - PLAYER.MIN_SPD);
-  tgtSpd -= fwdPre.y * PLAYER.CLIMB_TRADE;
+  // Só cobra energia quando a subida é muito íngreme. Antes qualquer nariz
+  // positivo drenava velocidade, deixando o avião ruim de subir em qualquer altitude.
+  tgtSpd -= Math.max(0, fwdPre.y - 0.18) * PLAYER.CLIMB_TRADE;
   if (jet.position.y > PLAYER.CEILING) {
-    tgtSpd *= Math.max(0.35, 1 - (jet.position.y - PLAYER.CEILING) / 500);
+    tgtSpd *= Math.max(0.35, 1 - (jet.position.y - PLAYER.CEILING) / 2500);
   }
   tgtSpd = Math.min(tgtSpd, PLAYER.MAX_SPD * PLAYER.DIVE_OVERSPEED);
   game.player.speed += (tgtSpd - game.player.speed) * Math.min(1, dt * PLAYER.CONVERGE_RATE);
@@ -567,8 +570,10 @@ export function updatePlayer(dt, input, onCrash) {
   jet.position.y -= PLAYER.GRAVITY * dt;
   if (!game.player.stalled) {
     const liftFactor = Math.min(game.player.speed / (PLAYER.MIN_SPD * 2.5), 1.0);
-    // Sustentação aplicada em Y mundo (não local) — elimina oscilação em ângulos de pitch
+    // Sustentação base + componente de climb: nariz para cima deve realmente subir,
+    // sem precisar "roubar" velocidade em qualquer altitude.
     jet.position.y += PLAYER.GRAVITY * liftFactor * dt;
+    jet.position.y += Math.max(0, fwd.y) * game.player.speed * 0.42 * dt;
   }
 
   // Crash
@@ -637,28 +642,38 @@ export function updatePlayer(dt, input, onCrash) {
   if (mr?.enabled) {
     const contact = classifyGroundContact({ x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
     const altitudeAboveGround = jet.position.y - contact.height;
+    // Velocidade vertical REAL = variação de altura por segundo (não a fórmula antiga
+    // que ignorava sustentação). Negativo = descendo; positivo = subindo.
+    const hadPrev = _prevAltY !== null;
+    const realVsp = (hadPrev && dt > 0) ? (jet.position.y - _prevAltY) / dt : 0;
+    _prevAltY = jet.position.y;
     syncFlightGroundDiagnostics(mr.ground, {
       speed: game.player.speed,
       throttle: game.player.throttle,
       pitch: jet.rotation.x,
       roll: jet.rotation.z,
-      verticalSpeed: fwd.y * game.player.speed - PLAYER.GRAVITY,
+      verticalSpeed: realVsp,
       surface: contact.type,
       contact,
       altitudeAboveGround,
     });
     mr.groundContact = contact;
     mr.landingZoneStatus = contact;
-    // MÁQUINA DE CONTATO (WS-1/WS-4): tocar pavimento em voo nunca é clamp silencioso.
-    // Em QUALQUER estado aéreo: envelope ok → touchdown (oportunista fora de RTB);
-    // atitude/sink ruins rente ao chão → hard landing (bounce + dano), não crash.
+    // MÁQUINA DE CONTATO — pouso na pista é SEMPRE seguro (jogo para criança).
+    // Tocar QUALQUER pavimento (runway/taxiway/service) descendo em velocidade de pouso
+    // dentro da janela de toque é um pouso bem-sucedido: snap suave + corta throttle, sem
+    // dano. Um mergulho a toda velocidade (≳ LAND_MAX_SPD) sobre a pista NÃO é pouso — o
+    // avião passa reto. Só uma queda catastrófica (invertido e despencando) também não conta.
     const onPavement = contact.type === 'runway' || contact.type === 'taxiway' || contact.type === 'service';
     if (onPavement && altitudeAboveGround < PLAYER.FLARE_HI) {
       const lastTD = mr.sortie.lastTouchdownTime ?? -Infinity;
       const debounceOk = (game.time - lastTD) > PLAYER.TOUCHDOWN_DEBOUNCE;
-      if (mr.ground.landingEnvelope.touchdownReady && debounceOk) {
-        // Touchdown contínuo: ajuste sub-métrico de altura, velocidade preservada,
-        // throttle cortado para idle (rollout desacelera via atrito de rolagem).
+      const descending = hadPrev && realVsp < -0.5; // descendo de fato (não decolando)
+      const landingSpeed = game.player.speed <= PLAYER.LAND_MAX_SPD; // não "pousa" num mergulho a 80 m/s
+      const bossBlocking = game.flags.bossActive === true; // monstro vivo trava o pouso
+      const catastrophic = Math.abs(jet.rotation.z) > 1.4 || realVsp < PLAYER.SINK_HARD;
+      if (altitudeAboveGround < PLAYER.FLARE_LO && descending && landingSpeed && !bossBlocking && debounceOk && !catastrophic) {
+        // Touchdown: ajuste sub-métrico de altura, velocidade preservada, throttle idle.
         jet.position.y = contact.height + 0.9;
         mr.ground.groundSpeed = game.player.speed;
         game.player.throttle = 0.05;
@@ -669,18 +684,24 @@ export function updatePlayer(dt, input, onCrash) {
           spawnMissileSmoke(_maydayPos);
         }
         transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_SAFE, {}, game.time);
-      } else if (altitudeAboveGround < PLAYER.FLARE_LO && mr.ground.landingEnvelope.unsafe && debounceOk) {
-        // Hard landing em pavimento: bounce + 1 hp — pousar mal na pista não é
-        // "colisão com terreno".
-        jet.position.y = contact.height + 2.2;
-        mr.sortie.lastTouchdownTime = game.time;
-        game.flags.shakeTime = 0.5;
-        playerHit();
+        // Pousou → arma o loop de solo automático (taxi + reabastecimento +
+        // recolocação para decolagem). O jogador não taxia na mão. (auto-taxi.js
+        // assume o controle no próximo frame, em main.js.)
+        if (mr.autoTaxi) { mr.autoTaxi.active = true; mr.autoTaxi.phase = 'taxi_service'; mr.autoTaxi.t = 0; }
       } else if (altitudeAboveGround < 0) {
-        // Entre bounces debounced: nunca atravessar o pavimento
+        // Nunca atravessar o pavimento (mantém o avião sobre a pista).
         jet.position.y = contact.height + 0.9;
         game.player.y = jet.position.y;
       }
+    }
+    const localSurface = surfaceInfoAt(jet.position.x, jet.position.z);
+    if (!onPavement && altitudeAboveGround < 0 && jet.position.y < localSurface.height + 0.9) {
+      // Última defesa contra tunneling em frame longo: o avião nunca atravessa
+      // chão, morro ou construção. Se bateu forte, vira crash; se só raspou,
+      // fica apoiado na superfície.
+      jet.position.y = localSurface.height + 0.9;
+      game.player.y = jet.position.y;
+      if (localSurface.kind === 'structure' || realVsp < PLAYER.SINK_MAX) onCrash('GROUND');
     }
   }
 }
@@ -733,6 +754,7 @@ export function respawnJet() {
   }
   jet.quaternion.set(0, 0, 0, 1);
   jet.visible = true;
+  _prevAltY = null; // zera o histórico de velocidade vertical (evita pouso/crash falso)
   game.player.speed = game.missionRealism?.enabled ? 0 : 25;
   game.player.throttle = game.missionRealism?.enabled ? 0.05 : 0.5;
   game.player.stalled = false;

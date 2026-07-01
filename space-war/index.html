@@ -18,6 +18,13 @@
     #mission { color: #ffd24d; font-weight: bold; letter-spacing: 1px; width: 100%; }
     #dominant { color: #7df; }
     #gravity { color: #b8a0ff; }
+    #escape { font-weight: bold; }
+    #orbit { color: #8fd6ff; }
+    #heatGlow {
+      position: fixed; inset: 0; pointer-events: none; z-index: 9; opacity: 0;
+      background: radial-gradient(ellipse at 50% 120%, rgba(255,150,40,0.85), rgba(255,80,20,0.35) 45%, rgba(0,0,0,0) 75%);
+      transition: opacity 0.15s;
+    }
     #nukes { color: #66ff88; }
     #hp { color: #ff8a8a; }
     #warning {
@@ -57,6 +64,8 @@
     <span id="speed">VEL: 0</span>
     <span id="throttle">THR: 0%</span>
     <span id="gravity">G: 0</span>
+    <span id="orbit"></span>
+    <span id="escape"></span>
     <span id="hp">CASCO: 100%</span>
     <span id="nukes">☢ NUKES: 4</span>
     <span id="score">SCORE: 000000</span>
@@ -68,8 +77,9 @@
   <canvas id="mapCanvas"></canvas>
   <div id="toast"></div>
   <div id="overlay"></div>
+  <div id="heatGlow"></div>
   <div id="flash"></div>
-  <div id="hint">[T] trocar alvo · [C] apontar no alvo · [W] acelerar · [X] freio · [M] mapa · [P] pausa · clique trava o mouse</div>
+  <div id="hint">[W/S] velocidade · [X] parar · [setas] virar · [C] apontar no alvo · [T] trocar alvo · [Shift] turbo · [M] mapa · [Z] assist on/off · [P] pausa</div>
   <script type="module" src="/space-war/src/main.js"></script>
 </body>
 </html>

@@ -199,7 +199,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 4000 });
     await page.waitForTimeout(800);
     const hasMilitary = await page.evaluate(() =>
-      window.game.targets.some(e => ['base', 'factory', 'building', 'convoy', 'aaGun'].includes(e.type))
+      window.game.targets.some(e => ['base', 'factory', 'building', 'convoy', 'armedConvoy', 'helicopter', 'aaGun'].includes(e.type))
     );
     expect(hasMilitary).toBe(true);
   });

@@ -5,7 +5,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene, camera, renderer } from './scene.js';
 import { game } from './state.js';
 import { createSkybox } from './skybox.js';
-import { buildSolarSystem, updateSOIView } from './bodies.js';
+import { buildSolarSystem, updateSOIView, updateBodyFX } from './bodies.js';
 import { initOrbits, updateOrbits } from './orbits.js';
 import { buildShip, updateShip, shipMesh } from './ship.js';
 import { input, installListeners, onAction } from './input.js';
@@ -45,7 +45,11 @@ showOverlay(`<div style="color:#7df;font-size:34px;letter-spacing:6px">SPACE WAR
   (a seta/mira na tela sempre mostra para onde ir)<br><br>
   <b>W/S</b> empuxo · <b>Shift</b> turbo · <b>X</b> freio · <b>setas</b> guinada/arfagem · <b>A/D</b> rolagem<br>
   <b>Mouse</b> (clique p/ travar) pilota · <b>Espaço</b> laser · <b>F</b> nuke · <b>M</b> mapa · <b>P</b> pausa<br>
-  <i style="color:#7a9">Física real: você tem inércia. Use o freio (X) pra parar e o turbo pra grandes distâncias.</i><br><br>
+  <i style="color:#7a9">Gravidade real de N-corpos: TODO corpo te puxa. O HUD mostra o PUXÃO e se você
+  consegue fugir (✅ DÁ / ⛔ NÃO DÁ).</i><br>
+  <i style="color:#b18cff">Logo depois de Netuno há um 2º sistema: um BURACO NEGRO + ESTRELA DE NÊUTRONS
+  girando juntos. Selecione-o com [T], aponte com [C] e segure [Shift] (turbo) — ~40 s de
+  viagem. Aproxime-se com cuidado: eles engolem naves.</i><br><br>
   [Enter] para iniciar</div>`);
 
 // --- Ações discretas ---
@@ -59,6 +63,11 @@ onAction('map', () => { if (game.phase === 'flight' || game.mapOpen) toggleMap()
 onAction('target', () => { if (game.phase === 'flight') cycleTarget(1); });
 onAction('targetPrev', () => { if (game.phase === 'flight') cycleTarget(-1); });
 onAction('align', () => { if (game.phase === 'flight') game.ship.aligning = true; });
+onAction('assist', () => {
+  if (game.phase !== 'flight') return;
+  game.ship.flightAssist = !game.ship.flightAssist;
+  showToast(game.ship.flightAssist ? '🛟 PILOTO ASSISTIDO: LIGADO' : '🚀 NEWTONIANO: inércia real (assist desligado)', 2200);
+});
 onAction('pause', () => { if (game.phase === 'flight') { game.paused = !game.paused; showToast(game.paused ? '⏸ PAUSA' : '', game.paused ? 99999 : 1); } });
 
 // --- Loop ---
@@ -77,6 +86,7 @@ function loop() {
 
   if ((game.phase === 'flight') && !game.paused) {
     updateOrbits(dt);
+    updateBodyFX(dt);
     updateShip(dt);
     if (input.fire) fireLaser(dt);
     // trilha do motor
@@ -90,6 +100,7 @@ function loop() {
   } else if (game.phase === 'briefing') {
     // planetas continuam girando no fundo do briefing
     updateOrbits(dt);
+    updateBodyFX(dt);
   }
 
   updateParticles(dt);
@@ -105,7 +116,17 @@ function loop() {
 
 function gameOver() {
   game.phase = 'gameover';
-  showOverlay(`<div style="color:#f55">💥 NAVE DESTRUÍDA</div><div class="sub">Score: ${game.score} · Abates: ${game.kills}<br><br>[Enter] para reiniciar</div>`);
+  const by = game.ship.killedBy;
+  const titles = {
+    blackhole: '🕳 ESPAGUETIFICADO NO BURACO NEGRO',
+    neutron: '⭐ ESMAGADO PELA ESTRELA DE NÊUTRONS',
+    gas: '🌪 ESMAGADO NO GIGANTE GASOSO',
+    sea: '🌊 QUEIMOU NA REENTRADA E CAIU NO MAR',
+    sun: '☀ INCINERADO NO SOL',
+  };
+  const title = titles[by] || '💥 NAVE DESTRUÍDA';
+  const color = by ? '#b18cff' : '#f55';
+  showOverlay(`<div style="color:${color}">${title}</div><div class="sub">Score: ${game.score} · Abates: ${game.kills}<br><br>[Enter] para reiniciar</div>`);
 }
 
 loop();

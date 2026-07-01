@@ -1,2 +1,2 @@
-release: space-war-v1
+release: v0.2.0
 phase: IMPLEMENTATION

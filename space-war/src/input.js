@@ -10,7 +10,7 @@ export const input = {
   mouseDX: 0, mouseDY: 0, pointerLocked: false,
 };
 
-const listeners = { nuke: [], map: [], pause: [], start: [], target: [], align: [], targetPrev: [] };
+const listeners = { nuke: [], map: [], pause: [], start: [], target: [], align: [], targetPrev: [], assist: [] };
 export function onAction(name, fn) { listeners[name]?.push(fn); }
 function emit(name) { for (const fn of (listeners[name] || [])) fn(); }
 
@@ -32,6 +32,7 @@ export function installListeners() {
     if (e.code === 'KeyP') emit('pause');
     if (e.code === 'KeyT') emit(e.shiftKey ? 'targetPrev' : 'target');
     if (e.code === 'KeyC') emit('align');
+    if (e.code === 'KeyZ') emit('assist');
     if (e.code === 'Enter') emit('start');
   });
   window.addEventListener('keyup', (e) => { if (DOWN[e.code]) input[DOWN[e.code]] = false; });

@@ -10,7 +10,7 @@ export const scene = new THREE.Scene();
 export const camera = new THREE.PerspectiveCamera(
   62,
   window.innerWidth / window.innerHeight,
-  1,
+  RENDER.near,
   RENDER.far,
 );
 camera.position.set(0, 6, 18);

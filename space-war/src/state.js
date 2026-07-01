@@ -16,14 +16,21 @@ export const game = {
     throttle: 0,          // 0..1
     boost: false,
     speed: 0,
+    flightAssist: true,   // fly-by-wire (Set Speed): throttle = velocidade-alvo, fácil de pilotar
     landed: true,
     hp: 100,
     nukes: 4,
     altitude: 0,          // distância à superfície do corpo dominante
-    dominant: null,       // corpo gravitacional dominante
+    dominant: null,       // corpo gravitacional dominante (quem mais puxa agora)
     gravMag: 0,           // magnitude da gravidade atual (u/s²)
+    escapeVel: 0,         // velocidade de escape do corpo dominante (u/s)
+    circVel: 0,           // velocidade de órbita circular no raio atual (u/s)
+    canEscape: true,      // a nave consegue escapar com a velocidade máxima?
+    killedBy: null,       // 'blackhole'|'neutron'|'gas'|'sea'|'sun'|null — causa da morte
+    heat: 0,              // 0..1 aquecimento de reentrada (brilho na tela + dano)
+    atmoBody: null,       // corpo cuja atmosfera a nave está atravessando
     inAtmosphere: false,
-    noReturn: false,      // dentro da zona de não-retorno do Sol
+    noReturn: false,      // dentro da zona de não-retorno (Sol / buraco negro / nêutrons)
     spawnGrace: 0,        // segundos de proteção pós-decolagem (sem dano / inimigos seguram fogo)
   },
   // Combate

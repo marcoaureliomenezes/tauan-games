@@ -89,6 +89,11 @@ export function drawNav() {
   if (!ctx || game.phase !== 'flight' || game.mapOpen) { if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
+
+  // Indicador de PUXÃO gravitacional — seta que aponta para o corpo que te puxa,
+  // do tamanho da força. Vermelho quando a fuga é impossível.
+  drawPullIndicator(ctx, W, H);
+
   const t = currentTarget();
   if (!t) return;
 
@@ -152,3 +157,35 @@ function label(ctx, text, x, y, color) {
   ctx.fillStyle = color; ctx.fillText(text, x, y + 2);
 }
 function fmtDist(d) { return d > 1000 ? `${(d / 1000).toFixed(1)}k` : `${d | 0}`; }
+
+// Seta de gravidade: aponta (do indicador central-inferior) para o corpo dominante,
+// com comprimento proporcional à força. Cor escala: lilás → laranja → vermelho (sem fuga).
+function drawPullIndicator(ctx, W, H) {
+  const s = game.ship;
+  if (!s.dominant || s.gravMag < 25) return;
+
+  _v.copy(s.dominant.worldPos).project(camera);
+  let sx = (_v.x * 0.5 + 0.5) * W, sy = (-_v.y * 0.5 + 0.5) * H;
+  camera.getWorldDirection(_camDir);
+  _to.copy(s.dominant.worldPos).sub(camera.position);
+  if (_to.dot(_camDir) <= 0) { sx = W - sx; sy = H - sy; }   // atrás → espelha
+
+  const cx = W / 2, cy = H - 110;
+  const ang = Math.atan2(sy - cy, sx - cx);
+  const danger = !s.canEscape;
+  const color = danger ? '#ff4060' : s.gravMag > 200 ? '#ffaa44' : '#b18cff';
+  const len = 34 + Math.min(110, s.gravMag * 0.12);
+
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(ang);
+  ctx.globalAlpha = danger ? 1 : 0.85;
+  ctx.strokeStyle = color; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(len, 0); ctx.lineTo(len - 14, -8); ctx.lineTo(len - 14, 8); ctx.closePath();
+  ctx.fillStyle = color; ctx.fill();
+  ctx.restore();
+
+  ctx.globalAlpha = 1;
+  ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = color;
+  ctx.fillText(`PUXÃO → ${s.dominant.def.name}  ${s.gravMag.toFixed(0)} u/s²`, cx, cy + 32);
+}

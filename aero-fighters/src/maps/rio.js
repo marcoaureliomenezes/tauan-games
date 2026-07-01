@@ -4,7 +4,7 @@
 
 import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
-import { airportSurface } from '../landing-zones.js';
+import { applyAirportClearing } from '../landing-zones.js';
 import { rioAirport } from '../airport.js';
 
 let _scene = null;
@@ -58,6 +58,8 @@ function createMorro(hDef, scene) {
     // Ruído para naturalidade
     h += Math.sin(x * 0.2) * 2 + Math.cos(z * 0.18) * 2;
     h = Math.max(0, h);
+    // Clareira do aeroporto (rampa suave) — sem morro no meio/beira da pista.
+    h = applyAirportClearing(h, cx + x, cz + z, 'rio');
     posAttr.setY(i, h);
 
     // Vertex colors por tipo e altitude
@@ -219,27 +221,28 @@ export function updateRioWorld(dt, playerPos) {
 export function rioHeightAt(isl, dx, dz) {
   const worldX = isl.cx + dx;
   const worldZ = isl.cz + dz;
-  if (airportSurface({ x: worldX, z: worldZ }, 'rio') !== 'none') {
-    return rioAirport.elevation;
-  }
   const t = Math.sqrt(dx * dx + dz * dz) / isl.radius;
-  if (t >= 1.0) return 0;
-  const noise = Math.sin(dx * 0.2) * 2 + Math.cos(dz * 0.18) * 2;
-  let h = 0;
-  if (isl.type === 'rock') {
-    h = isl.peakHeight * Math.max(0, 1 - t * t * 2.0);
-  } else if (isl.type === 'mesa') {
-    h = t < 0.65 ? isl.peakHeight : isl.peakHeight * Math.max(0, 1 - (t - 0.65) / 0.25);
-  } else if (isl.type === 'twin') {
-    const d1 = Math.sqrt((dx - 0.3 * isl.radius) ** 2 + dz * dz);
-    const d2 = Math.sqrt((dx + 0.3 * isl.radius) ** 2 + dz * dz);
-    h = isl.peakHeight * Math.max(
-      Math.max(0, 1 - (d1 / isl.radius * 1.8) ** 2),
-      Math.max(0, 1 - (d2 / isl.radius * 1.8) ** 2),
-    );
-  } else {
-    // forest / urban
-    h = isl.peakHeight * Math.max(0, 1 - t * t * 1.6);
+  let natural = 0;
+  if (t < 1.0) {
+    const noise = Math.sin(dx * 0.2) * 2 + Math.cos(dz * 0.18) * 2;
+    let h = 0;
+    if (isl.type === 'rock') {
+      h = isl.peakHeight * Math.max(0, 1 - t * t * 2.0);
+    } else if (isl.type === 'mesa') {
+      h = t < 0.65 ? isl.peakHeight : isl.peakHeight * Math.max(0, 1 - (t - 0.65) / 0.25);
+    } else if (isl.type === 'twin') {
+      const d1 = Math.sqrt((dx - 0.3 * isl.radius) ** 2 + dz * dz);
+      const d2 = Math.sqrt((dx + 0.3 * isl.radius) ** 2 + dz * dz);
+      h = isl.peakHeight * Math.max(
+        Math.max(0, 1 - (d1 / isl.radius * 1.8) ** 2),
+        Math.max(0, 1 - (d2 / isl.radius * 1.8) ** 2),
+      );
+    } else {
+      // forest / urban
+      h = isl.peakHeight * Math.max(0, 1 - t * t * 1.6);
+    }
+    natural = Math.max(0, h + noise);
   }
-  return Math.max(0, h + noise);
+  // Mesma clareira do aeroporto aplicada na malha (colisão == visual).
+  return applyAirportClearing(natural, worldX, worldZ, 'rio');
 }

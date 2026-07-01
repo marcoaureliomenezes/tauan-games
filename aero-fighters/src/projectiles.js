@@ -137,7 +137,7 @@ function buildMissileMesh(kind) {
 }
 
 /** Lança um míssil em direção a um alvo (homing). @param kind 'light'|'heavy' */
-export function spawnMissile(orig, target, jetQuat, kind = 'light') {
+export function spawnMissile(orig, target, jetQuat, kind = 'light', opts = {}) {
   const cfg = kind === 'heavy' ? MISSILES_HEAVY : MISSILES_LIGHT;
   const mesh = buildMissileMesh(kind);
   mesh.position.copy(orig);
@@ -145,7 +145,18 @@ export function spawnMissile(orig, target, jetQuat, kind = 'light') {
   mesh.quaternion.copy(jetQuat);
   scene.add(mesh);
   const vel = new THREE.Vector3(0, 0, -1).applyQuaternion(jetQuat).multiplyScalar(cfg.INITIAL_SPD);
-  missiles.push({ mesh, target, velocity: vel, life: cfg.LIFE, smokeTimer: 0, cfg, kind });
+  missiles.push({
+    mesh,
+    target,
+    velocity: vel,
+    life: opts.life ?? cfg.LIFE,
+    smokeTimer: 0,
+    cfg,
+    kind,
+    damage: opts.damage ?? cfg.DAMAGE,
+    explosionScale: opts.explosionScale,
+    support: opts.support === true,
+  });
   audio.missile();
 }
 
@@ -192,14 +203,14 @@ export function updateMissiles(dt) {
     if (m.target && !m.target.dead) {
       const hr2 = m.target.hr2 * 2.5;   // raio de impacto generoso (anti-miss)
       if (m.mesh.position.distanceToSquared(m.target.mesh.position) < hr2) {
-        damageTarget(m.target, m.cfg.DAMAGE);
+        damageTarget(m.target, m.damage);
         hit = true;
       }
     }
     if (hit || m.life <= 0) {
-      const scale = m.kind === 'heavy' ? 1.5 : 0.9;
+      const scale = m.explosionScale ?? (m.kind === 'heavy' ? 1.5 : 0.9);
       explosion(m.mesh.position, scale, COLORS.fireYellow);
-      audio.explosion(m.kind === 'heavy' ? 1.2 : 0.5, m.mesh.position);
+      audio.explosion(m.kind === 'heavy' || m.support ? 1.2 : 0.5, m.mesh.position);
       scene.remove(m.mesh);
       missiles.splice(i, 1);
     }

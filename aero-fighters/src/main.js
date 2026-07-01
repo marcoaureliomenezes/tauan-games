@@ -22,12 +22,15 @@ import { createCrosshair, updateCrosshair, missileLockedTarget } from './crossha
 import { initMinimap, updateMinimap } from './ui/minimap.js';
 import { MAPS, getMapHeightFn } from './maps/index.js';
 import { spawnWingmen, updateWingmen, clearWingmen } from './wingmen.js';
+import { spawnAllyEnemies, updateAllyWar, clearAllyEnemies } from './ally-war.js';
+import { updateAutoTaxi, isAutoTaxiActive } from './auto-taxi.js';
 import { installDebugApi, recordFrame } from './debug.js';
 import { createAirportFor } from './airport.js';
 import { startService, updateService } from './service-scene.js';
 import { requestEjection, updateEjection, createPilotVisual } from './ejection.js';
 import { cycleCameraMode, updateCameraRig } from './camera-modes.js';
 import { updateNuclearFx } from './nuclear-fx.js';
+import { updateBoss } from './boss.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 
 // ─── Boot do mundo ───────────────────────────────────────────────────────────
@@ -84,6 +87,8 @@ window.selectMap = function(mapKey) {
 
   // Aliados em formação — spawna após criar o mapa (game.islands já populado)
   spawnWingmen(scene, jet);
+  // Inimigos DOS ALIADOS — a frente de batalha dos amigos (separada da do player)
+  spawnAllyEnemies(scene);
 
   // Mostra o overlay de instruções (início do jogo)
   showOverlay(
@@ -268,7 +273,10 @@ installListeners();
 
 function handleStartOrFire() {
   audio.init();
+  // O loop de solo automático (auto-taxi) já recoloca para a próxima surtida;
+  // se ele estiver ativo, o Espaço não força avanço (evita duplo-avanço).
   if (game.missionRealism?.enabled && game.missionRealism.sortie.state === SortieState.NEXT_SORTIE_READY) {
+    if (isAutoTaxiActive()) return;
     transitionSortie(game.missionRealism.sortie, SortieEvent.NEXT_SORTIE, {}, game.time);
     game.cycle += 1;
     game.flags.missionCompleteShown = false;
@@ -286,6 +294,8 @@ function handleStartOrFire() {
         restartGame();
         clearWingmen(scene);
         spawnWingmen(scene, jet);
+        clearAllyEnemies(scene);
+        spawnAllyEnemies(scene);
       }
       return;
     }
@@ -379,7 +389,12 @@ function tick() {
         showOverlay('SERVIÇO COMPLETO', 'armamento completo — próxima surtida pronta', 1800);
       }
     }
-    if (!servicing) updatePlayer(dt, input, crashAndDie);
+    if (!servicing) {
+      // Após pousar, o loop de solo é automático (taxi + reabastecimento +
+      // recolocação para decolagem). Fora dele, controle manual normal.
+      if (isAutoTaxiActive()) updateAutoTaxi(dt);
+      else updatePlayer(dt, input, crashAndDie);
+    }
     if (game.missionRealism?.ejection?.active) {
       pilotVisual.visible = true;
       pilotVisual.position.y = game.missionRealism.ejection.descentY;
@@ -396,12 +411,16 @@ function tick() {
         game.flags.mayday = false;
       }
     }
-    updateWingmen(dt, jet, game.targets);
-    updateBullets(dt, jet.position, playerHit, game.wingmen);
+    updateWingmen(dt, jet);
+    updateAllyWar(dt);
+    // Player não passa wingmen: os inimigos do PLAYER não ferem os amigos
+    // (cada lado tem os próprios inimigos).
+    updateBullets(dt, jet.position, playerHit);
     updateMissiles(dt);
     updateNuclears(dt);
     updateNuclearFx(dt);
     updateTargets(dt, jet.position);
+    updateBoss(dt, jet.position, playerHit);
     updatePickups(dt, jet.position);
     updateParticles(dt, jet.position);
     tickSmokeEmitters(dt);

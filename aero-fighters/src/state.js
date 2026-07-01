@@ -36,6 +36,7 @@ function createInitialState() {
     targetsDestroyed: 0,
     islands: [],
     wingmen: [],           // aliados AI em formação
+    allyEnemies: [],       // inimigos DOS ALIADOS (frente de batalha separada da do player)
     timeOfDay: 0.35,    // ciclo dia/noite: 0.0 (meia-noite) → 1.0 (meia-noite)
     time: 0,            // tempo total de jogo em segundos (para animações)
     activeMap: runtimeConfig.map || 'desert', // mapa ativo: 'islands' | 'desert' | 'rio'
@@ -53,6 +54,9 @@ function createInitialState() {
       hudLayout: { style: 'n64-green-combat', overlap: false },
       aircraftVisual: { model: 'procedural-f35-v2', gearVisible: true, loadoutVisible: true },
       desertLandmarks: { roads: 0, hangars: 0, lights: 0 },
+      // Auto-sortie: depois de pousar, o avião é taxiado, reabastecido e recolocado
+      // para decolagem automaticamente (sem o jogador taxiar na mão).
+      autoTaxi: { active: false, phase: 'idle', t: 0, from: null, to: null },
     },
     player: {
       x: initialPlayer.x, y: initialPlayer.y, pitch: 0, pz: initialPlayer.pz,
@@ -67,6 +71,7 @@ function createInitialState() {
       paused: false,
       missionFailed: false,
       missionCompleteShown: false,
+      rtbAnnounced: false,   // trava re-disparo de nextMission durante o retorno à base
       invincibility: 0,
       shakeTime: 0,
       crashFreezeTime: 0,
@@ -77,6 +82,7 @@ function createInitialState() {
       nukeSlowmo: 0,         // janela restante de slow-mo nuclear (ADR-U4)
       nukeShockArrival: null,// chegada da onda de choque nuclear {t, intensity}
       damageSmoke: 0,        // timer de emissão de fumaça de dano
+      supportMissilesFired: 0, // contador debug/teste dos mísseis lançados por aliados
     },
   };
 }
@@ -106,6 +112,7 @@ export function resetState() {
   game.targets.length = 0;
   game.islands.length = 0;
   game.wingmen.length = 0;
+  game.allyEnemies.length = 0;
   // player
   Object.assign(game.player, fresh.player);
   game.missionRealism = fresh.missionRealism;

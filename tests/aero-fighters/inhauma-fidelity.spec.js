@@ -42,9 +42,6 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     const inhauma = byId(diag.cities, 'inhauma');
     const cachoeira = byId(diag.cities, 'cachoeira-da-prata');
     const sete = byId(diag.cities, 'sete-lagoas');
-    const mg238 = byId(diag.roads, 'mg-238');
-    const amg0360 = byId(diag.roads, 'amg-0360');
-    const rodMun = byId(diag.roads, 'rod-mun-inhauma');
 
     expect(inhauma).toBeTruthy();
     expect(cachoeira).toBeTruthy();
@@ -54,13 +51,63 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     expect(sete.x).toBeGreaterThan(inhauma.x + 600);
     expect(sete.z).toBeLessThan(inhauma.z - 150);
 
-    expect(mg238?.points?.length).toBeGreaterThanOrEqual(4);
-    expect(Math.min(...mg238.points.map((p) => p.x))).toBeLessThan(cachoeira.x + 120);
-    expect(Math.max(...mg238.points.map((p) => p.x))).toBeGreaterThan(sete.x - 160);
-    expect(mg238.points.some((p) => Math.abs(p.x - inhauma.x) < 240 && p.z > inhauma.z)).toBe(true);
+    expect(diag.roads.length).toBeGreaterThan(500);
+    expect(diag.roadGraph?.source).toBe('inhauma-osm-pbf-web-export-v1');
+    expect(diag.roadGraph?.inputSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(diag.roadGraph?.rawRoadFeatureCount).toBeGreaterThan(5000);
+    expect(diag.roadGraph?.edgeCount).toBe(diag.roads.length);
+    expect(diag.roadGraph?.nodeCount).toBeGreaterThan(10000);
+    expect(diag.roadGraph?.largestComponentNodeCount).toBeGreaterThan(1000);
+    expect(diag.roadGraph?.airportExclusionZones?.length).toBeGreaterThanOrEqual(5);
+    expect(diag.roadGraph?.namedRoutes?.['mg-238']?.pointCount).toBeGreaterThan(100);
+    expect(diag.roadGraph?.namedRoutes?.['mg-238-mg-424']?.pointCount).toBeGreaterThan(20);
+    expect(diag.roadGraph?.roadBed?.segmentCount).toBeGreaterThan(diag.roadGraph.edgeCount);
+    expect(diag.roadGraph?.roadBed?.bucketCount).toBeGreaterThan(100);
+    for (const key of ['highway', 'regional', 'street', 'service']) {
+      expect(diag.roadGraph?.renderClasses?.[key]).toBeGreaterThan(0);
+    }
+    expect(diag.roadGraph?.renderLayers?.length).toBeGreaterThanOrEqual(4);
+    expect(diag.roadGraph?.renderDetails?.centerDashCount).toBeGreaterThan(300);
+    expect(diag.roadGraph?.renderDetails?.edgeMarkerCount).toBeGreaterThan(600);
+    expect(diag.roadGraph?.renderDetails?.roadsidePostCount).toBeGreaterThan(300);
+    expect(diag.roadGraph?.renderDetails?.roadSignCount).toBeGreaterThan(30);
+    expect(diag.roadGraph?.renderDetails?.routeLabelSignCount).toBeGreaterThanOrEqual(6);
+    expect(diag.roadGraph?.geometry?.zeroLengthSegments).toBe(0);
+    expect(diag.roadGraph?.geometry?.p99SegmentLength).toBeLessThan(35);
+    expect(diag.roadGraph?.geometry?.maxSegmentLength).toBeLessThan(160);
+    expect(diag.roadGraph?.geometry?.roadBedSmoothness?.sampleCount).toBeGreaterThan(10000);
+    expect(diag.roadGraph?.geometry?.roadBedSmoothness?.p99AdjacentHeightDelta).toBeLessThan(6);
+    expect(diag.roadGraph?.intersections?.candidateCount).toBeGreaterThan(2500);
+    expect(diag.roadGraph?.intersections?.trueIntersectionCount).toBeGreaterThan(2000);
+    expect(diag.roadGraph?.intersections?.seamCandidateCount).toBeGreaterThan(300);
+    expect(diag.roadGraph?.intersections?.renderedCount).toBe(diag.roadGraph.intersections.candidateCount);
+    expect(diag.roadGraph?.intersections?.omittedCount).toBe(0);
+    expect(diag.roadGraph?.intersections?.coverageRatio).toBe(1);
+    expect(diag.roadGraph?.intersections?.degreeBuckets?.['4']).toBeGreaterThan(100);
+    expect(diag.traffic?.routeCount).toBeGreaterThanOrEqual(4);
+    expect(diag.traffic?.graphRouteSegments).toBeGreaterThan(40);
+    expect(diag.traffic?.routes.every((route) => route.graphEdgeCount >= 3)).toBe(true);
+    expect(diag.traffic?.routes.some((route) => route.classRank >= 3)).toBe(true);
 
-    expect(amg0360.points.at(-1).z).toBeGreaterThan(inhauma.z + 200);
-    expect(rodMun.points.at(-1).z).toBeLessThan(inhauma.z - 200);
+    // NENHUMA rodovia OSM gerada passa por pista, safety area ou aproximações.
+    const airportConflicts = [];
+    for (const road of diag.roads) {
+      for (let i = 0; i < road.points.length - 1; i++) {
+        const a = road.points[i], b = road.points[i + 1];
+        for (let s = 0; s <= 10; s++) {
+          const t = s / 10;
+          const x = a.x + (b.x - a.x) * t;
+          const z = a.z + (b.z - a.z) * t;
+          const zone = diag.roadGraph.airportExclusionZones.find((candidate) =>
+            Math.abs(x - candidate.cx) <= candidate.halfW &&
+            Math.abs(z - candidate.cz) <= candidate.halfL);
+          if (zone) {
+            airportConflicts.push({ road: road.id, zone: zone.id, x, z });
+          }
+        }
+      }
+    }
+    expect(airportConflicts).toEqual([]);
   });
 
   test('contains the required Inhauma landmarks inside the central city area', async ({ page }) => {
@@ -86,6 +133,37 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
 
     const airport = byId(diag.landmarks, 'aerodromo-inhauma');
     expect(Math.hypot(airport.x - city.x, airport.z - city.z)).toBeGreaterThan(city.radius + 80);
+  });
+
+  test('keeps traffic grounded on the road graph', async ({ page }) => {
+    await openInhauma(page, 'inhauma-traffic-grounded');
+    const timeline = [];
+    for (let i = 0; i < 4; i++) {
+      await page.waitForTimeout(450);
+      timeline.push(await page.evaluate(() => window.__aeroDebug.getMapDiagnostics().traffic));
+    }
+    const traffic = timeline[timeline.length - 1];
+    expect(traffic?.routeCount).toBeGreaterThanOrEqual(4);
+    expect(traffic?.graphRouteSegments).toBeGreaterThan(40);
+    expect(traffic?.active?.classSpeedBands?.['3'] || traffic?.active?.classSpeedBands?.['4']).toBeTruthy();
+    const firstSamples = timeline.map((t) => t?.active?.samples?.[0]).filter(Boolean);
+    expect(firstSamples.length).toBe(timeline.length);
+    expect(Math.hypot(firstSamples.at(-1).x - firstSamples[0].x, firstSamples.at(-1).z - firstSamples[0].z)).toBeGreaterThan(8);
+    for (const snapshot of timeline) {
+      expect(snapshot?.active?.checkedCars).toBeGreaterThanOrEqual(30);
+      expect(snapshot?.active?.samples?.length).toBeGreaterThan(0);
+      expect(snapshot?.active?.airportSurfaceSamples).toBe(0);
+      expect(snapshot?.active?.airportExclusionSamples).toBe(0);
+      expect(snapshot?.active?.offRoadSamples).toBe(0);
+      expect(snapshot?.active?.wheelHeightViolations).toBe(0);
+      expect(snapshot?.active?.maxClearanceError).toBeLessThanOrEqual(0.02);
+      expect(snapshot?.active?.pitchAlignedCars).toBe(snapshot.active.checkedCars);
+      expect(snapshot?.active?.maxBodyPitchDeg).toBeLessThanOrEqual(18.5);
+      const floating = snapshot.active.samples.filter((car) =>
+        car.onAirportSurface || !Number.isFinite(car.bodyPitchDeg) ||
+        Math.abs(car.clearance - 0.88) > 0.02 || car.wheelCenterY < car.groundY + 0.25 || car.wheelCenterY > car.groundY + 0.45);
+      expect(floating).toEqual([]);
+    }
   });
 
   test('terrain samples prove hills, ridge and Cachoeira valley are represented', async ({ page }) => {
@@ -149,9 +227,9 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
   test('player can taxi straight from Inhauma aerodrome and take off', async ({ page }) => {
     await openInhauma(page, 'inhauma-takeoff');
     await page.keyboard.down('KeyW');
-    await page.waitForTimeout(3500);
+    await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 15000 });
     await page.keyboard.down('ArrowDown');
-    await page.waitForTimeout(2200);
+    await page.waitForFunction(() => window.game.missionRealism.sortie.state === 'AIRBORNE', { timeout: 10000 });
     await page.keyboard.up('ArrowDown');
     await page.keyboard.up('KeyW');
 

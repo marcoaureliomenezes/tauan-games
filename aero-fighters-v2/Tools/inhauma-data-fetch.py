@@ -36,6 +36,7 @@ Usage:
     --dry-run            Print plan and exit 3 without downloading
     --skip-osm           Skip OSM steps (use if already fetched)
     --skip-srtm          Skip SRTM steps (use if already fetched)
+    --export-web-data    Export deterministic web-game GIS modules from local data
     --force              Force re-fetch even if outputs are up to date
 
 Exit codes:
@@ -94,6 +95,34 @@ AWS_SRTM_BASE = "https://elevation-tiles-prod.s3.amazonaws.com/skadi"
 SRTM_TILE_DIM = 3601  # samples per side (30m SRTM1 = 1 arc-second)
 BUILDING_CAP = 5000
 LANDUSE_TAGS = {"forest", "grass", "residential", "industrial", "farmland", "orchard"}
+WEB_DRIVABLE_HIGHWAYS = {
+    "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+    "secondary", "secondary_link", "tertiary", "tertiary_link", "unclassified",
+    "residential", "living_street", "service", "track",
+}
+WEB_ROAD_WIDTHS = {
+    "motorway": 22, "motorway_link": 14, "trunk": 21, "trunk_link": 14,
+    "primary": 18, "primary_link": 12, "secondary": 16, "secondary_link": 11,
+    "tertiary": 13, "tertiary_link": 10, "unclassified": 10,
+    "residential": 8, "living_street": 7, "service": 6, "track": 5,
+}
+WEB_ROAD_PRIORITY = {
+    "motorway": 90, "trunk": 85, "primary": 80, "secondary": 70, "tertiary": 60,
+    "unclassified": 45, "residential": 35, "living_street": 30, "service": 25,
+    "track": 20,
+}
+WEB_EXCLUDED_HIGHWAYS = {"footway", "path", "construction", "services"}
+WEB_WORLD_SCALE = 0.06
+WEB_NODE_SNAP = 8.0
+WEB_POINT_MIN_STEP = 5.0
+
+WEB_AIRPORT_ZONES = (
+    {"id": "runway-safety", "cx": -560, "cz": 320, "half_x": 82, "half_z": 390},
+    {"id": "taxiway-safety", "cx": -560, "cz": 430, "half_x": 48, "half_z": 120},
+    {"id": "service-safety", "cx": -560, "cz": 475, "half_x": 70, "half_z": 70},
+    {"id": "north-approach", "cx": -560, "cz": -220, "half_x": 125, "half_z": 230},
+    {"id": "south-approach", "cx": -560, "cz": 860, "half_x": 125, "half_z": 230},
+)
 
 # Metres per degree at Inhauma latitude (approx)
 LAT_TO_KM = 111.0  # 1 deg lat ≈ 111 km everywhere
@@ -493,6 +522,235 @@ def extract_landuse(osmium_bin: str, pbf_path: Path, output_json: Path):
     print(f"  Landuse entries written: {len(landuse_list)}", flush=True)
 
 # ---------------------------------------------------------------------------
+# Web-game deterministic export
+# ---------------------------------------------------------------------------
+
+def _local_point(lon: float, lat: float, origin_lat: float, origin_lon: float,
+                 scale: float = WEB_WORLD_SCALE) -> dict:
+    """Project WGS84 lon/lat to compressed game coordinates."""
+    x = (lon - origin_lon) * LON_TO_KM_AT_LAT * 1000.0 * scale
+    z = (lat - origin_lat) * LAT_TO_KM * 1000.0 * scale
+    return {"x": round(x, 1), "z": round(z, 1)}
+
+def _point_in_airport_exclusion(p: dict) -> bool:
+    for zone in WEB_AIRPORT_ZONES:
+        if (abs(p["x"] - zone["cx"]) <= zone["half_x"] and
+                abs(p["z"] - zone["cz"]) <= zone["half_z"]):
+            return True
+    return False
+
+def _segment_hits_airport(a: dict, b: dict) -> bool:
+    steps = max(3, int(math.ceil(math.hypot(b["x"] - a["x"], b["z"] - a["z"]) / 12)))
+    for i in range(steps + 1):
+        t = i / steps
+        p = {"x": a["x"] + (b["x"] - a["x"]) * t, "z": a["z"] + (b["z"] - a["z"]) * t}
+        if _point_in_airport_exclusion(p):
+            return True
+    return False
+
+def _polyline_length(points: list) -> float:
+    total = 0.0
+    for i in range(1, len(points)):
+        total += math.hypot(points[i]["x"] - points[i - 1]["x"],
+                            points[i]["z"] - points[i - 1]["z"])
+    return total
+
+def _simplify_points(points: list) -> list:
+    if len(points) <= 2:
+        return points
+    simplified = [points[0]]
+    for p in points[1:-1]:
+        last = simplified[-1]
+        if math.hypot(p["x"] - last["x"], p["z"] - last["z"]) >= WEB_POINT_MIN_STEP:
+            simplified.append(p)
+    if simplified[-1] != points[-1]:
+        simplified.append(points[-1])
+    return simplified
+
+def _split_airport_safe_segments(points: list) -> list:
+    parts = []
+    current = []
+    for p in points:
+        if _point_in_airport_exclusion(p):
+            if len(current) >= 2:
+                parts.append(current)
+            current = []
+            continue
+        if current and _segment_hits_airport(current[-1], p):
+            if len(current) >= 2:
+                parts.append(current)
+            current = [p]
+        else:
+            current.append(p)
+    if len(current) >= 2:
+        parts.append(current)
+    return parts
+
+def _canonical_ref(ref: str) -> str:
+    if not ref:
+        return ""
+    return ref.lower().replace(" ", "-").replace(";", "-").replace("/", "-")
+
+def _snap_node_id(p: dict) -> str:
+    sx = int(round(p["x"] / WEB_NODE_SNAP))
+    sz = int(round(p["z"] / WEB_NODE_SNAP))
+    return f"n{sx}_{sz}"
+
+def _road_sort_key(edge: dict) -> tuple:
+    priority = WEB_ROAD_PRIORITY.get(edge["kind"].replace("_link", ""), 10)
+    ref_score = 20 if edge.get("ref") else 0
+    return (-priority - ref_score, -edge["length"], edge["id"])
+
+def _osmium_export_lines(osmium_bin: str, pbf_path: Path, output_geojson: Path,
+                         tags_filter_args: list):
+    filtered_pbf = output_geojson.parent / (output_geojson.stem + "_filtered.osm.pbf")
+    cmd_filter = [osmium_bin, "tags-filter", str(pbf_path)] + tags_filter_args + [
+        "--output", str(filtered_pbf), "--overwrite"
+    ]
+    subprocess.run(cmd_filter, check=True, capture_output=True, text=True)
+    cmd_export = [
+        osmium_bin, "export",
+        "--geometry-types=linestring",
+        "--output-format=geojson",
+        "--output", str(output_geojson),
+        "--overwrite",
+        str(filtered_pbf),
+    ]
+    subprocess.run(cmd_export, check=True, capture_output=True, text=True)
+    filtered_pbf.unlink(missing_ok=True)
+
+def _js_module(name: str, value) -> str:
+    return f"export const {name} = {json.dumps(value, ensure_ascii=False, separators=(',', ':'))};\n"
+
+def _deterministic_web_generated_at(source_hash: str) -> str:
+    return f"deterministic:{source_hash[:16]}"
+
+def export_web_data(osmium_bin: str, pbf_path: Path, output_dir: Path,
+                    origin_lat: float, origin_lon: float, scale: float):
+    """Export static ES modules consumed by the Three.js web map."""
+    print("[WEB] Exporting deterministic Inhauma web map data…", flush=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tmp_geojson = output_dir / "_web_roads_raw.geojson"
+    _osmium_export_lines(osmium_bin, pbf_path, tmp_geojson, ["w/highway"])
+
+    with open(tmp_geojson, "r", encoding="utf-8") as f:
+        geojson = json.load(f)
+
+    raw_features = geojson.get("features", [])
+    nodes = {}
+    edges = []
+    named = {}
+    skipped_airport_segments = 0
+    skipped_kind = 0
+    source_hash = sha256_file(pbf_path)
+
+    for feature_index, feat in enumerate(raw_features):
+        props = feat.get("properties", {})
+        geom = feat.get("geometry", {})
+        kind = str(props.get("highway", ""))
+        if kind in WEB_EXCLUDED_HIGHWAYS or kind not in WEB_DRIVABLE_HIGHWAYS:
+            skipped_kind += 1
+            continue
+        if geom.get("type") != "LineString":
+            continue
+        coords = geom.get("coordinates", [])
+        if len(coords) < 2:
+            continue
+        points = _simplify_points([
+            _local_point(float(lon), float(lat), origin_lat, origin_lon, scale)
+            for lon, lat in coords
+        ])
+        for part_index, part in enumerate(_split_airport_safe_segments(points)):
+            if len(part) < 2:
+                continue
+            if len(part) != len(points):
+                skipped_airport_segments += 1
+            length = _polyline_length(part)
+            if length < 18:
+                continue
+            node_ids = []
+            for p in part:
+                node_id = _snap_node_id(p)
+                if node_id not in nodes:
+                    nodes[node_id] = {"id": node_id, "x": p["x"], "z": p["z"]}
+                if not node_ids or node_ids[-1] != node_id:
+                    node_ids.append(node_id)
+            if len(node_ids) < 2:
+                continue
+            osm_id = str(props.get("@id") or props.get("@osmId") or feature_index)
+            ref = str(props.get("ref", ""))
+            edge = {
+                "id": f"osm-{feature_index}-{part_index}",
+                "osmId": osm_id,
+                "kind": kind,
+                "ref": ref,
+                "name": str(props.get("name", "")),
+                "surface": str(props.get("surface", "")),
+                "oneway": str(props.get("oneway", "")),
+                "width": WEB_ROAD_WIDTHS.get(kind, 8),
+                "lanes": max(1, int(str(props.get("lanes", "2")).split(";")[0]) if str(props.get("lanes", "2")).split(";")[0].isdigit() else 2),
+                "length": round(length, 1),
+                "nodes": node_ids,
+            }
+            edges.append(edge)
+            canon = _canonical_ref(ref)
+            if canon:
+                named.setdefault(canon, []).extend(part)
+
+    # Keep deterministic order and stable diagnostics.
+    edges.sort(key=_road_sort_key)
+    node_list = sorted(nodes.values(), key=lambda n: n["id"])
+    road_graph = {"nodes": node_list, "edges": edges}
+    named_routes = {}
+    for key, pts in named.items():
+        if len(pts) >= 2:
+            named_routes[key] = pts[:1400]
+
+    metadata = {
+        "source": "inhauma-osm-pbf-web-export-v1",
+        "generatedAt": _deterministic_web_generated_at(source_hash),
+        "input": "aero-fighters-v2/Content/World/inhauma-osm.pbf",
+        "inputSha256": source_hash,
+        "origin": {"lat": origin_lat, "lon": origin_lon},
+        "worldScale": scale,
+        "axis": "x=east,z=north",
+        "rawRoadFeatureCount": len(raw_features),
+        "edgeCount": len(edges),
+        "nodeCount": len(node_list),
+        "skippedKindCount": skipped_kind,
+        "airportClippedSegmentCount": skipped_airport_segments,
+        "airportExclusionZones": [
+            {
+                "id": zone["id"],
+                "cx": zone["cx"],
+                "cz": zone["cz"],
+                "halfW": zone["half_x"],
+                "halfL": zone["half_z"],
+            }
+            for zone in WEB_AIRPORT_ZONES
+        ],
+    }
+    projection = {
+        "originLat": origin_lat,
+        "originLon": origin_lon,
+        "latMetersPerDegree": LAT_TO_KM * 1000.0,
+        "lonMetersPerDegree": LON_TO_KM_AT_LAT * 1000.0,
+        "worldScale": scale,
+        "axis": "x=east,z=north",
+    }
+
+    (output_dir / "projection.js").write_text(_js_module("INHAUMA_PROJECTION", projection), encoding="utf-8")
+    (output_dir / "metadata.js").write_text(_js_module("INHAUMA_WEB_MAP_METADATA", metadata), encoding="utf-8")
+    (output_dir / "roads.js").write_text(
+        _js_module("INHAUMA_OSM_ROAD_GRAPH", road_graph) +
+        _js_module("INHAUMA_OSM_NAMED_ROUTES", named_routes),
+        encoding="utf-8",
+    )
+    tmp_geojson.unlink(missing_ok=True)
+    print(f"  Web roads written: {len(edges)} edges, {len(node_list)} snapped nodes", flush=True)
+    print(f"  Output: {output_dir}", flush=True)
+
+# ---------------------------------------------------------------------------
 # SRTM steps
 # ---------------------------------------------------------------------------
 
@@ -697,6 +955,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dry-run",     action="store_true")
     p.add_argument("--skip-osm",    action="store_true")
     p.add_argument("--skip-srtm",   action="store_true")
+    p.add_argument("--export-web-data", action="store_true",
+                   help="Export static JS GIS modules for aero-fighters from local outputs")
+    p.add_argument("--web-output-dir", type=str,
+                   default="../aero-fighters/src/maps/inhauma-data",
+                   help="Output directory for --export-web-data")
+    p.add_argument("--web-world-scale", type=float, default=WEB_WORLD_SCALE,
+                   help="Compressed world scale for web-game coordinates")
     p.add_argument("--force",       action="store_true")
     return p.parse_args()
 
@@ -765,7 +1030,7 @@ def main():
 
     # Dependency check
     osmium_bin = None
-    if not args.skip_osm:
+    if not args.skip_osm or args.export_web_data:
         import shutil
         osmium_bin = shutil.which("osmium")
         if osmium_bin is None:
@@ -773,6 +1038,19 @@ def main():
             print("  Install: sudo apt install osmium-tool", file=sys.stderr)
             sys.exit(2)
     check_system_deps(args.skip_osm, args.skip_srtm)
+
+    if args.export_web_data:
+        clipped_pbf = output_dir / "inhauma-osm.pbf"
+        if not clipped_pbf.is_file():
+            print(f"[ERROR] Missing local PBF for web export: {clipped_pbf}", file=sys.stderr)
+            print("  Run the fetch step first or set --output-dir to a directory containing inhauma-osm.pbf.", file=sys.stderr)
+            sys.exit(2)
+        web_output_dir = Path(args.web_output_dir)
+        if not web_output_dir.is_absolute():
+            web_output_dir = game_root / web_output_dir
+        export_web_data(osmium_bin, clipped_pbf, web_output_dir,
+                        args.center_lat, args.center_lon, args.web_world_scale)
+        sys.exit(0)
 
     # Idempotence check
     png_path    = output_dir / "inhauma-heightmap.png"

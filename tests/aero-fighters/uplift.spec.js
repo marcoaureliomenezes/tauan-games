@@ -153,3 +153,83 @@ test('U-AC-6: altímetro honesto — HUD ALT = metros reais (WS-3)', async ({ pa
   const shown = parseInt(r.hud.replace(/[^0-9]/g, ''), 10);
   expect(Math.abs(shown - Math.floor(r.y))).toBeLessThanOrEqual(8); // tolerância de 1 frame
 });
+
+test('U-AC-7: Inhauma tem chão amplo e estruturas sólidas', async ({ page }) => {
+  await page.goto('/aero-fighters/index.html?testMode=1&map=inhauma&seed=solid-inhauma');
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
+
+  const checks = await page.evaluate(async () => {
+    const w = await import('/aero-fighters/src/world.js');
+    return {
+      farHeights: [
+        window.__aeroDebug.getTerrainHeightAt(7200, 0),
+        window.__aeroDebug.getTerrainHeightAt(-6400, 5100),
+        window.__aeroDebug.getTerrainHeightAt(0, -8200),
+      ],
+      church: w.surfaceInfoAt(20, -40),
+      plantTower: w.surfaceInfoAt(565, 640),
+      churchCrash: w.checkTerrainCollision({ x: 20, y: 4, z: -40 }),
+      mountainCrash: w.checkTerrainCollision({ x: 760, y: 5, z: -300 }),
+    };
+  });
+
+  expect(checks.farHeights.every(Number.isFinite)).toBe(true);
+  expect(checks.church.kind).toBe('structure');
+  expect(checks.plantTower.kind).toBe('structure');
+  expect(checks.churchCrash).toBe('GROUND');
+  expect(checks.mountainCrash).toBe('MOUNTAIN');
+});
+
+test('U-AC-8: Inhauma tem helicópteros, comboio armado e aliados com guerra própria', async ({ page }) => {
+  test.setTimeout(45000);
+  await page.goto('/aero-fighters/index.html?testMode=1&map=inhauma&seed=slow-action');
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => window.game.running === true && window.game.targets.length > 0, { timeout: 5000 });
+
+  const initial = await page.evaluate(() => {
+    const types = window.game.targets.map((t) => t.type);
+    const heli = window.game.targets.find((t) => t.type === 'helicopter');
+    const armed = window.game.targets.find((t) => t.type === 'armedConvoy');
+    return {
+      types,
+      heliAltitude: heli ? heli.mesh.position.y - (heli.spawnY || 0) : 0,
+      armedY: armed?.mesh.position.y ?? null,
+      armedSpawnY: armed?.spawnY ?? null,
+      supportMissiles: window.game.flags.supportMissilesFired || 0,
+      wingmen: window.game.wingmen.length,
+      allyEnemies: window.game.allyEnemies.length,
+      targetsTotal: window.game.targets.length,
+    };
+  });
+  expect(initial.types.filter((t) => t === 'helicopter').length).toBeGreaterThanOrEqual(2);
+  expect(initial.types).toContain('armedConvoy');
+  expect(initial.heliAltitude).toBeGreaterThan(30);
+  expect(Math.abs(initial.armedY - initial.armedSpawnY)).toBeLessThan(2);
+  expect(initial.wingmen).toBeGreaterThanOrEqual(2);
+  // Os amigos têm os PRÓPRIOS inimigos (frente de batalha separada da do player).
+  expect(initial.allyEnemies).toBeGreaterThanOrEqual(1);
+
+  // Os amigos só engajam em voo (decolam quando decolamos): faz a decolagem.
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(3500);
+  await page.keyboard.down('ArrowDown');
+  await page.waitForTimeout(2500);
+  await page.keyboard.up('ArrowDown');
+  await page.keyboard.up('KeyW');
+
+  // Em voo, os amigos atacam OS INIMIGOS DELES com mísseis dedicados.
+  await page.waitForFunction(() => (window.game.flags.supportMissilesFired || 0) > 0, { timeout: 12000 });
+  const after = await page.evaluate(() => ({
+    supportMissiles: window.game.flags.supportMissilesFired || 0,
+    wingmanBehind: window.game.wingmen.every((w) => w.mesh.position.z > window.game.player.pz),
+    // Os amigos NÃO destroem os alvos do player (cada lado tem seus inimigos).
+    targetsTotal: window.game.targets.length,
+  }));
+  expect(after.supportMissiles).toBeGreaterThan(initial.supportMissiles);
+  expect(after.wingmanBehind).toBe(false);
+});

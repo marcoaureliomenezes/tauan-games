@@ -2,9 +2,11 @@
 // Exporta: spawnMission, startGame, restartGame, gameOver, crashAndDie, nextMission, targetCountForMission.
 // Para adicionar uma missão diferente: edite TARGET_LAYOUT em config.js.
 
+import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { TARGET_LAYOUT, MISSION } from './config.js';
 import { spawnTarget, clearTargets } from './targets.js';
+import { spawnBoss, bossAlive, clearBoss } from './boss.js';
 import { getTargetLayout, getMapHeightFn } from './maps/index.js';
 import { clearMissiles, clearPickups, recycleBullet } from './projectiles.js';
 import { megaExplosion, scheduleDelayed, spawnScorchMark, spawnWaterSplash } from './fx.js';
@@ -23,8 +25,11 @@ export function targetCountForMission(m) {
 /** Spawna todos os alvos da missão N e mostra overlay. */
 export function spawnMission(missionNum) {
   clearTargets();
+  clearBoss();
+  game.flags.bossSpawned = false;
   // CONTRATO: writer de game.targetsDestroyed / targetsTotal
   game.targetsDestroyed = 0;
+  game.flags.rtbAnnounced = false; // nova missão libera o detector de conclusão
   const n = targetCountForMission(missionNum);
   // Usa o layout e heightFn do mapa ativo
   const activeMap = game.activeMap || 'islands';
@@ -61,6 +66,8 @@ export function startGame() {
 /** Reinicia tudo do zero (após gameOver). */
 export function restartGame() {
   clearTargets();
+  clearBoss();
+  game.flags.bossSpawned = false;
   for (const p of game.projectiles) recycleBullet(p);
   game.projectiles.length = 0;
   clearMissiles();
@@ -85,12 +92,17 @@ export function restartGame() {
   game.flags.sinking = 0;
   game.flags.nukeSlowmo = 0;
   game.flags.nukeShockArrival = null;
+  game.flags.supportMissilesFired = 0;
   if (game.missionRealism?.enabled) {
     game.missionRealism.sortie.state = SortieState.TAXI_OUT;
     game.missionRealism.sortie.history.push({ from: null, event: 'restart', to: SortieState.TAXI_OUT, at: game.time });
     game.missionRealism.service.active = false;
     game.missionRealism.service.phase = 'idle';
     game.missionRealism.ejection.active = false;
+    if (game.missionRealism.autoTaxi) {
+      game.missionRealism.autoTaxi.active = false;
+      game.missionRealism.autoTaxi.phase = 'idle';
+    }
   }
   respawnJet();
   game.running = true;
@@ -135,7 +147,12 @@ export function crashAndDie(where) {
 export function nextMission() {
   if (game.missionRealism?.enabled) {
     transitionSortie(game.missionRealism.sortie, SortieEvent.ALL_TARGETS_DESTROYED, {}, game.time);
-    showOverlay('RETORNE AO AEROPORTO', 'pouse na pista e taxe até a área de serviço', MISSION.NEXT_OVERLAY_MS);
+    // Trava o re-disparo: enquanto retornamos à base, o detector de conclusão não
+    // deve reanunciar (era o que fazia o overlay "piscar" na tela a cada ~2.5s).
+    game.flags.rtbAnnounced = true;
+    // Toast curto e discreto — a orientação contínua de volta à base fica numa
+    // linha pequena e estável no HUD (não num overlay grande piscando na tela).
+    showOverlay('alvos destruídos', 'volte ao aeroporto para pousar', 1300);
     return;
   }
   game.cycle += 1;
@@ -148,8 +165,20 @@ export function nextMission() {
 /** Detecta missão completa (todos alvos destruídos). Chamar a cada tick. */
 export function checkMissionComplete() {
   if (!game.running || game.flags.missionCompleteShown) return;
+  // Já anunciado e em retorno à base — não reanuncia (anti-flash).
+  if (game.flags.rtbAnnounced) return;
   if (game.targetsTotal === 0) return;
   if (game.targetsDestroyed >= game.targetsTotal) {
+    // BOSS KAIJU: nasce quando todas as fortificações caem. A missão só completa
+    // (e o pouso só libera) depois de matá-lo.
+    if (!game.flags.bossSpawned) {
+      game.flags.bossSpawned = true;
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(jet.quaternion);
+      spawnBoss(jet.position, fwd);
+      showOverlay('⚠ MONSTRO GIGANTE!', 'destrua o KAIJU para liberar o pouso', 2800);
+      return;
+    }
+    if (bossAlive()) return; // espera a morte do boss
     game.flags.missionCompleteShown = true;
     scheduleDelayed(2.5, () => { game.flags.missionCompleteShown = false; });
     nextMission();

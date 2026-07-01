@@ -60,8 +60,8 @@
     #overlay.visible { display: flex; }
     #overlay .sub { font-size: 14px; margin-top: 14px; opacity: 0.85; line-height: 1.8; }
     #lives { color: #ff5560; font-size: 18px; }
-    #stall-warn { color: #ff4400; font-weight: bold; display: none; animation: blink 0.4s step-start infinite; }
-    @keyframes blink { 50% { opacity: 0; } }
+    #stall-warn { color: #ff6a2a; font-weight: bold; display: none; animation: stallpulse 1.3s ease-in-out infinite; }
+    @keyframes stallpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
     #nuke-flash {
       position: fixed; inset: 0; background: #fff;
       opacity: 0; pointer-events: none; z-index: 100;
@@ -84,6 +84,14 @@
     <span id="stall-warn">&#9888; STALL</span>
     <span id="approach" style="color:#66ddff;display:none"></span>
     <button id="sound-toggle" type="button">&#128266; SOM</button>
+  </div>
+  <div id="boss-hud" style="position:fixed;top:42px;left:50%;transform:translateX(-50%);
+    z-index:12;display:none;flex-direction:column;align-items:center;font-family:monospace;
+    pointer-events:none;text-shadow:1px 1px 2px #000;">
+    <div id="boss-label" style="color:#ff4444;font-weight:bold;letter-spacing:3px;font-size:15px;margin-bottom:3px">&#129430; GODZILLÃO</div>
+    <div style="width:340px;height:14px;background:rgba(0,0,0,0.6);border:2px solid #911;border-radius:3px;overflow:hidden">
+      <div id="boss-bar-fill" style="height:100%;width:100%;background:linear-gradient(90deg,#ff2020,#ff7040);transition:width 0.15s"></div>
+    </div>
   </div>
   <div id="map-select" style="position:fixed;top:0;left:0;width:100%;height:100%;
     background:rgba(0,0,0,0.88);display:flex;flex-direction:column;align-items:center;

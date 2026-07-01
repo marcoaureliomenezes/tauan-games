@@ -26,6 +26,7 @@ function _onAirport(x, z, mapId = 'desert') {
 }
 
 export const GROUND_TOLERANCE = 1.0;
+const TARGET_AIR_OFFSETS = { helicopter: 46 };
 
 export const MAP_VALIDATION_DEFS = {
   desert: {
@@ -159,6 +160,7 @@ export function materializeLayout(mapId, mapDef = MAP_VALIDATION_DEFS[mapId]) {
         }
       }
     }
+    y += TARGET_AIR_OFFSETS[type] ?? 0;
     return { id, mapId, regionIdx, region, dx, dz, type, x: worldX, y, z: worldZ };
   });
 }
@@ -209,6 +211,7 @@ export function validateTargets(mapId, targets, options = {}) {
       pushError(errors, 'TERRAIN_HEIGHT_INVALID', `Terrain height for target ${target.id} is invalid`, { target, expectedY });
       continue;
     }
+    expectedY += TARGET_AIR_OFFSETS[target.type] ?? 0;
     const delta = target.y - expectedY;
     if (Math.abs(delta) > tolerance) {
       pushError(errors, 'TARGET_NOT_GROUNDED', `Target ${target.id} (${target.type}) height delta ${delta.toFixed(3)} exceeds ${tolerance}`, {

@@ -41,7 +41,7 @@ export function drawMap() {
   ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill();
 
   for (const b of game.bodies) {
-    if (b.isSun || b.isMoon) continue;
+    if (b.isSun || b.isMoon || b.system === 'binary') continue;
     // órbita
     ctx.strokeStyle = 'rgba(120,150,200,0.25)';
     ctx.beginPath(); ctx.arc(cx, cy, b.orbit * scale, 0, Math.PI * 2); ctx.stroke();

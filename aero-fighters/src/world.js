@@ -11,6 +11,7 @@ import { ISLAND_DEFS, WORLD, COLORS, PLAYER } from './config.js';
 import { explosion } from './fx.js';
 import { airportSurface } from './landing-zones.js';
 import { getAirportForMap } from './airport.js';
+import { inhaumaStructureInfoAt } from './maps/inhauma-scene.js';
 
 // ─── Oceano ──────────────────────────────────────────────────────────────────
 const oceanCanvas = document.createElement('canvas');
@@ -229,8 +230,12 @@ export function surfaceInfoAt(x, z) {
       if (localH > h) h = localH;
     }
   }
-  if (h > 2.5) return { height: h, kind: 'mountain' };
   const mapKey = game.activeMap || 'islands';
+  if (mapKey === 'inhauma') {
+    const structure = inhaumaStructureInfoAt(x, z);
+    if (structure) return structure;
+  }
+  if (h > 2.5) return { height: h, kind: 'mountain' };
   if (mapKey === 'islands') return { height: Math.max(h, 0), kind: h > 0.5 ? 'land' : 'water' };
   if (mapKey === 'rio') return { height: h, kind: z < -230 && h <= 0.5 ? 'water' : 'land' };
   return { height: h, kind: 'land' };
@@ -242,6 +247,7 @@ export function surfaceInfoAt(x, z) {
 export function checkTerrainCollision(jetPosition) {
   const s = surfaceInfoAt(jetPosition.x, jetPosition.z);
   if (s.kind === 'runway' || s.kind === 'taxiway' || s.kind === 'service') return null;
+  if (s.kind === 'structure') return jetPosition.y < s.height + 1.2 ? 'GROUND' : null;
   if (s.kind === 'mountain') {
     return jetPosition.y < s.height + PLAYER.MOUNTAIN_BUFFER ? 'MOUNTAIN' : null;
   }

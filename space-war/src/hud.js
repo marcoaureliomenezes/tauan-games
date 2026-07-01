@@ -10,10 +10,41 @@ export function updateHUD() {
   const tgt = currentTarget();
   if (tgt) set('navtarget', `→ ${tgt.name}: ${fmt(targetDistance())}${s.aligning ? ' 🎯' : ''}`);
   set('speed', `VEL: ${s.speed.toFixed(0)} u/s${s.speed > 900 ? ' ⚡WARP' : ''}`);
-  set('throttle', `THR: ${(s.throttle * 100).toFixed(0)}%${s.boost ? ' 🔥' : ''}`);
+  set('throttle', `${s.flightAssist ? '🛟 ' : ''}THR: ${(s.throttle * 100).toFixed(0)}%${s.boost ? ' 🔥' : ''}`);
   set('dominant', s.dominant ? `ÓRBITA: ${s.dominant.def.name}` : 'ESPAÇO PROFUNDO');
   set('altitude', s.dominant ? `ALT: ${fmt(s.altitude)}` : '');
+
+  // Gravidade com cor escalando do calmo (lilás) ao crítico (vermelho).
   set('gravity', `G: ${s.gravMag.toFixed(1)} u/s²`);
+  const gel = el('gravity');
+  if (gel) gel.style.color = s.gravMag > 800 ? '#ff5560' : s.gravMag > 200 ? '#ffaa44' : '#b8a0ff';
+
+  // Órbita: velocidade circular-alvo no raio atual (mire essa velocidade tangencial
+  // e corte o motor pra entrar em órbita).
+  const oel = el('orbit');
+  if (oel) oel.textContent = (s.dominant && s.circVel > 1) ? `ÓRBITA: ${fmt(s.circVel)}/s` : '';
+
+  // Análise de FUGA: % da velocidade de escape já atingida + estado + veredito.
+  const eel = el('escape');
+  if (eel) {
+    if (s.dominant && s.escapeVel > 1) {
+      const sp = s.speed;
+      const pct = Math.min(999, Math.round((sp / s.escapeVel) * 100));
+      let state, col;
+      if (!s.canEscape) { state = '⛔ PRESO'; col = '#ff5560'; }
+      else if (sp >= s.escapeVel) { state = '🚀 FUGA'; col = '#66ff88'; }
+      else if (sp >= s.circVel * 0.82 && sp <= s.circVel * 1.25) { state = '🛰 ÓRBITA'; col = '#8fd6ff'; }
+      else if (sp < s.circVel * 0.82) { state = '↓ QUEDA'; col = '#ffaa44'; }
+      else { state = '↑ SUBINDO'; col = '#ffd24d'; }
+      eel.textContent = `FUGA: ${fmt(s.escapeVel)}/s · ${pct}% ${state}`;
+      eel.style.color = col;
+    } else { eel.textContent = ''; }
+  }
+
+  // Brilho de reentrada (aquecimento do casco na atmosfera).
+  const hg = el('heatGlow');
+  if (hg) hg.style.opacity = Math.min(0.92, (s.heat || 0)).toFixed(2);
+
   set('hp', `CASCO: ${Math.max(0, s.hp | 0)}%`);
   set('nukes', `☢ NUKES: ${s.nukes}`);
   set('score', `SCORE: ${String(game.score).padStart(6, '0')}`);
@@ -22,11 +53,17 @@ export function updateHUD() {
 
   const warn = el('warning');
   if (warn) {
+    const domKind = s.dominant && s.dominant.def.kind;
+    const domName = s.dominant && s.dominant.def.name;
     if (s.landed) { warn.textContent = '🚀 SEGURE [W] PARA DECOLAR'; warn.style.display = 'block'; warn.style.color = '#66ddff'; }
-    else if (s.noReturn) { warn.textContent = '☢ ZONA DE NÃO-RETORNO SOLAR — FUJA!'; warn.style.display = 'block'; warn.style.color = '#ff5560'; }
+    else if (domKind === 'blackhole' && !s.canEscape) { warn.textContent = '🕳 HORIZONTE DE EVENTOS — FUJA OU MORRA!'; warn.style.display = 'block'; warn.style.color = '#c08aff'; }
+    else if (domKind === 'neutron' && !s.canEscape) { warn.textContent = '⭐ GRAVIDADE DA ESTRELA DE NÊUTRONS — TURBO JÁ!'; warn.style.display = 'block'; warn.style.color = '#9fd0ff'; }
+    else if (!s.canEscape) { warn.textContent = '⛔ NÃO DÁ PARA FUGIR — TURBO PRA LONGE!'; warn.style.display = 'block'; warn.style.color = '#ff5560'; }
+    else if (s.heat > 0.55) { warn.textContent = '🔥 REENTRADA CRÍTICA — CASCO QUEIMANDO!'; warn.style.display = 'block'; warn.style.color = '#ff7a30'; }
     else if (s.spawnGrace > 0) { warn.textContent = `🛡 ESCUDO ${Math.ceil(s.spawnGrace)}s`; warn.style.display = 'block'; warn.style.color = '#66ddff'; }
     else if (s.hp < 30) { warn.textContent = '⚠ CASCO CRÍTICO'; warn.style.display = 'block'; warn.style.color = '#ff5560'; }
-    else if (s.inAtmosphere) { warn.textContent = '🌍 ATMOSFERA'; warn.style.display = 'block'; warn.style.color = '#ffcc44'; }
+    else if (s.heat > 0.18) { warn.textContent = '🔥 REENTRADA — desacelere'; warn.style.display = 'block'; warn.style.color = '#ffaa44'; }
+    else if (s.inAtmosphere) { warn.textContent = `🌍 ATMOSFERA DE ${domName ? domName.toUpperCase() : ''}`; warn.style.display = 'block'; warn.style.color = '#ffcc44'; }
     else warn.style.display = 'none';
   }
 }

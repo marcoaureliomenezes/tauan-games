@@ -4,7 +4,7 @@
 
 import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
-import { airportSurface } from '../landing-zones.js';
+import { airportSurface, applyAirportClearing } from '../landing-zones.js';
 import { desertAirport } from '../airport.js';
 
 /** Textura procedural do piso: bandas de duna + speckle (WS-7). */
@@ -105,15 +105,8 @@ function createMesa(mDef, scene) {
     const x = posAttr.getX(i);
     const z = posAttr.getZ(i);
 
-    // Airport flatten: qualquer vértice sobre superfície do aeroporto vai a y=0
     const worldX = cx + x;
     const worldZ = cz + z;
-    if (airportSurface({ x: worldX, z: worldZ }) !== 'none') {
-      posAttr.setY(i, desertAirport.elevation);
-      // Cor de areia neutra na área do aeroporto (sem argila/rocha)
-      colArr[i * 3] = 0.88; colArr[i * 3 + 1] = 0.72; colArr[i * 3 + 2] = 0.38;
-      continue;
-    }
 
     const dist = Math.sqrt(x * x + z * z);
     const t = dist / radius;
@@ -130,7 +123,9 @@ function createMesa(mDef, scene) {
 
     // Ruído leve para naturalidade
     h += Math.sin(x * 0.15) * 1.5 + Math.cos(z * 0.12) * 1.5;
-    const hClamped = Math.max(-10, h);
+    // Clareira do aeroporto: achata o relevo (com rampa suave) numa área ampla ao
+    // redor da pista — nenhuma mesa fica no meio/beira da pista de pouso.
+    const hClamped = applyAirportClearing(Math.max(-10, h), worldX, worldZ, 'desert');
     posAttr.setY(i, hClamped);
 
     // Vertex colors
@@ -198,20 +193,20 @@ export function updateDesertWorld(dt, playerPos) {
 export function desertHeightAt(isl, dx, dz) {
   const worldX = isl.cx + dx;
   const worldZ = isl.cz + dz;
-  if (airportSurface({ x: worldX, z: worldZ }) !== 'none') {
-    return desertAirport.elevation;
-  }
   const noise = Math.sin(dx * 0.15) * 1.5 + Math.cos(dz * 0.12) * 1.5;
   const t = Math.sqrt(dx * dx + dz * dz) / isl.radius;
+  let natural;
   if (isl.type === 'mesa') {
     let h = 0;
     if (t < 0.7) h = isl.peakHeight;
     else if (t < 1.0) h = isl.peakHeight * (1 - (t - 0.7) / 0.3);
-    return Math.max(0, h + noise);
+    natural = Math.max(0, h + noise);
   } else {
     // canyon — pode ser negativo (vale)
-    if (t < 0.7) return Math.max(-10, -isl.peakHeight * 0.6 + noise);
-    if (t < 1.0) return Math.max(-10, -isl.peakHeight * 0.6 * (1 - (t - 0.7) / 0.3) + noise);
-    return 0;
+    if (t < 0.7) natural = Math.max(-10, -isl.peakHeight * 0.6 + noise);
+    else if (t < 1.0) natural = Math.max(-10, -isl.peakHeight * 0.6 * (1 - (t - 0.7) / 0.3) + noise);
+    else natural = 0;
   }
+  // Mesma clareira do aeroporto aplicada na malha (colisão == visual).
+  return applyAirportClearing(natural, worldX, worldZ, 'desert');
 }

@@ -19,6 +19,44 @@ export function airportHeightAt(x, z, fallbackHeight = 0, activeMap = 'desert') 
   return surface !== 'none' ? airport.elevation : fallbackHeight;
 }
 
+/** Caixa envolvente (runway+taxiway+service) do aeroporto do mapa. */
+function airportBounds(activeMap = 'desert') {
+  const airport = getAirportForMap(activeMap);
+  const parts = [airport.runway, airport.taxiway, airport.serviceZone].filter(Boolean);
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p of parts) {
+    minX = Math.min(minX, p.center.x - p.width / 2);
+    maxX = Math.max(maxX, p.center.x + p.width / 2);
+    minZ = Math.min(minZ, p.center.z - p.length / 2);
+    maxZ = Math.max(maxZ, p.center.z + p.length / 2);
+  }
+  return { minX, maxX, minZ, maxZ, elevation: airport.elevation };
+}
+
+/** Fator de clareira do aeroporto em [0,1].
+ *  1 = terreno totalmente achatado para a elevação do aeroporto (sobre/junto da pista),
+ *  0 = terreno natural intacto (longe do aeroporto), com rampa suave (smoothstep) entre os dois.
+ *  Garante que NENHUMA montanha fique no meio/beira da pista — carve um "campo de pouso"
+ *  plano ao redor de todo o complexo, não só na faixa exata do pavimento. */
+export function airportClearingFactor(pos, activeMap = 'desert', inner = 55, outer = 140) {
+  const b = airportBounds(activeMap);
+  const dx = Math.max(b.minX - pos.x, 0, pos.x - b.maxX);
+  const dz = Math.max(b.minZ - pos.z, 0, pos.z - b.maxZ);
+  const d = Math.hypot(dx, dz);
+  if (d <= inner) return 1;
+  if (d >= outer) return 0;
+  const t = (d - inner) / (outer - inner);
+  return 1 - t * t * (3 - 2 * t); // smoothstep invertido
+}
+
+/** Mistura a altura natural do terreno com a elevação do aeroporto pela clareira. */
+export function applyAirportClearing(naturalHeight, worldX, worldZ, activeMap = 'desert') {
+  const f = airportClearingFactor({ x: worldX, z: worldZ }, activeMap);
+  if (f <= 0) return naturalHeight;
+  const elevation = getAirportForMap(activeMap).elevation;
+  return naturalHeight * (1 - f) + elevation * f;
+}
+
 export function classifyGroundContact(pos, activeMap = 'desert', terrainHeight = 0, terrainKind = null) {
   // Todo mapa tem aeroporto (WS-2) — pavimento é sempre a 1ª classificação.
   const airport = getAirportForMap(activeMap);
@@ -49,23 +87,22 @@ export function evaluateTakeoffEnvelope({ speed, throttle, pitch, surface }) {
  *  Phase 'touchdown': altitude < FLARE_LO AND sink > -3 m/s — fires TOUCHDOWN_SAFE.
  *  Phase 'unsafe': roll > 0.5 OR pitch > 0.32 OR sink < SINK_MAX — fires TOUCHDOWN_UNSAFE. */
 export function evaluateLandingEnvelope({ speed, verticalSpeed, pitch, roll, surface, altitudeAboveGround = null }) {
-  const FLARE_HI = 3;
-  const FLARE_LO = 0.5;
-  const SINK_MAX = -9;
-  const unsafe = Math.abs(roll) > 0.5 || Math.abs(pitch) > 0.32 || verticalSpeed < SINK_MAX;
-  const onRunway = surface === 'runway';
-  const inSpeedRange = speed >= 18 && speed <= 52;
-  // 'safe' reflects that the aircraft CAN land (used for TOUCHDOWN_SAFE gate in player.js)
-  // touchdownReady: only true in the touchdown phase (altitude < FLARE_LO, sink > -3)
-  const touchdownReady = onRunway && inSpeedRange && !unsafe &&
-    altitudeAboveGround !== null && altitudeAboveGround < FLARE_LO && verticalSpeed > -5;
-  const safe = onRunway && inSpeedRange && !unsafe;
+  // Envelope tolerante: pousar na pista é fácil. Só atitude absurda conta como inseguro.
+  const FLARE_LO = 2.2;
+  const SINK_MAX = -16;
+  const unsafe = Math.abs(roll) > 0.7 || Math.abs(pitch) > 0.45 || verticalSpeed < SINK_MAX;
+  const onPavement = surface === 'runway' || surface === 'taxiway' || surface === 'service';
+  const inSpeedRange = speed >= 12 && speed <= 60;
+  // touchdownReady: dentro da janela de toque, descendo (ou quase nivelado) — pavimento.
+  const touchdownReady = onPavement && inSpeedRange && !unsafe &&
+    altitudeAboveGround !== null && altitudeAboveGround < FLARE_LO && verticalSpeed > -14;
+  const safe = onPavement && inSpeedRange && !unsafe;
   return {
     safe,
     touchdownReady,
     unsafe,
-    maxSpeed: 52,
-    minSpeed: 18,
+    maxSpeed: 60,
+    minSpeed: 12,
     maxDescentRate: SINK_MAX,
     surface,
   };
