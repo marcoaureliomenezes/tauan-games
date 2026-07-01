@@ -11,3 +11,4 @@ tests/screenshots/
 # Environment secrets (never commit)
 .env
 *.env.local
+tests/.server-*.pid

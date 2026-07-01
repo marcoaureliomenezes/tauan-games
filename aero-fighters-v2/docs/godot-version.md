@@ -9,13 +9,13 @@
 ## Install Path
 
 ```
-/home/marco/godot/godot
+~/godot/godot
 ```
 
 ## GODOT_BIN_PATH
 
 ```
-GODOT_BIN_PATH=/home/marco/godot/godot
+GODOT_BIN_PATH=~/godot/godot
 ```
 
 ## SHA-256 of Binary
