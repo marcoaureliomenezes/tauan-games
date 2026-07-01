@@ -25,7 +25,9 @@ let _normalsTex = null;
 
 function waterNormals() {
   if (!_normalsTex) {
-    _normalsTex = new THREE.TextureLoader().load('/vendor/textures/waternormals.jpg', (t) => {
+    // Relativo à PÁGINA (/aero-fighters/): sobe um nível até /vendor — funciona
+    // na raiz do dev server E sob o subpath /tauan-games/ do GitHub Pages.
+    _normalsTex = new THREE.TextureLoader().load('../vendor/textures/waternormals.jpg', (t) => {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
     });
     _normalsTex.wrapS = _normalsTex.wrapT = THREE.RepeatWrapping;
