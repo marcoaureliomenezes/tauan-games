@@ -1,56 +1,51 @@
-import { INHAUMA_OSM_ROAD_GRAPH } from './inhauma-data/roads.js';
+// maps/inhauma-roads.js — Fonte de estradas do mapa Inhaúma (v0.2.0 course-correction).
+//
+// ANTES: importava o dump OSM (2169 vias) → spiderweb preto. AGORA: constrói poucas
+// estradas contínuas a partir de inhauma-road-defs.js (splines Catmull-Rom autorais).
+// A API pública é a MESMA de antes (INHAUMA_ROADS, nearAnyRoad, applyInhaumaRoadBed,
+// road-bed carve, INHAUMA_ROAD_GRAPH, continuity patches, diagnostics) — assim
+// terreno, cidade, floresta, alvos, tráfego e render continuam funcionando.
+// Sem THREE aqui: mantém importável no Node (validador/sim).
 
-export const INHAUMA_ROAD_GRAPH = INHAUMA_OSM_ROAD_GRAPH;
+import { buildRoadsFromDefs, buildNamedRoutes } from './inhauma-road-defs.js';
 
 const ROAD_INDEX_CELL = 96;
 const ROAD_BED_MARGIN = 18;
-const MAX_INTERSECTION_PATCHES = 3200;
+const INTERSECTION_MERGE_DIST = 26; // m — cruzamentos mais próximos que isso viram um patch só
 
-const _nodeById = new Map(INHAUMA_ROAD_GRAPH.nodes.map((n) => [n.id, n]));
-const _roadById = new Map();
-let _adjacency = null;
+// ── Estradas (poucas, contínuas) ──────────────────────────────────────────────
+export const INHAUMA_ROADS = buildRoadsFromDefs();
+
+export function getInhaumaRoads() {
+  return INHAUMA_ROADS;
+}
+
+// Rotas nomeadas (placas de rodovia) — reusam as próprias polilinhas das estradas.
+export const INHAUMA_NAMED_ROUTES = buildNamedRoutes();
+
+// Grafo sintético (nós = pontos das polilinhas, arestas = 1 por estrada) para os
+// diagnósticos e o render de adjacência. Não é mais um grafo OSM gigante.
+export const INHAUMA_ROAD_GRAPH = (() => {
+  const nodes = [];
+  const edges = [];
+  for (const road of INHAUMA_ROADS) {
+    const nodeIds = road.points.map((p, i) => {
+      const id = `${road.id}:${i}`;
+      nodes.push({ id, x: p.x, z: p.z });
+      return id;
+    });
+    edges.push({ id: road.id, kind: road.kind, width: road.width, ref: road.ref, name: road.name, nodes: nodeIds });
+  }
+  return { nodes, edges };
+})();
+
+// ── Índice espacial dos segmentos (carve de terreno + nearAnyRoad) ────────────
 let _segmentIndex = null;
 let _segmentIndexStats = null;
 let _intersectionStats = null;
-let _roadsByNode = null;
 const _closest = { distance: Infinity, x: 0, z: 0, road: null };
 
-function roadKind(edge) {
-  if (edge.kind === 'motorway' || edge.kind === 'trunk' || edge.kind === 'primary') return 'highway';
-  if (edge.kind === 'secondary' || edge.kind === 'tertiary') return 'regional';
-  if (edge.kind === 'service' || edge.kind === 'track') return 'service';
-  return 'street';
-}
-
-export function getInhaumaRoads() {
-  if (_roadById.size === 0) {
-    for (const edge of INHAUMA_ROAD_GRAPH.edges) {
-      const points = edge.nodes.map((id) => {
-        const n = _nodeById.get(id);
-        return { x: n.x, z: n.z };
-      }).filter(Boolean);
-      if (points.length < 2) continue;
-      _roadById.set(edge.id, {
-        id: edge.id,
-        kind: roadKind(edge),
-        sourceKind: edge.kind,
-        ref: edge.ref,
-        name: edge.name,
-        osmId: edge.osmId,
-        w: edge.width,
-        width: edge.width,
-        lanes: edge.lanes,
-        points,
-      });
-    }
-  }
-  return [..._roadById.values()];
-}
-
-export const INHAUMA_ROADS = getInhaumaRoads();
-
 function indexKey(cx, cz) { return `${cx},${cz}`; }
-
 function cellCoord(v) { return Math.floor(v / ROAD_INDEX_CELL); }
 
 function addSegmentToIndex(index, segment) {
@@ -62,10 +57,7 @@ function addSegmentToIndex(index, segment) {
     for (let cz = cellCoord(minZ); cz <= cellCoord(maxZ); cz++) {
       const key = indexKey(cx, cz);
       let bucket = index.get(key);
-      if (!bucket) {
-        bucket = [];
-        index.set(key, bucket);
-      }
+      if (!bucket) { bucket = []; index.set(key, bucket); }
       bucket.push(segment);
     }
   }
@@ -81,11 +73,7 @@ function buildSegmentIndex() {
       const b = road.points[i];
       if (a.x === b.x && a.z === b.z) continue;
       addSegmentToIndex(index, {
-        road,
-        ax: a.x,
-        az: a.z,
-        bx: b.x,
-        bz: b.z,
+        road, ax: a.x, az: a.z, bx: b.x, bz: b.z,
         radius: road.width * 0.5 + ROAD_BED_MARGIN,
       });
       segmentCount++;
@@ -102,9 +90,7 @@ function closestRoadSegment(x, z, margin = 0) {
   const cz = cellCoord(z);
   const span = Math.max(1, Math.ceil((margin + 28) / ROAD_INDEX_CELL));
   let bestDistSq = Infinity;
-  let bestX = x;
-  let bestZ = z;
-  let bestRoad = null;
+  let bestX = x, bestZ = z, bestRoad = null;
   for (let ix = cx - span; ix <= cx + span; ix++) {
     for (let iz = cz - span; iz <= cz + span; iz++) {
       const bucket = index.get(indexKey(ix, iz));
@@ -116,114 +102,18 @@ function closestRoadSegment(x, z, margin = 0) {
         const t = lenSq > 0 ? Math.max(0, Math.min(1, ((x - seg.ax) * dx + (z - seg.az) * dz) / lenSq)) : 0;
         const px = seg.ax + dx * t;
         const pz = seg.az + dz * t;
-        const rx = x - px;
-        const rz = z - pz;
+        const rx = x - px, rz = z - pz;
         const distSq = rx * rx + rz * rz;
         const limit = seg.road.width * 0.5 + margin;
         if (distSq <= limit * limit && distSq < bestDistSq) {
-          bestDistSq = distSq;
-          bestX = px;
-          bestZ = pz;
-          bestRoad = seg.road;
+          bestDistSq = distSq; bestX = px; bestZ = pz; bestRoad = seg.road;
         }
       }
     }
   }
   _closest.distance = Math.sqrt(bestDistSq);
-  _closest.x = bestX;
-  _closest.z = bestZ;
-  _closest.road = bestRoad;
+  _closest.x = bestX; _closest.z = bestZ; _closest.road = bestRoad;
   return bestRoad ? _closest : null;
-}
-
-function buildAdjacency() {
-  if (_adjacency) return _adjacency;
-  const adjacency = new Map(INHAUMA_ROAD_GRAPH.nodes.map((n) => [n.id, new Set()]));
-  for (const edge of INHAUMA_ROAD_GRAPH.edges) {
-    for (let i = 1; i < edge.nodes.length; i++) {
-      adjacency.get(edge.nodes[i - 1]).add(edge.nodes[i]);
-      adjacency.get(edge.nodes[i]).add(edge.nodes[i - 1]);
-    }
-  }
-  _adjacency = adjacency;
-  return adjacency;
-}
-
-function buildRoadsByNode() {
-  if (_roadsByNode) return _roadsByNode;
-  const roadsById = new Map(INHAUMA_ROADS.map((road) => [road.id, road]));
-  const byNode = new Map();
-  for (const edge of INHAUMA_ROAD_GRAPH.edges) {
-    const road = roadsById.get(edge.id);
-    if (!road) continue;
-    for (const nodeId of edge.nodes) {
-      let roads = byNode.get(nodeId);
-      if (!roads) {
-        roads = [];
-        byNode.set(nodeId, roads);
-      }
-      roads.push(road);
-    }
-  }
-  _roadsByNode = byNode;
-  return byNode;
-}
-
-export function getRoadContinuityPatches() {
-  if (_intersectionStats?.patches) {
-    getRoadContinuityPatches.stats = _intersectionStats;
-    return _intersectionStats.patches;
-  }
-  const adjacency = buildAdjacency();
-  const roadsByNode = buildRoadsByNode();
-  const candidates = [];
-  const degreeBuckets = {};
-  let seamCandidateCount = 0;
-  let trueIntersectionCount = 0;
-  for (const node of INHAUMA_ROAD_GRAPH.nodes) {
-    const degree = adjacency.get(node.id)?.size ?? 0;
-    const roads = roadsByNode.get(node.id) || [];
-    const uniqueRoadCount = new Set(roads.map((road) => road.id)).size;
-    const isTrueIntersection = degree >= 3;
-    const isRoadSeam = degree === 2 && uniqueRoadCount > 1;
-    if (!isTrueIntersection && !isRoadSeam) continue;
-    const maxWidth = roads.reduce((max, road) => Math.max(max, road.width), 8);
-    const radius = isTrueIntersection
-      ? Math.max(14, Math.min(38, maxWidth * (degree >= 5 ? 1.7 : 1.35)))
-      : Math.max(9, Math.min(22, maxWidth * 1.05));
-    candidates.push({
-      id: node.id,
-      x: node.x,
-      z: node.z,
-      degree,
-      radius,
-      maxWidth,
-      type: isTrueIntersection ? 'intersection' : 'seam',
-    });
-    if (isTrueIntersection) trueIntersectionCount++;
-    else seamCandidateCount++;
-    degreeBuckets[degree] = (degreeBuckets[degree] || 0) + 1;
-  }
-  candidates.sort((a, b) => (b.degree - a.degree) || (b.maxWidth - a.maxWidth) || (a.id < b.id ? -1 : 1));
-  const patches = candidates.slice(0, MAX_INTERSECTION_PATCHES);
-  _intersectionStats = {
-    candidateCount: candidates.length,
-    renderedCount: patches.length,
-    omittedCount: Math.max(0, candidates.length - patches.length),
-    coverageRatio: candidates.length ? Math.round((patches.length / candidates.length) * 1000) / 1000 : 1,
-    patchLimit: MAX_INTERSECTION_PATCHES,
-    trueIntersectionCount,
-    seamCandidateCount,
-    degreeBuckets,
-    patches,
-  };
-  getRoadContinuityPatches.stats = _intersectionStats;
-  return patches;
-}
-
-export function getRoadBedDiagnostics() {
-  buildSegmentIndex();
-  return { ..._segmentIndexStats };
 }
 
 export function nearAnyRoad(x, z, margin = 0) {
@@ -234,6 +124,7 @@ export function roadBedInfoAt(x, z, margin = ROAD_BED_MARGIN) {
   return closestRoadSegment(x, z, margin);
 }
 
+/** Assenta o terreno na faixa da estrada (evita fita flutuando sobre morro). */
 export function applyInhaumaRoadBed(x, z, height, baseHeightAt) {
   const hit = roadBedInfoAt(x, z, ROAD_BED_MARGIN);
   if (!hit) return height;
@@ -245,4 +136,65 @@ export function applyInhaumaRoadBed(x, z, height, baseHeightAt) {
   const k = shoulderT * shoulderT * (3 - 2 * shoulderT);
   const target = Math.max(0, centerHeight - (hit.road.kind === 'highway' ? 0.35 : 0.18));
   return height * (1 - k) + target * k;
+}
+
+export function getRoadBedDiagnostics() {
+  buildSegmentIndex();
+  return { ..._segmentIndexStats };
+}
+
+// ── Patches de continuidade nos cruzamentos reais entre estradas ──────────────
+// Com poucas estradas, calculamos os cruzamentos de verdade (segmentos de estradas
+// diferentes que se aproximam) e fundimos em poucos discos.
+function computeIntersections() {
+  const raw = [];
+  for (let a = 0; a < INHAUMA_ROADS.length; a++) {
+    for (let b = a + 1; b < INHAUMA_ROADS.length; b++) {
+      const ra = INHAUMA_ROADS[a], rb = INHAUMA_ROADS[b];
+      const thresh = (ra.width + rb.width) * 0.5;
+      for (let i = 0; i < ra.points.length; i += 2) {
+        const pa = ra.points[i];
+        for (let j = 0; j < rb.points.length; j += 2) {
+          const pb = rb.points[j];
+          const d = Math.hypot(pa.x - pb.x, pa.z - pb.z);
+          if (d <= thresh) {
+            raw.push({ x: (pa.x + pb.x) / 2, z: (pa.z + pb.z) / 2, maxWidth: Math.max(ra.width, rb.width) });
+          }
+        }
+      }
+    }
+  }
+  // Funde pontos próximos num só patch.
+  const merged = [];
+  for (const p of raw) {
+    const near = merged.find((m) => Math.hypot(m.x - p.x, m.z - p.z) < INTERSECTION_MERGE_DIST);
+    if (near) { near.maxWidth = Math.max(near.maxWidth, p.maxWidth); continue; }
+    merged.push({ ...p });
+  }
+  return merged.map((m, i) => ({
+    id: `xr-${i}`, x: m.x, z: m.z, degree: 4,
+    radius: Math.max(9, Math.min(20, m.maxWidth * 1.15)),
+    maxWidth: m.maxWidth, type: 'intersection',
+  }));
+}
+
+export function getRoadContinuityPatches() {
+  if (_intersectionStats?.patches) {
+    getRoadContinuityPatches.stats = _intersectionStats;
+    return _intersectionStats.patches;
+  }
+  const patches = computeIntersections();
+  _intersectionStats = {
+    candidateCount: patches.length,
+    renderedCount: patches.length,
+    omittedCount: 0,
+    coverageRatio: 1,
+    patchLimit: patches.length,
+    trueIntersectionCount: patches.length,
+    seamCandidateCount: 0,
+    degreeBuckets: { 4: patches.length },
+    patches,
+  };
+  getRoadContinuityPatches.stats = _intersectionStats;
+  return patches;
 }

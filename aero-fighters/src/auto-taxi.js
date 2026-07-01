@@ -14,7 +14,6 @@ import { spawnMission } from './missions.js';
 
 const TAXI_SPEED = 34;     // m/s — velocidade de taxiamento
 const TAKEOFF_SPEED = 56;  // m/s — velocidade na qual decola
-const _look = new THREE.Vector3();
 
 function _state() { return game.missionRealism.autoTaxi; }
 
@@ -48,10 +47,14 @@ function _driveTo(tx, tz, dt, speed) {
   const v = Math.min(speed, Math.max(6, dist * 1.2));
   if (dist > 0.5) {
     const step = Math.min(dist, v * dt);
-    jet.position.x += (dx / dist) * step;
-    jet.position.z += (dz / dist) * step;
-    _look.set(jet.position.x + dx, jet.position.y, jet.position.z + dz);
-    jet.lookAt(_look); // -Z aponta para o destino
+    const ux = dx / dist, uz = dz / dist;
+    jet.position.x += ux * step;
+    jet.position.z += uz * step;
+    // O nariz do jato é o eixo -Z local. Para apontá-lo ao destino:
+    // forward = (-sinθ,0,-cosθ) = (ux,uz) → θ = atan2(-ux, -uz).
+    // (jet.lookAt aponta +Z ao alvo — convenção de objeto, não de câmera — o que
+    //  antes deixava o nariz para trás e a decolagem descia a pista ao contrário.)
+    jet.rotation.set(0, Math.atan2(-ux, -uz), 0);
   }
   jet.position.y = ap.elevation + 0.9;
   game.player.speed = dist > 1 ? v : 0;
@@ -120,10 +123,14 @@ export function updateAutoTaxi(dt) {
     const tz = r.center.z + r.length / 2 - 40;
     const dist = _driveTo(tx, tz, dt, TAXI_SPEED);
     if (dist < 6) {
-      // Alinha para a decolagem (forward -Z) e começa a corrida.
-      _look.set(jet.position.x, jet.position.y, jet.position.z - 100);
-      jet.lookAt(_look);
+      // Alinha EXATAMENTE com a pista: nariz (-Z) desce a pista (heading 0).
+      // rotation.set sincroniza o quaternion automaticamente (Object3D).
+      jet.rotation.set(0, 0, 0);
+      jet.position.x = r.center.x; // centraliza na pista antes da corrida
       game.player.throttle = 1.0;
+      // Limpa estado residual da surtida anterior para a 2ª/3ª decolagem sair limpa.
+      sortie._autoSpeedFlagged = false;
+      sortie.liftoffVsp = 0;
       if (sortie.state === SortieState.TAXI_OUT) {
         transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, game.time); // → TAKEOFF_ROLL
       }

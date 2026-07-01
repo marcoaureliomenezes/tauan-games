@@ -148,91 +148,81 @@ function staleRoadAuthorityMatches() {
 }
 
 function validateInhaumaRoadGraph() {
+  // v0.2.0 course-correction contract: FEW continuous authored spline roads with
+  // circulating traffic — NOT the 2169-edge OSM spiderweb. (Prior thresholds enforced
+  // the dump: edgeCount>=500, nodeCount>=10000, intersections>=2500. Replaced.)
   const errors = [];
   const diag = getRoadGraphDiagnostics(inhaumaContinuousHeight);
   errors.push(...staleRoadAuthorityMatches());
-  if (diag.source !== 'inhauma-osm-pbf-web-export-v1') {
-    errors.push(`ROAD_SOURCE: expected OSM web export, got ${diag.source}`);
-  }
-  if (!/^[0-9a-f]{64}$/.test(diag.inputSha256 || '')) {
-    errors.push('ROAD_SOURCE_HASH: missing or invalid OSM input sha256');
-  }
-  if (diag.generatedAt !== `deterministic:${diag.inputSha256.slice(0, 16)}`) {
-    errors.push(`ROAD_METADATA_NONDETERMINISTIC_GENERATED_AT: ${diag.generatedAt}`);
+
+  if (diag.source !== 'inhauma-authored-continuous-v2') {
+    errors.push(`ROAD_SOURCE: expected authored splines, got ${diag.source}`);
   }
   if (diag.edgeCount !== INHAUMA_ROADS.length) {
     errors.push(`ROAD_EDGE_COUNT: diagnostics edgeCount=${diag.edgeCount} roads=${INHAUMA_ROADS.length}`);
   }
-  if (diag.edgeCount < 500) errors.push(`ROAD_EDGE_COUNT_LOW: ${diag.edgeCount}`);
-  if (diag.nodeCount < 10000) errors.push(`ROAD_NODE_COUNT_LOW: ${diag.nodeCount}`);
-  if (diag.largestComponentNodeCount < 1000) {
-    errors.push(`ROAD_MAIN_COMPONENT_SMALL: ${diag.largestComponentNodeCount}`);
+  if (INHAUMA_ROADS.length < 3 || INHAUMA_ROADS.length > 12) {
+    errors.push(`ROAD_COUNT_OUT_OF_RANGE: ${INHAUMA_ROADS.length} (want 3..12 continuous roads)`);
   }
-  if (diag.largestComponentNodeCount / Math.max(1, diag.nodeCount) < 0.5) {
-    errors.push(`ROAD_MAIN_COMPONENT_RATIO_LOW: ${diag.largestComponentNodeCount}/${diag.nodeCount}`);
-  }
-  if ((diag.routes?.length ?? 0) < 4) errors.push(`ROAD_ROUTE_COUNT_LOW: ${diag.routes?.length ?? 0}`);
+  // Anti-spiderweb guard: the whole network is a few hundred points, not ~18k.
+  const totalPoints = INHAUMA_ROADS.reduce((sum, road) => sum + road.points.length, 0);
+  if (totalPoints > 2000) errors.push(`ROAD_TOTAL_POINTS_HIGH (spiderweb?): ${totalPoints}`);
+
+  // Airport exclusion metadata still present + consistent.
   if ((INHAUMA_WEB_MAP_METADATA.airportExclusionZones?.length ?? 0) < 5) {
     errors.push(`ROAD_AIRPORT_EXCLUSION_ZONES_LOW: ${INHAUMA_WEB_MAP_METADATA.airportExclusionZones?.length ?? 0}`);
   }
   if (JSON.stringify(diag.airportExclusionZones) !== JSON.stringify(INHAUMA_WEB_MAP_METADATA.airportExclusionZones)) {
     errors.push('ROAD_AIRPORT_EXCLUSION_METADATA_DRIFT');
   }
-  if ((diag.namedRoutes?.['mg-238']?.pointCount ?? 0) < 100) errors.push('ROAD_MG238_ROUTE_MISSING');
-  if ((diag.namedRoutes?.['mg-238-mg-424']?.pointCount ?? 0) < 20) errors.push('ROAD_MG424_ROUTE_MISSING');
-  if ((diag.routes?.reduce((sum, route) => sum + (route.graphEdgeCount || 0), 0) ?? 0) < 40) {
-    errors.push(`ROAD_TRAFFIC_GRAPH_ROUTE_SEGMENTS_LOW: ${diag.routes?.reduce((sum, route) => sum + (route.graphEdgeCount || 0), 0) ?? 0}`);
-  }
-  if (diag.routes?.some((route) => (route.graphEdgeCount || 0) < 3)) {
-    errors.push('ROAD_TRAFFIC_ROUTE_NOT_GRAPH_CONNECTED');
-  }
+
+  // Named spine route present + continuous; traffic runs a route per road.
+  if ((diag.namedRoutes?.['mg-238']?.pointCount ?? 0) < 30) errors.push('ROAD_MG238_ROUTE_MISSING');
+  if ((diag.routes?.length ?? 0) < 3) errors.push(`ROAD_ROUTE_COUNT_LOW: ${diag.routes?.length ?? 0}`);
   if (!diag.routes?.some((route) => (route.classRank || 0) >= 3)) {
     errors.push('ROAD_TRAFFIC_ROUTE_CLASS_RANK_MISSING');
   }
-  for (const key of ['highway', 'regional', 'street', 'service']) {
+
+  // Road classes for material variety + basic road furniture / signage.
+  for (const key of ['highway', 'regional', 'street']) {
     if ((diag.renderClasses?.[key] ?? 0) <= 0) errors.push(`ROAD_RENDER_CLASS_MISSING: ${key}`);
   }
-  if ((diag.renderLayers?.length ?? 0) < 4) errors.push(`ROAD_RENDER_LAYERS_LOW: ${diag.renderLayers?.length ?? 0}`);
-  if ((diag.renderDetails?.centerDashCount ?? 0) < 300) errors.push(`ROAD_CENTER_DASHES_LOW: ${diag.renderDetails?.centerDashCount ?? 0}`);
-  if ((diag.renderDetails?.edgeMarkerCount ?? 0) < 600) errors.push(`ROAD_EDGE_MARKERS_LOW: ${diag.renderDetails?.edgeMarkerCount ?? 0}`);
-  if ((diag.renderDetails?.roadsidePostCount ?? 0) < 300) errors.push(`ROAD_ROADSIDE_POSTS_LOW: ${diag.renderDetails?.roadsidePostCount ?? 0}`);
-  if ((diag.renderDetails?.roadSignCount ?? 0) < 30) errors.push(`ROAD_SIGNS_LOW: ${diag.renderDetails?.roadSignCount ?? 0}`);
-  if ((diag.renderDetails?.routeLabelSignCount ?? 0) < 6) errors.push(`ROAD_LABEL_SIGNS_LOW: ${diag.renderDetails?.routeLabelSignCount ?? 0}`);
-  if ((diag.intersections?.candidateCount ?? 0) < 2500) errors.push(`ROAD_INTERSECTION_CANDIDATES_LOW: ${diag.intersections?.candidateCount ?? 0}`);
-  if ((diag.intersections?.trueIntersectionCount ?? 0) < 2000) errors.push(`ROAD_TRUE_INTERSECTIONS_LOW: ${diag.intersections?.trueIntersectionCount ?? 0}`);
-  if ((diag.intersections?.seamCandidateCount ?? 0) < 300) errors.push(`ROAD_SEAM_CANDIDATES_LOW: ${diag.intersections?.seamCandidateCount ?? 0}`);
-  if ((diag.intersections?.renderedCount ?? 0) < 2500) errors.push(`ROAD_INTERSECTION_RENDERED_LOW: ${diag.intersections?.renderedCount ?? 0}`);
+  if ((diag.renderDetails?.routeLabelSignCount ?? 0) < 4) errors.push(`ROAD_LABEL_SIGNS_LOW: ${diag.renderDetails?.routeLabelSignCount ?? 0}`);
+
+  // A HANDFUL of intersections — not thousands of OSM junction patches.
+  if ((diag.intersections?.candidateCount ?? Infinity) > 20) {
+    errors.push(`ROAD_INTERSECTIONS_TOO_MANY (spiderweb?): ${diag.intersections?.candidateCount}`);
+  }
   if (diag.intersections?.renderedCount !== diag.intersections?.candidateCount) {
     errors.push(`ROAD_INTERSECTION_COVERAGE_PARTIAL: ${diag.intersections?.renderedCount}/${diag.intersections?.candidateCount}`);
   }
-  if ((diag.intersections?.omittedCount ?? Infinity) !== 0) errors.push(`ROAD_INTERSECTION_OMITTED: ${diag.intersections?.omittedCount}`);
-  if ((diag.intersections?.coverageRatio ?? 0) < 1) errors.push(`ROAD_INTERSECTION_COVERAGE_LOW: ${diag.intersections?.coverageRatio}`);
-  if ((diag.intersections?.degreeBuckets?.['4'] ?? 0) < 100) errors.push(`ROAD_INTERSECTION_4WAY_LOW: ${diag.intersections?.degreeBuckets?.['4'] ?? 0}`);
-  if (!diag.roadBed || diag.roadBed.segmentCount < diag.edgeCount) {
+
+  // Road-bed spatial index built (used by terrain carve + nearAnyRoad).
+  if (!diag.roadBed || diag.roadBed.segmentCount <= diag.edgeCount) {
     errors.push(`ROAD_BED_INDEX_INVALID: ${JSON.stringify(diag.roadBed ?? null)}`);
   }
-  if ((diag.roadBed?.bucketCount ?? 0) < 100) errors.push(`ROAD_BED_BUCKET_COUNT_LOW: ${diag.roadBed?.bucketCount ?? 0}`);
+  if ((diag.roadBed?.bucketCount ?? 0) < 20) errors.push(`ROAD_BED_BUCKET_COUNT_LOW: ${diag.roadBed?.bucketCount ?? 0}`);
+
+  // Clean geometry that follows the terrain smoothly (no cliffs / water dives).
   if (!diag.geometry || diag.geometry.zeroLengthSegments !== 0) {
     errors.push(`ROAD_GEOMETRY_ZERO_SEGMENTS: ${diag.geometry?.zeroLengthSegments ?? 'missing'}`);
   }
-  if ((diag.geometry?.segmentCount ?? 0) < 10000) errors.push(`ROAD_GEOMETRY_SEGMENT_COUNT_LOW: ${diag.geometry?.segmentCount ?? 0}`);
-  if ((diag.geometry?.p99SegmentLength ?? Infinity) > 35) errors.push(`ROAD_GEOMETRY_P99_TOO_LONG: ${diag.geometry?.p99SegmentLength}`);
-  if ((diag.geometry?.maxSegmentLength ?? Infinity) > 160) errors.push(`ROAD_GEOMETRY_MAX_TOO_LONG: ${diag.geometry?.maxSegmentLength}`);
-  if ((diag.geometry?.over120mSegments ?? Infinity) > 4) errors.push(`ROAD_GEOMETRY_LONG_SEGMENTS_HIGH: ${diag.geometry?.over120mSegments}`);
+  if ((diag.geometry?.maxSegmentLength ?? Infinity) > 30) errors.push(`ROAD_GEOMETRY_MAX_TOO_LONG: ${diag.geometry?.maxSegmentLength}`);
   const smoothness = diag.geometry?.roadBedSmoothness;
-  if (!smoothness || smoothness.sampleCount < 10000) {
+  if (!smoothness || smoothness.sampleCount < 100) {
     errors.push(`ROAD_BED_SMOOTHNESS_MISSING: ${JSON.stringify(smoothness ?? null)}`);
-  } else {
-    if (smoothness.p95AdjacentHeightDelta > 3) errors.push(`ROAD_BED_P95_TOO_STEEP: ${smoothness.p95AdjacentHeightDelta}`);
-    if (smoothness.p99AdjacentHeightDelta > 6) errors.push(`ROAD_BED_P99_TOO_STEEP: ${smoothness.p99AdjacentHeightDelta}`);
+  } else if (smoothness.p99AdjacentHeightDelta > 8) {
+    errors.push(`ROAD_BED_P99_TOO_STEEP: ${smoothness.p99AdjacentHeightDelta}`);
   }
+
   for (const road of INHAUMA_ROADS) {
     if (!Number.isFinite(road.width) || road.width <= 0) errors.push(`ROAD_WIDTH_INVALID: ${road.id}`);
-    if (!Array.isArray(road.points) || road.points.length < 2) errors.push(`ROAD_POINTS_INVALID: ${road.id}`);
+    if (!Array.isArray(road.points) || road.points.length < 10) errors.push(`ROAD_POINTS_INVALID: ${road.id}`);
     for (const p of road.points) {
       if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) errors.push(`ROAD_POINT_NONFINITE: ${road.id}`);
     }
   }
+
   const airportConflicts = roadAirportSurfaceConflicts();
   if (airportConflicts.length) {
     const first = airportConflicts[0];

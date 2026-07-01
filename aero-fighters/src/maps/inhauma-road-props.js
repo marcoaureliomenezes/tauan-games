@@ -1,6 +1,8 @@
 import * as THREE from '../../../vendor/three.module.min.js';
-import { INHAUMA_OSM_NAMED_ROUTES } from './inhauma-data/roads.js';
+import { INHAUMA_NAMED_ROUTES } from './inhauma-roads.js';
 import { getInhaumaRoads } from './inhauma-roads.js';
+
+const INHAUMA_OSM_NAMED_ROUTES = INHAUMA_NAMED_ROUTES;
 import { routeLength, samplePolyline } from './inhauma-road-utils.js';
 
 const DETAIL_ROAD_KINDS = new Set(['highway', 'regional']);
@@ -109,12 +111,12 @@ function addRoadSigns(group, roads, heightAt) {
 }
 
 const ROUTE_LABEL_SIGNS = [
-  { route: 'mg-238', distance: 360, label: 'MG-238', sub: 'Inhauma' },
-  { route: 'mg-238', distance: 1080, label: 'MG-238', sub: 'Sete Lagoas' },
-  { route: 'mg-238', distance: 1780, label: 'MG-238', sub: 'Cachoeira' },
-  { route: 'mg-238-mg-424', distance: 620, label: 'MG-424', sub: 'BR-040' },
-  { route: 'amg-0360', distance: 220, label: 'AMG-0360', sub: 'Centro' },
-  { route: 'ees-415', distance: 380, label: 'EES-415', sub: 'Rural' },
+  { route: 'mg-238', distance: 300, label: 'MG-238', sub: 'Inhaúma' },
+  { route: 'mg-238', distance: 1600, label: 'MG-238', sub: 'Sete Lagoas' },
+  { route: 'mg-424', distance: 400, label: 'MG-424', sub: 'Represa' },
+  { route: 'mg-060', distance: 300, label: 'MG-060', sub: 'Cachoeira' },
+  { route: 'amg-0360', distance: 400, label: 'AMG-0360', sub: 'Rural' },
+  { route: 'anel-inhauma', distance: 600, label: 'Anel', sub: 'Centro' },
 ];
 
 function signTexture(label, sub) {

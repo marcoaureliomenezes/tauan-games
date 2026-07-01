@@ -1,114 +1,36 @@
 import * as THREE from '../../../vendor/three.module.min.js';
-import { getInhaumaRoads, INHAUMA_ROAD_GRAPH, nearAnyRoad } from './inhauma-roads.js';
+import { getInhaumaRoads, nearAnyRoad } from './inhauma-roads.js';
 import { inhaumaAirportExclusionZoneAt, isInhaumaAirportSurface } from './inhauma-road-airport.js';
 import { routeLength, samplePolyline } from './inhauma-road-utils.js';
 
-const CAR_COUNT = 34;
+// Tráfego v0.2.0: carros circulam nas POUCAS estradas autorais (sem walk de grafo OSM).
+// Cada estrada é uma rota; carros percorrem a polilinha em laço (anel fechado circula
+// pra sempre; estrada aberta dá a volta pelas pontas, longe da vista do jogador).
+const CAR_COUNT = 30;
 const CAR_COLORS = [0xd03020, 0x2040d0, 0xf0f0f0, 0x202020, 0xf0c020, 0x20a040];
-const ROUTE_TARGET_LENGTH = 1800;
 const CAR_PITCH_SAMPLE = 5.5;
 const _dummy = new THREE.Object3D();
-let _graphRouteCache = null;
+let _routeCache = null;
 
-function roadRank(road) { return road.kind === 'highway' ? 4 : road.kind === 'regional' ? 3 : road.kind === 'street' ? 2 : 1; }
+function classRankFor(kind) { return kind === 'highway' ? 4 : kind === 'regional' ? 3 : kind === 'street' ? 2 : 1; }
 function speedForRoute(route, truck, variant) {
-  const base = route.classRank >= 4 ? 31 : route.classRank === 3 ? 26 : route.classRank === 2 ? 21 : 16;
-  return (truck ? base * 0.76 : base) + (variant % 5) * 1.4;
+  const base = route.classRank >= 4 ? 30 : route.classRank === 3 ? 24 : route.classRank === 2 ? 19 : 15;
+  return (truck ? base * 0.78 : base) + (variant % 5) * 1.3;
 }
 
-function buildTrafficGraph() {
-  const nodes = new Map(INHAUMA_ROAD_GRAPH.nodes.map((node) => [node.id, node]));
-  const roads = new Map(getInhaumaRoads().map((road) => [road.id, road]));
-  const adjacency = new Map(INHAUMA_ROAD_GRAPH.nodes.map((node) => [node.id, []]));
-  for (const edge of INHAUMA_ROAD_GRAPH.edges) {
-    const road = roads.get(edge.id);
-    if (!road || road.width < 8) continue;
-    for (let i = 1; i < edge.nodes.length; i++) {
-      const a = nodes.get(edge.nodes[i - 1]), b = nodes.get(edge.nodes[i]);
-      if (!a || !b) continue;
-      const length = Math.hypot(b.x - a.x, b.z - a.z);
-      if (length <= 0) continue;
-      const segment = { road, length };
-      adjacency.get(a.id).push({ ...segment, from: a, to: b });
-      adjacency.get(b.id).push({ ...segment, from: b, to: a });
-    }
-  }
-  return { nodes, adjacency };
-}
-
-function routeNodeScore(id, adjacency, nodes) {
-  const node = nodes.get(id);
-  const degree = adjacency.get(id)?.length ?? 0;
-  if (!node || degree < 2 || inhaumaAirportExclusionZoneAt(node.x, node.z)) return -Infinity;
-  const bestRoad = adjacency.get(id).reduce((best, link) => Math.max(best, roadRank(link.road)), 0);
-  return degree * 20 + bestRoad * 12 + Math.hypot(node.x, node.z) * 0.002;
-}
-
-function pickNextLink(links, prevNodeId, heading, variant) {
-  let best = null;
-  let bestScore = -Infinity;
-  for (let i = 0; i < links.length; i++) {
-    const link = links[i];
-    if (link.to.id === prevNodeId && links.length > 1) continue;
-    if (inhaumaAirportExclusionZoneAt(link.to.x, link.to.z)) continue;
-    const dx = link.to.x - link.from.x;
-    const dz = link.to.z - link.from.z;
-    const len = Math.hypot(dx, dz) || 1;
-    const continuity = heading ? ((dx / len) * heading.x + (dz / len) * heading.z) : ((variant % 3) - 1) * 0.08;
-    const score = roadRank(link.road) * 26 + link.road.width * 1.7 + continuity * 18 +
-      ((link.to.id.charCodeAt(link.to.id.length - 1) + variant * 13 + i * 7) % 17);
-    if (score > bestScore) {
-      best = link;
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
-function buildGraphRoute(seedId, graph, variant) {
-  const { nodes, adjacency } = graph;
-  const points = [];
-  let currentId = seedId, prevId = null, total = 0, minWidth = Infinity, graphEdgeCount = 0, classRank = 0, heading = null;
-  for (let guard = 0; guard < 360 && total < ROUTE_TARGET_LENGTH; guard++) {
-    const current = nodes.get(currentId);
-    if (!current) break;
-    if (!points.length) points.push({ x: current.x, z: current.z });
-    const links = adjacency.get(currentId) || [];
-    const next = pickNextLink(links, prevId, heading, variant + guard);
-    if (!next) break;
-    points.push({ x: next.to.x, z: next.to.z });
-    total += next.length;
-    minWidth = Math.min(minWidth, next.road.width);
-    classRank = Math.max(classRank, roadRank(next.road));
-    graphEdgeCount++;
-    heading = { x: (next.to.x - next.from.x) / next.length, z: (next.to.z - next.from.z) / next.length };
-    prevId = currentId;
-    currentId = next.to.id;
-  }
-  if (points.length < 4 || total < 220) return null;
-  return { id: `graph-${variant}-${seedId}`, points, width: Number.isFinite(minWidth) ? minWidth : 10, graphEdgeCount, classRank };
-}
-
+/** Rotas = as próprias estradas autorais. Sem grafo, sem seeds, sem walk. */
 export function createTrafficRoutes() {
-  if (_graphRouteCache) return _graphRouteCache;
-  const graph = buildTrafficGraph();
-  const seeds = [...graph.adjacency.keys()]
-    .map((id) => ({ id, score: routeNodeScore(id, graph.adjacency, graph.nodes) }))
-    .filter((item) => Number.isFinite(item.score))
-    .sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : 1))
-    .slice(0, 12);
-  const routes = [];
-  for (let i = 0; i < seeds.length; i++) {
-    const route = buildGraphRoute(seeds[i].id, graph, i);
-    if (!route) continue;
-    routes.push(route);
-    routes.push({ id: `${route.id}-reverse`, points: [...route.points].reverse(), width: route.width, graphEdgeCount: route.graphEdgeCount, classRank: route.classRank });
-  }
-  _graphRouteCache = routes
-    .map((route) => ({ ...route, length: routeLength(route.points) }))
-    .filter((route) => route.length > 220 && route.graphEdgeCount >= 3)
-    .slice(0, 20);
-  return _graphRouteCache;
+  if (_routeCache) return _routeCache;
+  _routeCache = getInhaumaRoads().map((road) => ({
+    id: road.id,
+    points: road.points,
+    width: road.width,
+    closed: !!road.closed,
+    classRank: classRankFor(road.kind),
+    graphEdgeCount: road.points.length - 1,
+    length: routeLength(road.points),
+  })).filter((r) => r.length > 120);
+  return _routeCache;
 }
 
 export function buildInhaumaTraffic(scene, roadGroup) {
@@ -124,20 +46,19 @@ export function buildInhaumaTraffic(scene, roadGroup) {
   for (let i = 0; i < CAR_COUNT; i++) {
     const route = routes[i % routes.length];
     const truck = i % 7 === 0 || i % 11 === 0;
+    const dir = i % 2 === 0 ? 1 : -1; // mão dupla: metade em cada sentido
     cars.push({
       route,
       distance: (route.length * ((i * 37) % 101)) / 101,
-      speed: speedForRoute(route, truck, i),
-      laneSide: i % 2 === 0 ? -1 : 1,
+      speed: speedForRoute(route, truck, i) * dir,
+      dir,
+      laneSide: dir, // cada sentido na sua faixa (mão direita)
       truck,
     });
     const c = new THREE.Color(CAR_COLORS[i % CAR_COLORS.length]);
     bodyMesh.instanceColor.setXYZ(i, c.r, c.g, c.b);
   }
-  scene.add(bodyMesh);
-  scene.add(cabinMesh);
-  scene.add(windowMesh);
-  scene.add(wheelMesh);
+  scene.add(bodyMesh); scene.add(cabinMesh); scene.add(windowMesh); scene.add(wheelMesh);
   return { bodyMesh, cabinMesh, windowMesh, wheelMesh, cars, roadGroup, routes, diagnostics: { samples: [] } };
 }
 
@@ -150,13 +71,14 @@ export function updateRoadTraffic(dt, refs, heightAt) {
   let maxClearanceError = 0;
   let maxBodyPitchDeg = 0;
   refs.cars.forEach((c, i) => {
-    c.distance = (c.distance + c.speed * dt) % c.route.length;
+    c.distance = ((c.distance + c.speed * dt) % c.route.length + c.route.length) % c.route.length;
     const p = samplePolyline(c.route.points, c.distance, c.route.length);
     const lane = c.laneSide * Math.min(4.2, c.route.width * 0.23);
     const x = p.x + Math.cos(p.ang) * lane;
     const z = p.z - Math.sin(p.ang) * lane;
     const groundY = heightAt(x, z);
-    const pitch = roadPitchAt(c.route, c.distance, lane, heightAt);
+    const pitch = roadPitchAt(c.route, c.distance, lane, heightAt) * c.dir;
+    const yaw = p.ang + (c.dir < 0 ? Math.PI : 0); // carro em contramão aponta pra trás
     maxBodyPitchDeg = Math.max(maxBodyPitchDeg, Math.abs(pitch * 180 / Math.PI));
     const onAirportSurface = isInhaumaAirportSurface(x, z);
     if (onAirportSurface) airportSurfaceSamples++;
@@ -170,10 +92,8 @@ export function updateRoadTraffic(dt, refs, heightAt) {
     if (!nearAnyRoad(x, z, Math.max(2, c.route.width * 0.5))) offRoadSamples++;
     if (i < 10) {
       samples.push({
-        i,
-        route: c.route.id,
-        x: Math.round(x * 10) / 10,
-        z: Math.round(z * 10) / 10,
+        i, route: c.route.id,
+        x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10,
         groundY: Math.round(groundY * 100) / 100,
         bodyY: Math.round(bodyY * 100) / 100,
         wheelCenterY: Math.round(wheelCenterY * 100) / 100,
@@ -183,7 +103,7 @@ export function updateRoadTraffic(dt, refs, heightAt) {
         airportExclusionZone: airportExclusionZone?.id || null,
       });
     }
-    updateCarMeshes(refs, i, c, x, z, p.ang, pitch, bodyY, wheelCenterY);
+    updateCarMeshes(refs, i, c, x, z, yaw, pitch, bodyY, wheelCenterY);
   });
   refs.bodyMesh.instanceMatrix.needsUpdate = true;
   refs.cabinMesh.instanceMatrix.needsUpdate = true;

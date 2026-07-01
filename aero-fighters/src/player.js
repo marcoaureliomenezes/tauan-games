@@ -407,6 +407,10 @@ export function updatePlayer(dt, input, onCrash) {
       const altAbove = jet.position.y - contact.height;
       if (altAbove > 4 && sortie.liftoffVsp > 0) {
         transitionSortie(sortie, SortieEvent.LIFTOFF, {}, game.time);
+        // Zera o estado de decolagem para a próxima surtida sair limpa (evita
+        // liftoffVsp residual pular o snap-ao-chão do próximo taxiamento).
+        sortie.liftoffVsp = 0;
+        sortie._autoSpeedFlagged = false;
       }
     }
     // Per-frame floor clamp: never let the jet go underground while in ground states
@@ -749,6 +753,10 @@ export function respawnJet() {
   if (game.missionRealism?.enabled) {
     const airport = getAirportForMap(game.activeMap);
     jet.position.set(airport.serviceZone.center.x, airport.elevation + 0.9, airport.serviceZone.center.z);
+    // Zera o estado de decolagem/surtida ao renascer (restart ou pós-mayday) —
+    // senão liftoffVsp/_autoSpeedFlagged residuais bagunçam a próxima decolagem.
+    const sortie = game.missionRealism.sortie;
+    if (sortie) { sortie.liftoffVsp = 0; sortie._autoSpeedFlagged = false; }
   } else {
     jet.position.set(0, PLAYER.START_HEIGHT, 0);
   }

@@ -1,12 +1,14 @@
 import { INHAUMA_WEB_MAP_METADATA } from './inhauma-data/metadata.js';
-import { INHAUMA_OSM_NAMED_ROUTES } from './inhauma-data/roads.js';
 import {
   getInhaumaRoads,
   getRoadBedDiagnostics,
   getRoadContinuityPatches,
+  INHAUMA_NAMED_ROUTES,
   INHAUMA_ROAD_GRAPH,
   INHAUMA_ROADS,
 } from './inhauma-roads.js';
+
+const INHAUMA_OSM_NAMED_ROUTES = INHAUMA_NAMED_ROUTES;
 import { INHAUMA_AIRPORT_EXCLUSION_ZONES } from './inhauma-road-airport.js';
 import { routeLength, segmentLength } from './inhauma-road-utils.js';
 import { createTrafficRoutes } from './inhauma-traffic.js';
@@ -149,7 +151,8 @@ export function getRoadGraphDiagnostics(heightAt = null) {
     renderClasses[road.kind] = (renderClasses[road.kind] || 0) + 1;
   }
   return {
-    source: INHAUMA_WEB_MAP_METADATA.source,
+    source: 'inhauma-authored-continuous-v2',
+    projectionSource: INHAUMA_WEB_MAP_METADATA.source,
     inputSha256: INHAUMA_WEB_MAP_METADATA.inputSha256,
     generatedAt: INHAUMA_WEB_MAP_METADATA.generatedAt,
     projection: {

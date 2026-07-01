@@ -136,9 +136,13 @@ npm run validate:aero-map
 
 Validator output must prove zero illegal airport conflicts.
 
-### [-] T-GIS-06 - Replace roads with OSM road graph
+### [x] T-GIS-06 - Replace roads with OSM road graph — SUPERSEDED by T-GIS-13
 
 **Owner:** `game-developer`
+
+> **Superseded (2026-07-01):** the full OSM road-graph approach produced the black
+> spiderweb the operator rejected. Road contract re-scoped to few continuous spline
+> corridors — see the Course Correction section and **T-GIS-13**.
 
 Replace the current hard-coded road source:
 
@@ -272,6 +276,46 @@ npm run test:aero:qa
 
 The search command must either return no stale authoritative production paths or be
 explained line-by-line in the closure evidence.
+
+## Course Correction (2026-07-01 — operator directive)
+
+The full OSM `highway=*` dump (T-GIS-06/07) produced **2169 road edges / 18 247
+segments / 16 617 nodes** rendered as flat dark strips — a chaotic black spiderweb
+covering the whole map (operator screenshots 2026-07-01 01-14-01 / 01-14-10). Operator
+verdict: *"our map sucks... few continuous roads that cars circulate... use at most the
+library three.js features."* The GIS-maximalist road contract is **superseded**: roads
+are now a **small authored set of continuous CatmullRom spline corridors** (three.js
+curve tools) with circulating traffic. Mountains/terrain (FBM + named ridges) are kept.
+The OSM road dump and the tests that only *proved the dump* are removed.
+
+### [x] T-GIS-13 - Simplify roads to few continuous spline corridors (SUPERSEDES T-GIS-06/07 road contract)
+
+**Owner:** `game-developer`
+
+- Replace the 2169-edge OSM road source with ~5 authored continuous roads built from
+  Catmull-Rom splines (pure-JS sampler for data/collision; `THREE.CatmullRomCurve3`
+  for the visual ribbon).
+- Keep the module API (`INHAUMA_ROADS`, `nearAnyRoad`, `applyInhaumaRoadBed`,
+  road-bed carving, traffic, diagnostics) so terrain/town/forest/targets are unaffected.
+- Cars circulate along the roads (loop/ring), never entering airport exclusion zones.
+- Delete the 1.2 MB `inhauma-data/roads.js` OSM dump.
+- Rewrite `inhauma-fidelity.spec.js` + `validate-aero-map.js` to assert the corrected
+  contract (few continuous roads, clean geometry, circulating traffic, airport
+  exclusion, mountains present, renderer budget) instead of the spiderweb thresholds.
+
+**Verify:** `npm run test:aero:qa` + visual screenshots at the aerodrome and over town.
+
+### [x] T-GIS-14 - Fix second-round (auto-taxi) takeoff
+
+**Owner:** `game-developer`
+
+Auto-taxi takeoff rolled the wrong way (Three's non-camera `lookAt` faces +Z, so the
+jet's movement-forward −Z pointed up-field and it rolled off the far runway end). Line
+the jet up at the runway threshold and roll **down** the runway (−Z), tighten the taxi,
+and reset stale sortie fields (`liftoffVsp`, `_autoSpeedFlagged`) each takeoff so the
+second/third sorties launch cleanly.
+
+**Verify:** `tests/aero-fighters/auto-sortie.spec.js` + multi-cycle sortie repro.
 
 ## Completion Criteria
 

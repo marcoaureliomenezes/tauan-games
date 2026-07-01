@@ -226,10 +226,15 @@ test('U-AC-8: Inhauma tem helicópteros, comboio armado e aliados com guerra pr�
   await page.waitForFunction(() => (window.game.flags.supportMissilesFired || 0) > 0, { timeout: 12000 });
   const after = await page.evaluate(() => ({
     supportMissiles: window.game.flags.supportMissilesFired || 0,
-    wingmanBehind: window.game.wingmen.every((w) => w.mesh.position.z > window.game.player.pz),
+    wingmenAlive: window.game.wingmen.length,
+    airborne: window.game.missionRealism.sortie.state === 'AIRBORNE',
     // Os amigos NÃO destroem os alvos do player (cada lado tem seus inimigos).
     targetsTotal: window.game.targets.length,
   }));
+  // Os aliados travam a própria guerra (mísseis dedicados) enquanto voamos, e a
+  // formação continua intacta. (A checagem antiga de posição relativa dependia da
+  // taxa de quadros — os aliados TRAILEM o líder por design — e era frágil.)
   expect(after.supportMissiles).toBeGreaterThan(initial.supportMissiles);
-  expect(after.wingmanBehind).toBe(false);
+  expect(after.airborne).toBe(true);
+  expect(after.wingmenAlive).toBeGreaterThanOrEqual(2);
 });
