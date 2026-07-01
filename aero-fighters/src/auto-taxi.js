@@ -7,13 +7,20 @@
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
-import { jet } from './player.js';
+import { jet, setLiftoffCarry } from './player.js';
 import { getAirportForMap } from './airport.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 import { spawnMission } from './missions.js';
 
-const TAXI_SPEED = 34;     // m/s — velocidade de taxiamento
-const TAKEOFF_SPEED = 56;  // m/s — velocidade na qual decola
+const TAXI_SPEED = 34;      // m/s — velocidade de taxiamento
+const TAKEOFF_SPEED = 56;   // m/s — velocidade na qual decola
+const TAXI_TURN_RATE = 1.5; // rad/s — giro máximo do nariz no taxi
+const TAXI_ACCEL = 8;       // m/s² — aceleração limitada no taxi
+const TAXI_BRAKE = 12;      // m/s² — frenagem limitada (rolagem pós-pouso 62→34 sem degrau)
+
+function _wrapAngle(a) {
+  return ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+}
 
 function _state() { return game.missionRealism.autoTaxi; }
 
@@ -37,24 +44,35 @@ export function isAutoTaxiActive() {
 
 function _airport() { return getAirportForMap(game.activeMap); }
 
-/** Move o avião em direção a (tx,tz) no nível do pavimento. Devolve a distância restante. */
+/** Move o avião em direção a (tx,tz) no nível do pavimento. Devolve a distância restante.
+ *  Suavizado: aceleração/frenagem limitadas (sem degrau de velocidade no pós-pouso),
+ *  giro do nariz com taxa máxima, e o avião anda AO LONGO DO NARIZ — faz a curva
+ *  como um veículo em vez de deslizar de lado até o waypoint. */
 function _driveTo(tx, tz, dt, speed) {
   const ap = _airport();
   const dx = tx - jet.position.x;
   const dz = tz - jet.position.z;
   const dist = Math.hypot(dx, dz);
-  // Desacelera perto do alvo para parar suave
-  const v = Math.min(speed, Math.max(6, dist * 1.2));
+  // Desacelera perto do alvo para parar suave; delta de velocidade limitado por frame.
+  const vTarget = dist > 0.5 ? Math.min(speed, Math.max(6, dist * 1.2)) : 0;
+  const cur = game.player.speed || 0;
+  const delta = vTarget - cur;
+  const maxDelta = (delta > 0 ? TAXI_ACCEL : TAXI_BRAKE) * dt;
+  const v = cur + Math.max(-maxDelta, Math.min(maxDelta, delta));
   if (dist > 0.5) {
-    const step = Math.min(dist, v * dt);
     const ux = dx / dist, uz = dz / dist;
-    jet.position.x += ux * step;
-    jet.position.z += uz * step;
     // O nariz do jato é o eixo -Z local. Para apontá-lo ao destino:
     // forward = (-sinθ,0,-cosθ) = (ux,uz) → θ = atan2(-ux, -uz).
-    // (jet.lookAt aponta +Z ao alvo — convenção de objeto, não de câmera — o que
-    //  antes deixava o nariz para trás e a decolagem descia a pista ao contrário.)
-    jet.rotation.set(0, Math.atan2(-ux, -uz), 0);
+    const targetYaw = Math.atan2(-ux, -uz);
+    const yawErr = _wrapAngle(targetYaw - jet.rotation.y);
+    const maxTurn = TAXI_TURN_RATE * dt;
+    const newYaw = jet.rotation.y + Math.max(-maxTurn, Math.min(maxTurn, yawErr));
+    // Pitch/roll residuais do pouso decaem suavemente (derrotação no taxi).
+    const att = Math.max(0, 1 - 2.6 * dt);
+    jet.rotation.set(jet.rotation.x * att, newYaw, jet.rotation.z * att);
+    const step = Math.min(dist, v * dt);
+    jet.position.x += -Math.sin(newYaw) * step;
+    jet.position.z += -Math.cos(newYaw) * step;
   }
   jet.position.y = ap.elevation + 0.9;
   game.player.speed = dist > 1 ? v : 0;
@@ -123,26 +141,47 @@ export function updateAutoTaxi(dt) {
     const tz = r.center.z + r.length / 2 - 40;
     const dist = _driveTo(tx, tz, dt, TAXI_SPEED);
     if (dist < 6) {
-      // Alinha EXATAMENTE com a pista: nariz (-Z) desce a pista (heading 0).
-      // rotation.set sincroniza o quaternion automaticamente (Object3D).
-      jet.rotation.set(0, 0, 0);
-      jet.position.x = r.center.x; // centraliza na pista antes da corrida
-      game.player.throttle = 1.0;
-      // Limpa estado residual da surtida anterior para a 2ª/3ª decolagem sair limpa.
-      sortie._autoSpeedFlagged = false;
-      sortie.liftoffVsp = 0;
-      if (sortie.state === SortieState.TAXI_OUT) {
-        transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, game.time); // → TAKEOFF_ROLL
-      }
-      a.phase = 'takeoff';
+      a.phase = 'line_up';
       a.t = 0;
     }
     _mirror();
     return;
   }
 
+  if (a.phase === 'line_up') {
+    // Alinhamento suave com o eixo da pista: pivô no ponto até heading 0 e
+    // centraliza no eixo — sem teleporte de rotação/posição.
+    const r = ap.runway;
+    const yawErr = _wrapAngle(0 - jet.rotation.y);
+    const maxTurn = 1.2 * dt;
+    const newYaw = jet.rotation.y + Math.max(-maxTurn, Math.min(maxTurn, yawErr));
+    const att = Math.max(0, 1 - 2.6 * dt);
+    jet.rotation.set(jet.rotation.x * att, newYaw, jet.rotation.z * att);
+    jet.position.x += (r.center.x - jet.position.x) * Math.min(1, dt * 1.8);
+    jet.position.y = ap.elevation + 0.9;
+    game.player.speed = 0;
+    mr.ground.groundSpeed = 0;
+    if (Math.abs(_wrapAngle(newYaw)) < 0.02 && Math.abs(r.center.x - jet.position.x) < 0.5) {
+      jet.rotation.set(0, 0, 0);
+      jet.position.x = r.center.x;
+      // Limpa estado residual da surtida anterior para a 2ª/3ª decolagem sair limpa.
+      sortie._autoSpeedFlagged = false;
+      sortie.liftoffVsp = 0;
+      sortie.rotateSpool = 0;
+      if (sortie.state === SortieState.TAXI_OUT) {
+        transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, game.time); // → TAKEOFF_ROLL
+      }
+      a.phase = 'takeoff';
+      a.t = 0;
+      a.vsp = 0;
+    }
+    _mirror();
+    return;
+  }
+
   if (a.phase === 'takeoff') {
-    // Acelera na pista e levanta voo automaticamente.
+    // Acelera na pista e levanta voo automaticamente (throttle spool, sem snap).
+    game.player.throttle = Math.min(1, (game.player.throttle || 0.05) + dt * 1.4);
     const accel = 26;
     game.player.speed = Math.min(TAKEOFF_SPEED + 6, game.player.speed + accel * dt);
     mr.ground.groundSpeed = game.player.speed;
@@ -155,18 +194,22 @@ export function updateAutoTaxi(dt) {
     }
 
     if (game.player.speed >= TAKEOFF_SPEED) {
-      // Rotaciona o nariz e sobe
+      // Rotaciona o nariz e sobe — vsp cresce gradualmente (sem degrau 0→22)
       if (jet.rotation.x > -0.18) jet.rotateX(-0.5 * dt);
-      jet.position.y += 22 * dt;
+      a.vsp = Math.min(22, (a.vsp || 0) + 16 * dt);
+      jet.position.y += a.vsp * dt;
     } else {
+      a.vsp = 0;
       jet.position.y = ap.elevation + 0.9;
     }
 
     const altAbove = jet.position.y - ap.elevation;
     if (altAbove > 8) {
+      setLiftoffCarry(a.vsp); // continuidade da subida na troca para a física normal
       transitionSortie(sortie, SortieEvent.LIFTOFF, {}, game.time); // → AIRBORNE
       sortie._autoSpeedFlagged = false;
       sortie.liftoffVsp = 0;
+      sortie.rotateSpool = 0;
       cancelAutoTaxi();
     }
     _mirror();

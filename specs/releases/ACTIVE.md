@@ -1,2 +1,2 @@
-release: v0.2.0
+release: aero-fighters-world-realism-v1
 phase: IMPLEMENTATION

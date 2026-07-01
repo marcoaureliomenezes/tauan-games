@@ -10,7 +10,16 @@ import { game } from '../state.js';
 import { applyAirportClearing } from '../landing-zones.js';
 import { fbm2D, ridgedFbm2D, distToPolyline } from './noise.js';
 import { applyInhaumaRoadBed, nearAnyRoad } from './inhauma-roads.js';
+import { getPortalMounds } from './inhauma-road-defs.js';
 import { updateRoadTraffic } from './inhauma-traffic.js';
+import { createReflectiveWater, createFlowingWater, updateWaterSurfaces } from '../environment/water-surface.js';
+
+// sky.js importa scene.js (que toca window no escopo de módulo) — carga LAZY para
+// este módulo continuar importável em Node (validate:aero-map).
+let _getSunData = null;
+if (typeof window !== 'undefined') {
+  import('../sky.js').then((m) => { _getSunData = m.getSunData; }).catch(() => {});
+}
 
 // ─── Geografia ────────────────────────────────────────────────────────────────
 export const WATER_LEVEL = 4.5;     // m — cota da lâmina d'água
@@ -35,6 +44,18 @@ export const INHAUMA_FEATURES = [
   { id: 'serra-leste-inhauma', cx: 1300, cz: 120, radius: 380, peakHeight: 70, type: 'ridge' },
 ].map((d, index) => ({ ...d, index }));
 
+// WS-2: colinas de portal de túnel — geradas das pontas de estrada (inhauma-road-defs).
+// Somadas ao relevo para que TODA estrada aberta fure uma encosta real, nunca pare no ar.
+const PORTAL_MOUNDS = getPortalMounds();
+function portalMoundContribution(x, z) {
+  let h = 0;
+  for (const m of PORTAL_MOUNDS) {
+    const t = Math.hypot(x - m.x, z - m.z) / m.radius;
+    if (t < 1) h += m.peak * Math.max(0, 1 - t * t * 1.3); // mesma curva de roundedHill
+  }
+  return h;
+}
+
 function featureContribution(f, dx, dz) {
   const d = Math.hypot(dx, dz);
   const t = d / f.radius;
@@ -57,6 +78,8 @@ function inhaumaBaseHeight(x, z) {
 
   // Features nomeadas (morros, serras, vale)
   for (const f of INHAUMA_FEATURES) h += featureContribution(f, x - f.cx, z - f.cz);
+  // Colinas de portal de túnel (WS-2) — encostas onde as estradas entram em túnel.
+  h += portalMoundContribution(x, z);
 
   // Entalhe do rio: rampa para o leito (cria vale + canal abaixo da água)
   const dr = distToPolyline(x, z, RIVER);
@@ -122,6 +145,12 @@ export function inhaumaStructureInfoAt(x, z) {
     }
   }
   return hit;
+}
+
+// Lista de estruturas (casas/prédios/fábricas) em coords de mundo — exposto para a nuke
+// incendiar cenário (WS-5). Cada item: {id, x, z, halfX, halfZ, topY}.
+export function getInhaumaStructures() {
+  return structures;
 }
 
 function updateTerrainChunkGeometry(chunk, gridX, gridZ) {
@@ -192,48 +221,62 @@ export function buildInhaumaTerrain(scene) {
   return terrain;
 }
 
-/** Height-fn registrada (assinatura compatível com world.js: (isl, dx, dz)). */
+// Altura da SUPERFÍCIE RENDERIZADA do terreno: amostra a MESMA grade dos chunks
+// (espaçamento chunkSize/seg) e interpola bilinearmente. Objetos e colisão assentam
+// no que é DESENHADO, não no pico contínuo sub-amostrado — elimina o "float" de
+// ~7-9 m nos cumes agudos das serras (WS-1 / bug aero-inhauma-invisible-mountains).
+const TERR_STEP = TERR.chunkSize / TERR.seg; // 2600/54 ≈ 48.148 m — passo da grade do mesh
+export function inhaumaVisualSurfaceHeight(x, z) {
+  const x0 = Math.floor(x / TERR_STEP) * TERR_STEP;
+  const z0 = Math.floor(z / TERR_STEP) * TERR_STEP;
+  const tx = (x - x0) / TERR_STEP;
+  const tz = (z - z0) / TERR_STEP;
+  const h00 = inhaumaContinuousHeight(x0, z0);
+  const h10 = inhaumaContinuousHeight(x0 + TERR_STEP, z0);
+  const h01 = inhaumaContinuousHeight(x0, z0 + TERR_STEP);
+  const h11 = inhaumaContinuousHeight(x0 + TERR_STEP, z0 + TERR_STEP);
+  const h0 = h00 + (h10 - h00) * tx;
+  const h1 = h01 + (h11 - h01) * tx;
+  return h0 + (h1 - h0) * tz;
+}
+
+/** Height-fn registrada (assinatura compatível com world.js: (isl, dx, dz)).
+ *  Usa a superfície RENDERIZADA para grounding/colisão casarem com o mesh visível. */
 export function inhaumaHeightAt(isl, dx, dz) {
-  return inhaumaContinuousHeight(isl.cx + dx, isl.cz + dz);
+  return inhaumaVisualSurfaceHeight(isl.cx + dx, isl.cz + dz);
 }
 
 // ─── Água (rio + reservatório), animada ──────────────────────────────────────
-function makeWaterTex() {
-  const c = document.createElement('canvas'); c.width = c.height = 256;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#1f5f86'; ctx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 60; i++) {
-    ctx.strokeStyle = `rgba(150,200,230,${0.05 + Math.random() * 0.12})`;
-    ctx.beginPath(); const y = Math.random() * 256;
-    ctx.moveTo(0, y); ctx.lineTo(256, y + (Math.random() - 0.5) * 18); ctx.stroke();
-  }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
+// Reuso de terceiros (2026-07-01): reservatório = examples/jsm Water (reflexivo,
+// waternormals oficial do three r165); rio = shader de fluxo compartilhado
+// (environment/water-surface.js — reutilizável pelos outros mapas).
 export function buildInhaumaWater(scene) {
-  const tex = makeWaterTex(); tex.repeat.set(8, 8);
-  const mat = new THREE.MeshLambertMaterial({ map: tex, color: 0x3d7fa3, transparent: true, opacity: 0.86 });
   const waters = [];
 
-  // Reservatório (lago da represa) — elipse aproximada por um plano grande
-  const lake = new THREE.Mesh(new THREE.PlaneGeometry(RESERVOIR.rx * 2, RESERVOIR.rz * 2, 1, 1), mat);
-  lake.rotation.x = -Math.PI / 2; lake.position.set(RESERVOIR.x, WATER_LEVEL, RESERVOIR.z);
+  // Reservatório (lago da represa) — 1 superfície reflexiva por mapa
+  const lake = createReflectiveWater(
+    new THREE.PlaneGeometry(RESERVOIR.rx * 2, RESERVOIR.rz * 2, 1, 1),
+    { color: 0x2a6d94, opacity: 0.96 },
+  );
+  lake.position.set(RESERVOIR.x, WATER_LEVEL, RESERVOIR.z);
   scene.add(lake); waters.push(lake);
 
-  // Rio (ribbon de segmentos seguindo a polilinha, a jusante da barragem)
-  for (let i = 1; i < RIVER.length - 1; i++) {
+  // Rio (ribbon de segmentos seguindo TODA a polilinha — WS-3: rio visível de ponta a
+  // ponta, não só a jusante da barragem. O leito já é escavado ao longo de todo o
+  // traçado por inhaumaBaseHeight, então basta desenhar a lâmina d'água inteira.)
+  for (let i = 0; i < RIVER.length - 1; i++) {
     const a = RIVER[i], b = RIVER[i + 1];
-    if ((a.x + a.z) < (DAM.x + DAM.z) - 40) continue; // só a jusante
     const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
     const len = Math.hypot(b.x - a.x, b.z - a.z);
-    const seg = new THREE.Mesh(new THREE.PlaneGeometry(RIVER_W * 2.2, len + 40), mat);
-    seg.rotation.x = -Math.PI / 2;
+    const seg = createFlowingWater(
+      new THREE.PlaneGeometry(RIVER_W * 2.8, len + 40),
+      { color: 0x3d7fa3, deepColor: 0x16405c, flow: [0.012, 0.055], repeat: 5, opacity: 0.9 },
+    );
     seg.rotation.z = -Math.atan2(b.x - a.x, b.z - a.z);
     seg.position.set(mx, WATER_LEVEL - 0.2, mz);
     scene.add(seg); waters.push(seg);
   }
-  return { tex, waters };
+  return { waters };
 }
 
 // ─── Barragem (represa) ──────────────────────────────────────────────────────
@@ -330,9 +373,31 @@ export function buildFactories(scene) {
 }
 
 // ─── Florestas (árvores instanciadas em encostas de cota média) ───────────────
+// Posições de árvore em coords de mundo — exposto para a nuke incendiar cenário (WS-5).
+export const inhaumaTrees = [];
+
+// Espécies de árvore (WS-3): geometrias/cores distintas por banda de altitude, cada uma
+// um par de InstancedMesh (tronco+copa) com jitter de cor por instância. Copa usa base
+// branca (lmat(0xffffff)) × instanceColor para a cor sair exata (padrão buildTown).
+const TREE_SPECIES = [
+  // key,       band,     trunk[rTop,rBot,h,seg]|null, trunkCol,  crown['cone'|'ico'|'sphere', ...args], crownCol,   sMin,sMax
+  { key: 'pine',      band: [30, 70], trunk: [0.5, 0.8, 7, 5], trunkCol: 0x4a3520, crown: ['cone', 2.4, 11, 6], crownCol: 0x1f4d1c, sMin: 0.8, sMax: 1.6 },
+  { key: 'broadleaf', band: [13, 42], trunk: [0.9, 1.2, 4, 6], trunkCol: 0x5b3f2a, crown: ['ico', 3.6],         crownCol: 0x3a7a2f, sMin: 0.8, sMax: 1.7 },
+  { key: 'bush',      band: [7, 22],  trunk: null,             trunkCol: 0,        crown: ['sphere', 2.4, 7, 5], crownCol: 0x5a7a30, sMin: 0.7, sMax: 1.3 },
+  { key: 'dry',       band: [16, 60], trunk: [0.5, 0.9, 6, 5], trunkCol: 0x6a5a3a, crown: ['cone', 2.4, 7, 6],  crownCol: 0x8a7a40, sMin: 0.7, sMax: 1.2 },
+];
+
+function makeCrownGeo(spec) {
+  const c = spec.crown;
+  if (c[0] === 'cone') return new THREE.ConeGeometry(c[1], c[2], c[3]);
+  if (c[0] === 'ico') return new THREE.IcosahedronGeometry(c[1], 0);
+  return new THREE.SphereGeometry(c[1], c[2], c[3]);
+}
+
 export function buildForests(scene) {
-  const trunks = [], crowns = [];
-  for (let i = 0; i < 1400; i++) {
+  inhaumaTrees.length = 0;
+  const buckets = TREE_SPECIES.map(() => []);
+  for (let i = 0; i < 1700; i++) {
     const range = TERR.chunkSize * 1.35;
     const x = game.rng.range(-range, range);
     const z = game.rng.range(-range, range);
@@ -343,23 +408,54 @@ export function buildForests(scene) {
     if (distToPolyline(x, z, RIVER) < RIVER_W + 10) continue;
     if (nearAnyRoad(x, z, 14)) continue;                  // sem árvore sobre a rodovia
     if (game.rng.random() > (h > 22 ? 0.85 : 0.35)) continue; // mais densa na mata alta
-    const s = game.rng.range(0.8, 1.7);
-    trunks.push({ x, y: h, z, s }); crowns.push({ x, y: h, z, s });
+    // Escolhe espécie pela banda de altitude; ~12% viram árvore seca espalhada.
+    const candidates = [];
+    for (let s = 0; s < TREE_SPECIES.length; s++) {
+      const [lo, hi] = TREE_SPECIES[s].band;
+      if (h >= lo && h <= hi) candidates.push(s);
+    }
+    if (!candidates.length) continue;
+    let si = candidates[Math.floor(game.rng.random() * candidates.length)];
+    if (game.rng.random() < 0.12) si = 3; // dry
+    const sc = game.rng.range(TREE_SPECIES[si].sMin, TREE_SPECIES[si].sMax);
+    buckets[si].push({ x, y: h, z, s: sc });
+    inhaumaTrees.push({ x, y: h, z });
   }
-  if (!trunks.length) return null;
-  const trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.7, 1.0, 6, 5), lmat(0x5b3f2a), trunks.length);
-  const crownMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(3.4, 9, 7), lmat(0x1f4d1c), crowns.length);
-  trunkMesh.frustumCulled = false; crownMesh.frustumCulled = false;
   const dummy = new THREE.Object3D();
-  trunks.forEach((t, i) => {
-    dummy.position.set(t.x, t.y + 3 * t.s, t.z); dummy.scale.set(t.s, t.s, t.s); dummy.rotation.set(0, 0, 0);
-    dummy.updateMatrix(); trunkMesh.setMatrixAt(i, dummy.matrix);
-    dummy.position.set(t.x, t.y + 9 * t.s, t.z);
-    dummy.updateMatrix(); crownMesh.setMatrixAt(i, dummy.matrix);
+  const col = new THREE.Color();
+  const meshes = [];
+  TREE_SPECIES.forEach((spec, si) => {
+    const items = buckets[si];
+    if (!items.length) return;
+    const crownMesh = new THREE.InstancedMesh(makeCrownGeo(spec), lmat(0xffffff), items.length);
+    crownMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(items.length * 3), 3);
+    crownMesh.frustumCulled = false; crownMesh.castShadow = false;
+    let trunkMesh = null, trunkH = 0;
+    if (spec.trunk) {
+      trunkH = spec.trunk[2];
+      trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(spec.trunk[0], spec.trunk[1], spec.trunk[2], spec.trunk[3]), lmat(spec.trunkCol), items.length);
+      trunkMesh.frustumCulled = false; trunkMesh.castShadow = false;
+    }
+    items.forEach((t, i) => {
+      if (trunkMesh) {
+        dummy.position.set(t.x, t.y + trunkH * 0.5 * t.s, t.z);
+        dummy.scale.set(t.s, t.s, t.s); dummy.rotation.set(0, 0, 0);
+        dummy.updateMatrix(); trunkMesh.setMatrixAt(i, dummy.matrix);
+      }
+      const crownY = t.y + (spec.trunk ? trunkH * 0.9 : spec.crown[1] * 0.7) * t.s;
+      dummy.position.set(t.x, crownY, t.z);
+      dummy.scale.set(t.s, t.s, t.s);
+      dummy.rotation.set(0, (t.x * 0.7 + t.z * 0.3) % Math.PI, 0);
+      dummy.updateMatrix(); crownMesh.setMatrixAt(i, dummy.matrix);
+      // Jitter de luminância por instância — mata o look de "clone".
+      col.setHex(spec.crownCol);
+      const j = game.rng.range(0.82, 1.16);
+      crownMesh.instanceColor.setXYZ(i, Math.min(1, col.r * j), Math.min(1, col.g * j), Math.min(1, col.b * j));
+    });
+    if (trunkMesh) { scene.add(trunkMesh); meshes.push(trunkMesh); }
+    scene.add(crownMesh); meshes.push(crownMesh);
   });
-  trunkMesh.castShadow = false; crownMesh.castShadow = false; // muitas árvores → fora do shadow-map (FPS)
-  scene.add(trunkMesh); scene.add(crownMesh);
-  return { trunkMesh, crownMesh };
+  return meshes.length ? { meshes } : null;
 }
 
 // ─── Cidade (downtown + igreja + campos + praça) ─────────────────────────────
@@ -432,7 +528,7 @@ export function buildTown(scene) {
 // ─── Update (água + carros + vapor/fumaça) ───────────────────────────────────
 export function updateInhaumaScene(dt, refs, playerPos) {
   updateInfiniteTerrain(playerPos, refs.terrain);
-  if (refs.water) { refs.water.tex.offset.y += dt * 0.06; refs.water.tex.offset.x += dt * 0.02; }
+  if (refs.water) updateWaterSurfaces(dt, _getSunData ? _getSunData().direction : undefined);
   if (refs.cars) {
     updateRoadTraffic(dt, refs.cars, inhaumaContinuousHeight);
     if (game.missionRealism?.inhaumaMap?.traffic) {

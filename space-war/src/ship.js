@@ -175,7 +175,8 @@ function updateFlight(s, dt) {
   pitch += -dy * SHIP.mouseSens;
   yaw += -dx * SHIP.mouseSens;
   const manual = pitch || yaw || roll;
-  if (manual) s.aligning = false;       // controlar manualmente cancela o piloto automático
+  if (manual) { s.aligning = false; s.approach = false; }  // controle manual cancela autopilotos
+  if (input.brake) s.approach = false;                     // freio manual cancela a aproximação
 
   if (s.aligning) {
     // --- Piloto automático de mira: gira o nariz para o alvo de navegação ---
@@ -191,6 +192,7 @@ function updateFlight(s, dt) {
   }
   s.quat.normalize();
   game.nav.aligning = s.aligning;
+  game.nav.approach = s.approach === true;
 
   // --- Gravidade de N-corpos (aceleração REAL, calculada ANTES do motor) ---
   // Calculada primeiro e somada DEPOIS do motor, sem ser "lavada": é isto que faz
@@ -200,7 +202,29 @@ function updateFlight(s, dt) {
   // --- Propulsão ---
   fwd.set(0, 0, -1).applyQuaternion(s.quat);
   const boost = s.boost ? SHIP.boostMultiplier : 1;
-  if (s.flightAssist) {
+  if (s.approach) {
+    // --- AUTO-APROXIMAÇÃO ([N]): voa até o alvo e CHEGA devagar ---
+    // Perfil de chegada: velocidade desejada = √(2·a·restante)·0.55 (desacelera a
+    // tempo), limitada pelo cruzeiro; a velocidade é dirigida ao alvo (mata deriva
+    // lateral). A gravidade continua entrando por cima — perto do buraco negro ela
+    // pode vencer o autopiloto, e deve.
+    const t = currentTarget();
+    if (t) {
+      tmp.copy(t.pos).sub(s.pos);
+      const dist = tmp.length();
+      const arriveR = (t.radius || 8) * 3 + 60;
+      tmp.multiplyScalar(1 / Math.max(1e-6, dist));   // direção ao alvo
+      _m.lookAt(s.pos, t.pos, _up);
+      _q.setFromRotationMatrix(_m);
+      s.quat.slerp(_q, Math.min(1, SHIP.alignRate * 0.8 * dt));
+      const vArrive = Math.sqrt(2 * SHIP.assistThrust * Math.max(0, dist - arriveR)) * 0.55;
+      const vDes = Math.min(vArrive, SHIP.cruiseSpeed * boost);
+      desiredV.copy(tmp).multiplyScalar(vDes);
+      s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * 0.8 * dt));
+      s.throttle = Math.max(0.05, Math.min(1, vDes / SHIP.cruiseSpeed));
+      if (dist < arriveR && s.vel.length() < 60) { s.approach = false; s.throttle = 0; }
+    } else s.approach = false;
+  } else if (s.flightAssist) {
     // NAVEGAÇÃO RESPONSIVA (Set-Speed / fly-by-wire): a velocidade é continuamente
     // DIRECIONADA para o nariz, na intensidade do throttle. Virar a nave vira o seu
     // movimento → você VAI PARA ONDE APONTA. throttle 0 desacelera; [X] freia rápido.

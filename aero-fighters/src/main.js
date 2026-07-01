@@ -12,8 +12,9 @@ import { ocean, createIslands, updateWorld, updateAmbientFlak, setActiveHeightFn
 import { getActiveHeightFn } from './world.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
+import { updatePropFires } from './prop-fire.js';
 import { input, installListeners, onAction } from './input.js';
-import { jet, updatePlayer, playerHit, barrelRoll, firePosition, respawnJet } from './player.js';
+import { jet, updatePlayer, playerHit, barrelRoll, firePosition, respawnJet, respawnAndRelaunch } from './player.js';
 import { updateTargets } from './targets.js';
 import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups, spawnNuclearMissile, updateNuclears } from './projectiles.js';
 import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } from './hud.js';
@@ -401,14 +402,11 @@ function tick() {
       pilotVisual.position.x = jet.position.x;
       pilotVisual.position.z = jet.position.z;
       if (updateEjection(game.missionRealism.ejection, dt)) {
-        transitionSortie(game.missionRealism.sortie, SortieEvent.PILOT_LANDED, {}, game.time);
+        // Paraquedas tocou o solo: recoloca o avião no aeroporto e rearma a
+        // decolagem automática (mesmo caminho do crash no solo) — senão o avião
+        // ficava parado no ar em NEXT_SORTIE_READY, sem conseguir decolar.
         pilotVisual.visible = false;
-        jet.visible = true;
-        game.player.missiles = 100;
-        game.player.heavyMissiles = 10;
-        game.player.nuclearMissiles = 3;
-        game.player.hp = 3;
-        game.flags.mayday = false;
+        respawnAndRelaunch();
       }
     }
     updateWingmen(dt, jet);
@@ -425,6 +423,7 @@ function tick() {
     updateParticles(dt, jet.position);
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
+    updatePropFires(dt);
     updateSpeedLines();
     _activeMapUpdate(dt, jet.position);
     updateAmbientFlak(dt, jet.position, jet.quaternion);
@@ -458,6 +457,7 @@ function tick() {
     updateParticles(dt, jet.position);
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
+    updatePropFires(dt);
     updateNuclearFx(dt);
     _activeMapUpdate(dt, jet.position);
   }

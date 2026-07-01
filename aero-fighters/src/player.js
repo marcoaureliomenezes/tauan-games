@@ -16,7 +16,7 @@ import { checkTerrainCollision, surfaceInfoAt } from './world.js';
 import { classifyGroundContact, airportSurface } from './landing-zones.js';
 import { getAirportForMap } from './airport.js';
 import { syncFlightGroundDiagnostics, updateGroundRoll } from './ground-physics.js';
-import { SortieEvent, SortieState, GROUND_STATES, transitionSortie } from './sortie-state.js';
+import { SortieEvent, SortieState, GROUND_STATES, transitionSortie, relaunchSortie } from './sortie-state.js';
 
 // ─── Mesh do F-35 ────────────────────────────────────────────────────────────
 function buildJet() {
@@ -323,6 +323,11 @@ const _maydayPos = new THREE.Vector3();
 //  sempre ~-14 m/s em voo nivelado → todo pouso era classificado "inseguro" → explosão.)
 let _prevAltY = null;
 
+// Continuidade de decolagem: momento vertical herdado da rotação, decaindo em ~1 s
+// após a troca para a física AIRBORNE (elimina o "soluço" de subida no liftoff).
+let _liftoffCarry = 0;
+export function setLiftoffCarry(v) { _liftoffCarry = Math.max(0, v || 0); }
+
 function clampPitchAttitude() {
   _attitudeEuler.setFromQuaternion(jet.quaternion, 'YXZ');
   _attitudeEuler.x = Math.max(PLAYER.PITCH_DOWN_LIMIT, Math.min(PLAYER.PITCH_UP_LIMIT, _attitudeEuler.x));
@@ -360,6 +365,13 @@ export function updatePlayer(dt, input, onCrash) {
     if (input.throttleDown) game.player.throttle = Math.max(0.02, game.player.throttle - dt * PLAYER.THROTTLE_DN_RATE);
     game.player.speed = mr.ground.groundSpeed;
 
+    // Rolagem de pouso: sem input, o throttle decai para idle suavemente (spool-down)
+    // — a rolagem desacelera de forma natural em vez de corte seco no toque.
+    if ((sortie.state === SortieState.LANDING_ROLL || sortie.state === SortieState.TAXI_IN) &&
+        !input.throttleUp && game.player.throttle > 0.05) {
+      game.player.throttle += (0.05 - game.player.throttle) * Math.min(1, dt * 1.5);
+    }
+
     if (input.rollLeft || input.yawLeft) {
       _yawQ.setFromAxisAngle(_worldUp, PLAYER.YAW_RATE * 0.55 * dt);
       jet.quaternion.premultiply(_yawQ);
@@ -373,10 +385,12 @@ export function updatePlayer(dt, input, onCrash) {
     const movedContact = classifyGroundContact({ x: jet.position.x, y: jet.position.y, z: jet.position.z }, game.activeMap, 0);
     const movedSurface = surfaceInfoAt(jet.position.x, jet.position.z);
     const hardFloor = Math.max(movedContact.height, movedSurface.height) + 0.9;
-    // Only snap to ground when NOT in active liftoff rotation.
-    // Once liftoffVsp is accumulating, allow y to rise freely.
+    // Assentamento suave no solo (nunca abaixo do piso): a altura CONVERGE para o
+    // piso em ~0.3 s — o toque comprime como amortecedor de trem de pouso, em vez
+    // de snap instantâneo. Só quando NÃO está em rotação ativa de decolagem.
     if (!sortie.liftoffVsp || sortie.liftoffVsp <= 0) {
-      jet.position.y = hardFloor;
+      const settle = 1 - Math.exp(-dt * 7);
+      jet.position.y = Math.max(hardFloor, jet.position.y + (hardFloor - jet.position.y) * settle);
     }
 
     if (sortie.state === SortieState.TAXI_OUT && contact.type === 'runway') {
@@ -403,13 +417,18 @@ export function updatePlayer(dt, input, onCrash) {
       clampPitchAttitude();
       sortie.liftoffVsp += PLAYER.ROTATE_LIFT * dt;
       jet.position.y += sortie.liftoffVsp * dt;
-      game.player.speed = Math.max(game.player.speed, 45);
+      // Spool suave até a velocidade de subida (45 m/s) — sem salto 32→45 num frame.
+      sortie.rotateSpool = Math.min(13, (sortie.rotateSpool || 0) + 26 * dt);
+      game.player.speed = Math.max(game.player.speed, Math.min(45, game.player.speed + sortie.rotateSpool));
       const altAbove = jet.position.y - contact.height;
       if (altAbove > 4 && sortie.liftoffVsp > 0) {
+        // Continuidade: o vsp da rotação decai suavemente já na física AIRBORNE.
+        _liftoffCarry = sortie.liftoffVsp;
         transitionSortie(sortie, SortieEvent.LIFTOFF, {}, game.time);
         // Zera o estado de decolagem para a próxima surtida sair limpa (evita
         // liftoffVsp residual pular o snap-ao-chão do próximo taxiamento).
         sortie.liftoffVsp = 0;
+        sortie.rotateSpool = 0;
         sortie._autoSpeedFlagged = false;
       }
     }
@@ -422,6 +441,18 @@ export function updatePlayer(dt, input, onCrash) {
       // Still clamp to runway height if we're just barely off the ground during liftoff rotation
       jet.position.y = Math.max(jet.position.y, contact.height + 0.9);
     }
+    // Derrotação graciosa: no solo sem input de pitch, nariz e asas nivelam
+    // suavemente (pós-toque/pós-flare), em vez de congelar a atitude do pouso.
+    if (!input.pitchUp && !input.pitchDown) {
+      _attitudeEuler.setFromQuaternion(jet.quaternion, 'YXZ');
+      if (Math.abs(_attitudeEuler.x) > 0.002 || Math.abs(_attitudeEuler.z) > 0.002) {
+        const decay = Math.max(0, 1 - 2.6 * dt);
+        _attitudeEuler.x *= decay;
+        _attitudeEuler.z *= decay;
+        jet.quaternion.setFromEuler(_attitudeEuler);
+      }
+    }
+
     if ((sortie.state === SortieState.LANDING_ROLL || sortie.state === SortieState.TAXI_IN) && movedContact.type === 'service' && game.player.speed < 10) {
       transitionSortie(sortie, SortieEvent.SERVICE_ZONE_REACHED, {}, game.time);
     }
@@ -579,6 +610,12 @@ export function updatePlayer(dt, input, onCrash) {
     jet.position.y += PLAYER.GRAVITY * liftFactor * dt;
     jet.position.y += Math.max(0, fwd.y) * game.player.speed * 0.42 * dt;
   }
+  // Continuidade de decolagem: o momento vertical da rotação decai em ~1 s em vez
+  // de sumir no frame da transição TAKEOFF_ROLL → AIRBORNE (subida sem soluço).
+  if (_liftoffCarry > 0.01) {
+    jet.position.y += _liftoffCarry * dt;
+    _liftoffCarry = Math.max(0, _liftoffCarry - 11 * dt);
+  }
 
   // Crash
   const crash = checkTerrainCollision(jet.position);
@@ -677,10 +714,10 @@ export function updatePlayer(dt, input, onCrash) {
       const bossBlocking = game.flags.bossActive === true; // monstro vivo trava o pouso
       const catastrophic = Math.abs(jet.rotation.z) > 1.4 || realVsp < PLAYER.SINK_HARD;
       if (altitudeAboveGround < PLAYER.FLARE_LO && descending && landingSpeed && !bossBlocking && debounceOk && !catastrophic) {
-        // Touchdown: ajuste sub-métrico de altura, velocidade preservada, throttle idle.
-        jet.position.y = contact.height + 0.9;
+        // Touchdown suave: a altura ASSENTA nos próximos frames (ground settle) e o
+        // throttle decai para idle na rolagem — sem snap de altura nem corte seco.
         mr.ground.groundSpeed = game.player.speed;
-        game.player.throttle = 0.05;
+        _liftoffCarry = 0;
         mr.sortie.lastTouchdownTime = game.time;
         for (let i = 0; i < 4; i++) {
           firePosition(_maydayPos, 1.2 - i * 0.8);
@@ -721,11 +758,30 @@ function _ejectAndRespawn(onGameOver) {
     onGameOver('MAYDAY — AERONAVE PERDIDA');
     return;
   }
-  game.player.hp = 3;
   game.flags.invincibility = 3.0;
   game.flags.shakeTime = 0;
-  respawnJet();
+  respawnAndRelaunch();
   audio.explosion(0.5);
+}
+
+// Recoloca o avião no aeroporto E rearma a decolagem automática. Chamado ao voltar
+// à base depois de um mayday (crash no solo OU ejeção manual). Sem isto, o avião
+// reaparecia no aeroporto mas a máquina de surtida ficava presa fora de um estado de
+// solo e o auto-taxi nunca era armado — o avião não decolava mais ("bug do avião
+// parado no aeroporto"). Aqui: respawn na zona de serviço → reset da surtida para
+// TAXI_OUT → auto-taxi na fase 'taxi_runway' (taxia até a pista e decola sozinho).
+export function respawnAndRelaunch() {
+  respawnJet();
+  const mr = game.missionRealism;
+  if (!mr?.enabled || !mr.sortie) return;
+  relaunchSortie(mr.sortie, game.time);
+  game.player.hp = 3;
+  game.player.missiles = 100;
+  game.player.heavyMissiles = 10;
+  game.player.nuclearMissiles = 3;
+  game.flags.mayday = false;
+  game.flags.maydayTimer = 0;
+  if (mr.autoTaxi) { mr.autoTaxi.active = true; mr.autoTaxi.phase = 'taxi_runway'; mr.autoTaxi.t = 0; }
 }
 
 /** Aplica dano ao HP; 3 hits por vida antes de entrar em mayday. */

@@ -114,7 +114,7 @@ test('U-AC-4: impacto na água afunda e reporta AFUNDOU NO MAR (WS-5)', async ({
   expect(overlay).toContain('AFUNDOU NO MAR');
 });
 
-test('U-AC-5: nuke percorre stages e ativa a cinematic dedicada (WS-6)', async ({ page }) => {
+test('U-AC-5: nuke percorre stages e a câmera permanece NORMAL (sem cinematic — operador 2026-07-01)', async ({ page }) => {
   await page.goto('/aero-fighters/index.html?map=desert&testMode=1');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForTimeout(600);
@@ -136,10 +136,11 @@ test('U-AC-5: nuke percorre stages e ativa a cinematic dedicada (WS-6)', async (
   expect(sawStages).toContain('fireball');
   expect(sawStages).toContain('mushroom');
   const cine = await page.evaluate(() => ({
-    engaged: window.game.missionRealism.camera.cinematic !== null,
+    engaged: window.game.missionRealism.camera.cinematic?.active === true,
     slowmo: window.game.flags.nukeSlowmo, // guarda ADR-U4: nunca em testMode/webdriver
   }));
-  expect(cine.engaged).toBe(true);
+  // Decisão do operador (2026-07-01): a detonação NÃO troca de câmera.
+  expect(cine.engaged).toBe(false);
   expect(cine.slowmo).toBe(0);
 });
 

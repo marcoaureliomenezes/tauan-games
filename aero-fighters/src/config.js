@@ -102,6 +102,8 @@ export const TARGETS = {
   convoy:   { hp: 12, score: 380, hr2: 60, dropChance: 0.4 },
   armedConvoy: { hp: 18, score: 700, hr2: 95, dropChance: 0.45 },
   helicopter: { hp: 10, score: 650, hr2: 120, dropChance: 0.35 },
+  tank:     { hp: 22, score: 550, hr2: 44, dropChance: 0.4 },   // solo lento, torre mira
+  patrolAir: { hp: 14, score: 720, hr2: 150, dropChance: 0.4 }, // dirigível de patrulha lento (ar)
   aaGun:    { hp:  6, score: 250, hr2:  9, dropChance: 0.1 },
   warship:  { hp: 35, score: 1200, hr2: 80, dropChance: 0.5 },
 };
@@ -129,6 +131,15 @@ export const SLOW_TARGETS = {
   CONVOY_SPEED: 9,
   CONVOY_RANGE: 420,
   CONVOY_INTERVAL: 1.9,
+  // Tanque de solo lento (WS-4)
+  TANK_SPEED: 6,
+  TANK_RANGE: 470,
+  TANK_INTERVAL: 2.6,
+  // Dirigível de patrulha lento no ar (WS-4)
+  PATROLAIR_SPEED: 7,
+  PATROLAIR_ALTITUDE: 95,
+  PATROLAIR_RANGE: 700,
+  PATROLAIR_INTERVAL: 3.0,
 };
 
 /** Estrutura de missões */
@@ -265,6 +276,10 @@ export const TARGET_LAYOUT_INHAUMA = [
   [-1,  840, -250, 'armedConvoy'],  // MG-238 rumo Sete Lagoas
   [-1, 1120, -330, 'factory'],
   [-1, 1310, -520, 'helicopter'],   // escolta de Sete Lagoas
+  [-1,  480, -160, 'tank'],         // tanque lento na periferia leste (WS-4)
+  [-1, -300,  120, 'tank'],         // tanque lento a oeste
+  [-1,  820, -360, 'patrolAir'],    // dirigível de patrulha sobre a serra de Sete Lagoas
+  [-1, -120,  420, 'patrolAir'],    // dirigível de patrulha sobre o reservatório
   [-1, 1020, -120, 'building'],
   [-1, -980,  620, 'base'],
   [-1, -850,  360, 'building'],

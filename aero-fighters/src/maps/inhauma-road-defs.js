@@ -20,12 +20,25 @@ const SAMPLE_STEP = 12; // m entre amostras da spline (fita + colisão contínua
 // Todos os corredores ficam em terra SECA (ao norte do rio, longe do reservatório)
 // e em rampa suave (contornam o flanco dos morros, não o pico). Verificado por
 // tests/…/inhauma-fidelity.spec.js (nada submerso, sem pico, sem exclusão do aeroporto).
+// WS-2 (terminação de estradas): NENHUMA estrada termina no ar/no nada. Toda ponta
+// aberta ENTRA NUM TÚNEL numa encosta — ou de relevo REAL (serra/morro nomeado) ou de
+// uma COLINA DE PORTAL sintética (getPortalMounds abaixo) posta na direção de saída da
+// estrada, em terra seca e longe do aeroporto/rio (verificado contra o campo de altura).
+// Anéis fechados não têm ponta. Regra: uma estrada é contínua (segue o mapa) e, no pior
+// caso, entra num túnel — jamais para como um toco de fita em terreno plano.
+//  - startcap/endcap: 'tunnel' → portal de túnel (inhauma-road-props.js) na ponta.
+//  - startMound/endMound: true → a ponta NÃO fica sobre relevo real, então uma colina de
+//    portal é gerada ali (getPortalMounds) para o túnel furar uma encosta de verdade.
 export const INHAUMA_ROAD_CORRIDORS = [
   {
     id: 'mg-238', name: 'MG-238', ref: 'MG-238', kind: 'highway', width: 15, closed: false,
-    // Espinha central→NE ao NORTE do rio: sai da borda oeste da cidade (fora do morro
-    // oeste), passa ao SUL do pico da serra de Sete Lagoas em rampa suave até a NE.
-    control: [[-90, -30], [220, -10], [560, -40], [880, -70], [1160, -180], [1320, -330]],
+    startcap: 'tunnel', // SW: sai de um túnel no flanco dos morros-oeste (relevo REAL)
+    endcap: 'tunnel',   // NE: entra num túnel no flanco da serra-leste (relevo REAL)
+    // Espinha SW→NE ao NORTE do rio: emerge de um túnel no flanco dos morros-oeste
+    // (-380,40), cruza a periferia, passa ao SUL do pico de Sete Lagoas em rampa suave e
+    // curva para o flanco da serra-leste (1300,120), onde entra noutro túnel. Ambas as
+    // pontas assentam em relevo real (h≈70 e h≈35) — sem colina sintética.
+    control: [[-285, 8], [-90, -30], [220, -10], [560, -40], [880, -70], [1160, -180], [1320, -330], [1330, -150], [1335, -70]],
   },
   {
     id: 'anel-inhauma', name: 'Anel de Inhaúma', ref: 'Anel', kind: 'regional', width: 11, closed: true,
@@ -35,13 +48,20 @@ export const INHAUMA_ROAD_CORRIDORS = [
   },
   {
     id: 'amg-0360', name: 'AMG-0360', ref: 'AMG-0360', kind: 'street', width: 8, closed: false,
+    startcap: 'tunnel', // início no flanco do morro-norte (relevo REAL) → túnel
+    endcap: 'tunnel',   // norte rural: entra num túnel de colina de portal (endMound)
+    endMound: true,     // a ponta norte (697,-1068) fica em rural plano → colina sintética
     // Estrada rural ao norte, a LESTE do morro norte (contorna, não sobe o pico).
-    control: [[120, -260], [260, -460], [420, -650], [560, -860]],
+    control: [[120, -260], [260, -460], [420, -650], [560, -860], [697, -1068]],
   },
   {
     id: 'mg-060', name: 'MG-060', ref: 'MG-060', kind: 'regional', width: 9, closed: false,
-    // Estrada oeste (rumo a Cachoeira da Prata) — a OESTE do aeroporto e a LESTE do rio.
-    control: [[-800, -320], [-760, -80], [-770, 140], [-745, 300]],
+    startcap: 'tunnel', endcap: 'tunnel', // corredor oeste — as duas pontas entram em túnel
+    startMound: true, endMound: true,     // ambas em rural plano (~21 m) → colinas de portal
+    // Corredor oeste (a OESTE do aeroporto, a LESTE do rio). A ponta sul foi RECUADA para
+    // fora do vale do reservatório (antes terminava submersa em (-780,410), h=0): agora
+    // acaba em terra seca (-795,20) e entra num túnel. A ponta norte idem.
+    control: [[-841, -567], [-800, -320], [-780, -120], [-795, 20]],
   },
 ];
 
@@ -85,6 +105,34 @@ export function sampleCorridor(control, closed) {
   return out;
 }
 
+// ── Colinas de portal de túnel (WS-2) ─────────────────────────────────────────
+// Uma estrada NÃO pode terminar no nada; onde a ponta não cai num relevo real, geramos
+// uma colina arredondada na direção de saída da estrada para o túnel furar uma encosta.
+// O centro fica a `radius` da ponta (borda interna da colina encosta na ponta), então a
+// estrada segue plana até o portal e a colina sobe logo além dele. Puro JS (Node-safe):
+// inhauma-scene.js soma estas colinas ao campo de altura (visual + colisão).
+const PORTAL_MOUND = { radius: 150, peak: 46 };
+
+/** Devolve [{x,z,radius,peak}] das colinas de portal para pontas marcadas com *Mound. */
+export function getPortalMounds() {
+  const out = [];
+  for (const c of INHAUMA_ROAD_CORRIDORS) {
+    if (c.closed) continue;
+    const pts = sampleCorridor(c.control, c.closed);
+    const n = pts.length;
+    const addMound = (atStart) => {
+      const a = atStart ? pts[0] : pts[n - 1];
+      const b = atStart ? pts[1] : pts[n - 2];
+      const dx = a.x - b.x, dz = a.z - b.z;           // b→a = direção de saída da estrada
+      const L = Math.hypot(dx, dz) || 1;
+      out.push({ x: a.x + (dx / L) * PORTAL_MOUND.radius, z: a.z + (dz / L) * PORTAL_MOUND.radius, radius: PORTAL_MOUND.radius, peak: PORTAL_MOUND.peak });
+    };
+    if (c.startMound) addMound(true);
+    if (c.endMound) addMound(false);
+  }
+  return out;
+}
+
 /** Constrói os objetos de estrada (mesma forma que o antigo getInhaumaRoads()). */
 export function buildRoadsFromDefs() {
   return INHAUMA_ROAD_CORRIDORS.map((c) => {
@@ -100,6 +148,8 @@ export function buildRoadsFromDefs() {
       width: c.width,
       lanes: LANES_BY_KIND[c.kind] ?? 2,
       closed: !!c.closed,
+      endcap: c.endcap || null,     // WS-2: 'tunnel' → portal na ponta final
+      startcap: c.startcap || null, // WS-2: 'tunnel' → portal na ponta inicial
       points,
     };
   });

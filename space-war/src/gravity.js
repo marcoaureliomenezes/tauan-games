@@ -12,27 +12,73 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { MAX_ESCAPE_SPEED } from './config.js';
 import { game } from './state.js';
 
+// Aceleração |a| = μ/r² de um corpo, com clamp de singularidade dentro do corpo.
+function _accelOf(b, dist) {
+  const r = Math.max(dist, b.def.radius * 0.85);
+  return b.mu / (r * r);
+}
+
+const _partnerPull = new THREE.Vector3();
+
 export function computeGravity(pos, out) {
   out.set(0, 0, 0);
 
-  // Corpo dominante = menor SOI que contém a nave (o mais local).
+  // 1) Corpo dominante = menor SOI que contém a nave (o mais local) — preserva a
+  //    hierarquia patched-conics (Terra governa perto da Terra, Sol no interplanetário).
   let dominant = null, domSoi = Infinity, domDist = 0;
   for (const b of game.bodies) {
     const dist = b.worldPos.distanceTo(pos);
     if (dist < b.soi && b.soi < domSoi) { dominant = b; domSoi = b.soi; domDist = dist; }
   }
 
+  // 2) FIX (bug "buraco negro sem atração"): fora de TODOS os SOIs não existe mais
+  //    zona morta de gravidade nula — o corpo de MAIOR aceleração real domina o vazio
+  //    (na prática: o Sol ou o buraco negro, que alcança através do interestelar).
   if (!dominant) {
-    return {
-      dominant: null, gravMag: 0, noReturn: false, dist: Infinity, altitude: Infinity,
-      escapeVel: 0, circVel: 0, canEscape: true, pull: out,
-    };
+    let bestA = 0;
+    for (const b of game.bodies) {
+      const dist = b.worldPos.distanceTo(pos);
+      const a = _accelOf(b, dist);
+      if (a > bestA) { bestA = a; dominant = b; domDist = dist; }
+    }
+    if (!dominant) {
+      return {
+        dominant: null, gravMag: 0, noReturn: false, dist: Infinity, altitude: Infinity,
+        escapeVel: 0, circVel: 0, canEscape: true, pull: out,
+      };
+    }
+  }
+
+  // 3) FIX binário: perto do par BH+NS os DOIS parceiros puxam (campo de um sistema
+  //    binário de verdade — nenhum domina sozinho; o "menor SOI" escolhia sempre a
+  //    estrela de nêutrons e o buraco negro nunca atraía). O dominante do HUD é o
+  //    parceiro de maior aceleração real.
+  let partner = null;
+  if (dominant.binaryPair) {
+    for (const b of game.bodies) {
+      if (b !== dominant && b.binaryPair) { partner = b; break; }
+    }
+    if (partner) {
+      const distP = partner.worldPos.distanceTo(pos);
+      if (_accelOf(partner, distP) > _accelOf(dominant, domDist)) {
+        const tmp = dominant; dominant = partner; partner = tmp;
+        domDist = distP;
+      }
+    }
   }
 
   const surf = dominant.def.radius;
   const r = Math.max(domDist, surf * 0.85);          // evita singularidade dentro do corpo
-  const a = dominant.mu / (r * r);                    // |aceleração| do corpo dominante
+  const a = _accelOf(dominant, domDist);              // |aceleração| do corpo dominante
   out.copy(dominant.worldPos).sub(pos).multiplyScalar(a / Math.max(domDist, 1e-6));
+  let gravMag = a;
+  if (partner) {
+    const distP = partner.worldPos.distanceTo(pos);
+    const aP = _accelOf(partner, distP);
+    _partnerPull.copy(partner.worldPos).sub(pos).multiplyScalar(aP / Math.max(distP, 1e-6));
+    out.add(_partnerPull);
+    gravMag = out.length();
+  }
 
   const circVel = Math.sqrt(dominant.mu / r);         // v_circular = √(μ/r) — órbita estável
   const escapeVel = circVel * Math.SQRT2;             // v_escape   = √(2μ/r)
@@ -40,7 +86,7 @@ export function computeGravity(pos, out) {
   const noReturn = !canEscape;                        // gravidade vence a nave → sem volta
 
   return {
-    dominant, gravMag: a, noReturn, dist: domDist, altitude: domDist - surf,
+    dominant, gravMag, noReturn, dist: domDist, altitude: domDist - surf,
     escapeVel, circVel, canEscape, pull: out,
   };
 }

@@ -11,7 +11,7 @@ import { TARGETS, AA, MISSION, TARGET_LAYOUT, WARSHIP, SLOW_TARGETS, COLORS } fr
 import { explosion, megaExplosion, spawnShockwave, scheduleDelayed } from './fx.js';
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { spawnBullet, spawnPickup } from './projectiles.js';
-import { getActiveHeightFn, islandHeightAt } from './world.js';
+import { getActiveHeightFn } from './world.js';
 import { airportSurface } from './landing-zones.js';
 import { INHAUMA_ROADS } from './maps/inhauma-roads.js';
 
@@ -278,6 +278,49 @@ export function makeWarship() {
   return g;
 }
 
+/** Tanque de solo lento (WS-4): casco + esteiras + torre giratória + canhão. */
+export function makeTank() {
+  const g = new THREE.Group();
+  const hullMat = new THREE.MeshLambertMaterial({ color: 0x4b5133 });
+  const turMat = new THREE.MeshLambertMaterial({ color: 0x3d4029 });
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x161613 });
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.1, 5.0), hullMat);
+  hull.position.y = 1.0; g.add(hull);
+  for (const x of [-1.7, 1.7]) {
+    const track = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 5.4), darkMat);
+    track.position.set(x, 0.55, 0); g.add(track);
+  }
+  const turret = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 0.9, 8), turMat);
+  turret.position.set(0, 1.9, 0.2);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 3.4, 8), darkMat);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.1, -2.0); turret.add(barrel);
+  g.add(turret);
+  g.userData.turret = turret;
+  g.scale.setScalar(1.5);
+  return g;
+}
+
+/** Dirigível de patrulha lento (WS-4): envelope charuto + gôndola + barbatanas. */
+export function makePatrolAir() {
+  const g = new THREE.Group();
+  const envMat = new THREE.MeshLambertMaterial({ color: 0x9a9f88 });
+  const gondMat = new THREE.MeshLambertMaterial({ color: 0x3a3f36 });
+  const finMat = new THREE.MeshLambertMaterial({ color: 0x6a5040 });
+  const env = new THREE.Mesh(new THREE.SphereGeometry(4.5, 16, 10), envMat);
+  env.scale.set(1, 1, 2.6); g.add(env);
+  const gondola = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 4.0), gondMat);
+  gondola.position.set(0, -4.3, 0); g.add(gondola);
+  for (let i = 0; i < 4; i++) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.4, 2.0), finMat);
+    fin.position.set(0, 0, 10.6);
+    fin.rotation.z = (i * Math.PI) / 2;
+    g.add(fin);
+  }
+  g.scale.setScalar(1.4);
+  return g;
+}
+
 const MAKERS = {
   base: makeBase,
   factory: makeFactory,
@@ -285,6 +328,8 @@ const MAKERS = {
   convoy: makeConvoy,
   armedConvoy: makeArmedConvoy,
   helicopter: makeHelicopter,
+  tank: makeTank,
+  patrolAir: makePatrolAir,
   aaGun: makeAAGun,
   warship: makeWarship,
 };
@@ -338,12 +383,12 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
     // Coordenada absoluta no oceano / chão do mapa
     worldX = dx;
     worldZ = dz;
-    const hFn = (heightFn) ? heightFn : islandHeightAt;
+    const hFn = (heightFn) ? heightFn : getActiveHeightFn();
     yGround = type === 'warship' ? 0.6 : groundHeightAtAbsolute(worldX, worldZ, hFn);
   } else {
     const isl = game.islands[islandIdx];
     if (!isl) return null;
-    const hFn = (heightFn) ? heightFn : islandHeightAt;
+    const hFn = (heightFn) ? heightFn : getActiveHeightFn();
     yGround = hFn(isl, dx, dz);
     worldX = isl.cx + dx;
     worldZ = isl.cz + dz;
@@ -353,7 +398,8 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
   if (airportSurface({ x: worldX, z: worldZ }, game.activeMap) !== 'none') return null;
 
   const mesh = maker();
-  const airborneAltitude = type === 'helicopter' ? SLOW_TARGETS.HELI_ALTITUDE : 0;
+  const airborneAltitude = type === 'helicopter' ? SLOW_TARGETS.HELI_ALTITUDE
+    : (type === 'patrolAir' ? SLOW_TARGETS.PATROLAIR_ALTITUDE : 0);
   mesh.position.set(worldX, yGround + airborneAltitude, worldZ);
   mesh.rotation.y = game.rng.range(0, Math.PI * 2);
   // Alvos projetam e recebem sombra
@@ -385,6 +431,10 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
     path = pathNear(worldX, worldZ, 12);
   } else if (type === 'helicopter') {
     path = pathNear(worldX, worldZ, 180);
+  } else if (type === 'tank') {
+    path = pathNear(worldX, worldZ, 24);
+  } else if (type === 'patrolAir') {
+    path = pathNear(worldX, worldZ, 280);
   }
 
   const t = {
@@ -397,10 +447,14 @@ export function spawnTarget(islandIdx, dx, dz, type, heightFn) {
     fireInterval: type === 'warship' ? WARSHIP.INTERVAL :
       (type === 'helicopter' ? SLOW_TARGETS.HELI_INTERVAL :
       (type === 'armedConvoy' ? SLOW_TARGETS.CONVOY_INTERVAL :
-      (type === 'aaGun' ? AA.BASE_INTERVAL - aaSpeedup : Infinity))),
+      (type === 'tank' ? SLOW_TARGETS.TANK_INTERVAL :
+      (type === 'patrolAir' ? SLOW_TARGETS.PATROLAIR_INTERVAL :
+      (type === 'aaGun' ? AA.BASE_INTERVAL - aaSpeedup : Infinity))))),
     range: type === 'warship' ? WARSHIP.RANGE :
       (type === 'helicopter' ? SLOW_TARGETS.HELI_RANGE :
-      (type === 'armedConvoy' ? SLOW_TARGETS.CONVOY_RANGE : AA.RANGE)),
+      (type === 'armedConvoy' ? SLOW_TARGETS.CONVOY_RANGE :
+      (type === 'tank' ? SLOW_TARGETS.TANK_RANGE :
+      (type === 'patrolAir' ? SLOW_TARGETS.PATROLAIR_RANGE : AA.RANGE)))),
     path,
     pathIdx: 0,
     airborneAltitude,
@@ -430,7 +484,7 @@ export function killTarget(t) {
   }
   if (t.type === 'base' || t.type === 'factory') {
     megaExplosion(t.mesh.position, 'target');
-  } else if (t.type === 'building' || t.type === 'convoy' || t.type === 'armedConvoy' || t.type === 'helicopter') {
+  } else if (t.type === 'building' || t.type === 'convoy' || t.type === 'armedConvoy' || t.type === 'helicopter' || t.type === 'tank' || t.type === 'patrolAir') {
     explosion(t.mesh.position, 2.0);
     spawnShockwave(t.mesh.position, 22);
     audio.explosion(1.0, t.mesh.position);
@@ -465,6 +519,8 @@ export function updateTargets(dt, jetPos) {
     if (t.type === 'warship') updateWarship(t, dt, jetPos);
     if (t.type === 'armedConvoy') updateArmedConvoy(t, dt, jetPos);
     if (t.type === 'helicopter') updateHelicopter(t, dt, jetPos);
+    if (t.type === 'tank') updateTank(t, dt, jetPos);
+    if (t.type === 'patrolAir') updatePatrolAir(t, dt, jetPos);
   }
 }
 
@@ -536,6 +592,22 @@ function updateHelicopter(t, dt, jetPos) {
   if (t.mesh.userData.rotor) t.mesh.userData.rotor.rotation.y += dt * 26;
   if (t.mesh.userData.tailRotor) t.mesh.userData.tailRotor.rotation.x += dt * 34;
   slowTargetFire(t, dt, jetPos, 1.5, false);
+}
+
+// Tanque de solo lento (WS-4): dirige na estrada/patrulha, torre mira o player, atira.
+function updateTank(t, dt, jetPos) {
+  updatePathTarget(t, dt, SLOW_TARGETS.TANK_SPEED, 0);
+  if (t.mesh.userData.turret) {
+    const dx = jetPos.x - t.mesh.position.x, dz = jetPos.z - t.mesh.position.z;
+    t.mesh.userData.turret.rotation.y = Math.atan2(dx, dz) - t.mesh.rotation.y;
+  }
+  slowTargetFire(t, dt, jetPos, 2.0, true);
+}
+
+// Dirigível de patrulha lento (WS-4): flutua alto ao longo do path, atira devagar.
+function updatePatrolAir(t, dt, jetPos) {
+  updatePathTarget(t, dt, SLOW_TARGETS.PATROLAIR_SPEED, SLOW_TARGETS.PATROLAIR_ALTITUDE);
+  slowTargetFire(t, dt, jetPos, 0, false);
 }
 
 const _wsDir = new THREE.Vector2();

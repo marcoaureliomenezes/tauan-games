@@ -156,10 +156,57 @@ function addRouteLabelSigns(group, heightAt) {
   }
 }
 
+// WS-2: portal de túnel na ponta de uma estrada marcada com endcap/startcap:'tunnel'.
+// A ponta assenta numa encosta REAL (serra/morro) ou numa colina de portal sintética
+// (getPortalMounds), então o túnel fura relevo de verdade — nenhuma estrada para no ar.
+// A garganta escura recua SEMPRE para DENTRO da encosta (sentido "para fora" da estrada),
+// coerente tanto na ponta inicial quanto na final.
+function buildTunnelPortals(group, roads, heightAt, material) {
+  const concrete = material(0xb9b9b3);
+  const dark = new THREE.MeshBasicMaterial({ color: 0x07070a });
+  for (const road of roads) {
+    const pts = road.points;
+    const total = routeLength(pts);
+    const ends = [];
+    // p.ang aponta no SENTIDO DE TRÁFEGO; "para fora" (para dentro da encosta) é o oposto
+    // no início e o próprio sentido no fim.
+    if (road.startcap === 'tunnel') {
+      const p = samplePolyline(pts, 1, total);
+      ends.push({ x: p.x, z: p.z, ox: -Math.sin(p.ang), oz: -Math.cos(p.ang), w: road.width });
+    }
+    if (road.endcap === 'tunnel') {
+      const p = samplePolyline(pts, Math.max(1, total - 1), total);
+      ends.push({ x: p.x, z: p.z, ox: Math.sin(p.ang), oz: Math.cos(p.ang), w: road.width });
+    }
+    for (const e of ends) {
+      const halfW = e.w * 0.5 + 2.5;
+      const pillarH = 9, pillarW = 2.6, lintelH = 2.4;
+      const ang = Math.atan2(e.ox, e.oz); // +Z local = "para fora" = para dentro da encosta
+      const portal = new THREE.Group();
+      portal.position.set(e.x, heightAt(e.x, e.z), e.z);
+      portal.rotation.y = ang;
+      for (const side of [-1, 1]) {
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(pillarW, pillarH, 3.0), concrete);
+        pillar.position.set(side * halfW, pillarH * 0.5, 0);
+        portal.add(pillar);
+      }
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2 + pillarW, lintelH, 3.2), concrete);
+      lintel.position.set(0, pillarH + lintelH * 0.5, 0);
+      portal.add(lintel);
+      // Garganta escura funda recuando para DENTRO da encosta (+Z local) — boca de túnel.
+      const throat = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2 - 0.5, pillarH, 20.0), dark);
+      throat.position.set(0, pillarH * 0.5, 10.5);
+      portal.add(throat);
+      group.add(portal);
+    }
+  }
+}
+
 export function addRoadDetailProps(group, roads, heightAt, material) {
   group.add(buildDashInstances(roads, heightAt, material(0xf4e7a0)));
   group.add(buildEdgeMarkers(roads, heightAt, material(0xe8e7d6)));
   group.add(buildRoadsidePosts(roads, heightAt, material(0xd8d4bd)));
   addRoadSigns(group, roads, heightAt);
   addRouteLabelSigns(group, heightAt);
+  buildTunnelPortals(group, roads, heightAt, material);
 }

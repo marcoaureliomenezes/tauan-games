@@ -16,6 +16,7 @@ import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
 import { buildNav, initNavHUD, drawNav, cycleTarget } from './nav.js';
+import { initPostFx, renderFrame } from './postfx.js';
 
 // --- Construir o mundo ---
 const skybox = createSkybox();
@@ -30,6 +31,7 @@ installListeners();
 initMap();
 buildNav();
 initNavHUD();
+initPostFx(renderer, scene, camera);
 
 // Enquadra a Terra como pano de fundo do menu (offset proporcional ao raio).
 const earthForMenu = game.bodies.find((b) => b.def.key === 'earth');
@@ -42,7 +44,8 @@ game.phase = 'menu';
 showOverlay(`<div style="color:#7df;font-size:34px;letter-spacing:6px">SPACE WAR</div>
   <div class="sub">Decole da Terra · Cruze o Sistema Solar · Liberte os planetas<br><br>
   <b style="color:#9fe">NAVEGAÇÃO:</b> <b>T</b> escolhe o destino · <b>C</b> aponta a nave nele · <b>W</b> acelera até lá<br>
-  (a seta/mira na tela sempre mostra para onde ir)<br><br>
+  <b>N</b> = AUTO-APROXIMAÇÃO: voa sozinho até o alvo e chega devagar (a mira mostra distância,
+  velocidade de aproximação e ETA)<br><br>
   <b>W/S</b> empuxo · <b>Shift</b> turbo · <b>X</b> freio · <b>setas</b> guinada/arfagem · <b>A/D</b> rolagem<br>
   <b>Mouse</b> (clique p/ travar) pilota · <b>Espaço</b> laser · <b>F</b> nuke · <b>M</b> mapa · <b>P</b> pausa<br>
   <i style="color:#7a9">Gravidade real de N-corpos: TODO corpo te puxa. O HUD mostra o PUXÃO e se você
@@ -63,6 +66,11 @@ onAction('map', () => { if (game.phase === 'flight' || game.mapOpen) toggleMap()
 onAction('target', () => { if (game.phase === 'flight') cycleTarget(1); });
 onAction('targetPrev', () => { if (game.phase === 'flight') cycleTarget(-1); });
 onAction('align', () => { if (game.phase === 'flight') game.ship.aligning = true; });
+onAction('approach', () => {
+  if (game.phase !== 'flight') return;
+  game.ship.approach = !game.ship.approach;
+  showToast(game.ship.approach ? '⏵ AUTO-APROXIMAÇÃO: voando até o alvo (qualquer manche cancela)' : 'auto-aproximação off', 1800);
+});
 onAction('assist', () => {
   if (game.phase !== 'flight') return;
   game.ship.flightAssist = !game.ship.flightAssist;
@@ -107,7 +115,7 @@ function loop() {
   updateHUD();
   drawNav();
   drawMap();
-  renderer.render(scene, camera);
+  renderFrame();
 
   // fps
   acc += dt; frames++;

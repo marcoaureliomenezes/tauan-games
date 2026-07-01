@@ -110,11 +110,24 @@ export function drawNav() {
   const onScreen = front && _v.x >= -1 && _v.x <= 1 && _v.y >= -1 && _v.y <= 1;
   const color = t.isMission ? '#66ff88' : '#66ddff';
 
+  // Velocidade de APROXIMAÇÃO (componente da velocidade na direção do alvo) + ETA —
+  // é isto que torna a navegação legível: estou chegando ou me afastando, e em quanto tempo.
+  let approachTxt = '';
+  if (game.ship.vel) {
+    _to.copy(pos).sub(game.ship.pos).normalize();
+    const closing = game.ship.vel.dot(_to);            // >0 = aproximando
+    const eta = closing > 1 ? dist / closing : Infinity;
+    const arrow = closing > 0.5 ? '▶' : closing < -0.5 ? '◀' : '·';
+    approachTxt = `  ${arrow}${fmtDist(Math.abs(closing))}/s${Number.isFinite(eta) && eta < 3600 ? `  ETA ${fmtEta(eta)}` : ''}`;
+  }
+  const auto = game.nav.approach ? '⏵AUTO  ' : '';
+  const text = `${auto}${t.name}  ${fmtDist(dist)}${approachTxt}`;
+
   if (onScreen) {
     // mira (brackets) + ponto + rótulo
     bracket(ctx, sx, sy, 26, color);
     ctx.fillStyle = color; ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill();
-    label(ctx, `${t.name}  ${fmtDist(dist)}`, sx, sy - 38, color);
+    label(ctx, text, sx, sy - 38, color);
   } else {
     // seta no bordo apontando para o alvo + linha-guia do centro
     if (!front) { sx = W - sx; sy = H - sy; }
@@ -126,9 +139,10 @@ export function drawNav() {
     ctx.strokeStyle = 'rgba(120,200,255,0.18)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(W / 2, H / 2); ctx.lineTo(ex, ey); ctx.stroke();
     arrow(ctx, ex, ey, ang, color);
-    label(ctx, `${t.name}  ${fmtDist(dist)}`, ex - Math.cos(ang) * 40, ey - Math.sin(ang) * 40, color);
+    label(ctx, text, ex - Math.cos(ang) * 40, ey - Math.sin(ang) * 40, color);
   }
 }
+function fmtEta(s) { return s >= 60 ? `${(s / 60) | 0}m${(s % 60) | 0}s` : `${s | 0}s`; }
 
 function bracket(ctx, x, y, s, color) {
   ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineCap = 'round';

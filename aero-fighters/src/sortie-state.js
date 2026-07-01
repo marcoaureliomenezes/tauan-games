@@ -81,6 +81,21 @@ export function isAirborneState(state) {
   return state === SortieState.AIRBORNE || state === SortieState.MISSION_ACTIVE || state === SortieState.RETURN_TO_BASE || state === SortieState.MAYDAY;
 }
 
+// Respawn pós-mayday: a máquina de surtida fica presa em MAYDAY/EJECTION quando o
+// avião volta ao aeroporto (nem transitionSortie nem respawnJet a resetavam), então
+// a decolagem automática nunca reiniciava e o avião ficava travado. relaunchSortie
+// devolve a máquina a um estado de solo LIMPO (TAXI_OUT), do qual o auto-taxi retoma
+// o táxi→decolagem. Sai de QUALQUER estado (é um reset incondicional de recuperação).
+export function relaunchSortie(machine, at = 0) {
+  const from = machine.state;
+  machine.state = SortieState.TAXI_OUT;
+  machine.liftoffVsp = 0;
+  machine._autoSpeedFlagged = false;
+  machine.history.push({ from, event: 'RELAUNCH', to: SortieState.TAXI_OUT, at });
+  if (machine.history.length > 32) machine.history.shift();
+  return machine.state;
+}
+
 export const GROUND_STATES = new Set([
   SortieState.TAXI_OUT,
   SortieState.TAKEOFF_ROLL,

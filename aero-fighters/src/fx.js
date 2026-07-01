@@ -172,31 +172,8 @@ export function nuclearExplosion(pos) {
   });
 
   // t=150–600ms: stem (coluna subindo) — 4 lotes escalonados de 30 partículas cada
-  for (let batch = 0; batch < 4; batch++) {
-    scheduleDelayed(0.15 + batch * 0.15, () => {
-      const start = batch * 30;
-      for (let i = start; i < start + 30; i++) {
-        const p = nucStemPool[i];
-        if (!p || p.life > 0) continue;
-        const angle = Math.random() * Math.PI * 2;
-        const r = Math.random() * 18;
-        p.mesh.position.set(
-          pos.x + Math.cos(angle) * r,
-          pos.y + Math.random() * 40,
-          pos.z + Math.sin(angle) * r,
-        );
-        p.mesh.scale.setScalar(1.2 + Math.random() * 3.0);
-        p.mesh.material.opacity = 0.85;
-        p.vel.set(
-          (Math.random() - 0.5) * 4,
-          25 + Math.random() * 45,
-          (Math.random() - 0.5) * 4,
-        );
-        p.life = 4.0 + Math.random() * 3.0;
-        p.mesh.visible = true;
-      }
-    });
-  }
+  // WS-5: o talo (stem) e o cogumelo PERSISTENTES são desenhados pela pluma MESH em
+  // nuclear-fx.js (dura ~60 s), não mais por partículas aqui — evita cogumelo duplicado.
 
   // t=300ms: anel de shockwave médio + explosão laranja secundária
   scheduleDelayed(0.3, () => {
@@ -204,24 +181,21 @@ export function nuclearExplosion(pos) {
     spawnShockwave(pos, 480, 0xffeeaa);
   });
 
-  // Mushroom cap — 3 bandas escalonadas: núcleo → anel principal → bigorna externa
-  const capPos = new THREE.Vector3(pos.x, pos.y + 220, pos.z);
-  scheduleDelayed(0.50, () => spawnMushroomCap(capPos, 0)); // inner core
-  scheduleDelayed(0.80, () => spawnMushroomCap(capPos, 1)); // main ring
-  scheduleDelayed(1.20, () => spawnMushroomCap(capPos, 2)); // outer anvil
+  // WS-5: o mushroom cap persistente é a pluma MESH (nuclear-fx.js), não partículas.
 
   // t=700ms: anel externo final
   scheduleDelayed(0.7, () => {
     spawnShockwave(pos, 700, 0xddccaa);  // era 350
   });
 
-  // t=800ms–7s: 18 explosões chained espalhadas (era 10 em 4s)
-  for (let i = 0; i < 18; i++) {
-    const delay = 0.8 + (i / 18) * 6.2 + Math.random() * 0.5;
+  // t=800ms–3s: poucas explosões secundárias PERTO do epicentro — o espetáculo
+  // é o cogumelo subindo, não pipoco aleatório espalhado (aceite do operador).
+  for (let i = 0; i < 7; i++) {
+    const delay = 0.8 + (i / 7) * 2.0 + Math.random() * 0.3;
     scheduleDelayed(delay, () => {
-      const ox = (Math.random() - 0.5) * 400;
-      const oz = (Math.random() - 0.5) * 400;
-      const sc = 4 + Math.random() * 8;
+      const ox = (Math.random() - 0.5) * 220;
+      const oz = (Math.random() - 0.5) * 220;
+      const sc = 3 + Math.random() * 6;
       explosion(new THREE.Vector3(pos.x + ox, Math.max(pos.y, 0), pos.z + oz), sc, COLORS.fireOrange);
     });
   }

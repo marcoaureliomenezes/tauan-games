@@ -5,7 +5,7 @@ import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR, PLAYER } from '../../
 import { evaluateLandingEnvelope, evaluateTakeoffEnvelope, airportHeightAt } from '../../../aero-fighters/src/landing-zones.js';
 import { createGroundPhysicsState, updateGroundRoll } from '../../../aero-fighters/src/ground-physics.js';
 import { createServiceState, startService, updateService } from '../../../aero-fighters/src/service-scene.js';
-import { createSortieMachine, SortieEvent, SortieState, GROUND_STATES, transitionSortie } from '../../../aero-fighters/src/sortie-state.js';
+import { createSortieMachine, SortieEvent, SortieState, GROUND_STATES, transitionSortie, relaunchSortie } from '../../../aero-fighters/src/sortie-state.js';
 import { createEjectionState, requestEjection, updateEjection } from '../../../aero-fighters/src/ejection.js';
 
 test('sortie state machine covers takeoff to return-to-base to service', () => {
@@ -17,6 +17,36 @@ test('sortie state machine covers takeoff to return-to-base to service', () => {
   assert.equal(transitionSortie(m, SortieEvent.TOUCHDOWN_SAFE, {}, 4), SortieState.LANDING_ROLL);
   assert.equal(transitionSortie(m, SortieEvent.SERVICE_ZONE_REACHED, {}, 5), SortieState.TAXI_IN);
   assert.equal(transitionSortie(m, SortieEvent.SERVICE_ZONE_REACHED, {}, 6), SortieState.SERVICE_SCENE);
+});
+
+test('mayday respawn relaunches to a takeoff-capable ground state', () => {
+  // Regressão do "avião parado no aeroporto": ao ser destruído e voltar à base, a
+  // máquina de surtida DEVE sair de MAYDAY para um estado de solo do qual a
+  // decolagem automática (taxi_runway → takeoff) realcança AIRBORNE.
+  const m = createSortieMachine();
+  transitionSortie(m, SortieEvent.START, {}, 0);           // TAXI_OUT
+  transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 1);  // TAKEOFF_ROLL
+  transitionSortie(m, SortieEvent.LIFTOFF, {}, 2);         // AIRBORNE
+  transitionSortie(m, SortieEvent.CRITICAL_DAMAGE, {}, 3); // MAYDAY
+  assert.equal(m.state, SortieState.MAYDAY);
+  relaunchSortie(m, 4);
+  assert.equal(m.state, SortieState.TAXI_OUT);
+  assert.ok(GROUND_STATES.has(m.state), 'após relaunch o avião está taxiável no solo');
+  assert.equal(transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 5), SortieState.TAKEOFF_ROLL);
+  assert.equal(transitionSortie(m, SortieEvent.LIFTOFF, {}, 6), SortieState.AIRBORNE);
+});
+
+test('relaunchSortie also recovers from a stuck EJECTION/NEXT_SORTIE_READY chain', () => {
+  const m = createSortieMachine();
+  transitionSortie(m, SortieEvent.START, {}, 0);
+  transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 1);
+  transitionSortie(m, SortieEvent.LIFTOFF, {}, 2);
+  transitionSortie(m, SortieEvent.CRITICAL_DAMAGE, {}, 3);  // MAYDAY
+  transitionSortie(m, SortieEvent.EJECT_REQUESTED, {}, 4);  // EJECTION
+  transitionSortie(m, SortieEvent.PILOT_LANDED, {}, 5);     // NEXT_SORTIE_READY (antes: preso no ar)
+  relaunchSortie(m, 6);
+  assert.equal(m.state, SortieState.TAXI_OUT);
+  assert.equal(transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 7), SortieState.TAKEOFF_ROLL);
 });
 
 test('takeoff and landing envelopes enforce runway constraints', () => {

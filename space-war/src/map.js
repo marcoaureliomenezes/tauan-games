@@ -21,6 +21,12 @@ export function toggleMap() {
   if (canvas) canvas.style.display = game.mapOpen ? 'block' : 'none';
 }
 
+// Projeção RADIAL-LOG centrada no Sol: o sistema interno E o sistema binário
+// (a ~820k) cabem no mesmo mapa; órbitas circulares continuam círculos.
+const LOG_R0 = 6000;      // u — raio de referência (até aqui o mapa é ~linear)
+const MAX_R = 940000;     // u — alcance do mapa (binário + margem)
+function projRadius(r, k) { return k * Math.log10(1 + r / LOG_R0); }
+
 export function drawMap() {
   if (!game.mapOpen || !ctx) return;
   const W = canvas.width, H = canvas.height;
@@ -29,34 +35,71 @@ export function drawMap() {
   ctx.fillRect(0, 0, W, H);
 
   const cx = W / 2, cy = H / 2;
-  // Escala: Netuno (~320000) cabe na tela.
-  const maxR = 340000;
-  const scale = (Math.min(W, H) * 0.46) / maxR;
+  const k = (Math.min(W, H) * 0.46) / Math.log10(1 + MAX_R / LOG_R0);
+  const project = (x, z) => {
+    const r = Math.hypot(x, z);
+    if (r < 1e-6) return [cx, cy];
+    const pr = projRadius(r, k);
+    return [cx + (x / r) * pr, cy + (z / r) * pr];
+  };
 
   ctx.font = '12px monospace'; ctx.textAlign = 'center';
-  ctx.fillStyle = '#7df'; ctx.fillText('MAPA DO SISTEMA SOLAR  —  [M] fecha', cx, 28);
+  ctx.fillStyle = '#7df'; ctx.fillText('MAPA — SISTEMA SOLAR + SISTEMA BINÁRIO (escala log)  —  [M] fecha', cx, 28);
+
+  // Anéis de distância (escala log legível)
+  for (const r of [50000, 200000, 820000]) {
+    ctx.strokeStyle = 'rgba(90,110,150,0.14)';
+    ctx.beginPath(); ctx.arc(cx, cy, projRadius(r, k), 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(120,140,180,0.5)';
+    ctx.fillText(`${(r / 1000) | 0}k`, cx + projRadius(r, k) * 0.7071, cy - projRadius(r, k) * 0.7071 - 4);
+  }
 
   // Sol
   ctx.fillStyle = '#ffd24d';
   ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill();
 
   for (const b of game.bodies) {
-    if (b.isSun || b.isMoon || b.system === 'binary') continue;
-    // órbita
-    ctx.strokeStyle = 'rgba(120,150,200,0.25)';
-    ctx.beginPath(); ctx.arc(cx, cy, b.orbit * scale, 0, Math.PI * 2); ctx.stroke();
-    // planeta
-    const px = cx + b.worldPos.x * scale;
-    const py = cy + b.worldPos.z * scale;
+    if (b.isSun || b.isMoon) continue;
+    const [px, py] = project(b.worldPos.x, b.worldPos.z);
+    if (b.binaryPair) {
+      // Buraco negro / estrela de nêutrons — ícones dedicados
+      if (b.def.kind === 'blackhole') {
+        ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = '#cfe4ff';
+        ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(160,200,255,0.55)';
+        ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.fillStyle = '#b18cff'; ctx.fillText(b.def.name, px, py - 12);
+      continue;
+    }
+    // órbita (círculo em torno do centro do sistema do corpo)
+    if (b.orbit && b.system !== 'binary') {
+      ctx.strokeStyle = 'rgba(120,150,200,0.25)';
+      ctx.beginPath(); ctx.arc(cx, cy, projRadius(b.orbit, k), 0, Math.PI * 2); ctx.stroke();
+    }
+    const dotR = b.system === 'binary' ? 2.5 : Math.max(2.5, Math.min(9, projRadius(b.def.radius * 3, k) * 0.05 + 2.5));
     ctx.fillStyle = colorHex(b.def.color);
-    ctx.beginPath(); ctx.arc(px, py, Math.max(2.5, Math.min(11, b.def.radius * scale * 3)), 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#9ab'; ctx.fillText(b.def.name, px, py - 10);
   }
 
-  // Nave
+  // Nave + linha até o alvo de navegação
   const s = game.ship;
   if (s.pos) {
-    const sx = cx + s.pos.x * scale, sy = cy + s.pos.z * scale;
+    const [sx, sy] = project(s.pos.x, s.pos.z);
+    const t = game.nav?.target;
+    if (t && t.pos) {
+      const [tx, ty] = project(t.pos.x, t.pos.z);
+      ctx.setLineDash([6, 6]);
+      ctx.strokeStyle = 'rgba(102,221,255,0.5)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.setLineDash([]);
+    }
     ctx.fillStyle = '#66ffcc';
     ctx.beginPath();
     ctx.moveTo(sx, sy - 7); ctx.lineTo(sx - 5, sy + 5); ctx.lineTo(sx + 5, sy + 5); ctx.closePath(); ctx.fill();

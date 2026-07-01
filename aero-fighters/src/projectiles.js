@@ -12,7 +12,8 @@ import { game } from './state.js';
 import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, COLORS } from './config.js';
 import { explosion, spawnMissileSmoke, nuclearExplosion, spawnScorchMark, scheduleDelayed as fxDelay } from './fx.js';
 import { spawnNuclearFx } from './nuclear-fx.js';
-import { startCinematicCamera } from './camera-modes.js';
+import { spawnPropFire } from './prop-fire.js';
+import { inhaumaTrees, getInhaumaStructures } from './maps/inhauma-scene.js';
 import { damageTarget } from './targets.js';
 import { deformTerrainNuclear, surfaceInfoAt } from './world.js';
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
@@ -336,6 +337,33 @@ function applyNuclearShockwave(epicenter) {
   deformTerrainNuclear(epicenter, MISSILES_NUCLEAR.BLAST_RADIUS);
 }
 
+// WS-5: incendiar árvores e casas dentro do raio da nuke (só o mapa inhauma tem esse
+// cenário rico). Cap rígido de focos + amostragem probabilística longe do epicentro para
+// proteger FPS; spawnPropFire já ignora headless/testMode.
+const NUKE_IGNITE_CAP = 42;
+function igniteNearbyProps(ep) {
+  if (game.activeMap !== 'inhauma') return;
+  const R = MISSILES_NUCLEAR.BLAST_RADIUS;
+  const R2 = R * R, near2 = R2 * 0.25;
+  let lit = 0;
+  for (const tr of inhaumaTrees) {
+    if (lit >= NUKE_IGNITE_CAP) break;
+    const dx = tr.x - ep.x, dz = tr.z - ep.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > R2) continue;
+    if (d2 > near2 && Math.random() > 0.35) continue; // longe: amostra
+    spawnPropFire(tr.x, tr.y + 3, tr.z, 1.0, 24);
+    lit++;
+  }
+  for (const s of getInhaumaStructures()) {
+    if (lit >= NUKE_IGNITE_CAP) break;
+    const dx = s.x - ep.x, dz = s.z - ep.z;
+    if (dx * dx + dz * dz > R2) continue;
+    spawnPropFire(s.x, (s.topY || 6) * 0.6, s.z, 1.8, 34);
+    lit++;
+  }
+}
+
 /** Atualiza mísseis nucleares: homing + impacto + explosão. */
 export function updateNuclears(dt) {
   for (let i = nukes.length - 1; i >= 0; i--) {
@@ -380,11 +408,12 @@ export function updateNuclears(dt) {
       const ep = n.mesh.position.clone();
       nuclearExplosion(ep.clone());
       spawnNuclearFx(ep.clone());
-      if (game.missionRealism?.camera) {
-        const _jetPos = new THREE.Vector3(game.player.x, game.player.y, game.player.pz || 0);
-        startCinematicCamera(game.missionRealism.camera, ep, _jetPos, game.runtime?.testMode ? 1.4 : 5.5);
-      }
+      // Decisão do operador (2026-07-01): SEM câmera cinematográfica na detonação —
+      // o jogador assiste ao cogumelo da câmera normal (shake + flash mantidos).
       applyNuclearShockwave(ep.clone());
+
+      // WS-5: árvores e casas próximas ao epicentro pegam fogo (cap + guarda headless).
+      igniteNearbyProps(ep);
 
       // ADR-U4: slow-mo global 0.35× por 1.5 s — nunca em testMode/webdriver
       const _headless = typeof navigator !== 'undefined' && navigator.webdriver === true;
