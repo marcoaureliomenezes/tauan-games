@@ -150,6 +150,31 @@ ETA na mira, mapa log-radial incluindo o sistema binário + linha até o alvo.
 gravMag≈2.8e7 u/s², noReturn=true perto do horizonte); screenshots
 `.dadaia/tmp/claude/20260701/sw-*.png`; aceite visual final = operador no preview.
 
+### [x] T-WR-11 — Space-war: UNIVERSO DE 5 SISTEMAS + física orbital honesta (operador 2026-07-01)
+
+**Owner:** `game-developer`
+
+5 sistemas: Solar (trilhos) · BETELGEUSE (supergigante shader com células de convecção
+GIGANTES, limbo assimétrico ALMA, envelope de poeira, companheira real Siwarha 2025,
+3 planetas carbonizados) · BINÁRIO BN+pulsar (separação 140k, período do par DERIVADO
+da física T=2π√(a³/μ), remanescente de supernova filamentar — a origem do BN) ·
+CAÓTICO (2 estrelas diferentes + 5 planetas, N-corpos REAL) · NÚCLEO DA GALÁXIA
+(SMBH Sagitário A✦ + 12 estrelas S + 3 errantes, N-corpos velocity-Verlet com
+softening de Plummer e substeps fixos, reinjeção de ejetados). FÍSICA: fix do coast
+(assist com throttle 0 FREAVA — órbita era impossível), aceleração de FRAME do corpo
+dominante (patched-conics honesto: órbita da Terra fecha e=0.01, órbita do BURACO
+NEGRO fecha e=0.25 em coast puro — provas numéricas live), campo somado nos sistemas
+caóticos, decomposição tangencial/radial no frame co-móvel. NAVEGAÇÃO: assistente de
+órbita [O] (circulariza em torno de QUALQUER corpo), câmera de observação [V]
+(OrbitControls r165 vendorado), MOTOR INTERESTELAR por gravidade-fraca (Terra→binário
+596k em 101 s passivo), estrelas gerais via shader único (Sol granulação fina),
+tesselação alta (limbo contínuo na aproximação — arco→plano na colisão), mapa
+galáctico com os 5 sistemas, alvos por sistema. Fix: mapa crashava no SMBH sem cor.
+
+**Verify:** provas numéricas (órbita Terra 60 s drift 2.5%; órbita BN 50 s coast
+e=0.25 bound; viagem 101 s; overdrive 1.00), console limpo, screenshots
+`.dadaia/tmp/claude/20260701/v2-*.png`; aceite visual/jogável = operador.
+
 ### [ ] T-WR-06 — QA/fechamento
 
 **Owner:** `qa-engineer` + `code-reviewer`

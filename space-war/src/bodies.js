@@ -3,20 +3,130 @@
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { Lensflare, LensflareElement } from '../../vendor/jsm/objects/Lensflare.js';
-import { SUN, PLANETS, BINARY, defaultGravReach } from './config.js';
+import { SUN, PLANETS, BINARY, BETELGEUSE, CHAOTIC, CORE, SYSTEMS, EARTH_YEAR, defaultGravReach } from './config.js';
 import { scene, camera } from './scene.js';
 import { game } from './state.js';
 
 const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
 
+// ── GLSL compartilhado: value-noise 3D + FBM (estrelas, disco, remanescente) ──
+const GLSL_NOISE = /* glsl */ `
+  float hash3(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453123); }
+  float vnoise3(vec3 p){
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float n000=hash3(i), n100=hash3(i+vec3(1,0,0)), n010=hash3(i+vec3(0,1,0)), n110=hash3(i+vec3(1,1,0));
+    float n001=hash3(i+vec3(0,0,1)), n101=hash3(i+vec3(1,0,1)), n011=hash3(i+vec3(0,1,1)), n111=hash3(i+vec3(1,1,1));
+    return mix(mix(mix(n000,n100,f.x), mix(n010,n110,f.x), f.y),
+               mix(mix(n001,n101,f.x), mix(n011,n111,f.x), f.y), f.z);
+  }
+  float fbm3(vec3 p){
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++) { v += a * vnoise3(p); p *= 2.07; a *= 0.5; }
+    return v;
+  }
+`;
+
+// ── Shader genérico de ESTRELA: convecção FBM com domain-warp, rampa de cor e
+// limb darkening forte (borda escurece e "esfria"). uCell controla o tamanho das
+// células: Sol ~26 (granulação fina) vs Betelgeuse ~1.8 (2-4 células GIGANTES).
+// uLump desloca vértices em baixa frequência → silhueta assimétrica (ALMA).
+const STAR_VERT = /* glsl */ `
+  uniform float uTime;
+  uniform float uCell;
+  uniform float uLump;
+  varying vec3 vN;
+  varying vec3 vDir;
+  varying vec3 vView;
+  ${'__NOISE__'}
+  void main(){
+    vDir = normalize(position);
+    float d = uLump > 0.0 ? (fbm3(vDir * max(1.2, uCell * 0.6) + uTime * 0.012) - 0.5) : 0.0;
+    vec3 p = position * (1.0 + d * uLump * 2.0);
+    vN = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    vView = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
+  }
+`.replace('__NOISE__', GLSL_NOISE);
+const STAR_FRAG = /* glsl */ `
+  uniform float uTime;
+  uniform float uCell;
+  uniform vec3 uHot;
+  uniform vec3 uMid;
+  uniform vec3 uCool;
+  uniform vec3 uDeep;
+  varying vec3 vN;
+  varying vec3 vDir;
+  varying vec3 vView;
+  ${'__NOISE__'}
+  void main(){
+    // domain warp: células que se deformam lentamente (fotosfera fervendo)
+    vec3 q = vec3(
+      fbm3(vDir * uCell + uTime * 0.020),
+      fbm3(vDir * uCell + vec3(5.2, 1.3, 2.8) + uTime * 0.016),
+      fbm3(vDir * uCell + vec3(9.1, 4.7, 6.3) - uTime * 0.013));
+    float n = fbm3(vDir * uCell * 1.9 + q * 1.35 - uTime * 0.01);
+    float t = clamp(n * 1.55 - 0.18, 0.0, 1.0);           // temperatura relativa da célula
+    vec3 c = mix(uCool, uMid, smoothstep(0.12, 0.55, t));
+    c = mix(c, uHot, smoothstep(0.58, 0.95, t));
+    // limb darkening forte (supergigantes escurecem MUITO na borda)
+    float mu_ = max(dot(normalize(vN), normalize(vView)), 0.0);
+    c = mix(uDeep, c, pow(mu_, 0.5));
+    gl_FragColor = vec4(c, 1.0);
+  }
+`.replace('__NOISE__', GLSL_NOISE);
+
+function starMaterial(def) {
+  const mid = new THREE.Color(def.color);
+  const deep = new THREE.Color(def.color2 || def.color).multiplyScalar(0.55);
+  const hot = mid.clone().lerp(new THREE.Color(0xffffff), 0.65);
+  const cool = mid.clone().lerp(new THREE.Color(def.color2 || def.color), 0.75);
+  return new THREE.ShaderMaterial({
+    vertexShader: STAR_VERT,
+    fragmentShader: STAR_FRAG,
+    uniforms: {
+      uTime: { value: Math.random() * 100 },
+      uCell: { value: def.cellScale ?? 20 },
+      uLump: { value: def.lumpyLimb ?? 0 },
+      uHot: { value: hot },
+      uMid: { value: mid },
+      uCool: { value: cool },
+      uDeep: { value: deep },
+    },
+  });
+}
+
+// Estrela genérica: esfera shader + corona sprite tintada; luz opcional.
+function buildStar(def, { light = null, coronaScale = 4.2 } = {}) {
+  const group = new THREE.Group();
+  const seg = HEADLESS ? 24 : (def.radius > 20000 ? 128 : def.radius > 3000 ? 96 : 64);
+  const mat = starMaterial(def);
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(def.radius, seg, Math.floor(seg * 0.66)), mat);
+  group.add(mesh);
+  const c = new THREE.Color(def.color);
+  const corona = makeRadialSprite([
+    `rgba(${(c.r * 255) | 0},${(c.g * 255) | 0},${(c.b * 255) | 0},0.55)`,
+    `rgba(${(c.r * 255) | 0},${(c.g * 200) | 0},${(c.b * 160) | 0},0.20)`,
+    'rgba(0,0,0,0)',
+  ]);
+  corona.scale.setScalar(def.radius * coronaScale);
+  group.add(corona);
+  if (light) {
+    const pl = new THREE.PointLight(light.color, light.intensity ?? 3.0, light.range ?? 1_000_000, 0.0);
+    group.add(pl);
+  }
+  const fx = { t: 0, update(dt) {
+    this.t += dt;
+    mat.uniforms.uTime.value += dt;
+    corona.material.opacity = 0.75 + Math.sin(this.t * 0.9) * 0.12;
+  } };
+  return { group, mesh, corona, fx };
+}
+
 const ORIGIN = new THREE.Vector3(0, 0, 0);
-const BIN_CENTER = new THREE.Vector3(...BINARY.center);
-const BIN_CULL = 220_000;   // cada corpo binário aparece quando a nave chega a esta distância DELE
 // Hooks de animação por-frame dos corpos especiais (disco de acreção, jatos, pulso).
 const bodyFx = [];
-// Beacon: estrela brilhante sempre visível na posição do binário, pra você ENXERGAR
-// e mirar o destino de longe. Some quando o sistema detalhado aparece (ao se aproximar).
-let binBeacon = null;
 
 function hex(c) { return '#' + c.toString(16).padStart(6, '0'); }
 function rndSeed(s) {
@@ -182,8 +292,11 @@ function makeSphere(radius, tex, emissive, def = null) {
     }
     if (def.kind === 'earth') mat.roughness = 0.62;   // oceano com brilho especular do Sol
   }
-  const seg = radius > 50 ? 40 : radius > 12 ? 28 : 16;
-  return new THREE.Mesh(new THREE.SphereGeometry(radius, seg, seg / 2), mat);
+  // TESSELAÇÃO ALTA (pedido do operador): na aproximação final o arco do limbo
+  // precisa ficar RETO até virar plano na colisão — 40 segmentos davam um limbo
+  // poligonal de "brinquedo". Agora corpos grandes têm limbo contínuo de perto.
+  const seg = HEADLESS ? 24 : radius > 2000 ? 96 : radius > 300 ? 72 : radius > 50 ? 56 : radius > 8 ? 40 : 28;
+  return new THREE.Mesh(new THREE.SphereGeometry(radius, seg, Math.floor(seg * 0.66)), mat);
 }
 
 function reach(def) { return def.gravReach || defaultGravReach(def); }
@@ -229,49 +342,219 @@ function buildPlanetBody(def, parentBody, system, orbitCenter) {
   return body;
 }
 
+// Registro de corpo-estrela (primária pinada de um sistema).
+function registerStar(def, starBuilt, systemKey, centerVec, { isSun = false } = {}) {
+  starBuilt.group.position.copy(centerVec);
+  scene.add(starBuilt.group);
+  const body = {
+    def, group: starBuilt.group, mesh: starBuilt.mesh, worldPos: centerVec.clone(),
+    mu: def.mu, soi: def.soi, gravReach: reach(def), system: systemKey, orbitCenter: null,
+    isMoon: false, isSun, parent: null, angle: 0,
+  };
+  game.bodies.push(body);
+  bodyFx.push(starBuilt.fx);
+  return body;
+}
+
+// Corpo DINÂMICO (integrado por N-corpos em orbits.js).
+function makeDynamic(body, sysDef, { vel, softening, anchor = null, centralMu, reinjectR }) {
+  body.dynamic = true;
+  body.vel = vel.clone();
+  body.acc = new THREE.Vector3();
+  body.softening = softening;
+  body.anchor = anchor;
+  body.systemDef = sysDef;
+  body.centralMu = centralMu;
+  body.reinjectR = reinjectR;
+  body.spin = body.def.spin || 0;
+  game.dynBodies = game.dynBodies || [];
+  game.dynBodies.push(body);
+}
+
 export function buildSolarSystem() {
-  // --- Sol ---
-  const sunGroup = new THREE.Group();
-  const sunTex = sunTexture();
-  const sunMesh = makeSphere(SUN.radius, sunTex, true);
-  sunGroup.add(sunMesh);
-  const corona = sunGlow(SUN.radius);
-  sunGroup.add(corona);
-  // Luz do Sol — alcance FINITO (1,4M) p/ cobrir o sistema solar mas NÃO o binário.
-  const light = new THREE.PointLight(SUN.light, 3.2, 1_400_000, 0.0);
-  sunGroup.add(light);
-  // Lens flare (examples/jsm vendorado): brilho de lente ao olhar para o Sol.
+  game.dynBodies = game.dynBodies || [];
+
+  // --- Sol (shader de granulação fina + lens flare + luz do sistema) ---
+  const sunBuilt = buildStar({ ...SUN, cellScale: 26 }, {
+    light: { color: SUN.light, intensity: 3.2, range: 1_000_000 },
+    coronaScale: 5.0,
+  });
   if (!HEADLESS) {
     const flare = new Lensflare();
     flare.addElement(new LensflareElement(flareTexture(true), 640, 0, new THREE.Color(0xfff0c8)));
     flare.addElement(new LensflareElement(flareTexture(false), 110, 0.55, new THREE.Color(0xffd9a0)));
     flare.addElement(new LensflareElement(flareTexture(false), 60, 0.85, new THREE.Color(0xaac8ff)));
     flare.addElement(new LensflareElement(flareTexture(false), 150, 1.2, new THREE.Color(0xff9a70)));
-    light.add(flare);
+    sunBuilt.group.children.find((o) => o.isPointLight)?.add(flare);
   }
-  scene.add(sunGroup);
-  const sun = {
-    def: SUN, group: sunGroup, mesh: sunMesh, worldPos: new THREE.Vector3(0, 0, 0),
-    mu: SUN.mu, soi: SUN.soi, gravReach: reach(SUN), system: 'home', orbitCenter: ORIGIN,
-    isMoon: false, isSun: true, parent: null, angle: 0,
-  };
+  const sun = registerStar(SUN, sunBuilt, 'home', ORIGIN, { isSun: true });
   game.sun = sun;
-  game.bodies.push(sun);
-  // pulso solar (anima a corona única + a cor do disco — barato, sem fill extra)
-  bodyFx.push({ t: 0, update(dt) {
-    this.t += dt;
-    const p = 0.85 + Math.sin(this.t * 1.7) * 0.12;
-    corona.scale.setScalar(SUN.radius * (5.5 + Math.sin(this.t * 1.3) * 0.25));
-    sunMesh.material.color.setRGB(1, 0.92 * p + 0.05, 0.55 * p);
-  } });
 
   // --- Planetas do sistema solar ---
   for (const def of PLANETS) buildPlanetBody(def, sun, 'home', ORIGIN);
 
-  // --- Segundo sistema: binário buraco-negro + estrela-de-nêutrons ---
+  // --- Os outros 4 sistemas ---
   buildBinarySystem();
+  buildBetelgeuseSystem();
+  buildChaoticSystem();
+  buildCoreSystem();
+  buildSystemBeacons();
 
   return game.bodies;
+}
+
+// ===========================================================================
+// SISTEMA 2 — BETELGEUSE: supergigante laranja com células gigantes, limbo
+// assimétrico, envelope de poeira, pluma unilateral e a companheira Siwarha.
+// ===========================================================================
+function buildBetelgeuseSystem() {
+  const center = new THREE.Vector3(...SYSTEMS[1].center);
+  const def = BETELGEUSE.star;
+  const built = buildStar(def, {
+    light: { color: def.light, intensity: 2.6, range: 700_000 },
+    coronaScale: 3.6,
+  });
+  // Envelope de poeira ENORME e tênue (tijolo dessaturado) + pluma unilateral
+  const dust = makeRadialSprite(['rgba(140,74,47,0.10)', 'rgba(110,55,35,0.05)', 'rgba(0,0,0,0)']);
+  dust.scale.setScalar(def.radius * 9);
+  built.group.add(dust);
+  const plume = makeRadialSprite(['rgba(255,154,77,0.16)', 'rgba(180,80,40,0.07)', 'rgba(0,0,0,0)']);
+  plume.scale.set(def.radius * 4.2, def.radius * 2.2, 1);
+  plume.position.set(def.radius * 2.4, def.radius * 1.1, 0);
+  built.group.add(plume);
+  const star = registerStar(def, built, 'betelgeuse', center, { isSun: true });
+
+  // Companheira REAL (2025): Siwarha — faísca azul-branca DENTRO do envelope.
+  const compDef = BETELGEUSE.companion;
+  const compBuilt = buildStar(compDef, { coronaScale: 6 });
+  scene.add(compBuilt.group);
+  const comp = {
+    def: compDef, group: compBuilt.group, mesh: compBuilt.mesh, worldPos: new THREE.Vector3(),
+    mu: compDef.mu, soi: compDef.soi, gravReach: reach(compDef), system: 'betelgeuse',
+    orbitCenter: center, isMoon: false, isSun: false, parent: star,
+    angle: Math.random() * Math.PI * 2, orbit: compDef.orbit,
+    period: EARTH_YEAR * compDef.periodFactor, spin: compDef.spin,
+  };
+  game.bodies.push(comp);
+  bodyFx.push(compBuilt.fx);
+
+  // Planetas carbonizados em trilho
+  for (const p of BETELGEUSE.planets) buildPlanetBody(p, star, 'betelgeuse', center);
+}
+
+// ===========================================================================
+// SISTEMA 4 — BINÁRIO CAÓTICO: 2 estrelas DIFERENTES integradas (excêntricas)
+// + planetas circumbinários com jitter de velocidade → problema de 3 corpos real.
+// ===========================================================================
+function buildChaoticSystem() {
+  const sysDef = SYSTEMS[3];
+  const center = new THREE.Vector3(...sysDef.center);
+  const [d1, d2] = CHAOTIC.stars;
+  const muT = d1.mu + d2.mu;
+  const a = CHAOTIC.pairSep, e = CHAOTIC.pairEcc;
+  const rApo = a * (1 + e);
+  const vRel = Math.sqrt(muT * (2 / rApo - 1 / a));   // vis-viva no apoápside
+
+  const built1 = buildStar(d1, { light: { color: d1.light, intensity: 2.4, range: 500_000 }, coronaScale: 5 });
+  const built2 = buildStar(d2, { light: { color: d2.light, intensity: 2.0, range: 400_000 }, coronaScale: 5 });
+  const f1 = d2.mu / muT, f2 = d1.mu / muT;   // frações do baricentro
+  const s1 = registerStar(d1, built1, 'chaotic', center.clone().add(new THREE.Vector3(rApo * f1, 0, 0)));
+  const s2 = registerStar(d2, built2, 'chaotic', center.clone().add(new THREE.Vector3(-rApo * f2, 0, 0)));
+  makeDynamic(s1, sysDef, {
+    vel: new THREE.Vector3(0, 0, vRel * f1),
+    softening: CHAOTIC.softening, centralMu: muT, reinjectR: a,
+  });
+  makeDynamic(s2, sysDef, {
+    vel: new THREE.Vector3(0, 0, -vRel * f2),
+    softening: CHAOTIC.softening, centralMu: muT, reinjectR: a,
+  });
+
+  for (const p of CHAOTIC.planets) {
+    const body = buildPlanetBody(p, s1, 'chaotic', center);
+    body.orbitCenter = null;                       // sai do trilho → dinâmico
+    const ang = Math.random() * Math.PI * 2;
+    body.worldPos.set(
+      center.x + Math.cos(ang) * p.orbitR,
+      center.y + (Math.random() - 0.5) * p.orbitR * 0.12,
+      center.z + Math.sin(ang) * p.orbitR,
+    );
+    body.group.position.copy(body.worldPos);
+    const vC = Math.sqrt(muT / p.orbitR) * p.velJitter;
+    const s = Math.random() < 0.5 ? 1 : -1;
+    makeDynamic(body, sysDef, {
+      vel: new THREE.Vector3(-Math.sin(ang) * vC * s, (Math.random() - 0.5) * vC * 0.2, Math.cos(ang) * vC * s),
+      softening: CHAOTIC.softening, centralMu: muT, reinjectR: p.orbitR,
+    });
+  }
+}
+
+// ===========================================================================
+// SISTEMA 5 — NÚCLEO DA GALÁXIA: SMBH pinado + 12 estrelas S caóticas + planetas
+// perdidos, tudo integrado. Enxame vivo com deflexões mútuas de verdade.
+// ===========================================================================
+function buildCoreSystem() {
+  const sysDef = SYSTEMS[4];
+  const center = new THREE.Vector3(...sysDef.center);
+
+  // SMBH central (pinado — âncora do integrador)
+  const bhGroup = buildBlackHole(CORE.smbh);
+  bhGroup.group.position.copy(center);
+  scene.add(bhGroup.group);
+  const smbh = {
+    def: CORE.smbh, group: bhGroup.group, mesh: bhGroup.horizon, worldPos: center.clone(),
+    mu: CORE.smbh.mu, soi: CORE.smbh.soi, gravReach: reach(CORE.smbh), system: 'core',
+    isMoon: false, isSun: false, parent: null, angle: 0,
+  };
+  game.bodies.push(smbh);
+  bodyFx.push(bhGroup.fx);
+
+  // 12 estrelas S — órbitas excêntricas variadas (v_circ × 0.55..1.15, planos tortos)
+  for (let i = 0; i < CORE.starCount; i++) {
+    const pal = CORE.starPalette[i % CORE.starPalette.length];
+    const def = {
+      name: `Estrela S${i + 1}`, key: `s${i + 1}`, kind: 'star',
+      radius: pal.radius * (0.8 + Math.random() * 0.4),
+      color: pal.color, color2: pal.color2, mu: pal.mu,
+      soi: 30_000, gravReach: 80_000, spin: 200 + Math.random() * 300,
+      cellScale: pal.cellScale,
+    };
+    const built = buildStar(def, { coronaScale: 5.5 });
+    const r = CORE.starOrbitMin + Math.random() * (CORE.starOrbitMax - CORE.starOrbitMin);
+    const ang = Math.random() * Math.PI * 2;
+    const pos = center.clone().add(new THREE.Vector3(
+      Math.cos(ang) * r, (Math.random() - 0.5) * r * 0.35, Math.sin(ang) * r,
+    ));
+    const star = registerStar(def, built, 'core', pos);
+    const vC = Math.sqrt(CORE.smbh.mu / r) * (0.55 + Math.random() * 0.6);
+    const s = Math.random() < 0.5 ? 1 : -1;
+    makeDynamic(star, sysDef, {
+      vel: new THREE.Vector3(-Math.sin(ang) * vC * s, (Math.random() - 0.5) * vC * 0.3, Math.cos(ang) * vC * s),
+      softening: CORE.softening, anchor: smbh, centralMu: CORE.smbh.mu,
+      reinjectR: (CORE.starOrbitMin + CORE.starOrbitMax) / 2,
+    });
+  }
+
+  // Planetas perdidos vagando no enxame
+  for (let i = 0; i < CORE.planetCount; i++) {
+    const def = {
+      name: `Errante-${i + 1}`, key: `err${i + 1}`,
+      radius: 90 + Math.random() * 220,
+      color: [0x8a7a68, 0x6a8098, 0x9a6a50][i % 3], color2: 0x3a342e,
+      kind: i % 2 ? 'rock' : 'ice', spin: 50, mu: 3.0e6 * (0.5 + Math.random()), soi: 2600, moons: [],
+    };
+    const body = buildPlanetBody(def, smbh, 'core', center);
+    body.orbitCenter = null;
+    const r = 40_000 + Math.random() * 120_000;
+    const ang = Math.random() * Math.PI * 2;
+    body.worldPos.set(center.x + Math.cos(ang) * r, center.y + (Math.random() - 0.5) * r * 0.3, center.z + Math.sin(ang) * r);
+    body.group.position.copy(body.worldPos);
+    const vC = Math.sqrt(CORE.smbh.mu / r) * (0.6 + Math.random() * 0.55);
+    const s = Math.random() < 0.5 ? 1 : -1;
+    makeDynamic(body, sysDef, {
+      vel: new THREE.Vector3(-Math.sin(ang) * vC * s, (Math.random() - 0.5) * vC * 0.25, Math.cos(ang) * vC * s),
+      softening: CORE.softening, anchor: smbh, centralMu: CORE.smbh.mu, reinjectR: r,
+    });
+  }
 }
 
 // ===========================================================================
@@ -285,6 +568,10 @@ function buildBinarySystem() {
   const total = bh.mu + ns.mu;
   const rBH = BINARY.separation * (ns.mu / total);
   const rNS = BINARY.separation * (bh.mu / total);
+  // Período FÍSICO do par (Kepler): T = 2π·√(a³/μ_total). Trilho consistente com
+  // a gravidade → a aceleração de frame cancela o puxão do parceiro e a nave
+  // consegue órbitas FECHADAS em volta de cada membro.
+  const pairPeriod = 2 * Math.PI * Math.sqrt(BINARY.separation ** 3 / total);
 
   // --- Buraco negro ---
   const bhGroup = buildBlackHole(bh);
@@ -293,7 +580,7 @@ function buildBinarySystem() {
     def: bh, group: bhGroup.group, mesh: bhGroup.horizon, worldPos: new THREE.Vector3(),
     mu: bh.mu, soi: bh.soi, gravReach: reach(bh), system: 'binary',
     isMoon: false, isSun: false, parent: null, binaryPair: true,
-    barycenter: center, pairRadius: rBH, pairPhase: 0, period: BINARY.pairPeriod,
+    barycenter: center, pairRadius: rBH, pairPhase: 0, period: pairPeriod,
   };
   game.bodies.push(bhBody);
   bodyFx.push(bhGroup.fx);
@@ -305,7 +592,7 @@ function buildBinarySystem() {
     def: ns, group: nsGroup.group, mesh: nsGroup.core, worldPos: new THREE.Vector3(),
     mu: ns.mu, soi: ns.soi, gravReach: reach(ns), system: 'binary',
     isMoon: false, isSun: false, parent: null, binaryPair: true,
-    barycenter: center, pairRadius: rNS, pairPhase: Math.PI, period: BINARY.pairPeriod,
+    barycenter: center, pairRadius: rNS, pairPhase: Math.PI, period: pairPeriod,
   };
   game.bodies.push(nsBody);
   bodyFx.push(nsGroup.fx);
@@ -341,21 +628,104 @@ function buildBinarySystem() {
     streamMat.opacity = 0.09 + 0.05 * Math.sin(this.t * 2.3);
   } });
 
-  // Beacon: ponto brilhante (branco-azul + tom púrpura do disco) visível do sistema
-  // solar inteiro. É o que você vê e mira de longe; some ao chegar perto (detalhe assume).
-  binBeacon = makeRadialSprite(['rgba(220,232,255,0.98)', 'rgba(150,185,255,0.55)', 'rgba(150,90,230,0.18)', 'rgba(0,0,0,0)']);
-  binBeacon.scale.setScalar(17000);
-  binBeacon.position.copy(center);
-  scene.add(binBeacon);
+  // REMANESCENTE DE SUPERNOVA: a casca filamentar da estrela que MORREU para
+  // criar o buraco negro — envolve o sistema inteiro (a história de origem).
+  const remnant = buildSupernovaRemnant(BINARY.remnant);
+  remnant.group.position.copy(center);
+  scene.add(remnant.group);
+  bodyFx.push(remnant.fx);
+  _remnantGroup = remnant.group;
 
-  // --- Planetas gêmeos orbitando o baricentro, em ÓRBITAS COMPACTAS (50k–197k) ---
-  // Mantidos dentro do domínio do binário (SOI 230k) e fora da zona de não-retorno (~40k),
-  // pra NÃO vazarem para o SOI do Sol. É um sistema planetário aninhado no buraco negro.
-  PLANETS.forEach((def, i) => {
-    const twin = { ...def, key: def.key + '2', name: def.name + ' β', orbit: 50000 + i * 21000 };
-    if (def.moons) twin.moons = def.moons.map((m) => ({ ...m, name: m.name + ' β' }));
-    buildPlanetBody(twin, null, 'binary', center);
+  // (Os planetas-gêmeos foram removidos em 2026-07-01: com 5 sistemas reais o
+  //  clone do sistema solar virava ruído — o binário é BN + pulsar + remanescente.)
+}
+
+// Casca de remanescente de supernova: esfera gigante com filamentos FBM,
+// borda realçada (fresnel invertido → look de CASCA), 2 cores (Hα + O III).
+const REMNANT_FRAG = /* glsl */ `
+  uniform float uTime;
+  uniform vec3 uCol1;
+  uniform vec3 uCol2;
+  varying vec3 vDir;
+  varying vec3 vN;
+  varying vec3 vView;
+  ${'__NOISE__'}
+  void main(){
+    float fil = fbm3(vDir * 7.0 + uTime * 0.004);
+    float fil2 = fbm3(vDir * 16.0 - uTime * 0.003);
+    // filamentos: cristas do ruído
+    float f = smoothstep(0.42, 0.62, fil) * (0.35 + 0.65 * fil2);
+    // casca: borda do disco realça (limbo brilha, centro quase transparente)
+    float mu_ = abs(dot(normalize(vN), normalize(vView)));
+    float shell = pow(1.0 - mu_, 2.2);
+    vec3 c = mix(uCol1, uCol2, smoothstep(0.3, 0.75, fil2));
+    float alpha = (0.05 + 0.75 * f) * shell * 0.55;
+    if (alpha < 0.004) discard;
+    gl_FragColor = vec4(c, alpha);
+  }
+`.replace('__NOISE__', GLSL_NOISE);
+const REMNANT_VERT = /* glsl */ `
+  varying vec3 vDir;
+  varying vec3 vN;
+  varying vec3 vView;
+  void main(){
+    vDir = normalize(position);
+    vN = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vView = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+let _remnantGroup = null;
+function buildSupernovaRemnant(def) {
+  const group = new THREE.Group();
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: REMNANT_VERT,
+    fragmentShader: REMNANT_FRAG,
+    uniforms: {
+      uTime: { value: 0 },
+      uCol1: { value: new THREE.Color(def.color1) },
+      uCol2: { value: new THREE.Color(def.color2) },
+    },
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
   });
+  const seg = HEADLESS ? 20 : 64;
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(def.radius, seg, Math.floor(seg * 0.66)), mat);
+  shell.renderOrder = 1;
+  group.add(shell);
+  const fx = { t: 0, update(dt) {
+    this.t += dt;
+    mat.uniforms.uTime.value = this.t;
+    shell.rotation.y += dt * 0.002;                 // deriva lenta dos filamentos
+    const grow = 1 + this.t * 0.00012;              // expansão sutil contínua
+    shell.scale.setScalar(Math.min(1.25, grow));
+  } };
+  return { group, fx };
+}
+
+// Beacons: um farol colorido por sistema distante — o que você VÊ e mira de longe;
+// some quando o sistema detalhado assume (culling por proximidade).
+const _beacons = [];
+function buildSystemBeacons() {
+  const tints = {
+    betelgeuse: ['rgba(255,170,100,0.98)', 'rgba(230,110,50,0.5)', 'rgba(150,50,20,0.15)', 'rgba(0,0,0,0)'],
+    binary: ['rgba(220,232,255,0.98)', 'rgba(150,185,255,0.55)', 'rgba(150,90,230,0.18)', 'rgba(0,0,0,0)'],
+    chaotic: ['rgba(200,220,255,0.95)', 'rgba(255,180,110,0.45)', 'rgba(120,80,50,0.12)', 'rgba(0,0,0,0)'],
+    core: ['rgba(255,240,220,0.98)', 'rgba(255,190,120,0.5)', 'rgba(160,80,200,0.20)', 'rgba(0,0,0,0)'],
+  };
+  for (const sys of SYSTEMS) {
+    if (sys.key === 'solar') continue;
+    if (sys.key === 'betelgeuse') continue;   // a própria estrela é o farol
+    const sp = makeRadialSprite(tints[sys.key]);
+    sp.scale.setScalar(sys.key === 'betelgeuse' ? 26000 : 17000);
+    sp.position.set(...sys.center);
+    scene.add(sp);
+    _beacons.push({ sys, sprite: sp });
+  }
 }
 
 // ---- Buraco negro: horizonte + disco de acreção (shader) + anel de lensing ----
@@ -374,6 +744,10 @@ const DISK_FRAG = /* glsl */ `
   uniform float uInner;
   uniform float uOuter;
   uniform float uGain;
+  uniform vec3 uC1;
+  uniform vec3 uC2;
+  uniform vec3 uC3;
+  uniform vec3 uC4;
   varying vec3 vLocal;
   float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
   float vnoise(vec2 p){
@@ -396,11 +770,12 @@ const DISK_FRAG = /* glsl */ `
     // Streaks de gás: ruído alongado no ângulo (filamentos orbitais)
     float streak = fbm(vec2(ang * 3.0 + rot, rn * 22.0));
     float fino = fbm(vec2(ang * 9.0 + rot * 1.6, rn * 55.0));
-    // Temperatura de corpo-negro: interna quente
+    // Temperatura de corpo-negro: interna quente (paleta parametrizada — fogo
+    // para discos de acreção, azul-síncrotron para o toro do pulsar)
     float temp = pow(1.0 - rn, 1.35);
-    vec3 c = mix(vec3(0.30, 0.04, 0.01), vec3(1.0, 0.42, 0.10), smoothstep(0.0, 0.45, temp));
-    c = mix(c, vec3(1.0, 0.85, 0.55), smoothstep(0.45, 0.75, temp));
-    c = mix(c, vec3(0.85, 0.90, 1.0), smoothstep(0.75, 0.97, temp));
+    vec3 c = mix(uC1, uC2, smoothstep(0.0, 0.45, temp));
+    c = mix(c, uC3, smoothstep(0.45, 0.75, temp));
+    c = mix(c, uC4, smoothstep(0.75, 0.97, temp));
     // Doppler beaming: o lado do gás que se aproxima é mais brilhante (lado fixo)
     float doppler = 1.0 + 0.55 * cos(ang);
     float bright = (0.30 + 0.90 * streak * (0.55 + 0.45 * fino)) * doppler;
@@ -410,7 +785,10 @@ const DISK_FRAG = /* glsl */ `
     gl_FragColor = vec4(col, edge * 0.95);
   }
 `;
-function diskMaterial(inner, outer, gain = 1) {
+const DISK_FIRE = [[0.30, 0.04, 0.01], [1.0, 0.42, 0.10], [1.0, 0.85, 0.55], [0.85, 0.90, 1.0]];
+const DISK_SYNCHROTRON = [[0.03, 0.06, 0.22], [0.15, 0.42, 0.95], [0.55, 0.85, 1.0], [0.92, 0.97, 1.0]];
+
+function diskMaterial(inner, outer, gain = 1, palette = DISK_FIRE) {
   return new THREE.ShaderMaterial({
     vertexShader: DISK_VERT,
     fragmentShader: DISK_FRAG,
@@ -419,6 +797,10 @@ function diskMaterial(inner, outer, gain = 1) {
       uInner: { value: inner },
       uOuter: { value: outer },
       uGain: { value: gain },
+      uC1: { value: new THREE.Vector3(...palette[0]) },
+      uC2: { value: new THREE.Vector3(...palette[1]) },
+      uC3: { value: new THREE.Vector3(...palette[2]) },
+      uC4: { value: new THREE.Vector3(...palette[3]) },
     },
     side: THREE.DoubleSide,
     transparent: true,
@@ -501,78 +883,88 @@ function dipoleFieldLine(L, phi, radius) {
   );
 }
 
+// RESTYLE 2026-07-01 (veredito do operador): anatomia de pulsar REAL (referência
+// Caranguejo/Crab): núcleo COMPACTO ofuscante (o bloom faz o glare — nada de "ovo"
+// chapado), TORO DE VENTO síncrotron azul no equador (o anel do Crab), dois jatos
+// FINOS relativísticos ao longo do eixo, gaiola dipolo tênue. O farol é um flash
+// CURTO quando o feixe varre a câmera — não um balão inflando.
 function buildNeutronStar(def) {
   const group = new THREE.Group();
 
-  // Núcleo: esfera pequena e ofuscante (azul-branco) — o bloom faz o resto.
+  // Núcleo: pequeno, branco-azulado, BRILHANTE (satura via bloom, não via sprite).
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(def.radius, 32, 24),
-    new THREE.MeshBasicMaterial({ color: 0xeaf2ff }),
+    new THREE.SphereGeometry(def.radius, 48, 32),
+    new THREE.MeshBasicMaterial({ color: 0xf4f8ff }),
   );
   group.add(core);
+  // Brilho pontual curto (metade do raio do antigo, gradiente que MORRE cedo)
+  const glint = makeRadialSprite(['rgba(235,244,255,0.85)', 'rgba(160,200,255,0.15)', 'rgba(0,0,0,0)']);
+  glint.scale.setScalar(def.radius * 2.6);
+  group.add(glint);
 
-  // Halo ofuscante — gradiente CURTO (cai a ~zero na metade do raio do sprite)
-  // para ler como brilho pontual intenso, não como um ovo bege chapado.
-  const halo = makeRadialSprite(['rgba(230,240,255,0.9)', 'rgba(150,190,255,0.22)', 'rgba(80,120,255,0.04)', 'rgba(0,0,0,0)']);
-  halo.scale.setScalar(def.radius * 5);
-  group.add(halo);
-
-  // Eixo magnético (inclinado vs rotação) → carrega os dois jatos polares = farol.
+  // Eixo magnético (inclinado vs rotação) → jatos + toro carregados por ele.
   const axis = new THREE.Group();
   axis.rotation.z = def.jetTilt;
   group.add(axis);
 
-  const jetLen = def.radius * 60, jetR = def.radius * 2.6;
+  // TORO DE VENTO síncrotron (equatorial ao eixo magnético) — shader do disco
+  // com paleta azul; rotação diferencial anima os filamentos circulares.
+  const torusMat = diskMaterial(def.radius * 3.2, def.radius * 14, 0.85, DISK_SYNCHROTRON);
+  const torus = new THREE.Mesh(
+    new THREE.RingGeometry(def.radius * 3.2, def.radius * 14, 96, 3),
+    torusMat,
+  );
+  torus.rotation.x = Math.PI / 2;
+  axis.add(torus);
+
+  // JATOS relativísticos: cilindros FINOS e longos (não cones gordos), com um
+  // núcleo interno mais cravado — leitura de "agulha de luz".
+  const jetLen = def.radius * 90;
   const jetMats = [];
   for (const s of [1, -1]) {
-    // Bainha externa difusa
-    const sheath = new THREE.Mesh(
-      new THREE.ConeGeometry(jetR, jetLen, 16, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+    const outer = new THREE.Mesh(
+      new THREE.CylinderGeometry(def.radius * 0.9, def.radius * 0.35, jetLen, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
     );
-    sheath.position.y = s * jetLen / 2;
-    sheath.rotation.x = s > 0 ? 0 : Math.PI;
-    axis.add(sheath);
-    // Feixe interno cravado e brilhante
-    const beam = new THREE.Mesh(
-      new THREE.ConeGeometry(jetR * 0.38, jetLen * 1.06, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xdcecff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+    outer.position.y = s * jetLen / 2;
+    outer.rotation.x = s > 0 ? 0 : Math.PI;
+    axis.add(outer);
+    const inner = new THREE.Mesh(
+      new THREE.CylinderGeometry(def.radius * 0.30, def.radius * 0.12, jetLen * 1.05, 8, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xeaf4ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
     );
-    beam.position.y = s * jetLen * 0.53;
-    beam.rotation.x = s > 0 ? 0 : Math.PI;
-    axis.add(beam);
-    jetMats.push(sheath.material, beam.material);
-    // ponta brilhante do feixe
-    const tip = makeRadialSprite(['rgba(200,225,255,0.9)', 'rgba(120,170,255,0.3)', 'rgba(0,0,0,0)']);
-    tip.scale.setScalar(def.radius * 10);
-    tip.position.y = s * jetLen;
-    axis.add(tip);
+    inner.position.y = s * jetLen * 0.525;
+    inner.rotation.x = s > 0 ? 0 : Math.PI;
+    axis.add(inner);
+    jetMats.push(outer.material, inner.material);
   }
 
-  // Magnetosfera: linhas de campo dipolo em 8 azimutes × 2 conchas (L distintos).
-  for (let i = 0; i < 8; i++) {
-    const phi = (i / 8) * Math.PI * 2;
-    axis.add(dipoleFieldLine(def.radius * 5.2, phi, def.radius));
-    if (i % 2 === 0) axis.add(dipoleFieldLine(def.radius * 8.5, phi + 0.35, def.radius));
+  // Gaiola dipolo: poucas linhas, bem tênues (estrutura, não neon).
+  for (let i = 0; i < 6; i++) {
+    const phi = (i / 6) * Math.PI * 2;
+    const line = dipoleFieldLine(def.radius * 6.5, phi, def.radius);
+    line.material.opacity = 0.09;
+    axis.add(line);
   }
 
   const _jetDir = new THREE.Vector3();
   const _toCam = new THREE.Vector3();
   const fx = { t: 0, update(dt) {
     this.t += dt;
-    // rotação ultrarrápida do pulsar (gira o conjunto inteiro → jatos varrem o céu)
+    // rotação ultrarrápida do pulsar (jatos + toro varrem o céu)
     group.rotation.y += dt * (Math.PI * 2 / def.spin);
-    // pulso de brilho + cintilação dos jatos
-    const p = 0.7 + Math.abs(Math.sin(this.t * (Math.PI * 2 / def.spin))) * 0.3;
-    core.material.color.setRGB(0.87 * p + 0.1, 0.92 * p + 0.06, 1.0);
-    const flick = 0.86 + 0.14 * Math.sin(this.t * 31.7);
-    for (const m of jetMats) m.opacity = (m.color.r > 0.7 ? 0.75 : 0.28) * flick;
-    // EFEITO FAROL: feixe apontando para a câmera → flash (pulsar visível de longe)
+    torusMat.uniforms.uTime.value = this.t;
+    // cintilação dos jatos
+    const flick = 0.85 + 0.15 * Math.sin(this.t * 37.3);
+    jetMats[0].opacity = 0.22 * flick; jetMats[1].opacity = 0.6 * flick;
+    jetMats[2].opacity = 0.22 * flick; jetMats[3].opacity = 0.6 * flick;
+    // FAROL: flash curto e intenso quando o feixe cruza a câmera
     _jetDir.set(0, 1, 0).applyQuaternion(group.quaternion).applyQuaternion(axis.quaternion);
     _toCam.copy(camera.position).sub(group.position).normalize();
-    const sweep = Math.pow(Math.abs(_jetDir.dot(_toCam)), 18);
-    halo.material.opacity = Math.min(0.92, 0.55 + p * 0.2 + sweep * 0.5);
-    halo.scale.setScalar(def.radius * (5 + sweep * 3));
+    const sweep = Math.pow(Math.abs(_jetDir.dot(_toCam)), 24);
+    glint.material.opacity = Math.min(0.95, 0.5 + sweep * 0.45);
+    glint.scale.setScalar(def.radius * (2.6 + sweep * 2.2));
+    core.material.color.setRGB(0.92 + sweep * 0.08, 0.95 + sweep * 0.05, 1.0);
   } };
   return { group, core, fx };
 }
@@ -619,50 +1011,29 @@ export function updateBodyFX(dt) {
   for (const f of bodyFx) f.update(dt);
 }
 
-// Mostra a bolha de SOI só quando a nave se aproxima + CULL do sistema binário.
-// Quando a nave está longe do binário (jogo no sistema solar), todo o grupo binário
-// fica invisível → ZERO draw calls, FPS de volta ao baseline mesmo em software-GL.
+// CULLING POR SISTEMA: cada sistema distante fica invisível (zero draw calls)
+// até a nave se aproximar — no lugar brilha o BEACON colorido daquele sistema.
+// O sistema solar (home) é sempre visível.
+const _sysCenter = new THREE.Vector3();
 export function updateSOIView(shipPos) {
-  for (const b of game.bodies) {
-    if (b.system === 'binary') {
-      const vis = shipPos.distanceTo(b.worldPos) < BIN_CULL;   // cull POR CORPO
-      if (b.group.visible !== vis) b.group.visible = vis;
+  for (const sys of SYSTEMS) {
+    if (sys.key === 'solar') continue;
+    _sysCenter.set(...sys.center);
+    const near = shipPos.distanceTo(_sysCenter) < sys.radius * 1.15;
+    for (const b of game.bodies) {
+      if (b.system !== sys.key) continue;
+      // Betelgeuse NUNCA some: uma supergigante de 60k de raio é visível de
+      // qualquer lugar do mapa — como a Betelgeuse real no céu da Terra.
+      if (b.def.key === 'betelgeuse') { b.group.visible = true; continue; }
+      if (b.group.visible !== near) b.group.visible = near;
     }
-    if (!b.soiMesh) continue;
-    b.soiMesh.visible = shipPos.distanceTo(b.worldPos) < b.soi * 1.3;
+    if (sys.key === 'binary' && _remnantGroup) _remnantGroup.visible = near;
   }
-  // Beacon (estrela brilhante do binário) visível enquanto o par compacto está longe.
-  if (binBeacon) binBeacon.visible = shipPos.distanceTo(BIN_CENTER) > BIN_CULL * 0.8;
+  for (const bc of _beacons) {
+    _sysCenter.set(...bc.sys.center);
+    bc.sprite.visible = shipPos.distanceTo(_sysCenter) > bc.sys.radius * 0.9;
+  }
 }
 
-// ---- Texturas/visuais do Sol ---------------------------------------------
-function sunTexture() {
-  const W = 1024, H = 512;
-  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-  const ctx = cv.getContext('2d');
-  const rnd = rndSeed(42);
-  ctx.fillStyle = '#ffcf4d'; ctx.fillRect(0, 0, W, H);
-  ctx.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 800; i++) paintBlob(ctx, rnd() * W, rnd() * H, 10 + rnd() * 50, `rgba(255,${180 + rnd() * 60 | 0},80,${rnd() * 0.25})`, rnd, 1);
-  ctx.globalCompositeOperation = 'source-over';
-  // manchas solares
-  for (let i = 0; i < 18; i++) { ctx.fillStyle = 'rgba(120,40,0,0.35)'; ctx.beginPath(); ctx.arc(rnd() * W, rnd() * H, 4 + rnd() * 16, 0, Math.PI * 2); ctx.fill(); }
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-function sunGlow(radius) {
-  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
-  const ctx = cv.getContext('2d');
-  const g = ctx.createRadialGradient(128, 128, 20, 128, 128, 128);
-  g.addColorStop(0, 'rgba(255,240,180,0.9)');
-  g.addColorStop(0.25, 'rgba(255,180,80,0.5)');
-  g.addColorStop(0.6, 'rgba(255,120,40,0.18)');
-  g.addColorStop(1, 'rgba(255,90,30,0)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
-  const tex = new THREE.CanvasTexture(cv);
-  const mat = new THREE.SpriteMaterial({ map: tex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.setScalar(radius * 5.5);
-  return sprite;
-}
+// (Texturas canvas do Sol removidas — o Sol agora usa o shader genérico de
+//  estrela com granulação fina, como todas as estrelas dos 5 sistemas.)

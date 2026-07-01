@@ -4,22 +4,48 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { camera } from './scene.js';
 import { game } from './state.js';
+import { SYSTEMS } from './config.js';
 
 let canvas, ctx;
 const _v = new THREE.Vector3();
 const _camDir = new THREE.Vector3();
 const _to = new THREE.Vector3();
+const _c = new THREE.Vector3();
 
-// Itens de destino: Sol, planetas e (dinamicamente) o objetivo da missão.
-let bodyTargets = [];
+// Sistema onde a nave está (ou null = espaço interestelar).
+export function currentSystem() {
+  if (!game.ship?.pos) return SYSTEMS[0];
+  for (const sys of SYSTEMS) {
+    _c.set(...sys.center);
+    if (game.ship.pos.distanceTo(_c) < sys.radius * 1.1) return sys;
+  }
+  return null;
+}
+
+// Itens de destino: missão + PRIMÁRIAS dos 5 sistemas + corpos do sistema atual.
+let primaryTargets = [];
 
 export function buildNav() {
-  bodyTargets = [];
-  if (game.sun) bodyTargets.push(wrapBody(game.sun));
-  for (const b of game.bodies) {
-    if (!b.isSun && !b.isMoon) bodyTargets.push(wrapBody(b));
+  primaryTargets = [];
+  for (const sys of SYSTEMS) {
+    const b = game.bodies.find((x) => x.def.key === sys.primary);
+    if (b) primaryTargets.push(wrapBody(b));
   }
-  game.nav.target = bodyTargets.find((t) => t.key === 'earth') || bodyTargets[0];
+  const earth = game.bodies.find((b) => b.def.key === 'earth');
+  game.nav.target = earth ? wrapBody(earth) : primaryTargets[0];
+}
+
+function localTargets() {
+  const sys = currentSystem();
+  if (!sys) return [];
+  const list = [];
+  for (const b of game.bodies) {
+    const sysKey = sys.key === 'solar' ? 'home' : sys.key;
+    if (b.system !== sysKey || b.isMoon) continue;
+    if (b.def.key === sys.primary) continue;   // primária já está na lista global
+    list.push(wrapBody(b));
+  }
+  return list;
 }
 
 function wrapBody(b) {
@@ -44,7 +70,8 @@ function missionTarget() {
 
 function navList() {
   const m = missionTarget();
-  return m ? [m, ...bodyTargets] : bodyTargets;
+  const list = [...primaryTargets, ...localTargets()];
+  return m ? [m, ...list] : list;
 }
 
 export function cycleTarget(dir = 1) {

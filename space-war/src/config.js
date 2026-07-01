@@ -167,33 +167,165 @@ export const PLANETS = [
   },
 ];
 
+// ===========================================================================
+// OS 5 SISTEMAS ESTELARES (operador, 2026-07-01)
+// 1. Sistema Solar (Sol + planetas + luas)         — trilhos keplerianos
+// 2. Betelgeuse (supergigante vermelha)            — trilhos
+// 3. Binário: buraco negro (morte de estrela) + pulsar — par em trilho + remanescente
+// 4. Caótico: 2 estrelas diferentes + planetas     — N-CORPOS integrado (caos real)
+// 5. Núcleo da Galáxia: SMBH + 12 estrelas caóticas — N-CORPOS integrado
+//
+// DISTÂNCIAS (pedido do operador): sistemas num anel ~650-820k do Sol (era 820k
+// só o binário) + MOTOR INTERESTELAR (overdrive fora de qualquer SOI) → viagem
+// típica de 1-3 min em cruzeiro, segundos com turbo.
+// ===========================================================================
+
+// Overdrive interestelar: fora de TODOS os SOIs a nave desperta o motor
+// interestelar — multiplicador de cruzeiro/empuxo com rampa suave.
+export const OVERDRIVE = {
+  mult: 4.5,        // × cruiseSpeed quando totalmente engajado
+  thrustMult: 4.0,  // × empuxo/steer para alcançar a nova velocidade-alvo
+  rampIn: 2.5,      // s para engajar (fora de SOI)
+  rampOut: 1.2,     // s para desengajar (ao entrar num sistema)
+};
+
+export const SYSTEMS = [
+  { key: 'solar', name: 'Sistema Solar', center: [0, 0, 0], radius: 560_000, primary: 'sun' },
+  { key: 'betelgeuse', name: 'Betelgeuse', center: [520_000, 30_000, -520_000], radius: 300_000, primary: 'betelgeuse' },
+  { key: 'binary', name: 'Binário BN+Pulsar', center: [-650_000, 0, 220_000], radius: 280_000, primary: 'blackhole' },
+  { key: 'chaotic', name: 'Binário Caótico', center: [180_000, -30_000, 730_000], radius: 260_000, primary: 'azurak' },
+  { key: 'core', name: 'Núcleo da Galáxia', center: [-380_000, 60_000, -720_000], radius: 420_000, primary: 'sgr' },
+];
+
 // ---------------------------------------------------------------------------
-// SISTEMA BINÁRIO — 2º sistema, logo depois de Netuno (~770k), independente do Sol.
-// "Sol" = par BURACO NEGRO + ESTRELA DE NÊUTRONS orbitando o baricentro.
-// Ambos COMPACTOS (menores que a Terra) com massa monstruosa concentrada.
+// SISTEMA 3 — BINÁRIO: buraco negro (nascido da MORTE de uma estrela — o
+// remanescente de supernova ainda envolve o sistema) + estrela de nêutrons.
+// Separação LARGA (64k, pedido do operador) — dá para orbitar cada um.
 // ---------------------------------------------------------------------------
 export const BINARY = {
-  center: [820_000, 0, 0],   // depois de Netuno, fora do SOI do Sol (560k) → sistemas isolados
-  separation: 22000,
-  pairPeriod: 160,
+  center: SYSTEMS[2].center,
+  separation: 140_000,      // BEM afastados (pedido do operador) → região de Hill ~44k
+                            // em volta de cada um = órbitas estáveis para a nave
+  // pairPeriod é DERIVADO da física em bodies.js: T = 2π·√(a³/μ_total) ≈ 116 s.
+  // Trilho consistente com a gravidade → a aceleração de frame cancela o parceiro
+  // e órbitas em volta de cada membro FECHAM.
+  remnant: { radius: 210_000, color1: 0xff6a3a, color2: 0x46d8c8 }, // casca da supernova
 
   blackHole: {
     name: 'Buraco Negro', key: 'blackhole', kind: 'blackhole',
-    rs: 70,                   // horizonte de eventos MINÚSCULO (compacto)
-    radius: 70,
-    mu: 5.0e12,               // monstruoso e local — zona de não-retorno ~ até 40k
-    soi: 230_000, gravReach: 230_000,    // governa o sistema binário, sem alcançar Netuno
-    disk: { inner: 150, outer: 1400 },   // disco de acreção GRANDE (visível de longe)
-    photonRing: 95,
+    rs: 160,                  // horizonte com presença visual (ainda compacto)
+    radius: 160,
+    mu: 5.0e12,               // monstruoso e local
+    soi: 150_000, gravReach: 150_000,
+    disk: { inner: 340, outer: 3200 },   // disco de acreção GRANDE (visível de longe)
+    photonRing: 215,
   },
   neutronStar: {
     name: 'Estrela de Nêutrons', key: 'neutron', kind: 'neutron',
-    radius: 28,               // minúscula (≈ uma cidade), densíssima
+    radius: 30,               // minúscula (≈ uma cidade), densíssima
     mu: 3.0e12,               // gravidade brutal e local
     spin: 1.4,                // pulsar ultrarrápido
     jetTilt: 0.5,
-    soi: 200_000, gravReach: 200_000,
+    soi: 110_000, gravReach: 110_000,
   },
+};
+
+// ---------------------------------------------------------------------------
+// SISTEMA 2 — BETELGEUSE: supergigante vermelha (M2Iab). Na escala real ela
+// teria ~900× o raio solar; aqui 5.5× o Sol do jogo (60k) já domina o céu a
+// centenas de milhares de u. Células de convecção GIGANTES (poucas células
+// cobrem a superfície — nada da granulação fina do Sol), fotosfera assimétrica
+// fervendo, envelope de poeira. Vai virar supernova — os planetas são carvão.
+// ---------------------------------------------------------------------------
+export const BETELGEUSE = {
+  star: {
+    name: 'Betelgeuse', key: 'betelgeuse', kind: 'redsupergiant',
+    radius: 60_000, color: 0xff9a4d, color2: 0x7a2d0c,  // ~3600 K: LARANJA profundo (não vermelho)
+    mu: 1.6e13,               // ~16 massas solares (na escala μ do jogo)
+    soi: 300_000, gravReach: 300_000,
+    spin: 900, light: 0xffb080,
+    cellScale: 1.8,           // freq. do FBM: 2-4 células de convecção GIGANTES no disco
+    lumpyLimb: 0.045,         // deslocamento de vértice low-freq — silhueta assimétrica (ALMA)
+  },
+  // α Ori B "Siwarha" — companheira REAL confirmada em 2025: faísca azul-branca
+  // orbitando DENTRO do envelope estendido da gigante.
+  companion: {
+    name: 'Siwarha', key: 'siwarha', kind: 'star',
+    radius: 900, color: 0xcfe0ff, color2: 0x8fb0f0, mu: 5.0e10,
+    soi: 9000, gravReach: 30_000, spin: 120, cellScale: 12,
+    orbit: 86_000, periodFactor: 2.4,
+  },
+  planets: [
+    { name: 'Cinza', key: 'cinza', radius: 130, color: 0x4a3f38, color2: 0x2b241f, kind: 'rock',
+      orbit: 110_000, periodFactor: 3.2, tilt: 0.05, spin: 70, mu: mu(1.4), soi: 4800, moons: [] },
+    { name: 'Brasa', key: 'brasa', radius: 240, color: 0x6b3020, color2: 0x40180c, kind: 'rock',
+      orbit: 160_000, periodFactor: 5.6, tilt: 0.10, spin: 55, mu: mu(4.0), soi: 8200,
+      atmosphere: 0xff7040, hasAtmo: true, moons: [] },
+    { name: 'Fuligem', key: 'fuligem', radius: 480, color: 0x37312e, color2: 0x1e1a18, kind: 'ice',
+      orbit: 235_000, periodFactor: 9.5, tilt: 0.35, spin: 40, mu: mu(11), soi: 11_000, moons: [] },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// SISTEMA 4 — BINÁRIO CAÓTICO: duas estrelas DIFERENTES (azul quente + laranja
+// fria) em órbita mútua EXCÊNTRICA integrada de verdade; planetas circumbinários
+// com velocidades perturbadas → trajetórias caóticas (problema de 3 corpos REAL).
+// ---------------------------------------------------------------------------
+export const CHAOTIC = {
+  stars: [
+    { name: 'Azurak', key: 'azurak', kind: 'star',
+      radius: 6500, color: 0xbcd2ff, color2: 0x7a9cf0, mu: 6.0e11,
+      soi: 90_000, gravReach: 260_000, spin: 300, light: 0xcfe0ff, cellScale: 9.0 },
+    { name: 'Karvon', key: 'karvon', kind: 'star',
+      radius: 3800, color: 0xffa04a, color2: 0xd06018, mu: 2.5e11,
+      soi: 60_000, gravReach: 260_000, spin: 380, light: 0xffd0a0, cellScale: 7.0 },
+  ],
+  pairSep: 42_000,            // separação inicial do par
+  pairEcc: 0.45,              // excentricidade da dança
+  planets: [
+    { name: 'Vagante-I', key: 'vag1', radius: 110, color: 0x8a94a8, color2: 0x5a6478, kind: 'rock',
+      orbitR: 85_000, velJitter: 0.72, mu: mu(0.9), soi: 3600, moons: [] },
+    { name: 'Vagante-II', key: 'vag2', radius: 300, color: 0xc9b088, color2: 0x97815e, kind: 'gas',
+      orbitR: 120_000, velJitter: 1.18, mu: mu(30), soi: 9000, atmosphere: 0xd8c098, hasAtmo: true, moons: [] },
+    { name: 'Vagante-III', key: 'vag3', radius: 95, color: 0x6fc0c8, color2: 0x3f888e, kind: 'ice',
+      orbitR: 65_000, velJitter: 0.55, mu: mu(0.6), soi: 3000, moons: [] },
+    { name: 'Vagante-IV', key: 'vag4', radius: 170, color: 0xb06a4a, color2: 0x753f28, kind: 'rock',
+      orbitR: 150_000, velJitter: 1.35, mu: mu(2.2), soi: 5200, moons: [] },
+    { name: 'Vagante-V', key: 'vag5', radius: 70, color: 0xd8d0c0, color2: 0xa09884, kind: 'rock',
+      orbitR: 100_000, velJitter: 0.88, mu: mu(0.3), soi: 2400, moons: [] },
+  ],
+  softening: 2500,            // ε do integrador (evita singularidades)
+};
+
+// ---------------------------------------------------------------------------
+// SISTEMA 5 — NÚCLEO DA GALÁXIA: buraco negro SUPERMASSIVO no centro com 12
+// estrelas orbitando CAOTICAMENTE (como as S-stars de Sgr A*) + planetas
+// perdidos. Tudo integrado por N-corpos — órbitas excêntricas, deflexões
+// mútuas, um enxame vivo.
+// ---------------------------------------------------------------------------
+export const CORE = {
+  smbh: {
+    name: 'Sagitário A✦', key: 'sgr', kind: 'blackhole',
+    rs: 900, radius: 900,
+    mu: 4.0e12,
+    soi: 420_000, gravReach: 420_000,
+    disk: { inner: 2000, outer: 14_000 },
+    photonRing: 1200,
+  },
+  starCount: 12,
+  starOrbitMin: 30_000,
+  starOrbitMax: 190_000,
+  // paleta espectral das 12 estrelas (O azul → M vermelha), tamanhos variados
+  starPalette: [
+    { color: 0xa8c4ff, color2: 0x6a8ce0, radius: 5200, mu: 4.5e11, cellScale: 10 },
+    { color: 0xcfe0ff, color2: 0x93b0e8, radius: 4200, mu: 3.5e11, cellScale: 9 },
+    { color: 0xfff2cc, color2: 0xe0c080, radius: 3600, mu: 2.8e11, cellScale: 8 },
+    { color: 0xffd27a, color2: 0xd09838, radius: 3000, mu: 2.2e11, cellScale: 7 },
+    { color: 0xff9a52, color2: 0xd06020, radius: 2600, mu: 1.8e11, cellScale: 6 },
+    { color: 0xff6a3a, color2: 0xb03a12, radius: 2200, mu: 1.4e11, cellScale: 5 },
+  ],
+  planetCount: 3,
+  softening: 2000,
 };
 
 // Cor do laser do jogador e dos inimigos

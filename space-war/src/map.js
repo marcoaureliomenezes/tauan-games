@@ -1,6 +1,7 @@
 // map.js — Mapa do Sistema Solar (overlay 2D top-down) com a posição da nave.
 
 import { game } from './state.js';
+import { SYSTEMS } from './config.js';
 
 let canvas, ctx;
 
@@ -44,7 +45,19 @@ export function drawMap() {
   };
 
   ctx.font = '12px monospace'; ctx.textAlign = 'center';
-  ctx.fillStyle = '#7df'; ctx.fillText('MAPA — SISTEMA SOLAR + SISTEMA BINÁRIO (escala log)  —  [M] fecha', cx, 28);
+  ctx.fillStyle = '#7df'; ctx.fillText('MAPA GALÁCTICO — 5 SISTEMAS (escala log)  —  [M] fecha', cx, 28);
+
+  // Marcadores dos 5 sistemas: anel + nome no centro de cada um.
+  for (const sys of SYSTEMS) {
+    if (sys.key === 'solar') continue;
+    const [mx, my] = project(sys.center[0], sys.center[2]);
+    ctx.strokeStyle = 'rgba(255,210,122,0.45)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(mx, my, 16, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffd27a';
+    ctx.fillText(sys.name, mx, my - 22);
+  }
 
   // Anéis de distância (escala log legível)
   for (const r of [50000, 200000, 820000]) {
@@ -61,13 +74,14 @@ export function drawMap() {
   for (const b of game.bodies) {
     if (b.isSun || b.isMoon) continue;
     const [px, py] = project(b.worldPos.x, b.worldPos.z);
-    if (b.binaryPair) {
-      // Buraco negro / estrela de nêutrons — ícones dedicados
+    if (b.def.kind === 'blackhole' || b.def.kind === 'neutron') {
+      // Buraco negro (binário OU supermassivo) / estrela de nêutrons — ícones dedicados
       if (b.def.kind === 'blackhole') {
+        const rr = b.def.rs > 500 ? 10 : 7;   // SMBH maior no mapa
         ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(px, py, rr, 0, Math.PI * 2); ctx.stroke();
         ctx.fillStyle = '#000';
-        ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px, py, rr * 0.65, 0, Math.PI * 2); ctx.fill();
       } else {
         ctx.fillStyle = '#cfe4ff';
         ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
@@ -85,7 +99,10 @@ export function drawMap() {
     const dotR = b.system === 'binary' ? 2.5 : Math.max(2.5, Math.min(9, projRadius(b.def.radius * 3, k) * 0.05 + 2.5));
     ctx.fillStyle = colorHex(b.def.color);
     ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#9ab'; ctx.fillText(b.def.name, px, py - 10);
+    // rótulo: só sistema solar + betelgeuse (os enxames caóticos viram pontos — sem poluição)
+    if (b.system === 'home' || b.system === 'betelgeuse') {
+      ctx.fillStyle = '#9ab'; ctx.fillText(b.def.name, px, py - 10);
+    }
   }
 
   // Nave + linha até o alvo de navegação
@@ -110,4 +127,4 @@ export function drawMap() {
   }
 }
 
-function colorHex(c) { return '#' + c.toString(16).padStart(6, '0'); }
+function colorHex(c) { return '#' + (c ?? 0x9aa8bb).toString(16).padStart(6, '0'); }

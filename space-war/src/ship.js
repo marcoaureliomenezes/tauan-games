@@ -2,8 +2,9 @@
 // da Terra (com horizonte que se curva), atmosfera e câmera de perseguição.
 
 import * as THREE from '../../vendor/three.module.min.js';
-import { scene, camera } from './scene.js';
-import { SHIP, ATMO } from './config.js';
+import { OrbitControls } from '../../vendor/jsm/controls/OrbitControls.js';
+import { scene, camera, renderer } from './scene.js';
+import { SHIP, ATMO, OVERDRIVE } from './config.js';
 import { game } from './state.js';
 import { computeGravity, surfaceContact } from './gravity.js';
 import { input, consumeMouse } from './input.js';
@@ -23,6 +24,32 @@ const camTarget = new THREE.Vector3();
 const lastEarthPos = new THREE.Vector3();
 let earthBody = null;
 let launchAngle = 0;
+
+// Câmera de OBSERVAÇÃO ([V]): OrbitControls (three r165 vendorado) orbitando a
+// nave em movimento — arrasta com o mouse para OLHAR/RODAR ao redor e ver os
+// corpos celestes; [V] de novo (ou pointer-lock) volta à perseguição.
+let _obsControls = null;
+const _prevShipPos = new THREE.Vector3();
+export function toggleObservationCamera() {
+  const s = game.ship;
+  s.obsMode = !s.obsMode;
+  if (s.obsMode) {
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    if (!_obsControls) {
+      _obsControls = new OrbitControls(camera, renderer.domElement);
+      _obsControls.enableDamping = true;
+      _obsControls.dampingFactor = 0.08;
+      _obsControls.minDistance = 6;
+      _obsControls.maxDistance = 4000;
+    }
+    _obsControls.enabled = true;
+    _obsControls.target.copy(s.pos);
+    _prevShipPos.copy(s.pos);
+  } else if (_obsControls) {
+    _obsControls.enabled = false;
+  }
+  return s.obsMode;
+}
 
 export function buildShip() {
   mesh = new THREE.Group();
@@ -175,8 +202,9 @@ function updateFlight(s, dt) {
   pitch += -dy * SHIP.mouseSens;
   yaw += -dx * SHIP.mouseSens;
   const manual = pitch || yaw || roll;
-  if (manual) { s.aligning = false; s.approach = false; }  // controle manual cancela autopilotos
-  if (input.brake) s.approach = false;                     // freio manual cancela a aproximação
+  if (manual) { s.aligning = false; s.approach = false; s.orbitAssist = false; }
+  if (input.brake) { s.approach = false; s.orbitAssist = false; }
+  if (input.throttleUp || input.throttleDown) s.orbitAssist = false;
 
   if (s.aligning) {
     // --- Piloto automático de mira: gira o nariz para o alvo de navegação ---
@@ -197,12 +225,56 @@ function updateFlight(s, dt) {
   // --- Gravidade de N-corpos (aceleração REAL, calculada ANTES do motor) ---
   // Calculada primeiro e somada DEPOIS do motor, sem ser "lavada": é isto que faz
   // todo corpo (Saturno inclusive) puxar de verdade.
-  const g = computeGravity(s.pos, accelG);
+  const g = computeGravity(s.pos, accelG, s.vel);
+
+  // --- MOTOR INTERESTELAR (overdrive): engaja onde a GRAVIDADE É FRACA (meio
+  // interestelar de verdade — não "fora do SOI": os domínios dos sistemas quase
+  // se tocam e nunca haveria corredor). Total abaixo de 10 u/s², zero acima de
+  // 40 u/s², rampa suave — viagens entre sistemas caem para 1-3 min.
+  const weakG = Math.max(0, Math.min(1, (40 - g.gravMag) / 30));
+  if (weakG > (s.overdrive || 0)) s.overdrive = Math.min(weakG, (s.overdrive || 0) + dt / OVERDRIVE.rampIn);
+  else s.overdrive = Math.max(weakG, (s.overdrive || 0) - dt / OVERDRIVE.rampOut);
+  const odCruise = 1 + (OVERDRIVE.mult - 1) * s.overdrive;
+  const odThrust = 1 + (OVERDRIVE.thrustMult - 1) * s.overdrive;
 
   // --- Propulsão ---
   fwd.set(0, 0, -1).applyQuaternion(s.quat);
   const boost = s.boost ? SHIP.boostMultiplier : 1;
-  if (s.approach) {
+  if (s.orbitAssist) {
+    // --- ASSISTENTE DE ÓRBITA ([O]): circulariza em torno do corpo DOMINANTE ---
+    // Alinha a velocidade com a tangente local (prograde) na magnitude v_circ=√(μ/r):
+    // funciona para planeta, estrela, pulsar e buraco negro. Qualquer manche cancela.
+    const dom = g.dominant;
+    if (!dom) { s.orbitAssist = false; }
+    else {
+      // TUDO no frame CO-MÓVEL do corpo (planetas em trilho se movem — a órbita
+      // é relativa ao corpo; no fim somamos a velocidade do corpo de volta).
+      const bodyVel = dom.worldVel || null;
+      tmp.copy(s.pos).sub(dom.worldPos);
+      const d = tmp.length();
+      tmp.multiplyScalar(1 / Math.max(1e-6, d));            // r̂
+      // velocidade relativa ao corpo
+      dvV.copy(s.vel);
+      if (bodyVel) dvV.sub(bodyVel);
+      // tangente: projeta a velocidade RELATIVA no plano ⊥ r̂ (mantém o sentido)
+      desiredV.copy(dvV).addScaledVector(tmp, -dvV.dot(tmp));
+      if (desiredV.lengthSq() < 1) desiredV.crossVectors(_up, tmp); // degenerado
+      desiredV.normalize();
+      const vCirc = Math.sqrt(dom.mu / Math.max(d, dom.def.radius));
+      // nariz na prograde (a nave "deita" na órbita)
+      _m.lookAt(s.pos, camTarget.copy(s.pos).addScaledVector(desiredV, 100), _up);
+      _q.setFromRotationMatrix(_m);
+      s.quat.slerp(_q, Math.min(1, SHIP.alignRate * 0.7 * dt));
+      desiredV.multiplyScalar(vCirc);
+      if (bodyVel) desiredV.add(bodyVel);                   // volta ao frame de mundo
+      s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * 0.75 * dt));
+      s.throttle = Math.max(0.05, Math.min(1, vCirc / (SHIP.cruiseSpeed * odCruise)));
+      if (s.vel.distanceTo(desiredV) < Math.max(8, vCirc * 0.025)) {
+        s.orbitAssist = false;
+        s.orbitLocked = 2.5;   // main.js mostra o toast "ÓRBITA CIRCULAR ESTABELECIDA"
+      }
+    }
+  } else if (s.approach) {
     // --- AUTO-APROXIMAÇÃO ([N]): voa até o alvo e CHEGA devagar ---
     // Perfil de chegada: velocidade desejada = √(2·a·restante)·0.55 (desacelera a
     // tempo), limitada pelo cruzeiro; a velocidade é dirigida ao alvo (mata deriva
@@ -218,7 +290,7 @@ function updateFlight(s, dt) {
       _q.setFromRotationMatrix(_m);
       s.quat.slerp(_q, Math.min(1, SHIP.alignRate * 0.8 * dt));
       const vArrive = Math.sqrt(2 * SHIP.assistThrust * Math.max(0, dist - arriveR)) * 0.55;
-      const vDes = Math.min(vArrive, SHIP.cruiseSpeed * boost);
+      const vDes = Math.min(vArrive, SHIP.cruiseSpeed * boost * odCruise);
       desiredV.copy(tmp).multiplyScalar(vDes);
       s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * 0.8 * dt));
       s.throttle = Math.max(0.05, Math.min(1, vDes / SHIP.cruiseSpeed));
@@ -227,19 +299,23 @@ function updateFlight(s, dt) {
   } else if (s.flightAssist) {
     // NAVEGAÇÃO RESPONSIVA (Set-Speed / fly-by-wire): a velocidade é continuamente
     // DIRECIONADA para o nariz, na intensidade do throttle. Virar a nave vira o seu
-    // movimento → você VAI PARA ONDE APONTA. throttle 0 desacelera; [X] freia rápido.
-    // A gravidade entra por cima: onde ela é forte (Sol, buraco negro) ela vence e te
-    // puxa/prende; no espaço normal ela é fraca e não atrapalha a navegação.
-    const targetSpeed = s.throttle * SHIP.cruiseSpeed * boost;
-    desiredV.copy(fwd).multiplyScalar(targetSpeed);
-    s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * dt));
+    // movimento → você VAI PARA ONDE APONTA. [X] freia rápido.
+    // FIX DE ÓRBITA (2026-07-01): throttle ~0 agora COASTA DE VERDADE — antes o
+    // lerp puxava a velocidade para ZERO (freio disfarçado) e matava a componente
+    // tangencial: era IMPOSSÍVEL manter órbita. Com coast honesto + gravidade por
+    // cima, órbitas keplerianas fecham em torno de qualquer corpo.
     if (input.brake) {                             // freio = parada rápida
       s.throttle = 0;
       s.vel.multiplyScalar(Math.max(0, 1 - SHIP.stopRate * dt));
+    } else if (s.throttle > 0.02) {
+      const targetSpeed = s.throttle * SHIP.cruiseSpeed * boost * odCruise;
+      desiredV.copy(fwd).multiplyScalar(targetSpeed);
+      s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * odThrust * dt));
     }
+    // throttle 0 sem freio → coast: inércia + gravidade (essencial p/ orbitar)
   } else {
     // NEWTONIANO puro (assist desligado com [Z]) — inércia real, sem limite.
-    s.vel.addScaledVector(fwd, s.throttle * SHIP.maxThrustAccel * boost * dt);
+    s.vel.addScaledVector(fwd, s.throttle * SHIP.maxThrustAccel * boost * odThrust * dt);
     if (input.brake) {
       const sp = s.vel.length();
       if (sp > 0.1) s.vel.addScaledVector(dvV.copy(s.vel).multiplyScalar(1 / sp), -Math.min(sp, SHIP.brakeAccel * dt));
@@ -251,6 +327,14 @@ function updateFlight(s, dt) {
   s.dominant = g.dominant; s.gravMag = g.gravMag; s.noReturn = g.noReturn;
   s.altitude = g.altitude; s.escapeVel = g.escapeVel; s.canEscape = g.canEscape;
   s.circVel = g.circVel;
+  s.interstellar = g.interstellar;
+  s.vTangential = g.vTangential; s.vRadial = g.vRadial;
+  // Órbita "fechada": tangencial perto de v_circ e radial pequena → HUD marca ÓRBITA
+  s.inOrbit = !g.interstellar && g.dominant &&
+    Math.abs(g.vTangential - g.circVel) < g.circVel * 0.18 &&
+    Math.abs(g.vRadial) < Math.max(20, g.circVel * 0.10) &&
+    g.altitude > 0;
+  if (s.orbitLocked > 0) s.orbitLocked -= dt;
 
   // --- Atmosfera + REENTRADA (qualquer corpo com atmosfera) ---
   // Entrar rápido na atmosfera aquece o casco (brilho na tela + dano); o arrasto freia.
@@ -306,6 +390,17 @@ function updateFlight(s, dt) {
 }
 
 function updateCamera(s, dt) {
+  if (s.obsMode && _obsControls) {
+    // OBSERVAÇÃO: a câmera orbita a NAVE EM MOVIMENTO — translada junto com ela
+    // (delta do frame) e o OrbitControls cuida do olhar/zoom com o mouse.
+    tmp.copy(s.pos).sub(_prevShipPos);
+    camera.position.add(tmp);
+    _prevShipPos.copy(s.pos);
+    _obsControls.target.copy(s.pos);
+    camera.up.set(0, 1, 0);
+    _obsControls.update();
+    return;
+  }
   // Câmera de perseguição PRÓXIMA e firme atrás da nave (mantém a nave centralizada).
   tmp.copy(camOffset).applyQuaternion(s.quat).add(s.pos);
   camera.position.lerp(tmp, Math.min(1, 14 * dt));        // segue rápido → nave não "foge" da tela

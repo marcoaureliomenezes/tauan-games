@@ -7,7 +7,7 @@ import { game } from './state.js';
 import { createSkybox } from './skybox.js';
 import { buildSolarSystem, updateSOIView, updateBodyFX } from './bodies.js';
 import { initOrbits, updateOrbits } from './orbits.js';
-import { buildShip, updateShip, shipMesh } from './ship.js';
+import { buildShip, updateShip, shipMesh, toggleObservationCamera } from './ship.js';
 import { input, installListeners, onAction } from './input.js';
 import { fireLaser, launchNuke, updateProjectiles } from './weapons.js';
 import { spawnEnemies, updateEnemies } from './enemies.js';
@@ -42,17 +42,18 @@ camera.lookAt(earthForMenu.worldPos);
 // --- Menu inicial ---
 game.phase = 'menu';
 showOverlay(`<div style="color:#7df;font-size:34px;letter-spacing:6px">SPACE WAR</div>
-  <div class="sub">Decole da Terra · Cruze o Sistema Solar · Liberte os planetas<br><br>
-  <b style="color:#9fe">NAVEGAÇÃO:</b> <b>T</b> escolhe o destino · <b>C</b> aponta a nave nele · <b>W</b> acelera até lá<br>
-  <b>N</b> = AUTO-APROXIMAÇÃO: voa sozinho até o alvo e chega devagar (a mira mostra distância,
-  velocidade de aproximação e ETA)<br><br>
+  <div class="sub"><b style="color:#ffd27a">5 SISTEMAS ESTELARES</b> — Sistema Solar · BETELGEUSE (supergigante
+  vermelha + companheira Siwarha) · BINÁRIO buraco negro + pulsar (dentro do remanescente da
+  supernova que criou o BN) · BINÁRIO CAÓTICO (2 estrelas, planetas em caos de 3 corpos) ·
+  NÚCLEO DA GALÁXIA (12 estrelas orbitando caoticamente um buraco negro supermassivo)<br><br>
+  <b style="color:#9fe">NAVEGAÇÃO:</b> <b>T</b> destino · <b>C</b> aponta · <b>N</b> auto-aproximação ·
+  <b style="color:#8f8">O = ASSISTENTE DE ÓRBITA</b> (circulariza em torno de QUALQUER corpo — planeta,
+  estrela, pulsar, buraco negro) · <b>V</b> câmera de observação (gira ao redor da nave)<br>
+  <i style="color:#7a9">Fora dos sistemas o MOTOR INTERESTELAR desperta sozinho (velocidade ×4.5)
+  — cada sistema fica a 1-3 min de viagem. Throttle 0 agora COASTA de verdade: entre em
+  órbita, corte o motor e ela FECHA.</i><br><br>
   <b>W/S</b> empuxo · <b>Shift</b> turbo · <b>X</b> freio · <b>setas</b> guinada/arfagem · <b>A/D</b> rolagem<br>
-  <b>Mouse</b> (clique p/ travar) pilota · <b>Espaço</b> laser · <b>F</b> nuke · <b>M</b> mapa · <b>P</b> pausa<br>
-  <i style="color:#7a9">Gravidade real de N-corpos: TODO corpo te puxa. O HUD mostra o PUXÃO e se você
-  consegue fugir (✅ DÁ / ⛔ NÃO DÁ).</i><br>
-  <i style="color:#b18cff">Logo depois de Netuno há um 2º sistema: um BURACO NEGRO + ESTRELA DE NÊUTRONS
-  girando juntos. Selecione-o com [T], aponte com [C] e segure [Shift] (turbo) — ~40 s de
-  viagem. Aproxime-se com cuidado: eles engolem naves.</i><br><br>
+  <b>Mouse</b> (clique p/ travar) pilota · <b>Espaço</b> laser · <b>F</b> nuke · <b>M</b> mapa · <b>P</b> pausa<br><br>
   [Enter] para iniciar</div>`);
 
 // --- Ações discretas ---
@@ -69,7 +70,21 @@ onAction('align', () => { if (game.phase === 'flight') game.ship.aligning = true
 onAction('approach', () => {
   if (game.phase !== 'flight') return;
   game.ship.approach = !game.ship.approach;
+  if (game.ship.approach) game.ship.orbitAssist = false;
   showToast(game.ship.approach ? '⏵ AUTO-APROXIMAÇÃO: voando até o alvo (qualquer manche cancela)' : 'auto-aproximação off', 1800);
+});
+onAction('orbit', () => {
+  if (game.phase !== 'flight') return;
+  game.ship.orbitAssist = !game.ship.orbitAssist;
+  if (game.ship.orbitAssist) game.ship.approach = false;
+  showToast(game.ship.orbitAssist
+    ? `◎ ASSISTENTE DE ÓRBITA: circularizando em torno de ${game.ship.dominant?.def?.name ?? '...'}`
+    : 'assistente de órbita off', 2000);
+});
+onAction('look', () => {
+  if (game.phase !== 'flight') return;
+  const on = toggleObservationCamera();
+  showToast(on ? '👁 CÂMERA DE OBSERVAÇÃO: arraste o mouse p/ girar, scroll p/ zoom — [V] volta' : 'câmera de perseguição', 2200);
 });
 onAction('assist', () => {
   if (game.phase !== 'flight') return;
@@ -104,6 +119,9 @@ function loop() {
     updateProjectiles(dt);
     updateMissions(dt);
     updateSOIView(game.ship.pos);
+    if (game.ship.orbitLocked > 2.3) {   // recém-fechada (ship.js decrementa)
+      showToast(`◎ ÓRBITA CIRCULAR ESTABELECIDA em torno de ${game.ship.dominant?.def?.name ?? ''} — throttle 0 = coast`, 2600);
+    }
     if (game.ship.hp <= 0 && game.phase === 'flight') gameOver();
   } else if (game.phase === 'briefing') {
     // planetas continuam girando no fundo do briefing

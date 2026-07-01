@@ -9,9 +9,12 @@ export function updateHUD() {
   const s = game.ship;
   const tgt = currentTarget();
   if (tgt) set('navtarget', `→ ${tgt.name}: ${fmt(targetDistance())}${s.aligning ? ' 🎯' : ''}`);
-  set('speed', `VEL: ${s.speed.toFixed(0)} u/s${s.speed > 900 ? ' ⚡WARP' : ''}`);
-  set('throttle', `${s.flightAssist ? '🛟 ' : ''}THR: ${(s.throttle * 100).toFixed(0)}%${s.boost ? ' 🔥' : ''}`);
-  set('dominant', s.dominant ? `ÓRBITA: ${s.dominant.def.name}` : 'ESPAÇO PROFUNDO');
+  const od = s.overdrive > 0.05 ? ` ✦INTERESTELAR ×${(1 + 3.5 * s.overdrive).toFixed(1)}` : '';
+  set('speed', `VEL: ${s.speed.toFixed(0)} u/s${od || (s.speed > 900 ? ' ⚡WARP' : '')}`);
+  set('throttle', `${s.flightAssist ? '🛟 ' : ''}THR: ${(s.throttle * 100).toFixed(0)}%${s.boost ? ' 🔥' : ''}${s.orbitAssist ? ' ◎' : ''}`);
+  set('dominant', s.interstellar
+    ? 'ESPAÇO INTERESTELAR'
+    : s.dominant ? `${s.inOrbit ? '🛰 EM ÓRBITA de' : 'CAMPO:'} ${s.dominant.def.name}` : 'ESPAÇO PROFUNDO');
   set('altitude', s.dominant ? `ALT: ${fmt(s.altitude)}` : '');
 
   // Gravidade com cor escalando do calmo (lilás) ao crítico (vermelho).
@@ -19,10 +22,14 @@ export function updateHUD() {
   const gel = el('gravity');
   if (gel) gel.style.color = s.gravMag > 800 ? '#ff5560' : s.gravMag > 200 ? '#ffaa44' : '#b8a0ff';
 
-  // Órbita: velocidade circular-alvo no raio atual (mire essa velocidade tangencial
-  // e corte o motor pra entrar em órbita).
+  // Órbita: v_circ alvo + decomposição REAL tangencial/radial da velocidade —
+  // é o instrumento que torna órbita pilotável ([O] circulariza sozinho).
   const oel = el('orbit');
-  if (oel) oel.textContent = (s.dominant && s.circVel > 1) ? `ÓRBITA: ${fmt(s.circVel)}/s` : '';
+  if (oel) {
+    oel.textContent = (s.dominant && s.circVel > 1 && !s.interstellar)
+      ? `v○ ${fmt(s.circVel)}/s · tang ${fmt(s.vTangential || 0)}/s · rad ${s.vRadial >= 0 ? '+' : ''}${fmt(s.vRadial || 0)}/s`
+      : '';
+  }
 
   // Análise de FUGA: % da velocidade de escape já atingida + estado + veredito.
   const eel = el('escape');
