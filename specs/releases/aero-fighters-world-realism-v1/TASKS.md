@@ -175,7 +175,7 @@ galáctico com os 5 sistemas, alvos por sistema. Fix: mapa crashava no SMBH sem 
 e=0.25 bound; viagem 101 s; overdrive 1.00), console limpo, screenshots
 `.dadaia/tmp/claude/20260701/v2-*.png`; aceite visual/jogável = operador.
 
-### [-] T-WR-12 — Rodada de bugs do operador (2026-07-01, tarde): lag, água no aeroporto, pouso negado, câmera fugitiva
+### [x] T-WR-12 — Rodada de bugs do operador (2026-07-01, tarde): lag, água no aeroporto, pouso negado, câmera fugitiva — ENTREGUE + DEPLOYED (PR #5 merged 2026-07-02, Pages verde, live verificado)
 
 **Owner:** `game-developer`
 
