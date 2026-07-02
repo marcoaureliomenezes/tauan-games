@@ -78,30 +78,41 @@ export function computeGravity(pos, out, shipVel = null) {
     }
     gravMag = out.length();
   } else {
-    // 4) Hierárquico / binário.
-    let partner = null;
+    // 4) Hierárquico / binário — TODO corpo puxa (operador 2026-07-02): dominante
+    //    com força plena + PERTURBAÇÃO DE MARÉ de cada outro corpo próximo do
+    //    mesmo sistema: puxão_no_ponto_da_nave − puxão_no_dominante. É a física
+    //    real de N corpos no frame patched-conics: perto de qualquer lua/planeta
+    //    /estrela o puxão DELE emerge continuamente na aproximação, e órbitas
+    //    fechadas em volta do dominante continuam fechando (a maré é o resíduo
+    //    físico de verdade). Forma de maré, e não soma direta, porque os trilhos
+    //    são comprimidos (não keplerianos vs μ da primária) — somar direto
+    //    arrancaria a nave de qualquer órbita.
     if (dominant.binaryPair) {
+      // no par, o membro que puxa mais forte é o dominante do HUD/órbita
       for (const b of game.bodies) {
-        if (b !== dominant && b.binaryPair) { partner = b; break; }
-      }
-      if (partner) {
-        const distP = partner.worldPos.distanceTo(pos);
-        if (_accelOf(partner, distP) > _accelOf(dominant, domDist)) {
-          const t = dominant; dominant = partner; partner = t;
-          domDist = distP;
+        if (b !== dominant && b.binaryPair) {
+          const distP = b.worldPos.distanceTo(pos);
+          if (_accelOf(b, distP) > _accelOf(dominant, domDist)) { dominant = b; domDist = distP; }
+          break;
         }
       }
     }
     const a = _accelOf(dominant, domDist);
     out.copy(dominant.worldPos).sub(pos).multiplyScalar(a / Math.max(domDist, 1e-6));
-    gravMag = a;
-    if (partner) {
-      const distP = partner.worldPos.distanceTo(pos);
-      const aP = _accelOf(partner, distP);
-      _partnerPull.copy(partner.worldPos).sub(pos).multiplyScalar(aP / Math.max(distP, 1e-6));
-      out.add(_partnerPull);
-      gravMag = out.length();
+    for (const b of game.bodies) {
+      if (b === dominant || b.system !== dominant.system) continue;
+      const dist = b.worldPos.distanceTo(pos);
+      if (dist > (b.gravReach || b.soi * 4)) continue;      // longe demais p/ importar
+      const aS = _accelOf(b, dist);
+      _tmp.copy(b.worldPos).sub(pos).multiplyScalar(aS / Math.max(dist, 1e-6));
+      out.add(_tmp);                                        // puxão no ponto da nave…
+      const dDom = b.worldPos.distanceTo(dominant.worldPos);
+      const aD = _accelOf(b, dDom);
+      _partnerPull.copy(b.worldPos).sub(dominant.worldPos)
+        .multiplyScalar(-aD / Math.max(dDom, 1e-6));
+      out.add(_partnerPull);                                // …menos o puxão no dominante
     }
+    gravMag = out.length();
     // ACELERAÇÃO DE FRAME (patched-conics honesto): o corpo dominante ACELERA
     // (trilho ao redor da sua estrela). A nave cai JUNTO com ele — sem isto a
     // órbita relativa fica excêntrica e deriva. Com isto, Kepler puro no frame

@@ -822,7 +822,8 @@ function buildSystemBeacons() {
     if (sys.key === 'solar') continue;
     if (sys.key === 'betelgeuse') continue;   // a própria estrela é o farol
     const sp = makeRadialSprite(tints[sys.key]);
-    sp.scale.setScalar(sys.key === 'betelgeuse' ? 26000 : 17000);
+    // sistemas agora a ~2.6-3.3M (×4): o farol acompanha p/ continuar visível
+    sp.scale.setScalar(sys.key === 'betelgeuse' ? 60000 : 40000);
     sp.position.set(...sys.center);
     scene.add(sp);
     _beacons.push({ sys, sprite: sp });

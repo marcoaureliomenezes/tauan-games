@@ -316,8 +316,10 @@ export const CHAOTIC = {
 //  - Sol ×2 (22k — ainda bem menor que Betelgeuse, 60k)
 // =============================================================================
 function approachScale(p, forceF = null) {
-  const f = forceF ?? (p.radius < 200 ? 9 : p.radius < 500 ? 3.2 : 2.4);
-  const soiF = f === 2.4 ? 1.6 : 2.0;
+  // ×22/×9/×6 (operador 2026-07-02, 2ª rodada): "×9 ainda era bolinha na colisão" —
+  // o corpo tem que virar MUNDO na aproximação e a nave um grão de poeira.
+  const f = forceF ?? (p.radius < 200 ? 22 : p.radius < 500 ? 9 : 6);
+  const soiF = f === 6 ? 1.6 : 2.0;
   p.radius *= f;
   p.mu *= f;
   p.soi *= soiF;
@@ -325,8 +327,8 @@ function approachScale(p, forceF = null) {
   if (p.moons && p.moons.length) {
     let k = 1;
     for (const m of p.moons) {
-      m.radius *= 9;
-      m.mu *= 9;
+      m.radius *= 22;
+      m.mu *= 22;
       m.soi = Math.max(m.soi * 2.0, m.radius * 2.2);
       const floor = Math.max(p.radius * 2.1, p.ring ? p.ring.outer * 1.12 : 0) + m.radius * 2;
       k = Math.max(k, floor / m.orbit);
@@ -335,13 +337,33 @@ function approachScale(p, forceF = null) {
   }
 }
 for (const p of PLANETS) approachScale(p);
-// Betelgeuse/caótico: fator ÚNICO ×4.5 (preserva a ordem de tamanhos da lista)
-for (const p of BETELGEUSE.planets) approachScale(p, 4.5);
-for (const p of CHAOTIC.planets) approachScale(p, 4.5);
+// Betelgeuse/caótico: fator ÚNICO ×10 (preserva a ordem de tamanhos da lista)
+for (const p of BETELGEUSE.planets) approachScale(p, 10);
+for (const p of CHAOTIC.planets) approachScale(p, 10);
 SUN.radius *= 2;
 // μ do Sol acompanha (×2.2): sem isso a superfície MAIOR fica mais "fraca"
 // (v_esc ∝ √(μ/R)) e a ZONA DE NÃO-RETORNO do Sol deixaria de existir (AC-04b).
 SUN.mu *= 2.2;
+
+// ---------------------------------------------------------------------------
+// DISTÂNCIAS ×4 (operador 2026-07-02, 2ª rodada): "o Sol está perto demais dos
+// planetas — no mínimo 4× mais distantes entre si". Órbitas e SOIs planetários
+// ×4; o universo inteiro acompanha: sistemas vizinhos ×4 (mutação IN-PLACE dos
+// arrays center — BINARY/CHAOTIC/CORE apontam para eles), SOI do Sol contém
+// Netuno (1.92M), teto de render e skybox esticados, overdrive mais forte para
+// as travessias maiores continuarem em ~1-2 min.
+// ---------------------------------------------------------------------------
+for (const p of PLANETS) { p.orbit *= 4; p.soi *= 4; }
+SUN.soi = 2_350_000;
+SUN.gravReach = 2_350_000;
+for (const s of SYSTEMS) {
+  if (s.key === 'solar') { s.radius = 2_350_000; continue; }
+  for (let i = 0; i < 3; i++) s.center[i] *= 4;
+}
+RENDER.far = 9_500_000;
+RENDER.skyboxRadius = 5_500_000;
+OVERDRIVE.mult = 12;
+OVERDRIVE.thrustMult = 9;
 
 // ---------------------------------------------------------------------------
 // SISTEMA 5 — NÚCLEO DA GALÁXIA (rework 2026-07-02, pedido do operador): as

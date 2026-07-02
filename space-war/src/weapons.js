@@ -5,10 +5,16 @@ import { scene } from './scene.js';
 import { game } from './state.js';
 import { COLORS } from './config.js';
 import { shipForward } from './ship.js';
+import { computeGravity, surfaceContact } from './gravity.js';
 import { explosion, nukeBlast } from './fx.js';
 
 const _f = new THREE.Vector3();
 const _p = new THREE.Vector3();
+const _gPull = new THREE.Vector3();
+const _nR = new THREE.Vector3();
+const _nH = new THREE.Vector3();
+const _nT = new THREE.Vector3();
+const _nV = new THREE.Vector3();
 let cooldown = 0;
 
 function boltMesh(color, len = 48) {
@@ -42,7 +48,9 @@ export function launchNuke() {
     new THREE.MeshBasicMaterial({ color: COLORS.nuke }));
   m.position.copy(s.pos).addScaledVector(_f, 40);
   scene.add(m);
-  game.projectiles.push({ mesh: m, vel: _f.clone().multiplyScalar(1600).add(s.vel), life: 14, friendly: true, dmg: 0, isNuke: true, armed: 0.4 });
+  // life LONGA: a nuke agora é um corpo BALÍSTICO sob gravidade — dá para
+  // lançá-la em órbita e vê-la dar voltas antes de cair (operador 2026-07-02).
+  game.projectiles.push({ mesh: m, vel: _f.clone().multiplyScalar(1600).add(s.vel), life: 90, friendly: true, dmg: 0, isNuke: true, armed: 0.4 });
   return true;
 }
 
@@ -58,10 +66,61 @@ export function updateProjectiles(dt) {
   for (let i = arr.length - 1; i >= 0; i--) {
     const p = arr[i];
     p.life -= dt;
+    // NUKE SOB GRAVIDADE (operador 2026-07-02): a nuke é um corpo balístico —
+    // o MESMO campo da nave (dominante + marés de todo corpo próximo) a puxa:
+    // ela orbita, faz estilingue, e cai em ESPIRAL no disco de acreção.
+    if (p.isNuke) {
+      const g = computeGravity(p.mesh.position, _gPull);
+      p.vel.addScaledVector(_gPull, dt);
+      // ÓRBITA + ESPIRAL DA MORTE (pedido explícito): a nuke tem guiagem de
+      // inserção orbital — dentro do domínio de um corpo a velocidade é puxada
+      // p/ fluxo kepleriano SUB-circular com leve deriva p/ dentro. Resultado:
+      // captura em órbita visível → apoápside decai volta a volta → impacto.
+      //  · planeta/lua: captura suave dentro do SOI (a 1600 u/s ela jamais
+      //    orbitaria sozinha — v_circ local ~140; a guiagem entrega a fantasia)
+      //  · BN/pulsar: arrasto FORTE do disco de acreção/vento (como a nave)
+      //  · estrela: perto dela (r < 6R) espirala ACELERANDO p/ dentro (física:
+      //    espiral de decaimento ganha velocidade) até queimar na superfície
+      const dom = g.dominant;
+      if (dom) {
+        const kind = dom.def.kind;
+        const compact = kind === 'blackhole' || kind === 'neutron';
+        const dk = compact ? dom.def.disk : null;
+        const inDisk = dk && g.dist < dk.outer * 1.3;
+        const isStar = dom.isSun || kind === 'star' || kind === 'redsupergiant';
+        const nearStar = isStar && g.dist < dom.def.radius * 6;
+        const capture = !compact && !isStar && g.dist < (dom.soi || 0);
+        if (inDisk || capture || nearStar) {
+          _nR.copy(p.mesh.position).sub(dom.worldPos);
+          _nV.copy(p.vel);
+          if (dom.worldVel) _nV.sub(dom.worldVel);          // frame co-móvel do corpo
+          _nH.crossVectors(_nR, _nV);
+          _nT.crossVectors(_nH, _nR).normalize();           // direção prograde
+          // Piso de velocidade orbital de GAMEPLAY: v_circ real num planeta é
+          // ~70-140 u/s (período de 20+ min — espiral invisível). A guiagem usa
+          // max(vK, 320): loops de ~1 min com afundamento visível volta a volta.
+          // (inw 0.30/rate 0.5: acima do v_circ real a centrífuga excedente
+          //  empurra p/ FORA ~rate⁻¹·(v²/r−g) — a deriva p/ dentro tem que
+          //  vencer isso, senão a nuke paira em vez de espiralar. Medido.)
+          const vK = Math.max(Math.sqrt(dom.mu / Math.max(g.dist, 1)), inDisk ? 0 : 320);
+          const sub = inDisk ? 0.93 : 0.92;
+          const inw = inDisk ? 0.06 : 0.30;
+          const rate = inDisk ? 0.45 : 0.5;
+          _nR.normalize();
+          _nT.multiplyScalar(vK * sub).addScaledVector(_nR, -vK * inw);
+          _nV.lerp(_nT, Math.min(1, rate * dt));
+          p.vel.copy(_nV);
+          if (dom.worldVel) p.vel.add(dom.worldVel);
+        }
+      }
+      // horizonte/superfície engole a nuke → detona no impacto
+      const hit = surfaceContact(p.mesh.position, 6);
+      if (hit) p.surfaceHit = true;
+    }
     p.mesh.position.addScaledVector(p.vel, dt);
     if (p.isNuke && p.armed > 0) p.armed -= dt;
 
-    let detonate = false, hitPos = p.mesh.position;
+    let detonate = !!p.surfaceHit, hitPos = p.mesh.position;
 
     if (p.friendly) {
       // vs inimigos

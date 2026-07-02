@@ -297,6 +297,47 @@ sw-earth-night/glint-v2 ↔ print Terra, sw-bh-far-lens ↔ Cygnus X-1 "visível
 staging-only: bolha branca na nave = FX de overdrive do pino de teleporte (não ocorre
 em voo real). Suíte completa na CI do PR.
 
+### [x] T-WR-15 — Space-war: DISTÂNCIAS ×4, escala ×22, gravidade de TODO corpo, nukes balísticas (operador 2026-07-02, 3ª rodada)
+
+**Owner:** `game-developer`
+
+Cobranças do operador (verbatim: "Is it so difficult???? To understand and implement
+the reality of when we approach celestial bodies???"), com causa-raiz e fix:
+1. **"Sol perto demais / planetas 4× mais distantes":** órbitas planetárias ×4
+   (Mercúrio 104k … Netuno 1.92M), SOIs ×4, SOI do Sol 2.35M, sistemas vizinhos ×4
+   (anel 2.6-3.3M — mutação in-place dos arrays center que BINARY/CORE aliasam),
+   RENDER.far 9.5M, skybox 5.5M, beacons 40-60k, OVERDRIVE ×12 (era 4.5 — travessias
+   seguem 1-2 min), portão de distância do overdrive domR·30→·12 (o Sol ×2 com ·30
+   bloqueava overdrive no sistema externo inteiro; provado: 0.97 entre Marte-Júpiter,
+   0 colado na Terra, 1.0 interestelar).
+2. **"Colidi com a Terra e era uma bolinha":** escala de aproximação ×9→×22 (rochosos
+   e LUAS), ×3.2→×9 (médios), ×2.4→×6 (gigantes), Betelgeuse/caótico ×10. Terra
+   raio 2200 — a 292u de altitude é uma PAREDE de atmosfera sem curvatura
+   (sw2-earth-wall.jpeg); Lua 594 enche o quadro inteiro na chegada da missão
+   (sw2-moon-base.jpeg). μ ∝ fator (v_circ/v_esc de superfície preservadas).
+3. **"Cada planeta, cada lua, cada estrela puxa por massa":** computeGravity agora soma
+   PERTURBAÇÃO DE MARÉ de todo corpo próximo do mesmo sistema (puxão no ponto da nave −
+   puxão no dominante) sobre o dominante patched-conics. Forma de maré e não soma direta
+   porque os trilhos são comprimidos (somar direto arrancaria a nave de qualquer órbita).
+   PROVADO: transecto Terra→Lua contínuo com VALE DE LAGRANGE real (0.33 u/s² no ponto
+   de equilíbrio) e o puxão da Lua emergindo ANTES do handoff de SOI.
+4. **"A base era uma coisa verde estranha do tamanho da lua":** cúpula tinha raio 192
+   numa lua de 243 (80%!). baseMesh agora escala ~3% do raio do corpo (clamp 14-70) —
+   instalação NA paisagem.
+5. **"NUKES ATRAÍDAS PELA GRAVIDADE — órbita e espiral":** nukes viraram corpos
+   balísticos: computeGravity por frame (mesmo campo da nave, marés incluídas), vida
+   14→90s, detonação por contato de superfície/horizonte, e GUIAGEM DE INSERÇÃO
+   ORBITAL — dentro do SOI de planeta/lua puxa p/ fluxo kepleriano sub-circular com
+   deriva p/ dentro (piso de gameplay 320 u/s: v_circ real ~70-140 = período 20 min,
+   espiral invisível; medido que a centrífuga excedente exige inw 0.30/rate 0.5 senão
+   a nuke PAIRA); no disco do BN/pulsar arrasto forte (0.93/0.06/0.45 como a nave);
+   perto de estrela (r<6R) espirala acelerando p/ dentro. PROVADO: captura em r=4558,
+   ¾ de volta afundando monotônico 4558→2265, IMPACTO na superfície com detonação.
+
+**Verify (executado):** smoke space-war 12/12 no layout novo (decolagem, gravidade,
+não-retorno do Sol, nav, FPS); probes numéricos live (maré/Lagrange, espiral da nuke,
+overdrive nos 3 regimes); screenshots sw2-*.jpeg. Suíte completa na CI do PR.
+
 ### [ ] T-WR-06 — QA/fechamento
 
 **Owner:** `qa-engineer` + `code-reviewer`

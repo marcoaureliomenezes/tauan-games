@@ -20,7 +20,7 @@ function findBody(key) {
   return game.bodies.find((b) => b.def.key === key);
 }
 
-function baseMesh() {
+function baseMesh(bodyRadius) {
   const g = new THREE.Group();
   const dome = new THREE.Mesh(new THREE.SphereGeometry(4, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
     new THREE.MeshStandardMaterial({ color: 0x224422, emissive: 0x33ff66, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.4 }));
@@ -33,7 +33,10 @@ function baseMesh() {
   }
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshBasicMaterial({ color: 0x66ff88 }));
   beacon.position.y = 5; g.add(beacon);
-  g.scale.setScalar(48);          // base grande o bastante p/ ver na superfície do corpo
+  // Escala PROPORCIONAL ao corpo (operador 2026-07-02): escala fixa 48 fazia a
+  // cúpula (raio 4×48=192) ocupar 80% de uma lua — a "coisa verde estranha".
+  // Agora a base é ~5% do raio do corpo: instalação NA paisagem, não do tamanho dela.
+  g.scale.setScalar(Math.max(14, Math.min(70, bodyRadius * 0.028)));
   return g;
 }
 
@@ -47,7 +50,7 @@ function startMission(idx, blocking = false) {
       const body = findBody(spec.key);
       if (!body) continue;
       for (let i = 0; i < spec.n; i++) {
-        const obj = baseMesh();
+        const obj = baseMesh(body.def.radius);
         const dir = new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.5), (Math.random() - 0.5)).normalize();
         scene.add(obj);
         targets.push({ obj, body, dir, destroyed: false });
