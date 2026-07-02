@@ -21,11 +21,13 @@ on:
     branches: [main]
     paths:
       - "aero-fighters-v2/**"
+      - "!aero-fighters-v2/docs/**"
       - ".github/workflows/aero-v2-godot-ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "aero-fighters-v2/**"
+      - "!aero-fighters-v2/docs/**"
       - ".github/workflows/aero-v2-godot-ci.yml"
 
 concurrency:
