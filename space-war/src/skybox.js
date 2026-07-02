@@ -463,6 +463,25 @@ function paintSky() {
   puff(ctx, 0, 0, bandH * 0.22, [255, 245, 215], 0.35);   // núcleo quente compacto
   ctx.restore();
 
+  // NUVENS DE POEIRA MARROM (prints D.A 2026-07-02): a banda galáctica das
+  // referências é um rio de poeira SÉPIA/CHOCOLATE — sopros quentes tênues ao
+  // longo da banda + grumos de absorção irregulares por cima (não só as faixas).
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 40; i++) {
+    const x = (rnd() - 0.5) * W * 1.6;
+    const y = ((rnd() - 0.5) + (rnd() - 0.5)) * bandH * 0.42;
+    const r = bandH * (0.08 + rnd() * 0.16);
+    const warm = rnd() < 0.5 ? [96, 62, 40] : [72, 50, 34];
+    puff(ctx, x, y, r, warm, 0.028 + rnd() * 0.028);
+  }
+  ctx.restore();
+  for (let i = 0; i < 28; i++) {
+    const x = (rnd() - 0.5) * W * 1.5;
+    const y = ((rnd() - 0.5) + (rnd() - 0.5)) * bandH * 0.35;
+    darkPuff(ctx, x, y, bandH * (0.04 + rnd() * 0.09), 0.10 + rnd() * 0.14);
+  }
+
   // Faixas de poeira ESCURAS — depois das estrelas, com bordas nítidas e irregulares.
   ctx.globalCompositeOperation = 'source-over';
   const laneYs = [-0.16, -0.05, 0.02, 0.10, 0.20];

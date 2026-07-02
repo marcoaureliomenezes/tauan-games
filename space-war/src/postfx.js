@@ -32,6 +32,7 @@ const LENS_SHADER = {
     uTheta: { value: 0.0 },      // raio de Einstein em fração de tela (0 = off)
     uAspect: { value: 1.0 },
     uMix: { value: 0.0 },
+    uShadow: { value: 1.0 },     // 1 = buraco negro (sombra); 0 = estrela de nêutrons
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -44,7 +45,19 @@ const LENS_SHADER = {
     uniform float uTheta;
     uniform float uAspect;
     uniform float uMix;
+    uniform float uShadow;
     varying vec2 vUv;
+    // amostra o fundo lenseado com uma força de deflexão dada; fora da tela → base
+    vec4 sampleLensed(vec4 base, vec2 d, float pull, float swirl) {
+      vec2 d2 = d * (1.0 - pull);
+      // REDEMOINHO (frame dragging visual dos prints): rotação tangencial que
+      // decai com a distância — as estrias do fundo enrolam ao redor da sombra.
+      float cs = cos(swirl), sn = sin(swirl);
+      d2 = vec2(d2.x * cs - d2.y * sn, d2.x * sn + d2.y * cs);
+      vec2 uv2 = uBH + vec2(d2.x / uAspect, d2.y);
+      if (uv2.x < 0.0 || uv2.x > 1.0 || uv2.y < 0.0 || uv2.y > 1.0) return base;
+      return texture2D(tDiffuse, uv2);
+    }
     void main() {
       vec4 base = texture2D(tDiffuse, vUv);
       if (uMix <= 0.001 || uTheta <= 0.0005) { gl_FragColor = base; return; }
@@ -62,16 +75,22 @@ const LENS_SHADER = {
       // — dentro do raio de Einstein a imagem inverte (física), sem espelhamento
       // explosivo que borrava retângulos da borda da tela.
       float pull = (uTheta * uTheta) / (r * r + 0.25 * uTheta * uTheta);
-      vec2 d2 = d * (1.0 - pull);
-      vec2 uv2 = uBH + vec2(d2.x / uAspect, d2.y);
-      // fora da tela: mantém o fundo original (nunca esticar a borda)
-      vec4 lensed = (uv2.x < 0.0 || uv2.x > 1.0 || uv2.y < 0.0 || uv2.y > 1.0)
-        ? base : texture2D(tDiffuse, uv2);
-      // escurece o miolo (sombra) e realça um ARO fino no raio de Einstein
-      float shadow = smoothstep(uTheta * 0.62, uTheta * 0.30, r);
-      float ring = smoothstep(uTheta * 0.22, 0.0, abs(r - uTheta)) * 0.35;
+      float swirl = 0.9 * (uTheta * uTheta) / (r * r + 0.6 * uTheta * uTheta);
+      // ABERRAÇÃO CROMÁTICA sutil no raio de Einstein: a luz azul deflete um
+      // pouco mais que a vermelha (prisma gravitacional) — os arcos ganham
+      // franjas de cor como nos prints (3 taps, só na região da lente).
+      vec4 lensed = sampleLensed(base, d, pull, swirl);
+      float lensedR = sampleLensed(base, d, pull * 0.96, swirl * 0.97).r;
+      float lensedB = sampleLensed(base, d, pull * 1.04, swirl * 1.03).b;
+      lensed.r = mix(lensed.r, lensedR, 0.8);
+      lensed.b = mix(lensed.b, lensedB, 0.8);
+      // escurece o miolo (sombra) e realça um ARO fino no raio de Einstein —
+      // SÓ para buraco negro: estrela de nêutrons tem SUPERFÍCIE, não sombra
+      // ("mesmo não sendo um buraco negro… ela curva o espaço" — sem miolo preto).
+      float shadow = smoothstep(uTheta * 0.62, uTheta * 0.30, r) * uShadow;
+      float ring = smoothstep(uTheta * 0.20, 0.0, abs(r - uTheta)) * (0.2 + 0.3 * uShadow);
       vec4 c = mix(base, lensed, mixEff);
-      c.rgb = c.rgb * (1.0 - shadow * mixEff) + vec3(1.0, 0.85, 0.6) * ring * mixEff;
+      c.rgb = c.rgb * (1.0 - shadow * mixEff) + vec3(1.0, 0.88, 0.62) * ring * mixEff;
       gl_FragColor = c;
     }
   `,
@@ -133,8 +152,9 @@ export function updateAdaptiveRes(dt) {
   }
 }
 
-/** Atualiza a lente gravitacional. mix 0 desliga (custa ~nada no shader). */
-export function setLens(ndcX, ndcY, thetaScreen, mix, shipNdcX = 0, shipNdcY = -2) {
+/** Atualiza a lente gravitacional. mix 0 desliga (custa ~nada no shader).
+ *  shadow: 1 = buraco negro (miolo preto + aro), 0 = estrela de nêutrons (só warp). */
+export function setLens(ndcX, ndcY, thetaScreen, mix, shipNdcX = 0, shipNdcY = -2, shadow = 1) {
   if (!_lensPass) return;
   const u = _lensPass.uniforms;
   u.uBH.value.set(ndcX * 0.5 + 0.5, ndcY * 0.5 + 0.5);   // NDC → UV
@@ -142,6 +162,7 @@ export function setLens(ndcX, ndcY, thetaScreen, mix, shipNdcX = 0, shipNdcY = -
   u.uTheta.value = thetaScreen;
   u.uAspect.value = window.innerWidth / window.innerHeight;
   u.uMix.value = mix;
+  u.uShadow.value = shadow;
 }
 
 export function renderFrame() {

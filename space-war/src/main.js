@@ -148,17 +148,22 @@ function loop() {
   if (acc >= 0.5) { game.fps = Math.round(frames / acc); acc = 0; frames = 0; }
 }
 
-// LENTE GRAVITACIONAL: acha o buraco negro mais "aparente" na tela (rs/dist) e
+// LENTE GRAVITACIONAL: acha o corpo compacto mais "aparente" na tela (rs/dist) e
 // alimenta o passe de lente — o fundo estica em arcos ao redor do horizonte,
 // como nas imagens do EHT. Fora de alcance, mix 0 (custo ~zero).
+// Prints D.A 2026-07-02: "a parte mais notável não é o tamanho — é a DISTORÇÃO"
+// → a lente liga MUITO mais longe (rs·1400) e a estrela de nêutrons também
+// curva o espaço (lensRs pequeno), mesmo sem ser um buraco negro.
 const _lensV = new THREE.Vector3();
 function updateGravLens() {
   let best = null, bestApp = 0;
   for (const b of game.bodies) {
-    if (b.def.kind !== 'blackhole' || !b.group.visible) continue;
+    if (!b.group.visible) continue;
+    const kind = b.def.kind;
+    if (kind !== 'blackhole' && kind !== 'neutron') continue;
+    const rs = b.def.lensRs || b.def.rs || b.def.radius;
     const dist = camera.position.distanceTo(b.worldPos);
-    const rs = b.def.rs || b.def.radius;
-    if (dist < rs * 2 || dist > rs * 700) continue;
+    if (dist < rs * 2 || dist > rs * 1400) continue;
     const app = rs / dist;
     if (app > bestApp) { bestApp = app; best = b; }
   }
@@ -167,12 +172,12 @@ function updateGravLens() {
   // atrás da câmera ou fora da tela (com margem p/ os arcos): desliga
   if (_lensV.z > 1 || Math.abs(_lensV.x) > 1.6 || Math.abs(_lensV.y) > 1.6) { setLens(0, 0, 0, 0); return; }
   // raio de Einstein na tela ∝ √(rs/dist) (regime de lente fina), limitado
-  const theta = Math.min(0.34, 0.55 * Math.sqrt(bestApp));
-  const mix = Math.max(0, Math.min(1, (bestApp - 0.0014) / 0.004));
+  const theta = Math.min(0.38, 0.55 * Math.sqrt(bestApp));
+  const mix = Math.max(0, Math.min(1, (bestApp - 0.0007) / 0.0035));
   const bx = _lensV.x, by = _lensV.y;
   // posição da NAVE na tela (proteção do 1º plano na lente)
   _lensV.copy(game.ship.pos).project(camera);
-  setLens(bx, by, theta, mix, _lensV.x, _lensV.y);
+  setLens(bx, by, theta, mix, _lensV.x, _lensV.y, best.def.kind === 'blackhole' ? 1 : 0);
 }
 
 function gameOver() {
