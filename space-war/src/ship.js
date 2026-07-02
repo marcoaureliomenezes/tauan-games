@@ -19,8 +19,18 @@ const dvV = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _eul = new THREE.Euler();
+const _aim = new THREE.Vector3();
+const _relV = new THREE.Vector3();
+const _Lv = new THREE.Vector3();
+const _side = new THREE.Vector3();
+const _dr = new THREE.Vector3();
+const _dt2 = new THREE.Vector3();
+const _obs = new THREE.Vector3();
+const _perp = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
-const camOffset = new THREE.Vector3(0, 3.4, 13);
+// Mais LONGE (2026-07-02, pedido do operador): a nave ocupava tela demais.
+// Em overdrive a câmera ainda estica um pouco (sensação de velocidade).
+const camOffset = new THREE.Vector3(0, 6.5, 24);
 const camTarget = new THREE.Vector3();
 const lastEarthPos = new THREE.Vector3();
 const _earthVel = new THREE.Vector3();
@@ -130,7 +140,11 @@ function makeGlow() {
   g.addColorStop(0, 'rgba(180,230,255,1)'); g.addColorStop(0.4, 'rgba(90,180,255,0.6)'); g.addColorStop(1, 'rgba(40,120,255,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
   const tex = new THREE.CanvasTexture(cv);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  // NormalBlending (2026-07-02): AdditiveBlending + logarithmicDepthBuffer + bloom
+  // gerava NaN na cadeia de mips do UnrealBloom — um GLOBO branco com RETÂNGULOS
+  // enormes em volta da nave em qualquer foto. Bisseção ao vivo confirmou: só a
+  // troca do blending elimina o artefato por completo.
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, blending: THREE.NormalBlending, depthWrite: false, transparent: true }));
   sp.scale.setScalar(1.6);
   return sp;
 }
@@ -157,13 +171,15 @@ export function updateShip(dt) {
   // --- Aplica transform ---
   mesh.position.copy(s.pos);
   mesh.quaternion.copy(s.quat);
-  // glow do motor proporcional ao throttle (sutil — não pode cobrir a nave)
+  // glow do motor proporcional ao throttle (sutil — não pode cobrir a nave).
+  // Idle QUASE apagado (2026-07-02): com bloom, os 3 sprites aditivos somavam
+  // acima do threshold e viravam um GLOBO branco em volta da nave nas fotos.
   const thr = s.throttle * (s.boost ? 1.5 : 1);
-  engineGlow.scale.setScalar(0.5 + thr * 0.7);
-  engineGlow.material.opacity = Math.min(0.85, 0.18 + thr * 0.5);
+  engineGlow.scale.setScalar(0.35 + thr * 0.8);
+  engineGlow.material.opacity = Math.min(0.8, 0.05 + thr * 0.55);
   for (const g of sideGlows) {
-    g.scale.setScalar(0.32 + thr * 0.45);
-    g.material.opacity = Math.min(0.7, 0.12 + thr * 0.45);
+    g.scale.setScalar(0.24 + thr * 0.5);
+    g.material.opacity = Math.min(0.6, 0.03 + thr * 0.5);
   }
 
   updateCamera(s, dt);
@@ -234,7 +250,13 @@ function updateFlight(s, dt) {
   // interestelar de verdade — não "fora do SOI": os domínios dos sistemas quase
   // se tocam e nunca haveria corredor). Total abaixo de 10 u/s², zero acima de
   // 40 u/s², rampa suave — viagens entre sistemas caem para 1-3 min.
-  const weakG = Math.max(0, Math.min(1, (40 - g.gravMag) / 30));
+  // + PORTÃO DE DISTÂNCIA (2026-07-02): com os corpos na escala de aproximação a
+  // gravidade de superfície caiu (Terra ~33 u/s²) e o critério só-por-g engatava
+  // overdrive COLADO no planeta. Também é preciso estar LONGE do dominante.
+  const domR = g.dominant ? g.dominant.def.radius : 0;
+  const farFromBody = !g.dominant ||
+    g.dist > Math.min(domR * 30, (g.dominant.soi || Infinity) * 0.8);
+  const weakG = farFromBody ? Math.max(0, Math.min(1, (40 - g.gravMag) / 30)) : 0;
   if (weakG > (s.overdrive || 0)) s.overdrive = Math.min(weakG, (s.overdrive || 0) + dt / OVERDRIVE.rampIn);
   else s.overdrive = Math.max(weakG, (s.overdrive || 0) - dt / OVERDRIVE.rampOut);
   const odCruise = 1 + (OVERDRIVE.mult - 1) * s.overdrive;
@@ -278,26 +300,70 @@ function updateFlight(s, dt) {
       }
     }
   } else if (s.approach) {
-    // --- AUTO-APROXIMAÇÃO ([N]): voa até o alvo e CHEGA devagar ---
-    // Perfil de chegada: velocidade desejada = √(2·a·restante)·0.55 (desacelera a
-    // tempo), limitada pelo cruzeiro; a velocidade é dirigida ao alvo (mata deriva
-    // lateral). A gravidade continua entrando por cima — perto do buraco negro ela
-    // pode vencer o autopiloto, e deve.
+    // --- AUTO-APROXIMAÇÃO ([N]): voa até o alvo e chega em INSERÇÃO ORBITAL ---
+    // (2026-07-02, pedido do operador) Mirar o CENTRO do corpo era colisão radial
+    // ("sucção"). Agora: (a) mira num ponto de PERIAPSIS lateral (~2.6 raios), do
+    // lado do momento angular atual — a chegada CURVA para o lado do corpo;
+    // (b) para alvos que SE MOVEM (estrela orbitando o BN) a velocidade desejada
+    // é relativa ao corpo (co-móvel); (c) ao chegar, engata o assistente de
+    // órbita sozinho → você fica ORBITANDO/SEGUINDO o corpo, não caindo nele.
     const t = currentTarget();
     if (t) {
       tmp.copy(t.pos).sub(s.pos);
       const dist = tmp.length();
       const arriveR = (t.radius || 8) * 3 + 60;
-      tmp.multiplyScalar(1 / Math.max(1e-6, dist));   // direção ao alvo
-      _m.lookAt(s.pos, t.pos, _up);
+      const bodyVel = (t.body && t.body.worldVel) || null;
+      _aim.copy(t.pos);
+      if (t.body && dist > arriveR * 1.6) {
+        _relV.copy(s.vel); if (bodyVel) _relV.sub(bodyVel);
+        _Lv.crossVectors(tmp, _relV);
+        if (_Lv.lengthSq() < 1e-4) _Lv.crossVectors(tmp, _up);  // head-on: escolhe um lado
+        _side.crossVectors(_Lv, tmp).normalize();               // (r×v)×r ∝ v_lateral
+        _aim.addScaledVector(_side, Math.min((t.radius || 8) * 2.6, dist * 0.35));
+      }
+      // DESVIO DE CORPO NO CAMINHO (2026-07-02): com os corpos na escala de
+      // aproximação, a reta até o alvo pode passar POR DENTRO de um planeta
+      // (ex.: a Terra entre você e a base na Lua, ou a base no lado oculto).
+      // Se o raio até o waypoint passa a <1.6R de qualquer corpo, o waypoint
+      // arqueia para o lado — o autopiloto CONTORNA em vez de mergulhar.
+      {
+        tmp.copy(_aim).sub(s.pos);
+        const distA = tmp.length();
+        tmp.multiplyScalar(1 / Math.max(1e-6, distA));
+        let obsProj = Infinity;
+        for (const b of game.bodies) {
+          if (b.def.radius < 120) continue;
+          _obs.copy(b.worldPos).sub(s.pos);
+          const proj = _obs.dot(tmp);
+          if (proj <= b.def.radius || proj >= distA) continue;
+          const clearR = b.def.radius * 1.6 + 120;
+          const closest2 = _obs.lengthSq() - proj * proj;
+          if (closest2 >= clearR * clearR || proj >= obsProj) continue;
+          obsProj = proj;
+          // ponto de contorno: ao LADO do corpo, no lado por onde o raio já passa
+          _perp.copy(s.pos).addScaledVector(tmp, proj).sub(b.worldPos);
+          if (_perp.lengthSq() < 1) _perp.crossVectors(tmp, _up);   // centro exato
+          _perp.normalize();
+          _aim.copy(b.worldPos).addScaledVector(_perp, clearR * 1.35);
+        }
+      }
+      tmp.copy(_aim).sub(s.pos);
+      tmp.multiplyScalar(1 / Math.max(1e-6, tmp.length()));
+      _m.lookAt(s.pos, _aim, _up);
       _q.setFromRotationMatrix(_m);
       s.quat.slerp(_q, Math.min(1, SHIP.alignRate * 0.8 * dt));
       const vArrive = Math.sqrt(2 * SHIP.assistThrust * Math.max(0, dist - arriveR)) * 0.55;
       const vDes = Math.min(vArrive, SHIP.cruiseSpeed * boost * odCruise);
       desiredV.copy(tmp).multiplyScalar(vDes);
+      if (bodyVel) desiredV.add(bodyVel);                       // co-move com o alvo
       s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * 0.8 * dt));
       s.throttle = Math.max(0.05, Math.min(1, vDes / SHIP.cruiseSpeed));
-      if (dist < arriveR && s.vel.length() < 60) { s.approach = false; s.throttle = 0; }
+      _relV.copy(s.vel); if (bodyVel) _relV.sub(bodyVel);
+      if (dist < arriveR * 1.15 && _relV.length() < 90) {
+        s.approach = false;
+        if (t.body && t.body.mu > 1e4) s.orbitAssist = true;    // chegada → circulariza
+        else s.throttle = 0;
+      }
     } else s.approach = false;
   } else if (s.flightAssist) {
     // NAVEGAÇÃO RESPONSIVA (Set-Speed / fly-by-wire): a velocidade é continuamente
@@ -313,7 +379,22 @@ function updateFlight(s, dt) {
     } else if (s.throttle > 0.02) {
       const targetSpeed = s.throttle * SHIP.cruiseSpeed * boost * odCruise;
       desiredV.copy(fwd).multiplyScalar(targetSpeed);
-      s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * odThrust * dt));
+      // CAMPO FORTE DE CORPO COMPACTO (2026-07-02, pedido do operador): o
+      // fly-by-wire dirigia a velocidade para o nariz e LAVAVA o momento
+      // angular — toda aproximação de estrela/BN/pulsar virava queda RETA,
+      // nada orbital. Perto desses corpos a autoridade do assist DECAI e o
+      // motor vira empuxo newtoniano puro ao longo do nariz: a gravidade
+      // CURVA a trajetória de verdade → flybys, slingshots e espirais, como
+      // na física real. Perto de PLANETAS o assist continua pleno.
+      const domK = g.dominant && g.dominant.def.kind;
+      const compact = domK === 'blackhole' || domK === 'neutron' || domK === 'star' ||
+        domK === 'redsupergiant' || (g.dominant && g.dominant.isSun);
+      const strong = compact ? Math.max(0, Math.min(1, (g.gravMag - 60) / 240)) : 0;
+      s.newtonBlend = strong;
+      s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * odThrust * dt) * (1 - strong * strong));
+      if (strong > 0) {
+        s.vel.addScaledVector(fwd, SHIP.maxThrustAccel * boost * odThrust * s.throttle * strong * dt);
+      }
     }
     // throttle 0 sem freio → coast: inércia + gravidade (essencial p/ orbitar)
   } else {
@@ -358,6 +439,33 @@ function updateFlight(s, dt) {
   } else {
     s.heat = Math.max(0, (s.heat || 0) - dt * 0.9);
     s.atmoBody = null;
+  }
+
+  // --- ESPIRAL DA MORTE: arrasto do disco de acreção (2026-07-02) ---
+  // A física real de "cair" num buraco negro: quase nada cai RETO — a matéria
+  // entra no disco, o gás rouba energia orbital aos poucos e a órbita DECAI em
+  // espiral (muitos BNs nem absorvem matéria — ela só orbita). Dentro da região
+  // do disco (perto do plano), a velocidade relativa é arrastada para o fluxo
+  // kepleriano local ligeiramente sub-circular + leve deriva para dentro →
+  // captura gradual, espiral visível, morte só no horizonte.
+  s.diskDrag = false;
+  const dk = dom && dom.def.disk;
+  if (dk && !s.landed) {
+    _dr.copy(s.pos).sub(dom.worldPos);
+    const dd = _dr.length();
+    const hAbove = Math.abs(_dr.y);
+    if (dd > dom.def.radius * 1.05 && dd < dk.outer * 1.3 &&
+        hAbove < Math.max(dk.inner * 0.6, dd * 0.22)) {
+      _dr.y = 0;
+      _dr.multiplyScalar(1 / Math.max(1e-3, _dr.length()));    // r̂ no plano do disco
+      _dt2.set(-_dr.z, 0, _dr.x);                              // t̂ prograde
+      const vK = Math.sqrt(dom.mu / dd);
+      desiredV.copy(_dt2).multiplyScalar(vK * 0.95).addScaledVector(_dr, -vK * 0.07);
+      if (dom.worldVel) desiredV.add(dom.worldVel);
+      const depth = Math.max(0, Math.min(1, (dk.outer * 1.3 - dd) / (dk.outer * 1.3 - dk.inner * 0.5)));
+      s.vel.lerp(desiredV, Math.min(1, (0.14 + 0.5 * depth) * dt));
+      s.diskDrag = true;
+    }
   }
 
   // --- Integra posição ---
@@ -414,7 +522,8 @@ function updateCamera(s, dt) {
   }
   const k = 1 - Math.exp(-9 * dt);
   _camQuat.slerp(s.quat, k);
-  tmp.copy(camOffset).applyQuaternion(_camQuat).add(s.pos);
+  const stretch = 1 + 0.45 * (s.overdrive || 0);
+  tmp.copy(camOffset).multiplyScalar(stretch).applyQuaternion(_camQuat).add(s.pos);
   camera.position.copy(tmp);
   camTarget.copy(fwd.set(0, 0, -10).applyQuaternion(s.quat)).add(s.pos);
   camera.up.copy(_camUp.set(0, 1, 0).applyQuaternion(_camQuat));

@@ -216,6 +216,48 @@ host, trex intocado idem); INSPEÇÃO VISUAL: aeroporto SECO em vista aérea top
 BN + disco renderizando (sw-blackhole.jpg), câmera↔nave = 13.4 CONSTANTE a 178.900 u/s
 (antes: atraso ~12.800 u), resolução adaptativa degrauou 1.0→0.55 sob carga.
 
+### [x] T-WR-13 — Space-war: rodada FÍSICA ORBITAL + ESCALA + design BN/pulsar (operador 2026-07-02)
+
+**Owner:** `game-developer`
+
+Pedidos do operador, com causa-raiz e fix:
+1. **Nave perto demais da tela:** camOffset (0,3.4,13)→(0,6.5,24) + estiramento ×1.45
+   em overdrive.
+2. **"Sucção reta" p/ corpos compactos:** o fly-by-wire lavava o momento angular
+   (velocidade→nariz). Perto de estrela/BN/pulsar a autoridade do assist decai e o
+   motor vira empuxo newtoniano — a gravidade CURVA a trajetória (flybys/espirais).
+   Provado: nariz no BN + throttle 1 + v tangencial = trajetória orbital, viva, minD
+   35.8k ≫ rs. Perto de PLANETAS o assist continua pleno.
+3. **Espiral da morte:** arrasto do disco de acreção (BN) e do vento de pulsar (NS,
+   novo def.disk) — dentro do disco a velocidade é arrastada p/ fluxo kepleriano
+   sub-circular + deriva p/ dentro → captura em espiral decadente (provado: apoápside
+   4126→3821 em 45 s), aviso HUD "ESPIRAL DA MORTE". Morte só no horizonte.
+4. **Núcleo galáctico calmo e SEGUÍVEL:** 12 estrelas S saíram do N-corpos p/ ELIPSES
+   KEPLERIANAS railed (r(θ)=p/(1+e·cosθ), θ̇=h/r², worldAcc = gravidade EXATA do SMBH
+   no trilho), maiores (2.8k–6.5k), mais distantes (a 70k–260k), SOI de Hill por
+   estrela → patched-conics. PROVADO seguir estrela: 45 s co-móvel com S6 enquanto ela
+   andou 13.750 u ao redor do BN. [N] chega co-móvel + engata [O] sozinho.
+5. **Corpos "bolinha" na aproximação:** ESCALA DE APROXIMAÇÃO — rochosos ×9, médios
+   ×3.2, gigantes ×2.4, luas ×9 (órbitas re-espaçadas, anéis junto), Sol ×2 (μ ×2.2 p/
+   manter a zona de não-retorno), μ ∝ fator (v_circ/v_esc de superfície preservadas).
+   Terra a 169 u de altitude agora é PAREDE de horizonte, não bolinha. BN/pulsar
+   ficam compactos DE PROPÓSITO (física). Overdrive ganhou portão de distância (g de
+   superfície caiu — só-g engatava overdrive colado no planeta).
+6. **Design BN (referências EHT/Interstellar):** passe de LENTE GRAVITACIONAL
+   (ShaderPass próprio no composer — arcos de Einstein, sombra, aro quente; núcleo
+   suavizado sem singularidade; proteção do 1º plano na região da nave). Bisseção ao
+   vivo matou o artefato do "globo branco": AdditiveBlending+log-depth+bloom gerava
+   NaN nos mips do UnrealBloom → glow do motor virou NormalBlending.
+7. **[N] desvia de corpos no caminho** (a Terra entre você e a Lua matava o autopiloto
+   na escala nova — waypoint arqueia a 1.6R) + alvo de MISSÃO expõe .body (chegada
+   co-móvel na Lua; antes a velocidade relativa nunca zerava e a chegada nunca vinha).
+
+**Verify (executado):** smoke space-war 12/12 (AC-04b re-verificado com μ do Sol ×2.2;
+FPS headless ≥4 com material básico + pixel-ratio 0.5 em webdriver); provas numéricas
+live (segue-estrela, anti-sucção, espiral); screenshots
+.dadaia/tmp/claude/20260702/sw-*.jpg (horizonte-parede da Terra, núcleo galáctico,
+lente no BN estilo Interstellar, bisseção do globo); suíte completa na CI do PR.
+
 ### [ ] T-WR-06 — QA/fechamento
 
 **Owner:** `qa-engineer` + `code-reviewer`

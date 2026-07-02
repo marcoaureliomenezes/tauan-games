@@ -14,12 +14,71 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { EffectComposer } from '../../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../../vendor/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from '../../vendor/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from '../../vendor/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '../../vendor/jsm/postprocessing/OutputPass.js';
 
 const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
 
+// ── LENTE GRAVITACIONAL (2026-07-02): distorção de tela ao redor do buraco
+// negro — referência visual: imagens EHT de M87*/Sgr A* e o clássico anel de
+// Einstein (o fundo é "empurrado" para fora do raio de Einstein e forma arcos).
+// Aproximação de tela barata e estável: uv' = bh + d·(1 − θ²/|d|²), 1 passe.
+const LENS_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uBH: { value: new THREE.Vector2(0.5, 0.5) },
+    uShip: { value: new THREE.Vector2(0.5, 0.5) },   // proteção: não lentear a NAVE
+    uTheta: { value: 0.0 },      // raio de Einstein em fração de tela (0 = off)
+    uAspect: { value: 1.0 },
+    uMix: { value: 0.0 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform vec2 uBH;
+    uniform vec2 uShip;
+    uniform float uTheta;
+    uniform float uAspect;
+    uniform float uMix;
+    varying vec2 vUv;
+    void main() {
+      vec4 base = texture2D(tDiffuse, vUv);
+      if (uMix <= 0.001 || uTheta <= 0.0005) { gl_FragColor = base; return; }
+      // a lente é de TELA (sem profundidade): protege a região da NAVE — objeto
+      // em primeiro plano não pode ser esticado pela lente do fundo.
+      vec2 ds = vUv - uShip;
+      ds.x *= uAspect;
+      float protectShip = smoothstep(0.045, 0.15, length(ds));
+      float mixEff = uMix * protectShip;
+      if (mixEff <= 0.001) { gl_FragColor = base; return; }
+      vec2 d = vUv - uBH;
+      d.x *= uAspect;                       // círculo de verdade na tela
+      float r = max(length(d), 1e-5);
+      // núcleo SUAVIZADO (sem singularidade): deflexão máxima limitada e contínua
+      // — dentro do raio de Einstein a imagem inverte (física), sem espelhamento
+      // explosivo que borrava retângulos da borda da tela.
+      float pull = (uTheta * uTheta) / (r * r + 0.25 * uTheta * uTheta);
+      vec2 d2 = d * (1.0 - pull);
+      vec2 uv2 = uBH + vec2(d2.x / uAspect, d2.y);
+      // fora da tela: mantém o fundo original (nunca esticar a borda)
+      vec4 lensed = (uv2.x < 0.0 || uv2.x > 1.0 || uv2.y < 0.0 || uv2.y > 1.0)
+        ? base : texture2D(tDiffuse, uv2);
+      // escurece o miolo (sombra) e realça um ARO fino no raio de Einstein
+      float shadow = smoothstep(uTheta * 0.62, uTheta * 0.30, r);
+      float ring = smoothstep(uTheta * 0.22, 0.0, abs(r - uTheta)) * 0.35;
+      vec4 c = mix(base, lensed, mixEff);
+      c.rgb = c.rgb * (1.0 - shadow * mixEff) + vec3(1.0, 0.85, 0.6) * ring * mixEff;
+      gl_FragColor = c;
+    }
+  `,
+};
+
 let _composer = null;
+let _lensPass = null;
 let _renderer = null, _scene = null, _camera = null;
 let _basePixelRatio = 1;
 
@@ -29,6 +88,8 @@ export function initPostFx(renderer, scene, camera) {
   if (HEADLESS) return null;
   _composer = new EffectComposer(renderer);
   _composer.addPass(new RenderPass(scene, camera));
+  _lensPass = new ShaderPass(LENS_SHADER);
+  _composer.addPass(_lensPass);
   const bloom = new UnrealBloomPass(
     // (o UnrealBloomPass já divide por 2 internamente e re-divide por mip —
     // o bloom acompanha a resolução adaptativa via composer.setPixelRatio)
@@ -70,6 +131,17 @@ export function updateAdaptiveRes(dt) {
   } else if (_ema < 0.015 && _stepIdx > 0) {
     _stepIdx--; _applyStep(); _cooldown = 2.5;
   }
+}
+
+/** Atualiza a lente gravitacional. mix 0 desliga (custa ~nada no shader). */
+export function setLens(ndcX, ndcY, thetaScreen, mix, shipNdcX = 0, shipNdcY = -2) {
+  if (!_lensPass) return;
+  const u = _lensPass.uniforms;
+  u.uBH.value.set(ndcX * 0.5 + 0.5, ndcY * 0.5 + 0.5);   // NDC → UV
+  u.uShip.value.set(shipNdcX * 0.5 + 0.5, shipNdcY * 0.5 + 0.5);
+  u.uTheta.value = thetaScreen;
+  u.uAspect.value = window.innerWidth / window.innerHeight;
+  u.uMix.value = mix;
 }
 
 export function renderFrame() {

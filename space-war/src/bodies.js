@@ -281,10 +281,13 @@ function ringMesh(ring) {
 
 // ---- Construção de um corpo ----------------------------------------------
 function makeSphere(radius, tex, emissive, def = null) {
-  const mat = emissive
+  // HEADLESS (swiftshader/CI): material BASIC — com a escala de aproximação um
+  // planeta preenche a TELA INTEIRA e o Standard+bump em software-GL derrubava
+  // o FPS do smoke abaixo do piso. Visual de teste não precisa de PBR.
+  const mat = (emissive || HEADLESS)
     ? new THREE.MeshBasicMaterial({ map: tex })
     : new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0.0 });
-  if (!emissive && def) {
+  if (!emissive && !HEADLESS && def) {
     // Relevo barato: a própria textura como bump map — crateras e continentes
     // ganham sombreamento 3D no terminador em vez de parecerem pintura chapada.
     if (def.kind === 'rock' || def.kind === 'earth' || !def.kind) {
@@ -490,14 +493,37 @@ function buildChaoticSystem() {
 }
 
 // ===========================================================================
-// SISTEMA 5 — NÚCLEO DA GALÁXIA: SMBH pinado + 12 estrelas S caóticas + planetas
-// perdidos, tudo integrado. Enxame vivo com deflexões mútuas de verdade.
+// SISTEMA 5 — NÚCLEO DA GALÁXIA (rework 2026-07-02): SMBH estático + 12 estrelas
+// S em ELIPSES KEPLERIANAS de trilho (calmas, distantes, MAIORES — como as
+// órbitas reais medidas ao redor de Sgr A*). Cada estrela tem SOI de HILL:
+// dentro dele a estrela DOMINA (patched-conics) e a aceleração de frame do
+// trilho elíptico é exata → dá para entrar em órbita da estrela e SEGUI-LA
+// enquanto ela contorna o buraco negro.
 // ===========================================================================
+// Monta o trilho elíptico: plano orbital (nodo + inclinação), base ortonormal
+// u,v, parâmetro p=a(1−e²) e momento angular específico h=√(μp).
+function makeEllipse(center, mu, a, e, incl, node, theta0, dir) {
+  const u = new THREE.Vector3(Math.cos(node), 0, Math.sin(node));
+  const v = new THREE.Vector3(-Math.sin(node), 0, Math.cos(node))
+    .multiplyScalar(Math.cos(incl))
+    .add(new THREE.Vector3(0, Math.sin(incl), 0))
+    .normalize();
+  const p = a * (1 - e * e);
+  return { center, u, v, p, e, h: Math.sqrt(mu * p), mu, theta: theta0, dir };
+}
+
+function ellipsePos(el, out) {
+  const r = el.p / (1 + el.e * Math.cos(el.theta));
+  return out.copy(el.center)
+    .addScaledVector(el.u, Math.cos(el.theta) * r)
+    .addScaledVector(el.v, Math.sin(el.theta) * r);
+}
+
 function buildCoreSystem() {
   const sysDef = SYSTEMS[4];
   const center = new THREE.Vector3(...sysDef.center);
 
-  // SMBH central (pinado — âncora do integrador)
+  // SMBH central — estático no coração do sistema
   const bhGroup = buildBlackHole(CORE.smbh);
   bhGroup.group.position.copy(center);
   scene.add(bhGroup.group);
@@ -509,33 +535,39 @@ function buildCoreSystem() {
   game.bodies.push(smbh);
   bodyFx.push(bhGroup.fx);
 
-  // 12 estrelas S — órbitas excêntricas variadas (v_circ × 0.55..1.15, planos tortos)
+  // 12 estrelas S — semieixo cresce com o índice (maiores por fora, Hill maior)
   for (let i = 0; i < CORE.starCount; i++) {
-    const pal = CORE.starPalette[i % CORE.starPalette.length];
+    const t = i / (CORE.starCount - 1);
+    const pal = CORE.starPalette[Math.min(CORE.starPalette.length - 1, Math.floor(t * CORE.starPalette.length))];
+    const a = (CORE.aMin + t * (CORE.aMax - CORE.aMin)) * (0.92 + Math.random() * 0.16);
+    const e = CORE.eMin + Math.random() * (CORE.eMax - CORE.eMin);
+    // SOI de HILL no periélio (pior caso): r_H = r_p·∛(μ*/3μ_BN). O raio visual
+    // é limitado a uma fração do Hill para SEMPRE caber uma órbita de rider.
+    const rPeri = a * (1 - e);
+    const rHill = rPeri * Math.cbrt(pal.mu / (3 * CORE.smbh.mu));
+    const radius = Math.min(pal.radius * (0.9 + Math.random() * 0.2), rHill / 3.2);
+    const soi = Math.min(Math.max(0.55 * rHill, 2.2 * radius), 30_000);
     const def = {
       name: `Estrela S${i + 1}`, key: `s${i + 1}`, kind: 'star',
-      radius: pal.radius * (0.8 + Math.random() * 0.4),
+      radius,
       color: pal.color, color2: pal.color2, mu: pal.mu,
-      soi: 30_000, gravReach: 80_000, spin: 200 + Math.random() * 300,
+      soi, gravReach: 90_000, spin: 200 + Math.random() * 300,
       cellScale: pal.cellScale,
     };
     const built = buildStar(def, { coronaScale: 5.5 });
-    const r = CORE.starOrbitMin + Math.random() * (CORE.starOrbitMax - CORE.starOrbitMin);
-    const ang = Math.random() * Math.PI * 2;
-    const pos = center.clone().add(new THREE.Vector3(
-      Math.cos(ang) * r, (Math.random() - 0.5) * r * 0.35, Math.sin(ang) * r,
-    ));
-    const star = registerStar(def, built, 'core', pos);
-    const vC = Math.sqrt(CORE.smbh.mu / r) * (0.55 + Math.random() * 0.6);
-    const s = Math.random() < 0.5 ? 1 : -1;
-    makeDynamic(star, sysDef, {
-      vel: new THREE.Vector3(-Math.sin(ang) * vC * s, (Math.random() - 0.5) * vC * 0.3, Math.cos(ang) * vC * s),
-      softening: CORE.softening, anchor: smbh, centralMu: CORE.smbh.mu,
-      reinjectR: (CORE.starOrbitMin + CORE.starOrbitMax) / 2,
-    });
+    const star = registerStar(def, built, 'core', center);
+    star.ellipse = makeEllipse(
+      center, CORE.smbh.mu, a, e,
+      (Math.random() * 2 - 1) * CORE.inclMax,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() < 0.5 ? -1 : 1,
+    );
+    ellipsePos(star.ellipse, star.worldPos);
+    star.group.position.copy(star.worldPos);
   }
 
-  // Planetas perdidos vagando no enxame
+  // Planetas errantes — elipses excêntricas inclinadas entre as estrelas
   for (let i = 0; i < CORE.planetCount; i++) {
     const def = {
       name: `Errante-${i + 1}`, key: `err${i + 1}`,
@@ -545,16 +577,17 @@ function buildCoreSystem() {
     };
     const body = buildPlanetBody(def, smbh, 'core', center);
     body.orbitCenter = null;
-    const r = 40_000 + Math.random() * 120_000;
-    const ang = Math.random() * Math.PI * 2;
-    body.worldPos.set(center.x + Math.cos(ang) * r, center.y + (Math.random() - 0.5) * r * 0.3, center.z + Math.sin(ang) * r);
+    body.ellipse = makeEllipse(
+      center, CORE.smbh.mu,
+      90_000 + Math.random() * 130_000,
+      0.25 + Math.random() * 0.35,
+      (Math.random() * 2 - 1) * CORE.inclMax,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() < 0.5 ? -1 : 1,
+    );
+    ellipsePos(body.ellipse, body.worldPos);
     body.group.position.copy(body.worldPos);
-    const vC = Math.sqrt(CORE.smbh.mu / r) * (0.6 + Math.random() * 0.55);
-    const s = Math.random() < 0.5 ? 1 : -1;
-    makeDynamic(body, sysDef, {
-      vel: new THREE.Vector3(-Math.sin(ang) * vC * s, (Math.random() - 0.5) * vC * 0.25, Math.cos(ang) * vC * s),
-      softening: CORE.softening, anchor: smbh, centralMu: CORE.smbh.mu, reinjectR: r,
-    });
   }
 }
 

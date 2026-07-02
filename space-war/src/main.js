@@ -16,7 +16,7 @@ import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
 import { buildNav, initNavHUD, drawNav, cycleTarget } from './nav.js';
-import { initPostFx, renderFrame, updateAdaptiveRes } from './postfx.js';
+import { initPostFx, renderFrame, updateAdaptiveRes, setLens } from './postfx.js';
 
 // --- Construir o mundo ---
 const skybox = createSkybox();
@@ -45,7 +45,11 @@ showOverlay(`<div style="color:#7df;font-size:34px;letter-spacing:6px">SPACE WAR
   <div class="sub"><b style="color:#ffd27a">5 SISTEMAS ESTELARES</b> — Sistema Solar · BETELGEUSE (supergigante
   vermelha + companheira Siwarha) · BINÁRIO buraco negro + pulsar (dentro do remanescente da
   supernova que criou o BN) · BINÁRIO CAÓTICO (2 estrelas, planetas em caos de 3 corpos) ·
-  NÚCLEO DA GALÁXIA (12 estrelas orbitando caoticamente um buraco negro supermassivo)<br><br>
+  NÚCLEO DA GALÁXIA (12 estrelas S em <b>elipses keplerianas</b> ao redor de Sagitário A✦ —
+  mire uma com <b>[N]</b> e <b>SIGA-A em órbita</b> enquanto ela contorna o buraco negro)<br>
+  <i style="color:#c9a2ff">Física real: nada cai RETO num buraco negro — perto de corpos
+  compactos o controle vira newtoniano (a gravidade CURVA sua trajetória) e dentro do
+  disco de acreção o gás rouba energia: ESPIRAL DA MORTE, não sucção.</i><br><br>
   <b style="color:#9fe">NAVEGAÇÃO:</b> <b>T</b> destino · <b>C</b> aponta · <b>N</b> auto-aproximação ·
   <b style="color:#8f8">O = ASSISTENTE DE ÓRBITA</b> (circulariza em torno de QUALQUER corpo — planeta,
   estrela, pulsar, buraco negro) · <b>V</b> câmera de observação (gira ao redor da nave)<br>
@@ -136,11 +140,39 @@ function loop() {
   updateHUD();
   drawNav();
   drawMap();
+  updateGravLens();
   renderFrame();
 
   // fps
   acc += dt; frames++;
   if (acc >= 0.5) { game.fps = Math.round(frames / acc); acc = 0; frames = 0; }
+}
+
+// LENTE GRAVITACIONAL: acha o buraco negro mais "aparente" na tela (rs/dist) e
+// alimenta o passe de lente — o fundo estica em arcos ao redor do horizonte,
+// como nas imagens do EHT. Fora de alcance, mix 0 (custo ~zero).
+const _lensV = new THREE.Vector3();
+function updateGravLens() {
+  let best = null, bestApp = 0;
+  for (const b of game.bodies) {
+    if (b.def.kind !== 'blackhole' || !b.group.visible) continue;
+    const dist = camera.position.distanceTo(b.worldPos);
+    const rs = b.def.rs || b.def.radius;
+    if (dist < rs * 2 || dist > rs * 700) continue;
+    const app = rs / dist;
+    if (app > bestApp) { bestApp = app; best = b; }
+  }
+  if (!best) { setLens(0, 0, 0, 0); return; }
+  _lensV.copy(best.worldPos).project(camera);
+  // atrás da câmera ou fora da tela (com margem p/ os arcos): desliga
+  if (_lensV.z > 1 || Math.abs(_lensV.x) > 1.6 || Math.abs(_lensV.y) > 1.6) { setLens(0, 0, 0, 0); return; }
+  // raio de Einstein na tela ∝ √(rs/dist) (regime de lente fina), limitado
+  const theta = Math.min(0.34, 0.55 * Math.sqrt(bestApp));
+  const mix = Math.max(0, Math.min(1, (bestApp - 0.0014) / 0.004));
+  const bx = _lensV.x, by = _lensV.y;
+  // posição da NAVE na tela (proteção do 1º plano na lente)
+  _lensV.copy(game.ship.pos).project(camera);
+  setLens(bx, by, theta, mix, _lensV.x, _lensV.y);
 }
 
 function gameOver() {

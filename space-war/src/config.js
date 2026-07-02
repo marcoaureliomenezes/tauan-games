@@ -222,11 +222,14 @@ export const BINARY = {
   },
   neutronStar: {
     name: 'Estrela de Nêutrons', key: 'neutron', kind: 'neutron',
-    radius: 30,               // minúscula (≈ uma cidade), densíssima
+    radius: 30,               // minúscula (≈ uma cidade), densíssima — de propósito
     mu: 3.0e12,               // gravidade brutal e local
     spin: 1.4,                // pulsar ultrarrápido
     jetTilt: 0.5,
     soi: 110_000, gravReach: 110_000,
+    // região do vento de pulsar/toro síncrotron: arrasto → ESPIRAL DA MORTE
+    // (mesma mecânica do disco de acreção do BN — captura orbital, não sucção)
+    disk: { inner: 90, outer: 2200 },
   },
 };
 
@@ -297,11 +300,56 @@ export const CHAOTIC = {
   softening: 2500,            // ε do integrador (evita singularidades)
 };
 
+// =============================================================================
+// ESCALA DE APROXIMAÇÃO (2026-07-02, pedido do operador): com raios em proporção
+// real a Terra era uma BOLINHA mesmo colado nela (R=100 vs câmera a ~24 u — o
+// limbo curvava na tela a 71 u de altitude). Corpos agora MUITO maiores: de
+// longe continuam pontos, mas CRESCEM até virar PAREDE na aproximação (o
+// horizonte achata no limite do contato, como na realidade). Buraco negro e
+// estrela de nêutrons ficam COMPACTOS de propósito — é a física deles.
+//  - raio: pequenos (<200) ×9 · médios (<500: Urano/Netuno…) ×3.2 · gigantes ×2.4
+//  - μ ∝ fator do raio → v_circ e v_esc NA SUPERFÍCIE preservadas (pilotável)
+//  - SOI ×2.0 (×1.6 nos gigantes) — conferido: sem sobreposição entre vizinhos
+//  - anéis × fator do planeta; órbitas de LUAS re-espaçadas (fator único por
+//    planeta preserva o espaçamento relativo; piso = raio novo + anel)
+//  - Sol ×2 (22k — ainda bem menor que Betelgeuse, 60k)
+// =============================================================================
+function approachScale(p, forceF = null) {
+  const f = forceF ?? (p.radius < 200 ? 9 : p.radius < 500 ? 3.2 : 2.4);
+  const soiF = f === 2.4 ? 1.6 : 2.0;
+  p.radius *= f;
+  p.mu *= f;
+  p.soi *= soiF;
+  if (p.ring) { p.ring.inner *= f; p.ring.outer *= f; }
+  if (p.moons && p.moons.length) {
+    let k = 1;
+    for (const m of p.moons) {
+      m.radius *= 9;
+      m.mu *= 9;
+      m.soi = Math.max(m.soi * 2.0, m.radius * 2.2);
+      const floor = Math.max(p.radius * 2.1, p.ring ? p.ring.outer * 1.12 : 0) + m.radius * 2;
+      k = Math.max(k, floor / m.orbit);
+    }
+    for (const m of p.moons) m.orbit *= k;
+  }
+}
+for (const p of PLANETS) approachScale(p);
+// Betelgeuse/caótico: fator ÚNICO ×4.5 (preserva a ordem de tamanhos da lista)
+for (const p of BETELGEUSE.planets) approachScale(p, 4.5);
+for (const p of CHAOTIC.planets) approachScale(p, 4.5);
+SUN.radius *= 2;
+// μ do Sol acompanha (×2.2): sem isso a superfície MAIOR fica mais "fraca"
+// (v_esc ∝ √(μ/R)) e a ZONA DE NÃO-RETORNO do Sol deixaria de existir (AC-04b).
+SUN.mu *= 2.2;
+
 // ---------------------------------------------------------------------------
-// SISTEMA 5 — NÚCLEO DA GALÁXIA: buraco negro SUPERMASSIVO no centro com 12
-// estrelas orbitando CAOTICAMENTE (como as S-stars de Sgr A*) + planetas
-// perdidos. Tudo integrado por N-corpos — órbitas excêntricas, deflexões
-// mútuas, um enxame vivo.
+// SISTEMA 5 — NÚCLEO DA GALÁXIA (rework 2026-07-02, pedido do operador): as
+// estrelas S andam em ELIPSES KEPLERIANAS calmas em trilho — como as órbitas
+// REAIS medidas em volta de Sagitário A* (S2 e companhia) — mais DISTANTES e
+// MAIORES, cada uma com campo gravitacional próprio e SOI de Hill: dá para
+// aproximar e SEGUIR uma estrela em órbita DELA enquanto ela orbita o buraco
+// negro (patched-conics + aceleração de frame exata do trilho elíptico).
+// O caos N-corpos de verdade fica no sistema 'chaotic'.
 // ---------------------------------------------------------------------------
 export const CORE = {
   smbh: {
@@ -313,19 +361,22 @@ export const CORE = {
     photonRing: 1200,
   },
   starCount: 12,
-  starOrbitMin: 30_000,
-  starOrbitMax: 190_000,
-  // paleta espectral das 12 estrelas (O azul → M vermelha), tamanhos variados
+  aMin: 70_000,      // semieixo maior mínimo (estrelas menores por dentro)
+  aMax: 260_000,     // semieixo maior máximo (supergigantes na periferia)
+  eMin: 0.12,        // excentricidades moderadas — grandioso, não caótico
+  eMax: 0.50,
+  inclMax: 0.55,     // rad — planos orbitais variados (como os S-stars reais)
+  // paleta espectral (M vermelha → O azul), MAIOR e mais massiva que antes;
+  // ordenada da MENOR para a MAIOR: o raio cresce com o semieixo (Hill maior fora)
   starPalette: [
-    { color: 0xa8c4ff, color2: 0x6a8ce0, radius: 5200, mu: 4.5e11, cellScale: 10 },
-    { color: 0xcfe0ff, color2: 0x93b0e8, radius: 4200, mu: 3.5e11, cellScale: 9 },
-    { color: 0xfff2cc, color2: 0xe0c080, radius: 3600, mu: 2.8e11, cellScale: 8 },
-    { color: 0xffd27a, color2: 0xd09838, radius: 3000, mu: 2.2e11, cellScale: 7 },
-    { color: 0xff9a52, color2: 0xd06020, radius: 2600, mu: 1.8e11, cellScale: 6 },
-    { color: 0xff6a3a, color2: 0xb03a12, radius: 2200, mu: 1.4e11, cellScale: 5 },
+    { color: 0xff6a3a, color2: 0xb03a12, radius: 2800, mu: 2.3e11, cellScale: 5 },
+    { color: 0xff9a52, color2: 0xd06020, radius: 3300, mu: 2.9e11, cellScale: 6 },
+    { color: 0xffd27a, color2: 0xd09838, radius: 3800, mu: 3.6e11, cellScale: 7 },
+    { color: 0xfff2cc, color2: 0xe0c080, radius: 4600, mu: 4.6e11, cellScale: 8 },
+    { color: 0xcfe0ff, color2: 0x93b0e8, radius: 5400, mu: 5.8e11, cellScale: 9 },
+    { color: 0xa8c4ff, color2: 0x6a8ce0, radius: 6500, mu: 7.2e11, cellScale: 10 },
   ],
   planetCount: 3,
-  softening: 2000,
 };
 
 // Cor do laser do jogador e dos inimigos

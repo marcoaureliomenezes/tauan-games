@@ -17,7 +17,11 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { MAX_ESCAPE_SPEED } from './config.js';
 import { game } from './state.js';
 
-const DYNAMIC_SYSTEMS = new Set(['chaotic', 'core']);
+// 'core' saiu do regime somado (2026-07-02): as estrelas S agora andam em trilho
+// elíptico com SOI de Hill — patched-conics + aceleração de frame exata é o que
+// permite ENTRAR EM ÓRBITA de uma estrela e segui-la ao redor do buraco negro.
+// Só o sistema 'chaotic' continua com o campo somado de N-corpos.
+const DYNAMIC_SYSTEMS = new Set(['chaotic']);
 
 function _accelOf(b, dist) {
   const r = Math.max(dist, b.def.radius * 0.85);
