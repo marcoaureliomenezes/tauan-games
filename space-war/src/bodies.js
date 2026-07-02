@@ -61,11 +61,12 @@ const STAR_FRAG = /* glsl */ `
   varying vec3 vView;
   ${'__NOISE__'}
   void main(){
-    // domain warp: células que se deformam lentamente (fotosfera fervendo)
-    vec3 q = vec3(
-      fbm3(vDir * uCell + uTime * 0.020),
-      fbm3(vDir * uCell + vec3(5.2, 1.3, 2.8) + uTime * 0.016),
-      fbm3(vDir * uCell + vec3(9.1, 4.7, 6.3) - uTime * 0.013));
+    // domain warp: células que se deformam lentamente (fotosfera fervendo).
+    // (perf 2026-07-01: 2 fbm3 + componente sintetizada em vez de 3 fbm3 —
+    // visualmente indistinguível, corta 4 vnoise3 POR FRAGMENTO em tela cheia)
+    float qa = fbm3(vDir * uCell + uTime * 0.020);
+    float qb = fbm3(vDir * uCell + vec3(5.2, 1.3, 2.8) + uTime * 0.016);
+    vec3 q = vec3(qa, qb, qa * 0.62 + qb * 0.38);
     float n = fbm3(vDir * uCell * 1.9 + q * 1.35 - uTime * 0.01);
     float t = clamp(n * 1.55 - 0.18, 0.0, 1.0);           // temperatura relativa da célula
     vec3 c = mix(uCool, uMid, smoothstep(0.12, 0.55, t));
@@ -652,7 +653,11 @@ const REMNANT_FRAG = /* glsl */ `
   ${'__NOISE__'}
   void main(){
     float fil = fbm3(vDir * 7.0 + uTime * 0.004);
-    float fil2 = fbm3(vDir * 16.0 - uTime * 0.003);
+    // detalhe fino: 2 oitavas inline (não fbm3 completo) — o remanescente cobre a
+    // TELA INTEIRA quando se está dentro do sistema binário; cada vnoise3 poupado
+    // aqui é FPS direto no pior lugar (perf 2026-07-01).
+    vec3 p2 = vDir * 16.0 - uTime * 0.003;
+    float fil2 = vnoise3(p2) * 0.667 + vnoise3(p2 * 2.07) * 0.333;
     // filamentos: cristas do ruído
     float f = smoothstep(0.42, 0.62, fil) * (0.35 + 0.65 * fil2);
     // casca: borda do disco realça (limbo brilha, centro quase transparente)

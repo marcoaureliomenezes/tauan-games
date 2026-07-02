@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # REWRITE PENDING — see aero-fighters-v2-stylized-inhauma-v1/TASKS.md T-S-08
-# (Algorithm survives unchanged; baselines rewrite for cel-shaded poses + thresholds tighten to AC-V2-S-19)
+# (Algorithm survives unchanged; baselines rewrite for cel-shaded poses +
+#  thresholds tighten to AC-V2-S-19)
 """Screenshot-diff harness for aero-fighters-v2 (AC-V2-18, FR-V2-14).
 
 Captures screenshots at 4 fixed WGS84 reference poses inside a Shipping build,
@@ -52,10 +53,7 @@ except ImportError:
 def _check_deps():
     """Exit with code 2 and install instructions if required packages are absent."""
     if _MISSING_DEPS:
-        print(
-            "[screenshot-diff-harness] Missing required packages: "
-            + ", ".join(_MISSING_DEPS)
-        )
+        print("[screenshot-diff-harness] Missing required packages: " + ", ".join(_MISSING_DEPS))
         print(
             "Install them with:  pip install -r "
             + os.path.join(os.path.dirname(__file__), "requirements.txt")
@@ -158,8 +156,10 @@ def compute_ssim(img_a_path: str, img_b_path: str) -> float:
 
     # Resize img_b to match img_a dimensions if needed
     if img_a.shape != img_b.shape:
-        pil_b = Image.open(img_b_path).convert("RGB").resize(
-            (img_a.shape[1], img_a.shape[0]), Image.LANCZOS
+        pil_b = (
+            Image.open(img_b_path)
+            .convert("RGB")
+            .resize((img_a.shape[1], img_a.shape[0]), Image.LANCZOS)
         )
         img_b = np.array(pil_b)
 
@@ -354,7 +354,7 @@ def _cmd_self_check(args) -> int:
     print("[self-check] Generating synthetic 256x256 random-noise image pair...")
     with tempfile.TemporaryDirectory() as tmpdir:
         rng = np.random.default_rng(seed=42)
-        noise = (rng.integers(0, 256, (256, 256, 3), dtype=np.uint8))
+        noise = rng.integers(0, 256, (256, 256, 3), dtype=np.uint8)
         img_a_path = os.path.join(tmpdir, "a.png")
         img_b_path = os.path.join(tmpdir, "b.png")
         Image.fromarray(noise).save(img_a_path)
@@ -463,24 +463,18 @@ def _cmd_compare(args) -> int:
 
         ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H%M%SZ")
         results_dir = os.path.join(repo_root, "Tests", "results")
-        report_path = os.path.join(
-            results_dir, "screenshot-diff-{}.html".format(ts)
-        )
+        report_path = os.path.join(results_dir, "screenshot-diff-{}.html".format(ts))
         write_html_report(aggregated, report_path)
 
     if not aggregated["overall_pass"]:
         print(
             "[compare] FAIL: threshold breach. Mean SSIM={:.4f} (gate>={:.2f}). "
-            "See report: {}".format(
-                aggregated["mean_ssim"], SSIM_MEAN_MIN, report_path
-            )
+            "See report: {}".format(aggregated["mean_ssim"], SSIM_MEAN_MIN, report_path)
         )
         return 1
 
     print(
-        "[compare] PASS: Mean SSIM={:.4f}. Report: {}".format(
-            aggregated["mean_ssim"], report_path
-        )
+        "[compare] PASS: Mean SSIM={:.4f}. Report: {}".format(aggregated["mean_ssim"], report_path)
     )
     return 0
 

@@ -1,5 +1,5 @@
-extends StaticBody3D
 class_name TargetBase
+extends StaticBody3D
 # target_base.gd — shared base class for static ground targets (factory + base).
 # Implements the contract the combat agent's bullet.gd + MissionManager expect:
 #   - method  take_damage(amount: int) -> bool      (returns true on kill)

@@ -49,7 +49,10 @@ func run_import() -> void:
 		return
 
 	if not FileAccess.file_exists(HEIGHTMAP_PATH):
-		push_error("[import_terrain] Not found: %s — run Tools/inhauma-data-fetch.py first." % HEIGHTMAP_PATH)
+		push_error(
+			"[import_terrain] Not found: %s — run Tools/inhauma-data-fetch.py first."
+			% HEIGHTMAP_PATH
+		)
 		get_tree().quit(1)
 		return
 
@@ -79,7 +82,9 @@ func run_import() -> void:
 
 	# Load heightmap via Terrain3DUtil (static class, not instantiated)
 	print("[import_terrain] Loading: %s" % HEIGHTMAP_PATH)
-	var util_class = ClassDB.instantiate("Terrain3DUtil") if ClassDB.class_exists("Terrain3DUtil") else null
+	var util_class = (
+		ClassDB.instantiate("Terrain3DUtil") if ClassDB.class_exists("Terrain3DUtil") else null
+	)
 	var height_image: Image
 
 	if util_class != null:
@@ -102,15 +107,15 @@ func run_import() -> void:
 	])
 
 	# TYPE_HEIGHT=0, TYPE_CONTROL=1, TYPE_COLOR=2, TYPE_MAX=3
-	var TYPE_MAX: int = 3
-	var TYPE_HEIGHT: int = 0
+	var type_max: int = 3
+	var type_height: int = 0
 	if ClassDB.class_exists("Terrain3DRegion"):
-		TYPE_MAX = ClassDB.class_get_integer_constant("Terrain3DRegion", "TYPE_MAX")
-		TYPE_HEIGHT = ClassDB.class_get_integer_constant("Terrain3DRegion", "TYPE_HEIGHT")
+		type_max = ClassDB.class_get_integer_constant("Terrain3DRegion", "TYPE_MAX")
+		type_height = ClassDB.class_get_integer_constant("Terrain3DRegion", "TYPE_HEIGHT")
 
 	var imported_images: Array = []
-	imported_images.resize(TYPE_MAX)
-	imported_images[TYPE_HEIGHT] = height_image
+	imported_images.resize(type_max)
+	imported_images[type_height] = height_image
 
 	print("[import_terrain] Calling import_images (scale=%.1f)..." % IMPORT_SCALE)
 	terrain_data.call("import_images", imported_images, Vector3.ZERO, HEIGHT_OFFSET, IMPORT_SCALE)
@@ -124,4 +129,7 @@ func run_import() -> void:
 		return
 
 	print("[import_terrain] SUCCESS — saved: %s" % OUTPUT_RES)
-	print("[import_terrain] AC-V2-G-02: sample terrain.get_height(Vector3(0,0,0)) → should be ~761 ± 5 m")
+	print(
+		"[import_terrain] AC-V2-G-02: sample terrain.get_height(Vector3(0,0,0))"
+		+ " → should be ~761 ± 5 m"
+	)

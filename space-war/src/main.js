@@ -16,7 +16,7 @@ import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
 import { buildNav, initNavHUD, drawNav, cycleTarget } from './nav.js';
-import { initPostFx, renderFrame } from './postfx.js';
+import { initPostFx, renderFrame, updateAdaptiveRes } from './postfx.js';
 
 // --- Construir o mundo ---
 const skybox = createSkybox();
@@ -96,11 +96,13 @@ onAction('pause', () => { if (game.phase === 'flight') { game.paused = !game.pau
 // --- Loop ---
 const clock = new THREE.Clock();
 const _back = new THREE.Vector3();
+const _thrPos = new THREE.Vector3();
 let acc = 0, frames = 0;
 
 function loop() {
   requestAnimationFrame(loop);
   let dt = clock.getDelta();
+  updateAdaptiveRes(dt);                // dt REAL (pré-clamp) mede a carga de verdade
   if (dt > 0.05) dt = 0.05;             // clamp p/ estabilidade
   game.time += dt;
 
@@ -114,7 +116,8 @@ function loop() {
     if (input.fire) fireLaser(dt);
     // trilha do motor
     _back.set(0, 0, 1).applyQuaternion(game.ship.quat);
-    thruster(shipMesh().position.clone().addScaledVector(_back, 8), _back, game.ship.throttle * (game.ship.boost ? 2 : 1));
+    _thrPos.copy(shipMesh().position).addScaledVector(_back, 8);
+    thruster(_thrPos, _back, game.ship.throttle * (game.ship.boost ? 2 : 1));
     updateEnemies(dt);
     updateProjectiles(dt);
     updateMissions(dt);

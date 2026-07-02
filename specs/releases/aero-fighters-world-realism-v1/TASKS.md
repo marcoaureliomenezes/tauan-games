@@ -175,6 +175,47 @@ galáctico com os 5 sistemas, alvos por sistema. Fix: mapa crashava no SMBH sem 
 e=0.25 bound; viagem 101 s; overdrive 1.00), console limpo, screenshots
 `.dadaia/tmp/claude/20260701/v2-*.png`; aceite visual/jogável = operador.
 
+### [-] T-WR-12 — Rodada de bugs do operador (2026-07-01, tarde): lag, água no aeroporto, pouso negado, câmera fugitiva
+
+**Owner:** `game-developer`
+
+Cinco bugs reportados no playtest do operador, com causa-raiz e fix:
+1. **Lag de voo (aero):** cruzar borda de célula reconstruía os 9 chunks de terreno num
+   único frame (27k amostras FBM + 9 computeVertexNormals). Fix: reciclagem AMORTIZADA —
+   chunks que continuam na janela 3×3 são reutilizados; rebuilds na fila, máx. 1/frame.
+   Bônus: reflexo do jsm Water a 30 Hz + pulado a >2.4 km do lago (o passe re-renderizava
+   a cena inteira todo frame).
+2. **Água no aeroporto (Inhauma):** o rio passava a ~52 m do centro da pista (dentro do
+   leito de 60) e o ribbon d'água ponta-a-ponta (WS-3) cobria o pavimento (cota 0 < 4.5).
+   Fix: curso a montante RE-ROTEADO pelo norte do aeródromo (≥122 m de qualquer superfície,
+   provado numericamente); nenhuma estrada autorada cruza o novo traçado.
+3. **Pouso negado no retorno:** exigir vsp<-0.5 criava DEADLOCK com o clamp
+   anti-atravessar (segura a 0.9 u → vsp≈0 → 'descending' nunca mais dispara). Fix: avião
+   ASSENTADO na janela de toque conta como toque; tentativa de touchdown agora gated nos
+   3 estados DE VOO (senão o gatilho assentado sequestraria a decolagem via auto-taxi).
+4. **Lag sob puxão gravitacional (space-war):** perto de um corpo os shaders FBM
+   (estrela 4×fbm3, remanescente em TELA CHEIA dentro do binário) dominam o custo por
+   fragmento — com pixel-ratio até 2 + log-depth (sem early-Z) + bloom full-res. Fix:
+   teto de pixel-ratio 1.5, RESOLUÇÃO ADAPTATIVA por frame-time (postfx.js, degraus
+   1.0→0.55 com histerese), warp da estrela 3→2 fbm3, detalhe do remanescente 4→2
+   oitavas, HUD só toca o DOM quando o texto muda, zero alocações por frame no loop.
+5. **Câmera fugitiva (space-war):** lerp de POSIÇÃO absoluto tinha atraso de regime
+   v/k — em overdrive a câmera assentava a milhares de unidades da nave. Fix: posição
+   ANCORADA rígida na nave (deriva zero em qualquer velocidade), suavização só na
+   ROTAÇÃO (slerp exponencial frame-rate-independente).
+6. **(achado na inspeção visual) Preso em TAKEOFF_ROLL para sempre:** a rotação de
+   decolagem exigia `contact.type==='runway'` — quem passava do fim da pista rolava
+   pelo campo em estado de solo PERMANENTE (nariz derrotado a 0, LIFTOFF inalcançável).
+   Fix: rotação vale de qualquer solo (decolagem de gramado), só não d'água.
+
+**Verify (executado):** `validate:aero-map` OK; unit 7/7; sim 5/5+9/9 (ciclo de pouso);
+distâncias rio→aeroporto ≥149 u provadas por script (ribbon 84); suíte Playwright
+47/48 + auto-sortie/service 6/6 com budgets honestos (falhas anteriores = contenção de
+host, trex intocado idem); INSPEÇÃO VISUAL: aeroporto SECO em vista aérea top-down
+(screenshots .dadaia/tmp/claude/20260702/aero-airport-*.jpg), decolagem manual real,
+BN + disco renderizando (sw-blackhole.jpg), câmera↔nave = 13.4 CONSTANTE a 178.900 u/s
+(antes: atraso ~12.800 u), resolução adaptativa degrauou 1.0→0.55 sob carga.
+
 ### [ ] T-WR-06 — QA/fechamento
 
 **Owner:** `qa-engineer` + `code-reviewer`

@@ -25,13 +25,13 @@ extends Node3D
 ## Emitted after the quad is successfully attached to a camera.
 signal attached_to_camera(camera: Camera3D)
 
-# The CelPass MeshInstance3D child.
-@onready var _cel_mesh: MeshInstance3D = $CelPass
+const NEAR_OFFSET: float = 0.01  # metres past the near-plane
 
 # The camera the quad is currently parented to.
 var _active_camera: Camera3D = null
 
-const NEAR_OFFSET: float = 0.01  # metres past the near-plane
+# The CelPass MeshInstance3D child.
+@onready var _cel_mesh: MeshInstance3D = $CelPass
 
 
 func _ready() -> void:

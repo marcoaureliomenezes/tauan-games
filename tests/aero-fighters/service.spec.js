@@ -11,7 +11,9 @@ test('MR service scene debug path refills armament after test duration', async (
     window.game.running = true;
   });
   await page.waitForFunction(() => window.__aeroDebug.getSnapshot().serviceProgress > 0, { timeout: 3000 });
-  await page.waitForFunction(() => window.__aeroDebug.getSnapshot().serviceState === 'complete', { timeout: 8000 });
+  // 20 s: sob carga o rAF desacelera e o serviço (duração em dt SIMULADO) leva
+  // mais tempo de parede — flakava sem bug (2026-07-02). Asserções inalteradas.
+  await page.waitForFunction(() => window.__aeroDebug.getSnapshot().serviceState === 'complete', { timeout: 20000 });
   const inv = await page.evaluate(() => window.__aeroDebug.getSnapshot().weaponInventory);
   expect(inv.missiles).toBe(100);
   expect(inv.heavyMissiles).toBe(10);
@@ -25,7 +27,9 @@ test('MR service complete keeps aircraft grounded and tells player how to restar
     window.game.missionRealism.sortie.state = 'SERVICE_SCENE';
     window.game.running = true;
   });
-  await page.waitForFunction(() => window.__aeroDebug.getSnapshot().serviceState === 'complete', { timeout: 8000 });
+  // 20 s: sob carga o rAF desacelera e o serviço (duração em dt SIMULADO) leva
+  // mais tempo de parede — flakava sem bug (2026-07-02). Asserções inalteradas.
+  await page.waitForFunction(() => window.__aeroDebug.getSnapshot().serviceState === 'complete', { timeout: 20000 });
   const before = await page.evaluate(() => ({
     y: window.game.player.y,
     state: window.game.missionRealism.sortie.state,

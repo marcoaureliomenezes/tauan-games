@@ -20,7 +20,10 @@ export function updateHUD() {
   // Gravidade com cor escalando do calmo (lilás) ao crítico (vermelho).
   set('gravity', `G: ${s.gravMag.toFixed(1)} u/s²`);
   const gel = el('gravity');
-  if (gel) gel.style.color = s.gravMag > 800 ? '#ff5560' : s.gravMag > 200 ? '#ffaa44' : '#b8a0ff';
+  if (gel) {
+    const gcol = s.gravMag > 800 ? '#ff5560' : s.gravMag > 200 ? '#ffaa44' : '#b8a0ff';
+    if (gel._col !== gcol) { gel.style.color = gcol; gel._col = gcol; }
+  }
 
   // Órbita: v_circ alvo + decomposição REAL tangencial/radial da velocidade —
   // é o instrumento que torna órbita pilotável ([O] circulariza sozinho).
@@ -80,7 +83,8 @@ function fmt(v) {
   if (a > 1000) return `${(v / 1000).toFixed(1)}k u`;
   return `${v.toFixed(0)} u`;
 }
-function set(id, txt) { const e = el(id); if (e) e.textContent = txt; }
+// Só toca no DOM quando o texto MUDOU (setar textContent igual ainda custa recalc).
+function set(id, txt) { const e = el(id); if (e && e._txt !== txt) { e.textContent = txt; e._txt = txt; } }
 
 export function showOverlay(html) {
   const o = el('overlay'); if (!o) return;

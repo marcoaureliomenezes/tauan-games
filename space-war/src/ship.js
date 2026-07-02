@@ -18,10 +18,12 @@ const desiredV = new THREE.Vector3();
 const dvV = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
+const _eul = new THREE.Euler();
 const _up = new THREE.Vector3(0, 1, 0);
 const camOffset = new THREE.Vector3(0, 3.4, 13);
 const camTarget = new THREE.Vector3();
 const lastEarthPos = new THREE.Vector3();
+const _earthVel = new THREE.Vector3();
 let earthBody = null;
 let launchAngle = 0;
 
@@ -137,8 +139,8 @@ export function updateShip(dt) {
   const s = game.ship;
 
   // --- Velocidade da Terra (diferença finita) p/ acompanhar a órbita ao decolar ---
-  tmp.copy(earthBody.worldPos).sub(lastEarthPos);
-  const earthVel = tmp.clone().multiplyScalar(dt > 0 ? 1 / dt : 0);
+  _earthVel.copy(earthBody.worldPos).sub(lastEarthPos).multiplyScalar(dt > 0 ? 1 / dt : 0);
+  const earthVel = _earthVel;
   lastEarthPos.copy(earthBody.worldPos);
 
   // --- Throttle ---
@@ -167,14 +169,15 @@ export function updateShip(dt) {
   updateCamera(s, dt);
 }
 
+const _landedUp = new THREE.Vector3();
+const _noseAxis = new THREE.Vector3(0, 0, -1);
 function updateLanded(s, dt, earthVel) {
   // Presa à superfície da Terra, girando com ela; nariz radialmente para fora.
   launchAngle += ((Math.PI * 2) / earthBody.def.spin) * dt;
-  const up = new THREE.Vector3(Math.cos(launchAngle), 0.35, Math.sin(launchAngle)).normalize();
+  const up = _landedUp.set(Math.cos(launchAngle), 0.35, Math.sin(launchAngle)).normalize();
   s.pos.copy(earthBody.worldPos).addScaledVector(up, earthBody.def.radius + SHIP.startAltitude);
   // orientar nariz (-Z) para "up"
-  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), up);
-  s.quat.copy(q);
+  s.quat.setFromUnitVectors(_noseAxis, up);
   s.vel.copy(earthVel);
   s.altitude = SHIP.startAltitude;
   s.dominant = earthBody;
@@ -216,7 +219,7 @@ function updateFlight(s, dt) {
       if (s.quat.angleTo(_q) < 0.02) s.aligning = false;
     } else s.aligning = false;
   } else if (manual) {
-    s.quat.multiply(_q.setFromEuler(new THREE.Euler(pitch, yaw, roll, 'XYZ')));
+    s.quat.multiply(_q.setFromEuler(_eul.set(pitch, yaw, roll, 'XYZ')));
   }
   s.quat.normalize();
   game.nav.aligning = s.aligning;
@@ -389,6 +392,13 @@ function updateFlight(s, dt) {
   }
 }
 
+// FIX câmera-fugitiva (2026-07-01): o lerp de POSIÇÃO absoluto tinha atraso de
+// regime v/k — em overdrive (×4.5 cruzeiro) a câmera assentava MILHARES de
+// unidades atrás da nave ("nave some da tela"). Agora a posição é ANCORADA
+// RIGIDAMENTE na nave (deriva zero em qualquer velocidade) e a suavização fica
+// só na ROTAÇÃO (slerp exponencial, independente de frame-rate).
+const _camQuat = new THREE.Quaternion();
+const _camUp = new THREE.Vector3(0, 1, 0);
 function updateCamera(s, dt) {
   if (s.obsMode && _obsControls) {
     // OBSERVAÇÃO: a câmera orbita a NAVE EM MOVIMENTO — translada junto com ela
@@ -399,15 +409,16 @@ function updateCamera(s, dt) {
     _obsControls.target.copy(s.pos);
     camera.up.set(0, 1, 0);
     _obsControls.update();
+    _camQuat.copy(s.quat);   // ao voltar à perseguição, sem chicotada
     return;
   }
-  // Câmera de perseguição PRÓXIMA e firme atrás da nave (mantém a nave centralizada).
-  tmp.copy(camOffset).applyQuaternion(s.quat).add(s.pos);
-  camera.position.lerp(tmp, Math.min(1, 14 * dt));        // segue rápido → nave não "foge" da tela
+  const k = 1 - Math.exp(-9 * dt);
+  _camQuat.slerp(s.quat, k);
+  tmp.copy(camOffset).applyQuaternion(_camQuat).add(s.pos);
+  camera.position.copy(tmp);
   camTarget.copy(fwd.set(0, 0, -10).applyQuaternion(s.quat)).add(s.pos);
+  camera.up.copy(_camUp.set(0, 1, 0).applyQuaternion(_camQuat));
   camera.lookAt(camTarget);
-  const upv = new THREE.Vector3(0, 1, 0).applyQuaternion(s.quat);
-  camera.up.lerp(upv, Math.min(1, 10 * dt));
 }
 
 export function shipForward(out) { return out.set(0, 0, -1).applyQuaternion(game.ship.quat); }

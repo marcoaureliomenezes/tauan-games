@@ -4,6 +4,8 @@ extends Node
 # Attach to Player (RigidBody3D) root or as a child Node.
 # Physics integration runs in _integrate_forces() for deterministic per-tick control.
 
+enum FlightState { NORMAL, STALLED, CRASHED }
+
 # ────────────────────────────────────────────────────────────────────────────────
 # Constants (ported from v1 aero-fighters/src/config.js PLAYER block)
 # ────────────────────────────────────────────────────────────────────────────────
@@ -28,17 +30,15 @@ const PITCH_INVERT: float = -1.0
 const BOUNDARY_RADIUS: float = 20000.0 # m
 const BOUNDARY_SPRING: float = 6.0    # m/s² per meter of overshoot
 
+# Stall auto-recovery: automatically pitches nose down
+const STALL_RECOVERY_PITCH: float = 0.6  # rad/s nose-down when stalled
+
 # ────────────────────────────────────────────────────────────────────────────────
 # State
 # ────────────────────────────────────────────────────────────────────────────────
-enum FlightState { NORMAL, STALLED, CRASHED }
-
 var current_speed: float = 0.0     # m/s — current airspeed
 var current_throttle: float = 0.5  # 0..1 — current throttle setting
 var state: FlightState = FlightState.NORMAL
-
-# Stall auto-recovery: automatically pitches nose down
-const STALL_RECOVERY_PITCH: float = 0.6  # rad/s nose-down when stalled
 
 # Reference to parent RigidBody3D — set in _ready()
 var _body: RigidBody3D = null
@@ -152,7 +152,7 @@ func _handle_stall() -> void:
 				print("[flight_arcade] STALL RECOVERY — speed=%.1f" % current_speed)
 
 
-func _handle_rotation(delta: float) -> void:
+func _handle_rotation(_delta: float) -> void:
 	if _body == null:
 		return
 

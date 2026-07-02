@@ -117,6 +117,21 @@ export function createReflectiveWater(geometry, opts = {}) {
   });
   water.rotation.x = -Math.PI / 2;
   water.material.transparent = true;
+  // PERF (2026-07-01): o passe de reflexo do jsm Water RE-RENDERIZA A CENA INTEIRA
+  // (terreno + florestas instanciadas) num render-target a cada frame — em GPU
+  // integrada isso era boa parte do lag de voo. O reflexo agora atualiza a 30 Hz
+  // (frames alternados; o target guarda o último reflexo) e é PULADO por completo
+  // quando a câmera está longe do lago (a distorção + fresnel dominam de longe;
+  // ninguém distingue um reflexo de meio segundo atrás).
+  const origOnBeforeRender = water.onBeforeRender;
+  const maxReflectDist = opts.maxReflectDist ?? 2400;
+  let reflFrame = 0;
+  water.onBeforeRender = function (renderer, scene, cam, ...rest) {
+    reflFrame++;
+    if (reflFrame % 2 === 0) return;
+    if (cam?.position && this.position.distanceTo(cam.position) > maxReflectDist) return;
+    origOnBeforeRender.call(this, renderer, scene, cam, ...rest);
+  };
   _registry.push({ kind: 'reflective', mesh: water });
   return water;
 }

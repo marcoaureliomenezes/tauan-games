@@ -7,6 +7,19 @@ extends CanvasLayer
 # Boundary threshold (FR-V2-G-19)
 # ────────────────────────────────────────────────────────────────────────────────
 const BOUNDARY_WARNING_DIST: float = 18000.0  # m — show warning at 18 km
+const BOUNDARY_FLASH_PERIOD: float = 0.5  # s
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Tracked game state
+# ────────────────────────────────────────────────────────────────────────────────
+var _score: int = 0
+var _mission_cycle: int = 1
+var _factory_alive: bool = true
+var _base_alive: bool = true
+var _aa_alive: bool = true
+
+# Flash timer for boundary warning
+var _boundary_flash_timer: float = 0.0
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Child node references (matched to HUD.tscn structure)
@@ -20,19 +33,6 @@ const BOUNDARY_WARNING_DIST: float = 18000.0  # m — show warning at 18 km
 @onready var mission_n_label: Label = $Control/MissionProgress/MissionN
 @onready var target_icons_label: Label = $Control/MissionProgress/TargetIcons
 @onready var boundary_warning: Label = $Control/BoundaryWarning
-
-# ────────────────────────────────────────────────────────────────────────────────
-# Tracked game state
-# ────────────────────────────────────────────────────────────────────────────────
-var _score: int = 0
-var _mission_cycle: int = 1
-var _factory_alive: bool = true
-var _base_alive: bool = true
-var _aa_alive: bool = true
-
-# Flash timer for boundary warning
-var _boundary_flash_timer: float = 0.0
-const BOUNDARY_FLASH_PERIOD: float = 0.5  # s
 
 
 func _ready() -> void:

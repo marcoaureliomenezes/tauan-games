@@ -1,5 +1,5 @@
-extends StaticBody3D
 class_name AAGunBody
+extends StaticBody3D
 # aa_gun_body.gd — Hit-volume bridge for an AA gun sub-target.
 #
 # Why this exists: the combat agent's `scripts/aa_gun.gd` (T-G-19 lane)

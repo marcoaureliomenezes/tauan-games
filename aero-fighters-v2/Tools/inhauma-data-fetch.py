@@ -63,7 +63,6 @@ import hashlib
 import json
 import math
 import os
-import struct
 import subprocess
 import sys
 import traceback
@@ -76,11 +75,15 @@ from pathlib import Path
 try:
     import requests
 except ImportError:
-    print("[ERROR] Python package 'requests' not installed. Run: pip install requests", file=sys.stderr)
+    print(
+        "[ERROR] Python package 'requests' not installed. Run: pip install requests",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 try:
     from dotenv import load_dotenv
+
     _HAS_DOTENV = True
 except ImportError:
     _HAS_DOTENV = False
@@ -88,27 +91,55 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-GEOFABRIK_URL = (
-    "https://download.geofabrik.de/south-america/brazil/sudeste-latest.osm.pbf"
-)
+GEOFABRIK_URL = "https://download.geofabrik.de/south-america/brazil/sudeste-latest.osm.pbf"
 AWS_SRTM_BASE = "https://elevation-tiles-prod.s3.amazonaws.com/skadi"
 SRTM_TILE_DIM = 3601  # samples per side (30m SRTM1 = 1 arc-second)
 BUILDING_CAP = 5000
 LANDUSE_TAGS = {"forest", "grass", "residential", "industrial", "farmland", "orchard"}
 WEB_DRIVABLE_HIGHWAYS = {
-    "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
-    "secondary", "secondary_link", "tertiary", "tertiary_link", "unclassified",
-    "residential", "living_street", "service", "track",
+    "motorway",
+    "motorway_link",
+    "trunk",
+    "trunk_link",
+    "primary",
+    "primary_link",
+    "secondary",
+    "secondary_link",
+    "tertiary",
+    "tertiary_link",
+    "unclassified",
+    "residential",
+    "living_street",
+    "service",
+    "track",
 }
 WEB_ROAD_WIDTHS = {
-    "motorway": 22, "motorway_link": 14, "trunk": 21, "trunk_link": 14,
-    "primary": 18, "primary_link": 12, "secondary": 16, "secondary_link": 11,
-    "tertiary": 13, "tertiary_link": 10, "unclassified": 10,
-    "residential": 8, "living_street": 7, "service": 6, "track": 5,
+    "motorway": 22,
+    "motorway_link": 14,
+    "trunk": 21,
+    "trunk_link": 14,
+    "primary": 18,
+    "primary_link": 12,
+    "secondary": 16,
+    "secondary_link": 11,
+    "tertiary": 13,
+    "tertiary_link": 10,
+    "unclassified": 10,
+    "residential": 8,
+    "living_street": 7,
+    "service": 6,
+    "track": 5,
 }
 WEB_ROAD_PRIORITY = {
-    "motorway": 90, "trunk": 85, "primary": 80, "secondary": 70, "tertiary": 60,
-    "unclassified": 45, "residential": 35, "living_street": 30, "service": 25,
+    "motorway": 90,
+    "trunk": 85,
+    "primary": 80,
+    "secondary": 70,
+    "tertiary": 60,
+    "unclassified": 45,
+    "residential": 35,
+    "living_street": 30,
+    "service": 25,
     "track": 20,
 }
 WEB_EXCLUDED_HIGHWAYS = {"footway", "path", "construction", "services"}
@@ -132,9 +163,11 @@ LON_TO_KM_AT_LAT = 111.0 * math.cos(math.radians(-19.47))  # ≈ 104.9 km / deg
 # Dependency checks
 # ---------------------------------------------------------------------------
 
+
 def _require_bin(name: str, hint: str) -> str:
     """Return the binary path or exit 2 with installation instructions."""
     import shutil
+
     path = shutil.which(name)
     if path is None:
         print(f"[MISSING DEP] '{name}' not found in PATH.", file=sys.stderr)
@@ -142,6 +175,7 @@ def _require_bin(name: str, hint: str) -> str:
         print("  This tool cannot continue without it.", file=sys.stderr)
         sys.exit(2)
     return path
+
 
 def check_system_deps(skip_osm: bool, skip_srtm: bool):
     """Verify all required system binaries are present."""
@@ -152,6 +186,7 @@ def check_system_deps(skip_osm: bool, skip_srtm: bool):
             _require_bin(name, "sudo apt install gdal-bin")
         # gdal_merge.py can live anywhere on PATH
         import shutil
+
         if shutil.which("gdal_merge.py") is None:
             # Try the common gdal-bin location
             candidates = [
@@ -167,9 +202,11 @@ def check_system_deps(skip_osm: bool, skip_srtm: bool):
             return  # found via fallback path
     return
 
+
 def _gdal_merge_path() -> str:
     """Return path to gdal_merge.py."""
     import shutil
+
     p = shutil.which("gdal_merge.py")
     if p:
         return p
@@ -183,9 +220,11 @@ def _gdal_merge_path() -> str:
             return c
     return "gdal_merge.py"  # let subprocess fail with a clear message
 
+
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
+
 
 def load_config(repo_root: Path) -> dict:
     """Load .env.local if present; return env dict."""
@@ -194,9 +233,11 @@ def load_config(repo_root: Path) -> dict:
         load_dotenv(env_file, override=False)
     return os.environ.copy()
 
+
 # ---------------------------------------------------------------------------
 # Bbox helpers
 # ---------------------------------------------------------------------------
+
 
 def compute_bbox(center_lat: float, center_lon: float, radius_km: float) -> dict:
     """Compute WGS84 bounding box for a circle of radius_km."""
@@ -205,9 +246,10 @@ def compute_bbox(center_lat: float, center_lon: float, radius_km: float) -> dict
     return {
         "north": center_lat + delta_lat,
         "south": center_lat - delta_lat,
-        "east":  center_lon + delta_lon,
-        "west":  center_lon - delta_lon,
+        "east": center_lon + delta_lon,
+        "west": center_lon - delta_lon,
     }
+
 
 def srtm_tiles(bbox: dict) -> list:
     """
@@ -219,8 +261,8 @@ def srtm_tiles(bbox: dict) -> list:
     tiles = []
     south_i = math.floor(bbox["south"])  # inclusive floor
     north_i = math.floor(bbox["north"])  # SW corner of tile containing north edge
-    west_i  = math.floor(bbox["west"])
-    east_i  = math.floor(bbox["east"])
+    west_i = math.floor(bbox["west"])
+    east_i = math.floor(bbox["east"])
 
     for lat in range(south_i, north_i + 1):
         for lon in range(west_i, east_i + 1):
@@ -231,9 +273,11 @@ def srtm_tiles(bbox: dict) -> list:
             tiles.append({"name": name, "subdir": subdir, "lat": lat, "lon": lon})
     return tiles
 
+
 # ---------------------------------------------------------------------------
 # Hashing helpers
 # ---------------------------------------------------------------------------
+
 
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -242,9 +286,11 @@ def sha256_file(path: Path) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+
 # ---------------------------------------------------------------------------
 # HTTP helpers with progress
 # ---------------------------------------------------------------------------
+
 
 def download_file(url: str, dest: Path, resume: bool = True) -> dict:
     """
@@ -287,9 +333,14 @@ def download_file(url: str, dest: Path, resume: bool = True) -> dict:
             downloaded += len(chunk)
             if total > 0:
                 pct = 100 * downloaded / total
-                print(f"  {pct:5.1f}%  {downloaded>>20} MB / {total>>20} MB\r", end="", flush=True)
+                print(
+                    f"  {pct:5.1f}%  {downloaded >> 20} MB / {total >> 20} MB\r",
+                    end="",
+                    flush=True,
+                )
     print()
     return {"etag": etag, "last_modified": last_modified}
+
 
 def head_file(url: str) -> dict:
     """Return ETag and Last-Modified via HEAD."""
@@ -300,9 +351,11 @@ def head_file(url: str) -> dict:
         "last_modified": resp.headers.get("Last-Modified", ""),
     }
 
+
 # ---------------------------------------------------------------------------
 # OSM steps
 # ---------------------------------------------------------------------------
+
 
 def fetch_geofabrik_pbf(cache_dir: Path) -> dict:
     """
@@ -311,7 +364,7 @@ def fetch_geofabrik_pbf(cache_dir: Path) -> dict:
     Returns dict with 'path', 'last_modified'.
     """
     pbf_path = cache_dir / "sudeste.osm.pbf"
-    lm_path  = cache_dir / "sudeste.last_modified"
+    lm_path = cache_dir / "sudeste.last_modified"
 
     # Check remote Last-Modified
     print("[OSM] Checking Geofabrik PBF…", flush=True)
@@ -332,14 +385,18 @@ def fetch_geofabrik_pbf(cache_dir: Path) -> dict:
         lm_path.write_text(result["last_modified"])
     return {"path": pbf_path, "last_modified": result["last_modified"]}
 
+
 def clip_pbf(osmium_bin: str, pbf_src: Path, bbox: dict, output: Path):
     """Clip PBF to bbox using osmium extract."""
     bbox_str = f"{bbox['west']},{bbox['south']},{bbox['east']},{bbox['north']}"
     print(f"[OSM] Clipping PBF to bbox {bbox_str}…", flush=True)
     cmd = [
-        osmium_bin, "extract",
-        "--bbox", bbox_str,
-        "--output", str(output),
+        osmium_bin,
+        "extract",
+        "--bbox",
+        bbox_str,
+        "--output",
+        str(output),
         "--overwrite",
         str(pbf_src),
     ]
@@ -349,6 +406,7 @@ def clip_pbf(osmium_bin: str, pbf_src: Path, bbox: dict, output: Path):
     size_mb = output.stat().st_size / (1 << 20)
     print(f"  Clipped PBF: {output} ({size_mb:.1f} MB)", flush=True)
 
+
 # ---------------------------------------------------------------------------
 # OSM PBF parsing (buildings + landuse)
 # We use osmium's export to geojson rather than pulling osmium python bindings,
@@ -356,25 +414,31 @@ def clip_pbf(osmium_bin: str, pbf_src: Path, bbox: dict, output: Path):
 # a separate pip install).  We pipe through osmium tags-filter + osmium export.
 # ---------------------------------------------------------------------------
 
-def _osmium_export_json(osmium_bin: str, pbf_path: Path, output_json: Path,
-                         tags_filter_args: list) -> bool:
+
+def _osmium_export_json(
+    osmium_bin: str, pbf_path: Path, output_json: Path, tags_filter_args: list
+) -> bool:
     """
     Filter PBF by tags and export to GeoJSON via osmium.
     Returns True on success.
     """
     # Step 1: filter
     filtered_pbf = output_json.parent / (output_json.stem + "_filtered.osm.pbf")
-    cmd_filter = [osmium_bin, "tags-filter", str(pbf_path)] + tags_filter_args + [
-        "--output", str(filtered_pbf), "--overwrite"
-    ]
+    cmd_filter = (
+        [osmium_bin, "tags-filter", str(pbf_path)]
+        + tags_filter_args
+        + ["--output", str(filtered_pbf), "--overwrite"]
+    )
     subprocess.run(cmd_filter, check=True, capture_output=True, text=True)
 
     # Step 2: export to geojson
     cmd_export = [
-        osmium_bin, "export",
+        osmium_bin,
+        "export",
         "--geometry-types=polygon",
         "--output-format=geojson",
-        "--output", str(output_json),
+        "--output",
+        str(output_json),
         "--overwrite",
         str(filtered_pbf),
     ]
@@ -385,6 +449,7 @@ def _osmium_export_json(osmium_bin: str, pbf_path: Path, output_json: Path,
         return False
     filtered_pbf.unlink(missing_ok=True)
     return True
+
 
 def _shoelace_area(coords: list) -> float:
     """Approximate polygon area in square degrees via shoelace formula."""
@@ -398,6 +463,7 @@ def _shoelace_area(coords: list) -> float:
         area += x1 * y2 - x2 * y1
     return abs(area) / 2.0
 
+
 def _sq_deg_to_m2(sq_deg: float, lat: float) -> float:
     """
     Convert area in square degrees to approx m2 at given latitude.
@@ -407,6 +473,7 @@ def _sq_deg_to_m2(sq_deg: float, lat: float) -> float:
     lon_m = 111_000.0 * math.cos(math.radians(lat))
     return sq_deg * lat_m * lon_m
 
+
 def extract_buildings(osmium_bin: str, pbf_path: Path, output_json: Path):
     """
     Parse clipped PBF for building=* ways; output JSON (top 5000 by area).
@@ -414,11 +481,12 @@ def extract_buildings(osmium_bin: str, pbf_path: Path, output_json: Path):
     print("[OSM] Extracting buildings…", flush=True)
     tmp_geojson = output_json.parent / "_buildings_raw.geojson"
 
-    ok = _osmium_export_json(osmium_bin, pbf_path, tmp_geojson,
-                              ["w/building"])
+    ok = _osmium_export_json(osmium_bin, pbf_path, tmp_geojson, ["w/building"])
     if not ok:
-        print("  Warning: osmium export produced no output. Creating empty buildings list.",
-              flush=True)
+        print(
+            "  Warning: osmium export produced no output. Creating empty buildings list.",
+            flush=True,
+        )
         output_json.write_text("[]")
         return
 
@@ -429,7 +497,7 @@ def extract_buildings(osmium_bin: str, pbf_path: Path, output_json: Path):
     buildings = []
     for feat in features:
         props = feat.get("properties", {})
-        geom  = feat.get("geometry", {})
+        geom = feat.get("geometry", {})
         if geom.get("type") not in ("Polygon", "MultiPolygon"):
             continue
         if "building" not in props:
@@ -443,7 +511,7 @@ def extract_buildings(osmium_bin: str, pbf_path: Path, output_json: Path):
 
         # GeoJSON coords are [lon, lat]
         polygon_wgs84 = [[c[1], c[0]] for c in outer]  # convert to [lat, lon]
-        centroid_lat  = sum(c[0] for c in polygon_wgs84) / len(polygon_wgs84)
+        centroid_lat = sum(c[0] for c in polygon_wgs84) / len(polygon_wgs84)
 
         # Compute area
         sq_deg = _shoelace_area([[c[1], c[0]] for c in polygon_wgs84])
@@ -455,12 +523,14 @@ def extract_buildings(osmium_bin: str, pbf_path: Path, output_json: Path):
             levels = 3
         levels = max(1, levels)
 
-        buildings.append({
-            "id":           int(props.get("@osmId", 0)),
-            "polygon_wgs84": polygon_wgs84,
-            "levels":       levels,
-            "area_m2":      area_m2,
-        })
+        buildings.append(
+            {
+                "id": int(props.get("@osmId", 0)),
+                "polygon_wgs84": polygon_wgs84,
+                "levels": levels,
+                "area_m2": area_m2,
+            }
+        )
 
     # Sort by area descending, cap at BUILDING_CAP
     buildings.sort(key=lambda b: b["area_m2"], reverse=True)
@@ -472,6 +542,7 @@ def extract_buildings(osmium_bin: str, pbf_path: Path, output_json: Path):
     tmp_geojson.unlink(missing_ok=True)
     print(f"  Buildings written: {len(buildings)} (capped at {BUILDING_CAP})", flush=True)
 
+
 def extract_landuse(osmium_bin: str, pbf_path: Path, output_json: Path):
     """
     Parse clipped PBF for landuse polygons; output JSON.
@@ -479,13 +550,20 @@ def extract_landuse(osmium_bin: str, pbf_path: Path, output_json: Path):
     print("[OSM] Extracting landuse…", flush=True)
     tmp_geojson = output_json.parent / "_landuse_raw.geojson"
 
-    tag_filters = ["w/landuse=forest", "w/landuse=grass", "w/landuse=residential",
-                   "w/landuse=industrial", "w/landuse=farmland", "w/landuse=orchard"]
+    tag_filters = [
+        "w/landuse=forest",
+        "w/landuse=grass",
+        "w/landuse=residential",
+        "w/landuse=industrial",
+        "w/landuse=farmland",
+        "w/landuse=orchard",
+    ]
     ok = _osmium_export_json(osmium_bin, pbf_path, tmp_geojson, tag_filters)
 
     if not ok:
-        print("  Warning: osmium export produced no landuse output. Creating empty list.",
-              flush=True)
+        print(
+            "  Warning: osmium export produced no landuse output. Creating empty list.", flush=True
+        )
         output_json.write_text("[]")
         return
 
@@ -496,7 +574,7 @@ def extract_landuse(osmium_bin: str, pbf_path: Path, output_json: Path):
     landuse_list = []
     for feat in features:
         props = feat.get("properties", {})
-        geom  = feat.get("geometry", {})
+        geom = feat.get("geometry", {})
         lu_type = props.get("landuse", "")
         if lu_type not in LANDUSE_TAGS:
             continue
@@ -509,11 +587,13 @@ def extract_landuse(osmium_bin: str, pbf_path: Path, output_json: Path):
             outer = geom["coordinates"][0][0]
 
         polygon_wgs84 = [[c[1], c[0]] for c in outer]
-        landuse_list.append({
-            "id":            int(props.get("@osmId", 0)),
-            "type":          lu_type,
-            "polygon_wgs84": polygon_wgs84,
-        })
+        landuse_list.append(
+            {
+                "id": int(props.get("@osmId", 0)),
+                "type": lu_type,
+                "polygon_wgs84": polygon_wgs84,
+            }
+        )
 
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(landuse_list, f, separators=(",", ":"))
@@ -521,23 +601,30 @@ def extract_landuse(osmium_bin: str, pbf_path: Path, output_json: Path):
     tmp_geojson.unlink(missing_ok=True)
     print(f"  Landuse entries written: {len(landuse_list)}", flush=True)
 
+
 # ---------------------------------------------------------------------------
 # Web-game deterministic export
 # ---------------------------------------------------------------------------
 
-def _local_point(lon: float, lat: float, origin_lat: float, origin_lon: float,
-                 scale: float = WEB_WORLD_SCALE) -> dict:
+
+def _local_point(
+    lon: float, lat: float, origin_lat: float, origin_lon: float, scale: float = WEB_WORLD_SCALE
+) -> dict:
     """Project WGS84 lon/lat to compressed game coordinates."""
     x = (lon - origin_lon) * LON_TO_KM_AT_LAT * 1000.0 * scale
     z = (lat - origin_lat) * LAT_TO_KM * 1000.0 * scale
     return {"x": round(x, 1), "z": round(z, 1)}
 
+
 def _point_in_airport_exclusion(p: dict) -> bool:
     for zone in WEB_AIRPORT_ZONES:
-        if (abs(p["x"] - zone["cx"]) <= zone["half_x"] and
-                abs(p["z"] - zone["cz"]) <= zone["half_z"]):
+        if (
+            abs(p["x"] - zone["cx"]) <= zone["half_x"]
+            and abs(p["z"] - zone["cz"]) <= zone["half_z"]
+        ):
             return True
     return False
+
 
 def _segment_hits_airport(a: dict, b: dict) -> bool:
     steps = max(3, int(math.ceil(math.hypot(b["x"] - a["x"], b["z"] - a["z"]) / 12)))
@@ -548,12 +635,15 @@ def _segment_hits_airport(a: dict, b: dict) -> bool:
             return True
     return False
 
+
 def _polyline_length(points: list) -> float:
     total = 0.0
     for i in range(1, len(points)):
-        total += math.hypot(points[i]["x"] - points[i - 1]["x"],
-                            points[i]["z"] - points[i - 1]["z"])
+        total += math.hypot(
+            points[i]["x"] - points[i - 1]["x"], points[i]["z"] - points[i - 1]["z"]
+        )
     return total
+
 
 def _simplify_points(points: list) -> list:
     if len(points) <= 2:
@@ -566,6 +656,7 @@ def _simplify_points(points: list) -> list:
     if simplified[-1] != points[-1]:
         simplified.append(points[-1])
     return simplified
+
 
 def _split_airport_safe_segments(points: list) -> list:
     parts = []
@@ -586,47 +677,67 @@ def _split_airport_safe_segments(points: list) -> list:
         parts.append(current)
     return parts
 
+
 def _canonical_ref(ref: str) -> str:
     if not ref:
         return ""
     return ref.lower().replace(" ", "-").replace(";", "-").replace("/", "-")
+
 
 def _snap_node_id(p: dict) -> str:
     sx = int(round(p["x"] / WEB_NODE_SNAP))
     sz = int(round(p["z"] / WEB_NODE_SNAP))
     return f"n{sx}_{sz}"
 
+
 def _road_sort_key(edge: dict) -> tuple:
     priority = WEB_ROAD_PRIORITY.get(edge["kind"].replace("_link", ""), 10)
     ref_score = 20 if edge.get("ref") else 0
     return (-priority - ref_score, -edge["length"], edge["id"])
 
-def _osmium_export_lines(osmium_bin: str, pbf_path: Path, output_geojson: Path,
-                         tags_filter_args: list):
+
+def _osmium_export_lines(
+    osmium_bin: str, pbf_path: Path, output_geojson: Path, tags_filter_args: list
+):
     filtered_pbf = output_geojson.parent / (output_geojson.stem + "_filtered.osm.pbf")
-    cmd_filter = [osmium_bin, "tags-filter", str(pbf_path)] + tags_filter_args + [
-        "--output", str(filtered_pbf), "--overwrite"
-    ]
+    cmd_filter = (
+        [osmium_bin, "tags-filter", str(pbf_path)]
+        + tags_filter_args
+        + ["--output", str(filtered_pbf), "--overwrite"]
+    )
     subprocess.run(cmd_filter, check=True, capture_output=True, text=True)
     cmd_export = [
-        osmium_bin, "export",
+        osmium_bin,
+        "export",
         "--geometry-types=linestring",
         "--output-format=geojson",
-        "--output", str(output_geojson),
+        "--output",
+        str(output_geojson),
         "--overwrite",
         str(filtered_pbf),
     ]
     subprocess.run(cmd_export, check=True, capture_output=True, text=True)
     filtered_pbf.unlink(missing_ok=True)
 
+
 def _js_module(name: str, value) -> str:
-    return f"export const {name} = {json.dumps(value, ensure_ascii=False, separators=(',', ':'))};\n"
+    return (
+        f"export const {name} = {json.dumps(value, ensure_ascii=False, separators=(',', ':'))};\n"
+    )
+
 
 def _deterministic_web_generated_at(source_hash: str) -> str:
     return f"deterministic:{source_hash[:16]}"
 
-def export_web_data(osmium_bin: str, pbf_path: Path, output_dir: Path,
-                    origin_lat: float, origin_lon: float, scale: float):
+
+def export_web_data(
+    osmium_bin: str,
+    pbf_path: Path,
+    output_dir: Path,
+    origin_lat: float,
+    origin_lon: float,
+    scale: float,
+):
     """Export static ES modules consumed by the Three.js web map."""
     print("[WEB] Exporting deterministic Inhauma web map data…", flush=True)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -656,10 +767,12 @@ def export_web_data(osmium_bin: str, pbf_path: Path, output_dir: Path,
         coords = geom.get("coordinates", [])
         if len(coords) < 2:
             continue
-        points = _simplify_points([
-            _local_point(float(lon), float(lat), origin_lat, origin_lon, scale)
-            for lon, lat in coords
-        ])
+        points = _simplify_points(
+            [
+                _local_point(float(lon), float(lat), origin_lat, origin_lon, scale)
+                for lon, lat in coords
+            ]
+        )
         for part_index, part in enumerate(_split_airport_safe_segments(points)):
             if len(part) < 2:
                 continue
@@ -688,7 +801,14 @@ def export_web_data(osmium_bin: str, pbf_path: Path, output_dir: Path,
                 "surface": str(props.get("surface", "")),
                 "oneway": str(props.get("oneway", "")),
                 "width": WEB_ROAD_WIDTHS.get(kind, 8),
-                "lanes": max(1, int(str(props.get("lanes", "2")).split(";")[0]) if str(props.get("lanes", "2")).split(";")[0].isdigit() else 2),
+                "lanes": max(
+                    1,
+                    (
+                        int(str(props.get("lanes", "2")).split(";")[0])
+                        if str(props.get("lanes", "2")).split(";")[0].isdigit()
+                        else 2
+                    ),
+                ),
                 "length": round(length, 1),
                 "nodes": node_ids,
             }
@@ -739,20 +859,26 @@ def export_web_data(osmium_bin: str, pbf_path: Path, output_dir: Path,
         "axis": "x=east,z=north",
     }
 
-    (output_dir / "projection.js").write_text(_js_module("INHAUMA_PROJECTION", projection), encoding="utf-8")
-    (output_dir / "metadata.js").write_text(_js_module("INHAUMA_WEB_MAP_METADATA", metadata), encoding="utf-8")
+    (output_dir / "projection.js").write_text(
+        _js_module("INHAUMA_PROJECTION", projection), encoding="utf-8"
+    )
+    (output_dir / "metadata.js").write_text(
+        _js_module("INHAUMA_WEB_MAP_METADATA", metadata), encoding="utf-8"
+    )
     (output_dir / "roads.js").write_text(
-        _js_module("INHAUMA_OSM_ROAD_GRAPH", road_graph) +
-        _js_module("INHAUMA_OSM_NAMED_ROUTES", named_routes),
+        _js_module("INHAUMA_OSM_ROAD_GRAPH", road_graph)
+        + _js_module("INHAUMA_OSM_NAMED_ROUTES", named_routes),
         encoding="utf-8",
     )
     tmp_geojson.unlink(missing_ok=True)
     print(f"  Web roads written: {len(edges)} edges, {len(node_list)} snapped nodes", flush=True)
     print(f"  Output: {output_dir}", flush=True)
 
+
 # ---------------------------------------------------------------------------
 # SRTM steps
 # ---------------------------------------------------------------------------
+
 
 def fetch_srtm_tile(tile: dict, cache_dir: Path) -> dict:
     """
@@ -760,10 +886,10 @@ def fetch_srtm_tile(tile: dict, cache_dir: Path) -> dict:
     Cache in cache_dir.
     Returns dict with 'gz_path', 'hgt_path', 'etag'.
     """
-    name    = tile["name"]
-    subdir  = tile["subdir"]
+    name = tile["name"]
+    subdir = tile["subdir"]
     gz_name = f"{name}.hgt.gz"
-    url     = f"{AWS_SRTM_BASE}/{subdir}/{gz_name}"
+    url = f"{AWS_SRTM_BASE}/{subdir}/{gz_name}"
     gz_path = cache_dir / gz_name
     hgt_path = cache_dir / f"{name}.hgt"
 
@@ -804,6 +930,7 @@ def fetch_srtm_tile(tile: dict, cache_dir: Path) -> dict:
 
     return {"gz_path": gz_path, "hgt_path": hgt_path, "etag": etag}
 
+
 def merge_srtm_tiles(hgt_paths: list, bbox: dict, output_dir: Path) -> dict:
     """
     Merge .hgt tiles → inhauma-heightmap-wgs84.tif (via gdal_merge.py),
@@ -811,19 +938,23 @@ def merge_srtm_tiles(hgt_paths: list, bbox: dict, output_dir: Path) -> dict:
     export → inhauma-heightmap.png (16-bit UInt16 scaled 0–1500m).
     Returns dict with output paths.
     """
-    wgs84_tif  = output_dir / "inhauma-heightmap-wgs84.tif"
-    utm_tif    = output_dir / "inhauma-heightmap.tif"
-    png_out    = output_dir / "inhauma-heightmap.png"
+    wgs84_tif = output_dir / "inhauma-heightmap-wgs84.tif"
+    utm_tif = output_dir / "inhauma-heightmap.tif"
+    png_out = output_dir / "inhauma-heightmap.png"
 
     gdal_merge = _gdal_merge_path()
-    hgt_str    = [str(p) for p in hgt_paths]
+    hgt_str = [str(p) for p in hgt_paths]
 
     print("[SRTM] Merging tiles with gdal_merge.py…", flush=True)
     merge_cmd = [
-        "python3", gdal_merge,
-        "-o", str(wgs84_tif),
-        "-of", "GTiff",
-        "-ot", "Int16",
+        "python3",
+        gdal_merge,
+        "-o",
+        str(wgs84_tif),
+        "-of",
+        "GTiff",
+        "-ot",
+        "Int16",
     ] + hgt_str
     subprocess.run(merge_cmd, check=True, capture_output=True, text=True)
 
@@ -836,11 +967,20 @@ def merge_srtm_tiles(hgt_paths: list, bbox: dict, output_dir: Path) -> dict:
     ]
     warp_cmd = [
         "gdalwarp",
-        "-t_srs", "EPSG:31983",
-        "-tr", "30", "30",
-        "-r", "bilinear",
-        "-te_srs", "EPSG:4326",
-        "-te", bbox_te[0], bbox_te[1], bbox_te[2], bbox_te[3],
+        "-t_srs",
+        "EPSG:31983",
+        "-tr",
+        "30",
+        "30",
+        "-r",
+        "bilinear",
+        "-te_srs",
+        "EPSG:4326",
+        "-te",
+        bbox_te[0],
+        bbox_te[1],
+        bbox_te[2],
+        bbox_te[3],
         "-overwrite",
         str(wgs84_tif),
         str(utm_tif),
@@ -850,9 +990,15 @@ def merge_srtm_tiles(hgt_paths: list, bbox: dict, output_dir: Path) -> dict:
     print("[SRTM] Exporting 16-bit PNG for Terrain3D…", flush=True)
     translate_cmd = [
         "gdal_translate",
-        "-ot", "UInt16",
-        "-scale", "0", "1500", "0", "65535",
-        "-of", "PNG",
+        "-ot",
+        "UInt16",
+        "-scale",
+        "0",
+        "1500",
+        "0",
+        "65535",
+        "-of",
+        "PNG",
         str(utm_tif),
         str(png_out),
     ]
@@ -860,13 +1006,15 @@ def merge_srtm_tiles(hgt_paths: list, bbox: dict, output_dir: Path) -> dict:
 
     return {
         "wgs84_tif": wgs84_tif,
-        "utm_tif":   utm_tif,
-        "png":       png_out,
+        "utm_tif": utm_tif,
+        "png": png_out,
     }
+
 
 # ---------------------------------------------------------------------------
 # Idempotence check
 # ---------------------------------------------------------------------------
+
 
 def is_up_to_date(png_path: Path, sources_md: Path) -> bool:
     """
@@ -880,9 +1028,11 @@ def is_up_to_date(png_path: Path, sources_md: Path) -> bool:
     content = sources_md.read_text()
     return f"inhauma-heightmap.png sha256: {current_sha}" in content
 
+
 # ---------------------------------------------------------------------------
 # SOURCES.md writing
 # ---------------------------------------------------------------------------
+
 
 def write_sources_md(sources_path: Path, run_data: dict):
     """Append / create SOURCES.md provenance record."""
@@ -890,7 +1040,7 @@ def write_sources_md(sources_path: Path, run_data: dict):
 
     lines = [
         f"## Fetch run {now_iso}",
-        f"",
+        "",
         f"- bbox: N={run_data['bbox']['north']:.4f} S={run_data['bbox']['south']:.4f} "
         f"E={run_data['bbox']['east']:.4f} W={run_data['bbox']['west']:.4f}",
         f"- Geofabrik PBF Last-Modified: {run_data.get('geofabrik_lm', 'n/a')}",
@@ -909,24 +1059,31 @@ def write_sources_md(sources_path: Path, run_data: dict):
     sources_path.write_text("\n".join(lines) + "\n" + existing)
     print(f"[INFO] SOURCES.md updated: {sources_path}", flush=True)
 
+
 # ---------------------------------------------------------------------------
 # Dry-run
 # ---------------------------------------------------------------------------
+
 
 def print_dry_run(args, bbox: dict, tiles: list):
     """Print what would happen and exit 3."""
     print("=== DRY RUN ===")
     print(f"  Center:    ({args.center_lat}, {args.center_lon})")
     print(f"  Radius:    {args.radius_km} km")
-    print(f"  Bbox:      N={bbox['north']:.4f} S={bbox['south']:.4f} "
-          f"E={bbox['east']:.4f} W={bbox['west']:.4f}")
+    print(
+        f"  Bbox:      N={bbox['north']:.4f} S={bbox['south']:.4f} "
+        f"E={bbox['east']:.4f} W={bbox['west']:.4f}"
+    )
     print(f"  Output:    {args.output_dir}")
     print()
     if not args.skip_osm:
         print("  OSM steps:")
-        print(f"    1. Download Geofabrik PBF → Tools/.cache/geofabrik/sudeste.osm.pbf (~280 MB)")
+        print("    1. Download Geofabrik PBF → Tools/.cache/geofabrik/sudeste.osm.pbf (~280 MB)")
         print(f"    2. osmium extract → {args.output_dir}/inhauma-osm.pbf")
-        print(f"    3. Extract buildings (cap {BUILDING_CAP}) → {args.output_dir}/inhauma-buildings.json")
+        print(
+            f"    3. Extract buildings (cap {BUILDING_CAP}) → "
+            f"{args.output_dir}/inhauma-buildings.json"
+        )
         print(f"    4. Extract landuse → {args.output_dir}/inhauma-landuse.json")
     if not args.skip_srtm:
         print("  SRTM steps:")
@@ -940,38 +1097,52 @@ def print_dry_run(args, bbox: dict, tiles: list):
     print("=== END DRY RUN ===")
     sys.exit(3)
 
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--center-lat",  type=float, default=-19.47)
-    p.add_argument("--center-lon",  type=float, default=-44.46)
-    p.add_argument("--radius-km",   type=float, default=22.0)
-    p.add_argument("--output-dir",  type=str,   default="Content/World")
-    p.add_argument("--yes",         action="store_true")
-    p.add_argument("--dry-run",     action="store_true")
-    p.add_argument("--skip-osm",    action="store_true")
-    p.add_argument("--skip-srtm",   action="store_true")
-    p.add_argument("--export-web-data", action="store_true",
-                   help="Export static JS GIS modules for aero-fighters from local outputs")
-    p.add_argument("--web-output-dir", type=str,
-                   default="../aero-fighters/src/maps/inhauma-data",
-                   help="Output directory for --export-web-data")
-    p.add_argument("--web-world-scale", type=float, default=WEB_WORLD_SCALE,
-                   help="Compressed world scale for web-game coordinates")
-    p.add_argument("--force",       action="store_true")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument("--center-lat", type=float, default=-19.47)
+    p.add_argument("--center-lon", type=float, default=-44.46)
+    p.add_argument("--radius-km", type=float, default=22.0)
+    p.add_argument("--output-dir", type=str, default="Content/World")
+    p.add_argument("--yes", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--skip-osm", action="store_true")
+    p.add_argument("--skip-srtm", action="store_true")
+    p.add_argument(
+        "--export-web-data",
+        action="store_true",
+        help="Export static JS GIS modules for aero-fighters from local outputs",
+    )
+    p.add_argument(
+        "--web-output-dir",
+        type=str,
+        default="../aero-fighters/src/maps/inhauma-data",
+        help="Output directory for --export-web-data",
+    )
+    p.add_argument(
+        "--web-world-scale",
+        type=float,
+        default=WEB_WORLD_SCALE,
+        help="Compressed world scale for web-game coordinates",
+    )
+    p.add_argument("--force", action="store_true")
     return p.parse_args()
+
 
 def main():
     args = parse_args()
 
     # Locate repo root (2 levels up from this script)
     script_dir = Path(__file__).resolve().parent
-    game_root  = script_dir.parent          # aero-fighters-v2/
-    repo_root  = game_root.parent.parent    # workspace root
+    game_root = script_dir.parent  # aero-fighters-v2/
+    repo_root = game_root.parent.parent  # workspace root
 
     # Load .env.local
     load_config(repo_root / "repos" / "tauan-games")
@@ -986,21 +1157,24 @@ def main():
     if args.center_lat == -19.47 and args.center_lon == -44.46 and args.radius_km == 22.0:
         osm_north = _env_float("OSM_BBOX_NORTH", None)
         osm_south = _env_float("OSM_BBOX_SOUTH", None)
-        osm_east  = _env_float("OSM_BBOX_EAST",  None)
-        osm_west  = _env_float("OSM_BBOX_WEST",  None)
+        osm_east = _env_float("OSM_BBOX_EAST", None)
+        osm_west = _env_float("OSM_BBOX_WEST", None)
         if all(v is not None for v in [osm_north, osm_south, osm_east, osm_west]):
             # Compute center + radius from env bbox
             center_lat = (osm_north + osm_south) / 2
-            center_lon = (osm_east  + osm_west)  / 2
-            radius_km  = min(
+            center_lon = (osm_east + osm_west) / 2
+            radius_km = min(
                 (osm_north - osm_south) / 2 * LAT_TO_KM,
-                (osm_east  - osm_west)  / 2 * LON_TO_KM_AT_LAT,
+                (osm_east - osm_west) / 2 * LON_TO_KM_AT_LAT,
             )
-            print(f"[CONFIG] Using .env.local bbox: center=({center_lat:.4f},{center_lon:.4f}) "
-                  f"radius≈{radius_km:.1f}km", flush=True)
+            print(
+                f"[CONFIG] Using .env.local bbox: center=({center_lat:.4f},{center_lon:.4f}) "
+                f"radius≈{radius_km:.1f}km",
+                flush=True,
+            )
             args.center_lat = center_lat
             args.center_lon = center_lon
-            args.radius_km  = radius_km
+            args.radius_km = radius_km
 
     # Validate
     if not (-90 < args.center_lat < 90) or not (-180 < args.center_lon < 180):
@@ -1010,7 +1184,7 @@ def main():
         print("[ERROR] radius-km out of range (0, 500].", file=sys.stderr)
         sys.exit(4)
 
-    bbox  = compute_bbox(args.center_lat, args.center_lon, args.radius_km)
+    bbox = compute_bbox(args.center_lat, args.center_lon, args.radius_km)
     tiles = srtm_tiles(bbox)
 
     # Resolve output dir relative to game root
@@ -1019,7 +1193,7 @@ def main():
         output_dir = game_root / output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    cache_dir_pbf  = script_dir / ".cache" / "geofabrik"
+    cache_dir_pbf = script_dir / ".cache" / "geofabrik"
     cache_dir_srtm = script_dir / ".cache" / "srtm"
     cache_dir_pbf.mkdir(parents=True, exist_ok=True)
     cache_dir_srtm.mkdir(parents=True, exist_ok=True)
@@ -1032,6 +1206,7 @@ def main():
     osmium_bin = None
     if not args.skip_osm or args.export_web_data:
         import shutil
+
         osmium_bin = shutil.which("osmium")
         if osmium_bin is None:
             print("[MISSING DEP] 'osmium' not found in PATH.", file=sys.stderr)
@@ -1043,25 +1218,35 @@ def main():
         clipped_pbf = output_dir / "inhauma-osm.pbf"
         if not clipped_pbf.is_file():
             print(f"[ERROR] Missing local PBF for web export: {clipped_pbf}", file=sys.stderr)
-            print("  Run the fetch step first or set --output-dir to a directory containing inhauma-osm.pbf.", file=sys.stderr)
+            print(
+                "  Run the fetch step first or set --output-dir to a directory"
+                " containing inhauma-osm.pbf.",
+                file=sys.stderr,
+            )
             sys.exit(2)
         web_output_dir = Path(args.web_output_dir)
         if not web_output_dir.is_absolute():
             web_output_dir = game_root / web_output_dir
-        export_web_data(osmium_bin, clipped_pbf, web_output_dir,
-                        args.center_lat, args.center_lon, args.web_world_scale)
+        export_web_data(
+            osmium_bin,
+            clipped_pbf,
+            web_output_dir,
+            args.center_lat,
+            args.center_lon,
+            args.web_world_scale,
+        )
         sys.exit(0)
 
     # Idempotence check
-    png_path    = output_dir / "inhauma-heightmap.png"
-    sources_md  = output_dir / "SOURCES.md"
+    png_path = output_dir / "inhauma-heightmap.png"
+    sources_md = output_dir / "SOURCES.md"
     if not args.force and is_up_to_date(png_path, sources_md):
         print("[INFO] Outputs are up to date. Use --force to re-fetch.", flush=True)
         sys.exit(0)
 
     # Confirm
     if not args.yes:
-        print(f"\nThis will download ~280 MB (Geofabrik PBF) + a few MB of SRTM tiles.")
+        print("\nThis will download ~280 MB (Geofabrik PBF) + a few MB of SRTM tiles.")
         print(f"Output: {output_dir}")
         answer = input("Continue? [y/N] ").strip().lower()
         if answer != "y":
@@ -1073,7 +1258,7 @@ def main():
     # ---- OSM ----------------------------------------------------------------
     if not args.skip_osm:
         # Fetch / cache Geofabrik PBF
-        geo_result   = fetch_geofabrik_pbf(cache_dir_pbf)
+        geo_result = fetch_geofabrik_pbf(cache_dir_pbf)
         geofabrik_lm = geo_result["last_modified"]
         run_data["geofabrik_lm"] = geofabrik_lm
 
@@ -1097,7 +1282,7 @@ def main():
             hgt_paths.append(result["hgt_path"])
             run_data["srtm_etags"][tile["name"]] = result["etag"]
 
-        tif_result = merge_srtm_tiles(hgt_paths, bbox, output_dir)
+        merge_srtm_tiles(hgt_paths, bbox, output_dir)
 
     # ---- Record SHAs --------------------------------------------------------
     for fname in [
@@ -1117,7 +1302,7 @@ def main():
     print("\n[DONE] All outputs written to:", output_dir, flush=True)
     for fname, sha in run_data["output_shas"].items():
         size = (output_dir / fname).stat().st_size
-        print(f"  {fname:40s} {size>>10:>8} KB  sha256:{sha[:16]}…", flush=True)
+        print(f"  {fname:40s} {size >> 10:>8} KB  sha256:{sha[:16]}…", flush=True)
 
     sys.exit(0)
 

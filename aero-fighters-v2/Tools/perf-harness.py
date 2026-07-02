@@ -22,9 +22,9 @@ import sys
 # ---------------------------------------------------------------------------
 # AC-V2-17 gate constants (NFR-V2-01)
 # ---------------------------------------------------------------------------
-AC_V2_17_MIN_FPS = 60.0        # mean FPS floor
-AC_V2_17_MAX_P99_MS = 18.5     # 99th-percentile frame-time ceiling (ms)
-FLIGHT_LOOP_SECONDS = 60       # scripted flight duration for --run mode
+AC_V2_17_MIN_FPS = 60.0  # mean FPS floor
+AC_V2_17_MAX_P99_MS = 18.5  # 99th-percentile frame-time ceiling (ms)
+FLIGHT_LOOP_SECONDS = 60  # scripted flight duration for --run mode
 
 
 # ---------------------------------------------------------------------------
@@ -49,9 +49,7 @@ def run_scripted_flight_and_capture(platform: str) -> list:
         "[perf-harness] run_scripted_flight_and_capture() is a stub.\n"
         "Wave 6 (game-developer) implements the actual UE5 launch glue once\n"
         "UE 5.5 is installed.  Platform requested: {platform}.\n"
-        "See SPEC §NFR-V2-01 / AC-V2-17 and TASKS T-009 for context.".format(
-            platform=platform
-        )
+        "See SPEC §NFR-V2-01 / AC-V2-17 and TASKS T-009 for context.".format(platform=platform)
     )
 
 
@@ -122,9 +120,7 @@ def parse_frame_times_csv(path: str) -> list:
             continue
 
     if not frame_times:
-        raise ValueError(
-            "No valid positive numeric frame-time values found in: {}".format(path)
-        )
+        raise ValueError("No valid positive numeric frame-time values found in: {}".format(path))
 
     return frame_times
 
@@ -339,17 +335,13 @@ def _cmd_self_check(args) -> int:
 
     ok = True
     if abs(mean_fps - 62.5) > 0.1:
-        print(
-            "[self-check] FAIL: mean FPS expected 62.5 +/- 0.1, got {:.4f}".format(mean_fps)
-        )
+        print("[self-check] FAIL: mean FPS expected 62.5 +/- 0.1, got {:.4f}".format(mean_fps))
         ok = False
     else:
         print("[self-check] PASS: mean FPS within tolerance")
 
     if abs(p99 - 16.0) > 0.1:
-        print(
-            "[self-check] FAIL: p99 expected 16.0 +/- 0.1 ms, got {:.4f}".format(p99)
-        )
+        print("[self-check] FAIL: p99 expected 16.0 +/- 0.1 ms, got {:.4f}".format(p99))
         ok = False
     else:
         print("[self-check] PASS: p99 within tolerance")
@@ -393,9 +385,7 @@ def _cmd_analyze(args) -> int:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(script_dir)
     ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H%M%SZ")
-    report_path = os.path.join(
-        repo_root, "Tests", "results", "perf-{}.html".format(ts)
-    )
+    report_path = os.path.join(repo_root, "Tests", "results", "perf-{}.html".format(ts))
     write_html_report(stats, report_path)
     return 0
 
@@ -415,9 +405,7 @@ def _cmd_assert_only(args) -> int:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(script_dir)
     ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H%M%SZ")
-    report_path = os.path.join(
-        repo_root, "Tests", "results", "perf-assert-{}.html".format(ts)
-    )
+    report_path = os.path.join(repo_root, "Tests", "results", "perf-assert-{}.html".format(ts))
     write_html_report(stats, report_path)
 
     print("[assert-only] {}".format(stats["ac_v2_17_msg"]))
@@ -441,9 +429,7 @@ def _cmd_run(args) -> int:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(script_dir)
     ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H%M%SZ")
-    report_path = os.path.join(
-        repo_root, "Tests", "results", "perf-run-{}.html".format(ts)
-    )
+    report_path = os.path.join(repo_root, "Tests", "results", "perf-run-{}.html".format(ts))
     write_html_report(stats, report_path)
 
     if not stats["ac_v2_17_pass"]:

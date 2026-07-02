@@ -1,5 +1,5 @@
-extends Resource
 class_name GameConfigResource
+extends Resource
 # GameConfigResource — custom Resource class for world origin, spawn, and flight constants.
 # Implements FR-V2-G-04 flight constants ported from v1 aero-fighters/src/config.js PLAYER block.
 # Instantiated as Content/Data/GameConfig.tres.

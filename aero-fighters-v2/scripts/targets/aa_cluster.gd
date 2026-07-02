@@ -1,5 +1,5 @@
-extends Node3D
 class_name AAGunCluster
+extends Node3D
 # aa_cluster.gd — Assembly orchestrator for a 3-sub-gun AA emplacement.
 # The cluster root is a Node3D (NOT a TargetBase); each sub-gun is an
 # individual StaticBody3D with scripts/aa_gun.gd attached (authored under

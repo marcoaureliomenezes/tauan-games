@@ -244,7 +244,9 @@ func _build_tree_mesh() -> ArrayMesh:
 
 
 # Add a cylinder (trunk) using SurfaceTool
-func _add_cylinder(st: SurfaceTool, r_bot: float, r_top: float, h: float, sides: int, y_offset: float) -> void:
+func _add_cylinder(
+	st: SurfaceTool, r_bot: float, r_top: float, h: float, sides: int, y_offset: float
+) -> void:
 	var angle_step: float = TAU / float(sides)
 	var y_bot: float = y_offset
 	var y_top: float = y_offset + h
@@ -344,7 +346,7 @@ func _point_in_polygon(pt: Vector2, verts: Array) -> bool:
 		var yj: float = verts[j].y
 
 		if ((yi > pt.y) != (yj > pt.y)) and \
-		   (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi):
+			(pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi):
 			inside = not inside
 		j = i
 

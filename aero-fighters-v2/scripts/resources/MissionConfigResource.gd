@@ -1,5 +1,5 @@
-extends Resource
 class_name MissionConfigResource
+extends Resource
 # MissionConfigResource — custom Resource class for mission target placement and difficulty.
 # Implements FR-V2-G-06 target layout and FR-V2-G-07 difficulty scaling.
 # Instantiated as Content/Data/MissionConfig.tres.
@@ -23,4 +23,5 @@ class_name MissionConfigResource
 
 # --- Difficulty scaling per cycle ---
 @export var difficulty_hp_coef: float = 1.15    # HP multiplier per cycle
-@export var difficulty_aa_interval_coef: float = 0.92  # AA fire interval multiplier per cycle (< 1 = faster)
+# AA fire interval multiplier per cycle (< 1 = faster)
+@export var difficulty_aa_interval_coef: float = 0.92

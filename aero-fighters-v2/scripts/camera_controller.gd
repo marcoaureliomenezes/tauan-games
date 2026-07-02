@@ -3,12 +3,7 @@ extends Node3D
 # Implements FR-V2-G-09: Chase camera (default SpringArm3D) + Cockpit camera (Camera3D).
 # cycle_camera action toggles between the two.
 
-# ────────────────────────────────────────────────────────────────────────────────
-# Camera references (set up as children in Player.tscn)
-# ────────────────────────────────────────────────────────────────────────────────
-@onready var chase_spring_arm: SpringArm3D = $ChaseSpringArm
-@onready var chase_camera: Camera3D = $ChaseSpringArm/ChaseCamera
-@onready var cockpit_camera: Camera3D = $CockpitCamera
+enum CameraMode { CHASE, COCKPIT }
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SpringArm config constants
@@ -17,9 +12,15 @@ const SPRING_LENGTH: float = 12.0   # m — camera arm length behind aircraft
 const SPRING_HEIGHT: float = 4.0    # m — vertical offset above aircraft root
 const CHASE_SMOOTH: float = 8.0     # lerp factor for chase camera rotation smoothing
 
-enum CameraMode { CHASE, COCKPIT }
 var _mode: CameraMode = CameraMode.CHASE
 var _player_body: RigidBody3D = null
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Camera references (set up as children in Player.tscn)
+# ────────────────────────────────────────────────────────────────────────────────
+@onready var chase_spring_arm: SpringArm3D = $ChaseSpringArm
+@onready var chase_camera: Camera3D = $ChaseSpringArm/ChaseCamera
+@onready var cockpit_camera: Camera3D = $CockpitCamera
 
 
 func _ready() -> void:

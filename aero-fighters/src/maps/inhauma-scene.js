@@ -23,9 +23,16 @@ if (typeof window !== 'undefined') {
 
 // ─── Geografia ────────────────────────────────────────────────────────────────
 export const WATER_LEVEL = 4.5;     // m — cota da lâmina d'água
+// FIX água-no-aeroporto (2026-07-01): o curso antigo passava a ~52 m do centro da
+// pista (x=-560,z=320) — DENTRO do leito (RIVER_W=60). Com o rio desenhado de ponta
+// a ponta (WS-3), a lâmina d'água cobria a pista (pavimento na cota 0 < 4.5).
+// O trecho a montante agora CONTORNA o aeroporto pelo NORTE (≥ ~120 m de qualquer
+// superfície do aeródromo) e desce para o reservatório pelo nordeste. Nenhuma
+// estrada autorada cruza o novo traçado (todas ficam ao sul de z≈105 nesse setor).
 const RIVER = [
-  { x: -1250, z: -780 }, { x: -940, z: 520 }, { x: -520, z: 360 },
-  { x: -120, z: 240 }, { x: 320, z: 470 }, { x: 760, z: 700 }, { x: 1200, z: 900 },
+  { x: -1250, z: -780 }, { x: -940, z: 520 }, { x: -660, z: 860 },
+  { x: -260, z: 660 }, { x: -120, z: 240 }, { x: 320, z: 470 },
+  { x: 760, z: 700 }, { x: 1200, z: 900 },
 ];
 const RIVER_W = 60;       // meia-largura do leito
 const VALLEY_W = 200;     // meia-largura do vale (rampa até o leito)
@@ -186,18 +193,42 @@ function createTerrainChunk(gridX, gridZ, material) {
   return mesh;
 }
 
-export function updateInfiniteTerrain(playerPos, terrain) {
+// FIX lag-de-voo (2026-07-01): cruzar uma borda de célula reconstruía os 9 chunks
+// NO MESMO FRAME (9 × 55×55 amostras de altura FBM+estradas + 9 computeVertexNormals
+// + 9 uploads de geometria) — um congelamento periódico a cada ~2.6 km de voo. Agora:
+//  - chunks cujo grid continua dentro da janela 3×3 são REUTILIZADOS como estão;
+//  - só os que saíram são re-gerados, no MÁXIMO 1 POR FRAME (fila amortizada).
+// Mover 1 célula = 3 rebuilds espalhados em 3 frames (~16 ms cada) em vez de 9 num só.
+export function updateInfiniteTerrain(playerPos, terrain, drainAll = false) {
   if (!terrain || !playerPos) return;
   const baseX = Math.round(playerPos.x / TERR.chunkSize);
   const baseZ = Math.round(playerPos.z / TERR.chunkSize);
-  if (baseX === terrain.baseX && baseZ === terrain.baseZ) return;
-  terrain.baseX = baseX;
-  terrain.baseZ = baseZ;
-  let i = 0;
-  for (let gx = baseX - TERR.radius; gx <= baseX + TERR.radius; gx++) {
-    for (let gz = baseZ - TERR.radius; gz <= baseZ + TERR.radius; gz++) {
-      updateTerrainChunkGeometry(terrain.chunks[i++], gx, gz);
+  if (baseX !== terrain.baseX || baseZ !== terrain.baseZ) {
+    terrain.baseX = baseX;
+    terrain.baseZ = baseZ;
+    const wanted = [];
+    for (let gx = baseX - TERR.radius; gx <= baseX + TERR.radius; gx++) {
+      for (let gz = baseZ - TERR.radius; gz <= baseZ + TERR.radius; gz++) wanted.push([gx, gz]);
     }
+    const claimed = new Set();
+    const free = [];
+    for (const chunk of terrain.chunks) {
+      const key = chunk.userData.gridX + ':' + chunk.userData.gridZ;
+      const inWindow = wanted.some(([gx, gz]) => gx + ':' + gz === key);
+      if (inWindow && !claimed.has(key)) claimed.add(key);
+      else free.push(chunk);
+    }
+    terrain.queue = [];
+    for (const [gx, gz] of wanted) {
+      if (claimed.has(gx + ':' + gz)) continue;
+      terrain.queue.push({ chunk: free.pop(), gx, gz });
+    }
+  }
+  if (terrain.queue?.length) {
+    do {
+      const job = terrain.queue.shift();
+      updateTerrainChunkGeometry(job.chunk, job.gx, job.gz);
+    } while (drainAll && terrain.queue.length);
   }
 }
 
@@ -209,7 +240,8 @@ export function buildInhaumaTerrain(scene) {
     terrain.chunks.push(mesh);
     scene.add(mesh);
   }
-  updateInfiniteTerrain({ x: 0, z: 0 }, terrain);
+  // Boot é momento de carga: constrói a janela 3×3 inteira de uma vez (drainAll).
+  updateInfiniteTerrain({ x: 0, z: 0 }, terrain, true);
 
   // Registra UMA região virtual gigante: colisão/HUD usam a função contínua,
   // enquanto a malha visual é reciclada em chunks ao redor do avião.

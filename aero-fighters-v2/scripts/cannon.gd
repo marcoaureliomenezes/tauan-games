@@ -39,9 +39,9 @@ func _physics_process(delta: float) -> void:
 # ────────────────────────────────────────────────────────────────────────────────
 
 func _build_pool() -> void:
-	var bullet_scene: PackedScene = preload("res://scenes/Bullet.tscn")
+	var BulletScene: PackedScene = preload("res://scenes/Bullet.tscn")
 	for i in range(POOL_SIZE):
-		var b = bullet_scene.instantiate()
+		var b = BulletScene.instantiate()
 		add_child(b)
 		b.visible = false
 		_pool.append(b)

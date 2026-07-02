@@ -66,13 +66,16 @@ jobs:
       - name: Find .gd files
         id: find-gd
         run: |
-          count=$(find aero-fighters-v2 -name "*.gd" 2>/dev/null | wc -l)
+          count=$(find aero-fighters-v2 -name "*.gd" -not -path "*/addons/*" 2>/dev/null | wc -l)
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - name: Run gdlint
         if: steps.find-gd.outputs.count != '0'
         run: |
-          find aero-fighters-v2 -name "*.gd" -print0 \
+          # addons/ é código de TERCEIROS vendorado (terrain_3d) — não é nosso para
+          # lintar, e o ui.gd dele nem PARSEIA no gdtoolkit 4.3.3 (o job nunca
+          # poderia ficar verde com ele incluído). Lint só no código do projeto.
+          find aero-fighters-v2 -name "*.gd" -not -path "*/addons/*" -print0 \
             | xargs -0 gdlint
         # continue-on-error is NOT set — lint errors fail the job.
         # Warnings are allowed; only errors (exit code != 0) block the PR.

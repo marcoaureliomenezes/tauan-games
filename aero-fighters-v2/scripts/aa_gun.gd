@@ -1,5 +1,5 @@
-extends Node3D
 class_name AAGun
+extends Node3D
 # aa_gun.gd — Single AA gun in the cluster.
 # Implements FR-V2-G-06: fires back at player, range 220 m, base interval 1.7 s.
 # Attach to each of the 3 StaticBody3D sub-gun nodes inside aa_cluster.tscn.
@@ -48,8 +48,8 @@ func _physics_process(delta: float) -> void:
 # ────────────────────────────────────────────────────────────────────────────────
 
 func _fire_at_player() -> void:
-	var aa_proj_scene: PackedScene = preload("res://scenes/AAProjectile.tscn")
-	var proj: Node = aa_proj_scene.instantiate()
+	var AaProjScene: PackedScene = preload("res://scenes/AAProjectile.tscn")
+	var proj: Node = AaProjScene.instantiate()
 	var direction: Vector3 = (_target_player.global_position - global_position).normalized()
 	proj.global_position = global_position
 	# AAProjectile expects a velocity set before it enters the tree;
@@ -57,7 +57,10 @@ func _fire_at_player() -> void:
 	get_tree().current_scene.add_child(proj)
 	if proj.has_method("launch"):
 		proj.launch(direction)
-	print("[aa_gun] fired at player from %s (dist=%.0f m)" % [name, global_position.distance_to(_target_player.global_position)])
+	print(
+		"[aa_gun] fired at player from %s (dist=%.0f m)"
+		% [name, global_position.distance_to(_target_player.global_position)]
+	)
 
 
 # ────────────────────────────────────────────────────────────────────────────────

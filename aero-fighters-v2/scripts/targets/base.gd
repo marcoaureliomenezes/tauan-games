@@ -1,5 +1,5 @@
-extends "res://scripts/target_base.gd"
 class_name TargetMilitaryBase
+extends "res://scripts/target_base.gd"
 # base.gd — Military base target.
 # Implements FR-V2-G-05/07: HP 28, multi-stage destruction.
 #
@@ -30,7 +30,9 @@ func _on_damaged(_amount: int) -> void:
 	# Radar sub-event fires when HP first drops at or below half of CURRENT max
 	# (post-scaling). We snapshot the threshold from `hp` at the time of
 	# _ready — i.e. half of the scaled max.
-	var threshold: int = int(round(float(max_hp) * MissionManager.get_difficulty_multiplier_hp() * 0.5))
+	var threshold: int = int(
+		round(float(max_hp) * MissionManager.get_difficulty_multiplier_hp() * 0.5)
+	)
 	if hp <= threshold:
 		_destroy_radar()
 

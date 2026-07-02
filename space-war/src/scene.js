@@ -20,7 +20,10 @@ export const renderer = new THREE.WebGLRenderer({
   powerPreference: 'high-performance',
   logarithmicDepthBuffer: true,
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Teto 1.5 (não 2): em GPU integrada, ratio 2 = 4× fragmentos — com os shaders FBM
+// de estrela/disco/remanescente em tela cheia isso era LAG puro perto dos corpos.
+// A resolução ADAPTATIVA (postfx.js) ainda reduz abaixo disso sob carga.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000007, 1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;

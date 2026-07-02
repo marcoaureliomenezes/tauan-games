@@ -403,12 +403,17 @@ export function updatePlayer(dt, input, onCrash) {
     if (sortie.state === SortieState.LANDING_ROLL && game.player.throttle > 0.8 && game.player.speed >= 38) {
       transitionSortie(sortie, SortieEvent.TAKEOFF_SPEED_REACHED, {}, game.time);
     }
-    // Smooth liftoff: gate on runway contact + V_ROTATE speed + rotation input.
-    // Applies ROTATE_LIFT force gradually; no teleport. Transitions to AIRBORNE
-    // only when height > 4m above airport elevation AND vertical speed > 0.
+    // Smooth liftoff: V_ROTATE speed + rotation input. Applies ROTATE_LIFT force
+    // gradually; no teleport. Transitions to AIRBORNE only when height > 4m above
+    // ground AND vertical speed > 0.
     // ADR-U1: no solo a intenção "subir" é inequívoca — ↑ OU ↓ rotacionam.
+    // FIX preso-no-chão (2026-07-02): exigir contact.type==='runway' criava um
+    // estado PERMANENTE de TAKEOFF_ROLL — quem passava do fim da pista rolava
+    // pelo campo para sempre, sem NUNCA poder rotacionar (nariz derrotado a 0,
+    // LIFTOFF inalcançável). Rotação agora vale de qualquer solo (decolagem de
+    // gramado), só não d'água.
     if (sortie.state === SortieState.TAKEOFF_ROLL &&
-        contact.type === 'runway' &&
+        contact.type !== 'water' &&
         game.player.speed >= PLAYER.V_ROTATE &&
         (input.pitchDown || input.pitchUp)) {
       if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
@@ -706,10 +711,22 @@ export function updatePlayer(dt, input, onCrash) {
     // dano. Um mergulho a toda velocidade (≳ LAND_MAX_SPD) sobre a pista NÃO é pouso — o
     // avião passa reto. Só uma queda catastrófica (invertido e despencando) também não conta.
     const onPavement = contact.type === 'runway' || contact.type === 'taxiway' || contact.type === 'service';
-    if (onPavement && altitudeAboveGround < PLAYER.FLARE_HI) {
+    // Só estados DE VOO tentam touchdown — sem isto, o gatilho de contato
+    // assentado (abaixo) dispararia durante TAKEOFF_ROLL/TAXI e o auto-taxi
+    // sequestraria a decolagem.
+    const inFlightState = mr.sortie.state === SortieState.AIRBORNE ||
+      mr.sortie.state === SortieState.MISSION_ACTIVE ||
+      mr.sortie.state === SortieState.RETURN_TO_BASE;
+    if (onPavement && inFlightState && altitudeAboveGround < PLAYER.FLARE_HI) {
       const lastTD = mr.sortie.lastTouchdownTime ?? -Infinity;
       const debounceOk = (game.time - lastTD) > PLAYER.TOUCHDOWN_DEBOUNCE;
-      const descending = hadPrev && realVsp < -0.5; // descendo de fato (não decolando)
+      // FIX pouso-negado (2026-07-01): exigir vsp<-0.5 criava DEADLOCK — o clamp
+      // anti-atravessar (abaixo) segura o avião a 0.9 u do pavimento, o vsp vira ~0
+      // e 'descending' nunca mais disparava: o avião deslizava pela pista inteira
+      // proibido de pousar (idem chegando rápido demais: ao desacelerar, vsp já era
+      // 0). Avião JÁ ASSENTADO na janela de toque É toque.
+      const settled = altitudeAboveGround < 1.05;
+      const descending = (hadPrev && realVsp < -0.5) || settled;
       const landingSpeed = game.player.speed <= PLAYER.LAND_MAX_SPD; // não "pousa" num mergulho a 80 m/s
       const bossBlocking = game.flags.bossActive === true; // monstro vivo trava o pouso
       const catastrophic = Math.abs(jet.rotation.z) > 1.4 || realVsp < PLAYER.SINK_HARD;
