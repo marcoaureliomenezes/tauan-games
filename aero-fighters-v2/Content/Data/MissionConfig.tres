@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MissionConfigResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MissionConfigResource.gd" id="1_missionconfig"]
+
+[resource]
+script = ExtResource("1_missionconfig")
+aa_cluster_latitude = -19.49
+aa_cluster_longitude = -44.387
+factory_offsets = [Vector2(-0.03, 0.05)]
+base_offsets = [Vector2(0.02, -0.04)]
+factory_hp = 20
+base_hp = 28
+aa_gun_hp = 6
+difficulty_hp_coef = 1.15
+difficulty_aa_interval_coef = 0.92

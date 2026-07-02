@@ -1,17 +1,19 @@
-// wingmen.js — Aliados AI em formação (2 jatos amigos).
+// wingmen.js — Aliados AI de suporte (2 jatos amigos).
 // Exporta: spawnWingmen, updateWingmen, clearWingmen, wingmenList.
-// Cada wingman voa em formação com o player, auto-ataca inimigos e pode ser abatido.
+// Cada wingman patrulha em ataque visível pelo mapa, dispara mísseis fracos e pode ser abatido.
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
-import { spawnBullet } from './projectiles.js';
+import { spawnAllyMissile } from './ally-war.js';
 import { explosion } from './fx.js';
 import { audio } from './audio.js';
+import { getAirportForMap } from './airport.js';
+import { isAirborneState } from './sortie-state.js';
 
 export const wingmenList = [];
 
-const _off0 = new THREE.Vector3( 18, -2, 14);
-const _off1 = new THREE.Vector3(-18, -2, 14);
+const _off0 = new THREE.Vector3( 110, 24, -210);
+const _off1 = new THREE.Vector3(-140, 18, -155);
 const OFFSETS = [_off0, _off1];
 
 const _tmpPos = new THREE.Vector3();
@@ -63,6 +65,9 @@ function _makeWingman(scene, offsetIdx) {
     falling: false,
     fallTimer: 0,
     fireTimer: 1.5 + Math.random() * 1.5,
+    goalTimer: 0,
+    attackTarget: null,
+    goal: new THREE.Vector3(),
     _vel: new THREE.Vector3(),
   };
   game.wingmen.push(wm);
@@ -85,8 +90,56 @@ export function clearWingmen(scene) {
 }
 
 const _worldOffset = new THREE.Vector3();
+const _desiredDir = new THREE.Vector3();
+const _lookAt = new THREE.Vector3();
 
-export function updateWingmen(dt, jet, targets) {
+/** Alvo dos amigos = inimigos DOS ALIADOS (game.allyEnemies), nunca os alvos do player. */
+function chooseAllyEnemy(from) {
+  let best = null;
+  let bestD = Infinity;
+  for (const e of game.allyEnemies) {
+    if (e.dead || e.falling) continue;
+    const d = from.distanceToSquared(e.mesh.position);
+    if (d < bestD) { bestD = d; best = e; }
+  }
+  return best;
+}
+
+function chooseGoal(wm, jet) {
+  const target = chooseAllyEnemy(jet.position);
+  wm.attackTarget = target;
+  if (target) {
+    const side = wm.offsetIdx === 0 ? 1 : -1;
+    const phase = (game.time || 0) * 0.35 + wm.offsetIdx * Math.PI;
+    wm.goal.set(
+      target.mesh.position.x + Math.cos(phase) * 130 * side,
+      Math.max(target.mesh.position.y + 20, 70 + wm.offsetIdx * 18),
+      target.mesh.position.z + Math.sin(phase) * 150,
+    );
+    return;
+  }
+  _worldOffset.copy(OFFSETS[wm.offsetIdx]).applyQuaternion(jet.quaternion);
+  wm.goal.copy(jet.position).add(_worldOffset);
+}
+
+/** Vaga de estacionamento no aeroporto (amigos pousam quando o player pousa). */
+function parkingSpot(wm) {
+  const airport = getAirportForMap(game.activeMap);
+  const s = airport.serviceZone;
+  const side = wm.offsetIdx === 0 ? -1 : 1;
+  return _worldOffset.set(
+    s.center.x + side * (s.width * 0.5 + 40),
+    airport.elevation + 2.0,
+    s.center.z - 20,
+  );
+}
+
+export function updateWingmen(dt, jet) {
+  const mr = game.missionRealism;
+  const state = mr?.sortie?.state;
+  // Amigos decolam quando decolamos e pousam quando pousamos: só engajam em voo.
+  const airborne = !mr?.enabled || isAirborneState(state);
+
   for (const wm of wingmenList) {
     if (wm.dead) continue;
 
@@ -105,26 +158,54 @@ export function updateWingmen(dt, jet, targets) {
       continue;
     }
 
-    // Formação: lerp posição para offset em espaço local do jato
-    _worldOffset.copy(OFFSETS[wm.offsetIdx]).applyQuaternion(jet.quaternion);
-    _tmpPos.copy(jet.position).add(_worldOffset);
-    wm.mesh.position.lerp(_tmpPos, Math.min(1, 3.5 * dt));
-    wm.mesh.quaternion.slerp(jet.quaternion, Math.min(1, 4.0 * dt));
+    // ─── No solo: amigos taxiam/pousam ao lado da pista e ficam parados ───────
+    if (!airborne) {
+      const spot = parkingSpot(wm);
+      _desiredDir.subVectors(spot, wm.mesh.position);
+      const d = Math.max(0.5, _desiredDir.length());
+      _desiredDir.normalize();
+      const spd = Math.min(60, d * 0.9);
+      wm._vel.lerp(_desiredDir.multiplyScalar(spd), Math.min(1, dt * 1.6));
+      wm.mesh.position.addScaledVector(wm._vel, dt);
+      if (wm._vel.lengthSq() > 0.5) {
+        _lookAt.copy(wm.mesh.position).add(wm._vel);
+        wm.mesh.lookAt(_lookAt);
+      }
+      // Nivela a atitude ao parar (sai do banking de combate)
+      wm.mesh.rotation.z *= Math.max(0, 1 - dt * 3);
+      wm.mesh.rotation.x *= Math.max(0, 1 - dt * 3);
+      continue;
+    }
 
-    // Auto-ataque ao alvo mais próximo
+    wm.goalTimer -= dt;
+    if (wm.goalTimer <= 0 || wm.mesh.position.distanceToSquared(wm.goal) < 80 * 80) {
+      wm.goalTimer = 2.2 + Math.random() * 1.6;
+      chooseGoal(wm, jet);
+    }
+
+    _desiredDir.subVectors(wm.goal, wm.mesh.position);
+    const dist = Math.max(1, _desiredDir.length());
+    _desiredDir.normalize();
+    const speed = Math.min(95, Math.max(42, dist * 0.55));
+    wm._vel.lerp(_desiredDir.multiplyScalar(speed), Math.min(1, dt * 1.7));
+    wm.mesh.position.addScaledVector(wm._vel, dt);
+    wm.mesh.position.y = Math.max(26, wm.mesh.position.y);
+    if (wm._vel.lengthSq() > 1) {
+      _lookAt.copy(wm.mesh.position).add(wm._vel);
+      wm.mesh.lookAt(_lookAt);
+    }
+
+    // Ataque aos INIMIGOS DOS ALIADOS (míssil dedicado — não toca nos alvos do player).
     wm.fireTimer -= dt;
     if (wm.fireTimer <= 0) {
-      wm.fireTimer = 2.0 + Math.random() * 0.8;
-      let nearestDist2 = 800 * 800;
-      let nearestTarget = null;
-      for (const t of targets) {
-        if (t.dead) continue;
-        const d2 = wm.mesh.position.distanceToSquared(t.mesh.position);
-        if (d2 < nearestDist2) { nearestDist2 = d2; nearestTarget = t; }
-      }
-      if (nearestTarget) {
-        _tmpDir.subVectors(nearestTarget.mesh.position, wm.mesh.position).normalize();
-        spawnBullet(wm.mesh.position.clone().addScaledVector(_tmpDir, 2), _tmpDir, false);
+      wm.fireTimer = 2.6 + Math.random() * 1.6;
+      const foe = chooseAllyEnemy(wm.mesh.position);
+      if (foe && wm.mesh.position.distanceToSquared(foe.mesh.position) < 1200 * 1200) {
+        _tmpDir.subVectors(foe.mesh.position, wm.mesh.position).normalize();
+        _tmpPos.copy(wm.mesh.position).addScaledVector(_tmpDir, 3);
+        spawnAllyMissile(_tmpPos.clone(), foe, wm.mesh.quaternion);
+      } else {
+        wm.fireTimer = 0.8;
       }
     }
   }

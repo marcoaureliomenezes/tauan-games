@@ -1,8 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://target_factory"]
-
-[ext_resource type="Script" path="res://scripts/target_factory.gd" id="1_factory"]
-
-[node name="Factory" type="StaticBody3D"]
-script = ExtResource("1_factory")
-collision_layer = 4
-collision_mask = 2

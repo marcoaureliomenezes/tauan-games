@@ -9,18 +9,30 @@ import { audio } from './audio.js';
 import { scene, camera, renderer, attachToBody, dirLight, ambLight } from './scene.js';
 import { initSky, updateSky, getSunData, getAmbientData, getSkyColor } from './sky.js';
 import { ocean, createIslands, updateWorld, updateAmbientFlak, setActiveHeightFn } from './world.js';
+import { getActiveHeightFn } from './world.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
+import { updatePropFires } from './prop-fire.js';
 import { input, installListeners, onAction } from './input.js';
-import { jet, updatePlayer, playerHit, barrelRoll, firePosition } from './player.js';
+import { jet, updatePlayer, playerHit, barrelRoll, firePosition, respawnJet, respawnAndRelaunch } from './player.js';
 import { updateTargets } from './targets.js';
 import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups, spawnNuclearMissile, updateNuclears } from './projectiles.js';
 import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } from './hud.js';
-import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver } from './missions.js';
+import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver, spawnMission } from './missions.js';
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
 import { initMinimap, updateMinimap } from './ui/minimap.js';
 import { MAPS, getMapHeightFn } from './maps/index.js';
 import { spawnWingmen, updateWingmen, clearWingmen } from './wingmen.js';
+import { spawnAllyEnemies, updateAllyWar, clearAllyEnemies } from './ally-war.js';
+import { updateAutoTaxi, isAutoTaxiActive } from './auto-taxi.js';
+import { installDebugApi, recordFrame } from './debug.js';
+import { createAirportFor } from './airport.js';
+import { startService, updateService } from './service-scene.js';
+import { requestEjection, updateEjection, createPilotVisual } from './ejection.js';
+import { cycleCameraMode, updateCameraRig } from './camera-modes.js';
+import { updateNuclearFx } from './nuclear-fx.js';
+import { updateBoss } from './boss.js';
+import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 
 // ─── Boot do mundo ───────────────────────────────────────────────────────────
 attachToBody();
@@ -29,6 +41,7 @@ initSky(scene);
 createIslands();
 createCrosshair();
 initMinimap();
+const pilotVisual = createPilotVisual(scene);
 
 // ─── Seleção de Mapa ─────────────────────────────────────────────────────────
 // Guarda referência aos objetos extras criados pelos mapas alternativos
@@ -36,8 +49,8 @@ initMinimap();
 let _activeMapUpdate = updateWorld; // função de update do mapa atual
 
 // Ambient audio timers
-let _radioTimer = 8 + Math.random() * 12;
-let _boomTimer  = 5 + Math.random() * 10;
+let _radioTimer = 8 + game.rng.range(0, 12);
+let _boomTimer  = 5 + game.rng.range(0, 10);
 
 /** Chamado pelos botões do #map-select overlay no HTML. */
 window.selectMap = function(mapKey) {
@@ -52,6 +65,14 @@ window.selectMap = function(mapKey) {
     const mapDef = MAPS[mapKey];
     if (mapDef) {
       mapDef.create(scene);
+      if (mapKey === 'desert') {
+        const airport = createAirportFor('desert', scene);
+        game.missionRealism.desertLandmarks = {
+          roads: 2,
+          hangars: 1,
+          lights: airport.userData.airportText?.lights?.length ?? 0,
+        };
+      }
       _activeMapUpdate = mapDef.update;
       setActiveHeightFn(mapDef.heightAt);
     }
@@ -59,11 +80,16 @@ window.selectMap = function(mapKey) {
     // Mapa ilhas: restaura a função de altura padrão
     setActiveHeightFn(getMapHeightFn('islands'));
   }
-  // Atualiza estado
+  // Atualiza estado ANTES de criar aeroporto/respawn (ambos leem game.activeMap)
   game.activeMap = mapKey;
+  // Todo mapa tem aeroporto (WS-2) — e o jato nasce na zona de serviço dele
+  createAirportFor(mapKey, scene);
+  respawnJet();
 
   // Aliados em formação — spawna após criar o mapa (game.islands já populado)
   spawnWingmen(scene, jet);
+  // Inimigos DOS ALIADOS — a frente de batalha dos amigos (separada da do player)
+  spawnAllyEnemies(scene);
 
   // Mostra o overlay de instruções (início do jogo)
   showOverlay(
@@ -72,12 +98,14 @@ window.selectMap = function(mapKey) {
     'CONTROLES (estilo simulador):\n' +
     '↑ nariz para BAIXO   ↓ nariz para CIMA   (invertido)\n' +
     '← → rolar/virar     W acelerar    S frear\n' +
-    'Q/E leme    Espaço/Z canhão    X míssil leve    B míssil pesado    N NUCLEAR    Shift roll    P pausa    M mudo\n\n' +
-    '⚠ EVITE colisão com montanhas e o mar — destruição instantânea\n\n' +
+    'Q/E leme    Espaço/Z canhão    X míssil leve    B míssil pesado    T NUCLEAR    C câmera    J ejetar    P pausa\n\n' +
+    'Decole da pista, cumpra a missão, retorne ao aeroporto e faça serviço completo.\n\n' +
     'pressione Espaço para iniciar',
     0,
   );
 };
+
+if (game.runtime?.mission) game.cycle = game.runtime.mission;
 
 // Se não houver #map-select (headless/test), inicializa direto com mapa padrão
 if (typeof document !== 'undefined') {
@@ -85,8 +113,17 @@ if (typeof document !== 'undefined') {
   if (!mapSelectEl) {
     game.activeMap = 'islands';
   }
+  if (game.runtime?.map && MAPS[game.runtime.map]) {
+    window.selectMap(game.runtime.map);
+  }
   // Se está em headless (sem o overlay), também inicia direto
 }
+
+installDebugApi({
+  camera,
+  renderer,
+  heightFn: (...args) => getActiveHeightFn()(...args),
+});
 
 // Speed lines decorativos
 const speedLines = [];
@@ -97,6 +134,10 @@ for (let i = 0; i < 4; i++) {
 let _slFrame = 0;
 function updateSpeedLines() {
   if ((_slFrame++ & 1) !== 0) return;
+  // WS-7: streaks só fazem sentido em alta velocidade
+  const fast = game.player.speed > 60;
+  for (const l of speedLines) l.visible = fast;
+  if (!fast) return;
   const t = performance.now() * 0.01;
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + t * 0.5;
@@ -113,6 +154,21 @@ const _worldUp = new THREE.Vector3(0, 1, 0);
 const _camV = new THREE.Vector3();
 
 function updateCamera(dt) {
+  if (game.missionRealism?.enabled) {
+    const shake = game.flags.cameraShake?.intensity || 0;
+    updateCameraRig(game.missionRealism.camera, dt, camera, jet, shake);
+    if (game.flags.cameraShake) {
+      game.flags.cameraShake.intensity *= (1 - 8 * dt);
+      game.flags.cameraShake.duration -= dt;
+      if (game.flags.cameraShake.duration <= 0 || game.flags.cameraShake.intensity < 0.05) game.flags.cameraShake = null;
+    }
+    audio.updateListener(camera.position.x, camera.position.y, camera.position.z, 0, 0, -1, 0, 1, 0);
+    const _sunD = getSunData();
+    dirLight.position.set(jet.position.x + _sunD.direction.x * 300, jet.position.y + Math.max(50, _sunD.direction.y * 300), jet.position.z + _sunD.direction.z * 300);
+    dirLight.target.position.set(jet.position.x, 0, jet.position.z);
+    dirLight.target.updateMatrixWorld();
+    return;
+  }
   const localOff = _camV.set(0, 3.0, 5).applyQuaternion(jet.quaternion);
   camDesired.copy(jet.position).add(localOff);
   // Camera shake (nuclear ou outros eventos)
@@ -204,7 +260,7 @@ function fireHeavyMissile() {
   spawnMissile(_fOrig.clone(), locked, jet.quaternion, 'heavy');
 }
 
-// ─── Disparo de míssil nuclear (N) — devastador, supply 3 ────────────────────
+// ─── Disparo de míssil nuclear (T) — devastador, supply 3 ────────────────────
 function fireNuclearMissile() {
   if (!game.running || game.flags.paused || game.player.nuclearMissiles <= 0) return;
   const locked = missileLockedTarget();
@@ -218,6 +274,17 @@ installListeners();
 
 function handleStartOrFire() {
   audio.init();
+  // O loop de solo automático (auto-taxi) já recoloca para a próxima surtida;
+  // se ele estiver ativo, o Espaço não força avanço (evita duplo-avanço).
+  if (game.missionRealism?.enabled && game.missionRealism.sortie.state === SortieState.NEXT_SORTIE_READY) {
+    if (isAutoTaxiActive()) return;
+    transitionSortie(game.missionRealism.sortie, SortieEvent.NEXT_SORTIE, {}, game.time);
+    game.cycle += 1;
+    game.flags.missionCompleteShown = false;
+    game.missionRealism.service.phase = 'idle';
+    spawnMission(game.cycle);
+    return;
+  }
   if (!game.running) {
     if (!game.player.dead && game.player.lives > 0 && !game.flags.missionFailed && !game.flags.missionCompleteShown) {
       startGame();
@@ -228,6 +295,8 @@ function handleStartOrFire() {
         restartGame();
         clearWingmen(scene);
         spawnWingmen(scene, jet);
+        clearAllyEnemies(scene);
+        spawnAllyEnemies(scene);
       }
       return;
     }
@@ -239,6 +308,19 @@ onAction('fire', handleStartOrFire);    // Space/Z (inicia se parado, dispara se
 onAction('missile', () => { audio.init(); fireMissile(); });
 onAction('heavyMissile', () => { audio.init(); fireHeavyMissile(); });
 onAction('nuclearMissile', () => { audio.init(); fireNuclearMissile(); });
+onAction('cameraMode', () => { audio.init(); cycleCameraMode(game.missionRealism.camera); });
+onAction('eject', () => {
+  audio.init();
+  if (!game.missionRealism?.enabled) return;
+  if (game.flags.mayday || game.missionRealism.sortie.state === SortieState.MAYDAY) {
+    if (requestEjection(game.missionRealism.ejection, jet.position)) {
+      transitionSortie(game.missionRealism.sortie, SortieEvent.EJECT_REQUESTED, {}, game.time);
+      pilotVisual.position.copy(jet.position);
+      pilotVisual.visible = true;
+      jet.visible = false;
+    }
+  }
+});
 onAction('roll',    () => { audio.init(); barrelRoll(); });
 onAction('pause',   () => {
   audio.init();
@@ -271,6 +353,23 @@ function tick() {
   requestAnimationFrame(tick);
   let dt = clock.getDelta();
   if (dt > 0.1) dt = 0.1;
+  recordFrame(dt);
+
+  // ADR-U4: slow-mo nuclear — dilatação GLOBAL de dt (0.35×) por 1.5 s reais.
+  // Decremento em tempo real; cancela se o player está em mayday (justiça > drama).
+  if (game.flags.nukeSlowmo > 0) {
+    game.flags.nukeSlowmo -= dt;
+    if (!game.flags.mayday) dt *= 0.35;
+  }
+  // WS-6: chegada da onda de choque nuclear (delay físico) — shake + boom
+  if (game.flags.nukeShockArrival) {
+    game.flags.nukeShockArrival.t -= dt / (game.flags.nukeSlowmo > 0 ? 0.35 : 1);
+    if (game.flags.nukeShockArrival.t <= 0) {
+      game.flags.cameraShake = { intensity: game.flags.nukeShockArrival.intensity, duration: 1.4 };
+      audio.distantExplosion();
+      game.flags.nukeShockArrival = null;
+    }
+  }
 
   if (game.running && !game.flags.paused && !game.flags.missionFailed) {
     cannonCooldown -= dt;
@@ -280,25 +379,60 @@ function tick() {
 
     if (input.fireHeld) fireCannon();
 
-    updatePlayer(dt, input, crashAndDie);
-    updateWingmen(dt, jet, game.targets);
-    updateBullets(dt, jet.position, playerHit, game.wingmen);
+    if (game.missionRealism?.sortie?.state === SortieState.SERVICE_SCENE && !game.missionRealism.service.active && game.missionRealism.service.phase !== 'complete') {
+      startService(game.missionRealism.service);
+      showOverlay('REABASTECIMENTO', 'tanker, manutenção e rearmamento em andamento', game.runtime?.testMode ? 1200 : 2200);
+    }
+    const servicing = game.missionRealism?.sortie?.state === SortieState.SERVICE_SCENE || game.missionRealism?.service?.active;
+    if (game.missionRealism?.service?.active) {
+      if (updateService(game.missionRealism.service, dt, game.player)) {
+        transitionSortie(game.missionRealism.sortie, SortieEvent.SERVICE_COMPLETE, {}, game.time);
+        showOverlay('SERVIÇO COMPLETO', 'armamento completo — próxima surtida pronta', 1800);
+      }
+    }
+    if (!servicing) {
+      // Após pousar, o loop de solo é automático (taxi + reabastecimento +
+      // recolocação para decolagem). Fora dele, controle manual normal.
+      if (isAutoTaxiActive()) updateAutoTaxi(dt);
+      else updatePlayer(dt, input, crashAndDie);
+    }
+    if (game.missionRealism?.ejection?.active) {
+      pilotVisual.visible = true;
+      pilotVisual.position.y = game.missionRealism.ejection.descentY;
+      pilotVisual.position.x = jet.position.x;
+      pilotVisual.position.z = jet.position.z;
+      if (updateEjection(game.missionRealism.ejection, dt)) {
+        // Paraquedas tocou o solo: recoloca o avião no aeroporto e rearma a
+        // decolagem automática (mesmo caminho do crash no solo) — senão o avião
+        // ficava parado no ar em NEXT_SORTIE_READY, sem conseguir decolar.
+        pilotVisual.visible = false;
+        respawnAndRelaunch();
+      }
+    }
+    updateWingmen(dt, jet);
+    updateAllyWar(dt);
+    // Player não passa wingmen: os inimigos do PLAYER não ferem os amigos
+    // (cada lado tem os próprios inimigos).
+    updateBullets(dt, jet.position, playerHit);
     updateMissiles(dt);
     updateNuclears(dt);
+    updateNuclearFx(dt);
     updateTargets(dt, jet.position);
+    updateBoss(dt, jet.position, playerHit);
     updatePickups(dt, jet.position);
     updateParticles(dt, jet.position);
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
+    updatePropFires(dt);
     updateSpeedLines();
     _activeMapUpdate(dt, jet.position);
     updateAmbientFlak(dt, jet.position, jet.quaternion);
 
     // Ambient audio: radio chatter + distant booms
     _radioTimer -= dt;
-    if (_radioTimer <= 0) { audio.radioChatter(); _radioTimer = 8 + Math.random() * 17; }
+    if (_radioTimer <= 0) { audio.radioChatter(); _radioTimer = 8 + game.rng.range(0, 17); }
     _boomTimer -= dt;
-    if (_boomTimer <= 0) { audio.distantExplosion(); _boomTimer = 8 + Math.random() * 12; }
+    if (_boomTimer <= 0) { audio.distantExplosion(); _boomTimer = 8 + game.rng.range(0, 12); }
     audio.setWindLevel(game.player.y);
 
     checkMissionComplete();
@@ -323,6 +457,8 @@ function tick() {
     updateParticles(dt, jet.position);
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
+    updatePropFires(dt);
+    updateNuclearFx(dt);
     _activeMapUpdate(dt, jet.position);
   }
 

@@ -5,10 +5,13 @@
 // Para mover ou trocar ilhas: edite ISLAND_DEFS em config.js.
 
 import * as THREE from '../../vendor/three.module.min.js';
-import { scene } from './scene.js';
+import { scene, HEADLESS } from './scene.js';
 import { game } from './state.js';
 import { ISLAND_DEFS, WORLD, COLORS, PLAYER } from './config.js';
 import { explosion } from './fx.js';
+import { airportSurface } from './landing-zones.js';
+import { getAirportForMap } from './airport.js';
+import { inhaumaStructureInfoAt } from './maps/inhauma-scene.js';
 
 // ─── Oceano ──────────────────────────────────────────────────────────────────
 const oceanCanvas = document.createElement('canvas');
@@ -45,7 +48,7 @@ oceanTex.wrapS = oceanTex.wrapT = THREE.RepeatWrapping;
 oceanTex.repeat.set(50, 50);
 
 // Geometria de oceano com vértices animados (64×64 segmentos = 4225 vértices)
-const oceanGeom = new THREE.PlaneGeometry(WORLD.OCEAN_SIZE, WORLD.OCEAN_SIZE, 64, 64);
+const oceanGeom = new THREE.PlaneGeometry(WORLD.OCEAN_SIZE, WORLD.OCEAN_SIZE, HEADLESS ? 8 : 64, HEADLESS ? 8 : 64);
 oceanGeom.rotateX(-Math.PI / 2);
 // Salva as posições originais para usar como base nas ondas
 const oceanBase = new Float32Array(oceanGeom.attributes.position.array);
@@ -87,7 +90,7 @@ function updateOceanWaves() {
 
 // ─── Ilhas ───────────────────────────────────────────────────────────────────
 function createIsland(cx, cz, radius, peakHeight) {
-  const seg = 44;
+  const seg = HEADLESS ? 16 : 44;
   const geo = new THREE.PlaneGeometry(radius * 2, radius * 2, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
@@ -139,6 +142,9 @@ let _activeHeightFn = islandHeightAt;
 /** Define a função de altura do mapa ativo. Chamado por main.js ao trocar de mapa. */
 export function setActiveHeightFn(fn) { _activeHeightFn = fn; }
 
+/** Retorna a função de altura ativa para diagnósticos/testes. */
+export function getActiveHeightFn() { return _activeHeightFn; }
+
 /** Anel de espuma branca em volta de cada ilha (no waterline). */
 function createFoamRing(cx, cz, radius) {
   const ring = new THREE.Mesh(
@@ -151,6 +157,36 @@ function createFoamRing(cx, cz, radius) {
   return ring;
 }
 
+/** Palmeiras nas faixas de praia das ilhas (WS-7) — 2 InstancedMesh (troncos+copas). */
+function scatterPalms() {
+  if (HEADLESS) return;
+  const spots = [];
+  for (const isl of game.islands) {
+    const n = Math.max(3, Math.floor(isl.radius / 12));
+    for (let i = 0; i < n; i++) {
+      const a = game.rng.range(0, Math.PI * 2);
+      const rr = isl.radius * game.rng.range(0.62, 0.88);
+      const dx = Math.cos(a) * rr, dz = Math.sin(a) * rr;
+      const h = islandHeightAt(isl, dx, dz);
+      if (h > 0.4 && h < 3.0) spots.push({ x: isl.cx + dx, y: h, z: isl.cz + dz, s: game.rng.range(0.8, 1.4) });
+    }
+  }
+  if (!spots.length) return;
+  const trunkGeo = new THREE.CylinderGeometry(0.16, 0.26, 5, 5);
+  const frondGeo = new THREE.ConeGeometry(2.2, 1.6, 6);
+  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: 0x8a6844 }), spots.length);
+  const fronds = new THREE.InstancedMesh(frondGeo, new THREE.MeshLambertMaterial({ color: 0x2f7a32 }), spots.length);
+  trunks.frustumCulled = false; fronds.frustumCulled = false;
+  const d = new THREE.Object3D();
+  spots.forEach((p, i) => {
+    d.position.set(p.x, p.y + 2.5 * p.s, p.z); d.scale.setScalar(p.s); d.rotation.y = p.x * 0.7;
+    d.updateMatrix(); trunks.setMatrixAt(i, d.matrix);
+    d.position.y = p.y + 5.2 * p.s;
+    d.updateMatrix(); fronds.setMatrixAt(i, d.matrix);
+  });
+  scene.add(trunks); scene.add(fronds);
+}
+
 /** Constrói todas as ilhas e popula game.islands com metadados para colisão. */
 export function createIslands() {
   for (const [cx, cz, r, h] of ISLAND_DEFS) {
@@ -159,6 +195,7 @@ export function createIslands() {
     // CONTRATO: writer de game.islands
     game.islands.push({ cx, cz, radius: r, peakHeight: h, mesh });
   }
+  scatterPalms();
 }
 
 /** Altura local de uma ilha em (dx, dz) relativos ao centro. Função pura.
@@ -176,19 +213,46 @@ export function islandHeightAt(isl, dx, dz) {
   return Math.max(0, (1 - dist * dist * 1.35) * isl.peakHeight + noise);
 }
 
-/** Checa colisão do avião com terreno. @returns {'SEA'|'MOUNTAIN'|null} */
-export function checkTerrainCollision(jetPosition) {
-  if (jetPosition.y < 3) return 'SEA';
+/** VERDADE DE SUPERFÍCIE (WS-1) — única fonte para colisão, pouso e HUD.
+ *  Devolve { height, kind } com kind ∈ 'water'|'land'|'mountain'|'runway'|'taxiway'|'service'.
+ *  Água só existe onde o mapa tem água: islands (mar aberto) e rio (além da praia). */
+export function surfaceInfoAt(x, z) {
+  const surf = airportSurface({ x, z }, game.activeMap);
+  if (surf !== 'none') {
+    return { height: getAirportForMap(game.activeMap).elevation, kind: surf };
+  }
+  let h = 0;
   for (const isl of game.islands) {
-    const dx = jetPosition.x - isl.cx;
-    const dz = jetPosition.z - isl.cz;
-    const r2 = dx * dx + dz * dz;
-    if (r2 < isl.radius * isl.radius) {
+    const dx = x - isl.cx;
+    const dz = z - isl.cz;
+    if (dx * dx + dz * dz < isl.radius * isl.radius) {
       const localH = _activeHeightFn(isl, dx, dz);
-      if (jetPosition.y < localH + PLAYER.MOUNTAIN_BUFFER) return 'MOUNTAIN';
+      if (localH > h) h = localH;
     }
   }
-  return null;
+  const mapKey = game.activeMap || 'islands';
+  if (mapKey === 'inhauma') {
+    const structure = inhaumaStructureInfoAt(x, z);
+    if (structure) return structure;
+  }
+  if (h > 2.5) return { height: h, kind: 'mountain' };
+  if (mapKey === 'islands') return { height: Math.max(h, 0), kind: h > 0.5 ? 'land' : 'water' };
+  if (mapKey === 'rio') return { height: h, kind: z < -230 && h <= 0.5 ? 'water' : 'land' };
+  return { height: h, kind: 'land' };
+}
+
+/** Checa colisão do avião com terreno via surfaceInfoAt.
+ *  @returns {'WATER'|'GROUND'|'MOUNTAIN'|null} — pavimento nunca colide aqui
+ *  (a máquina de contato em player.js trata pouso/hard-landing). */
+export function checkTerrainCollision(jetPosition) {
+  const s = surfaceInfoAt(jetPosition.x, jetPosition.z);
+  if (s.kind === 'runway' || s.kind === 'taxiway' || s.kind === 'service') return null;
+  if (s.kind === 'structure') return jetPosition.y < s.height + 1.2 ? 'GROUND' : null;
+  if (s.kind === 'mountain') {
+    return jetPosition.y < s.height + PLAYER.MOUNTAIN_BUFFER ? 'MOUNTAIN' : null;
+  }
+  if (s.kind === 'water') return jetPosition.y < 1.5 ? 'WATER' : null;
+  return jetPosition.y < s.height + 1.2 ? 'GROUND' : null;
 }
 
 // ─── Nuvens Volumétricas ──────────────────────────────────────────────────────
@@ -198,7 +262,7 @@ export const clouds = [];
 const cloudMats = [];
 
 // Camadas: [altMin, altMax, count, radiusMin, radiusMax, sphereCountMin, sphereCountMax]
-const CLOUD_LAYERS = [
+const CLOUD_LAYERS = HEADLESS ? [] : [
   [80,  130, 20,  8, 18, 15, 25],   // Baixa
   [220, 380, 25, 12, 25, 15, 28],   // Média
   [500, 750, 15, 20, 40, 12, 20],   // Alta (cirrus — mais esparsas)
@@ -207,7 +271,12 @@ const CLOUD_LAYERS = [
 for (const [altMin, altMax, count, rMin, rMax, sMin, sMax] of CLOUD_LAYERS) {
   for (let i = 0; i < count; i++) {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.0 });
+    // ADR-U5: fog:false mata a tinta bege do fog do mapa; emissive leve dá leitura
+    // de nuvem (não rocha); cachos achatados em Y.
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: 0.95, metalness: 0.0,
+      emissive: 0x33363c, emissiveIntensity: 0.5, fog: false,
+    });
     cloudMats.push(mat);
     const n = sMin + Math.floor(Math.random() * (sMax - sMin + 1));
     const spread = rMax * 2.5;
@@ -226,6 +295,7 @@ for (const [altMin, altMax, count, rMin, rMax, sMin, sMax] of CLOUD_LAYERS) {
       altMin + Math.random() * (altMax - altMin),
       (Math.random() - 0.5) * 4000,
     );
+    g.scale.y = 0.55; // nuvens achatadas (ADR-U5)
     scene.add(g);
     clouds.push(g);
   }

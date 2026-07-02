@@ -1,0 +1,175 @@
+{
+  "generated_at": "2026-07-01T14:46:21Z",
+  "context": "tauan-games",
+  "features": [
+    {
+      "rank": 1,
+      "slug": "aero-strike-combat",
+      "title": "Aero Strike — inimigos e armas",
+      "category": "product",
+      "tldr": "8 tipos de alvo (estáticos e móveis lentos) + boss kaiju + guerra dos aliados; canhão + 3 classes de míssil + nuke, com lock-on por cone.",
+      "summary": "Especifica o catálogo de inimigos do Aero Strike (bases, fábricas, comboios, antiaéreas, helicópteros, navios, alvos lentos móveis) com HP/comportamento, o boss, o front paralelo dos aliados, e o arsenal do jogador (canhão Vulcan, mísseis leve/pesado/nuclear) com o sistema de lock-on. Detalhe suficiente para recriar o combate.",
+      "path": "specs/memory/product/aero-strike-combat.md",
+      "tags": [
+        "product",
+        "aero-strike",
+        "combat",
+        "enemies",
+        "weapons"
+      ],
+      "token_estimate": 0,
+      "agent_tier": "self-pull",
+      "depends_on": [
+        "aero-strike",
+        "aero-strike-fx",
+        "aero-strike-world"
+      ]
+    },
+    {
+      "rank": 2,
+      "slug": "aero-strike-flight",
+      "title": "Aero Strike — voo e jogabilidade",
+      "category": "product",
+      "tldr": "Controles, modelo de energia de voo (com constantes), e a máquina de estados de surtida (aeroporto, decolagem, pouso, auto-taxi).",
+      "summary": "Especifica os controles do teclado, o modelo de física de voo do F-35 com as constantes de config.js, e o sistema de surtida do modo realista (FSM sortie, aeroportos por mapa, decolagem por rotação, pouso por flare, auto-taxi e cena de serviço). Detalhe suficiente para recriar a jogabilidade.",
+      "path": "specs/memory/product/aero-strike-flight.md",
+      "tags": [
+        "product",
+        "aero-strike",
+        "flight",
+        "controls"
+      ],
+      "token_estimate": 0,
+      "agent_tier": "self-pull",
+      "depends_on": [
+        "aero-strike",
+        "aero-strike-world",
+        "aero-strike-combat"
+      ]
+    },
+    {
+      "rank": 3,
+      "slug": "aero-strike-fx",
+      "title": "Aero Strike — efeitos, nuke, câmera, HUD e áudio",
+      "category": "product",
+      "tldr": "Explosões pooladas + mega-explosão; a nuke (flash → fireball → cogumelo ~60s → shockwave → ignição de cenário); câmeras, HUD e áudio sintetizado.",
+      "summary": "Especifica o sistema de FX do Aero Strike — explosões pooladas, mega-explosão, e o espetáculo da nuke (flash, fireball, cogumelo persistente, shockwave, ignição de árvores/casas), além dos 5 modos de câmera, do HUD e do motor de áudio Web Audio. Detalhe suficiente para recriar o espetáculo.",
+      "path": "specs/memory/product/aero-strike-fx.md",
+      "tags": [
+        "product",
+        "aero-strike",
+        "fx",
+        "nuke",
+        "audio"
+      ],
+      "token_estimate": 0,
+      "agent_tier": "self-pull",
+      "depends_on": [
+        "aero-strike",
+        "aero-strike-combat",
+        "aero-strike-world"
+      ]
+    },
+    {
+      "rank": 4,
+      "slug": "aero-strike-world",
+      "title": "Aero Strike — mundo e mapas",
+      "category": "product",
+      "tldr": "4 mapas jogáveis, uma verdade de superfície única, terreno por heightfield, água/rio, estradas autorais e cenário (árvores/estruturas).",
+      "summary": "Especifica os 4 mapas do Aero Strike, o modelo de superfície surfaceInfoAt, o terreno de cada mapa (ilhas, mesas, morros, heightfield contínuo de Inhauma), água e rio, a rede de estradas por spline e o cenário (árvores instanciadas, estruturas). Detalhe suficiente para recriar o mundo.",
+      "path": "specs/memory/product/aero-strike-world.md",
+      "tags": [
+        "product",
+        "aero-strike",
+        "world",
+        "maps"
+      ],
+      "token_estimate": 0,
+      "agent_tier": "self-pull",
+      "depends_on": [
+        "aero-strike",
+        "aero-strike-flight",
+        "aero-strike-fx"
+      ]
+    },
+    {
+      "rank": 5,
+      "slug": "aero-strike",
+      "title": "Aero Strike — o jogo",
+      "category": "product",
+      "tldr": "Ataque ao solo em 3ª pessoa com um F-35 (Three.js) — destrua todos os alvos militares da missão, mate o boss, volte e pouse.",
+      "summary": "Especifica a identidade, o loop de jogo, o objetivo, os modos e o modelo de vidas/HP do Aero Strike (pasta aero-fighters/). Atom-raiz para recriar o jogo a partir da memória; aponta para world/flight/combat/fx.",
+      "path": "specs/memory/product/aero-strike.md",
+      "tags": [
+        "product",
+        "aero-strike",
+        "gameplay"
+      ],
+      "token_estimate": 0,
+      "agent_tier": "self-pull",
+      "depends_on": [
+        "architecture",
+        "tech-stack",
+        "overview",
+        "quality-bar",
+        "aero-strike-flight",
+        "aero-strike-world",
+        "aero-strike-combat",
+        "aero-strike-fx",
+        "games-catalog"
+      ]
+    },
+    {
+      "rank": 6,
+      "slug": "games-catalog",
+      "title": "Catálogo de jogos",
+      "category": "product",
+      "tldr": "Jogos/experimentos ativos do tauan-games e seus status de release.",
+      "summary": "Lista cada projeto do repo (tauan-trex, aero-fighters/Aero Strike, testing-infra, aero-fighters-v2) com pasta, descrição e status. Inclui a nota de nomenclatura codename vs nome visível. Portado do HTML legado em 2026-06-12.",
+      "path": "specs/memory/product/games-catalog.md",
+      "tags": [
+        "product",
+        "catalog",
+        "games"
+      ],
+      "token_estimate": 0,
+      "agent_tier": "self-pull",
+      "depends_on": []
+    },
+    {
+      "rank": 7,
+      "slug": "overview",
+      "title": "Identidade do produto",
+      "category": "product",
+      "tldr": "Repositório de jogos web pessoais para o Tauan — imediatamente jogáveis, sem loading, sem erros.",
+      "summary": "Define o que é o tauan-games, para quem existe e o critério de público-alvo que filtra todas as decisões de produto. Portado do HTML legado em 2026-06-12.",
+      "path": "specs/memory/product/overview.md",
+      "tags": [
+        "product",
+        "identity"
+      ],
+      "token_estimate": 0,
+      "agent_tier": "self-pull",
+      "depends_on": [
+        "games-catalog",
+        "quality-bar"
+      ]
+    },
+    {
+      "rank": 8,
+      "slug": "quality-bar",
+      "title": "Barra de qualidade",
+      "category": "product",
+      "tldr": "Objetivos de produto e critérios de qualidade não-negociáveis dos jogos.",
+      "summary": "Jogos realmente jogáveis para o Tauan, validados por Playwright antes da revisão do operador, operando offline e sem regressão entre releases. Portado do HTML legado em 2026-06-12.",
+      "path": "specs/memory/product/quality-bar.md",
+      "tags": [
+        "product",
+        "quality"
+      ],
+      "token_estimate": 0,
+      "agent_tier": "self-pull",
+      "depends_on": []
+    }
+  ]
+}

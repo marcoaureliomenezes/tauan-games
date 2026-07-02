@@ -2,9 +2,29 @@
 // Exporta: `game` (compartilhado com window.game), `resetState()` para reinício.
 // Para adicionar campo novo: edite createInitialState() e documente em CONVENTIONS.md.
 
+import { createRng, parseRuntimeConfig } from './rng.js';
+import { createSortieMachine, SortieState } from './sortie-state.js';
+import { createGroundPhysicsState } from './ground-physics.js';
+import { createServiceState } from './service-scene.js';
+import { createEjectionState } from './ejection.js';
+import { createCameraRig } from './camera-modes.js';
+
+const runtimeConfig = parseRuntimeConfig(typeof window !== 'undefined' ? window.location.search : '');
+const runtimeRng = createRng(runtimeConfig.seed);
+
+function initialPlayerPosition(mapKey) {
+  // Zona de serviço do aeroporto de cada mapa (WS-2)
+  if (mapKey === 'inhauma') return { x: -560, y: 0.9, pz: 475 };
+  if (mapKey === 'rio') return { x: 560, y: 1.35, pz: 560 };
+  return { x: -160, y: 0.9, pz: 350 };
+}
+
 /** Constrói o objeto de estado padrão. */
 function createInitialState() {
+  const initialPlayer = initialPlayerPosition(runtimeConfig.map || 'desert');
   return {
+    runtime: runtimeConfig,
+    rng: runtimeRng,
     running: false,
     score: 0,
     projectiles: [],
@@ -16,29 +36,53 @@ function createInitialState() {
     targetsDestroyed: 0,
     islands: [],
     wingmen: [],           // aliados AI em formação
+    allyEnemies: [],       // inimigos DOS ALIADOS (frente de batalha separada da do player)
     timeOfDay: 0.35,    // ciclo dia/noite: 0.0 (meia-noite) → 1.0 (meia-noite)
     time: 0,            // tempo total de jogo em segundos (para animações)
-    activeMap: 'islands', // mapa ativo: 'islands' | 'desert' | 'rio'
+    activeMap: runtimeConfig.map || 'desert', // mapa ativo: 'islands' | 'desert' | 'rio'
+    missionRealism: {
+      enabled: true,
+      sortie: createSortieMachine(SortieState.MENU),
+      ground: createGroundPhysicsState(),
+      service: createServiceState(runtimeConfig.testMode),
+      ejection: createEjectionState(),
+      camera: createCameraRig(),
+      groundContact: null,
+      landingZoneStatus: null,
+      missionScore: 0,
+      criticalVideoCapture: false,
+      hudLayout: { style: 'n64-green-combat', overlap: false },
+      aircraftVisual: { model: 'procedural-f35-v2', gearVisible: true, loadoutVisible: true },
+      desertLandmarks: { roads: 0, hangars: 0, lights: 0 },
+      // Auto-sortie: depois de pousar, o avião é taxiado, reabastecido e recolocado
+      // para decolagem automaticamente (sem o jogador taxiar na mão).
+      autoTaxi: { active: false, phase: 'idle', t: 0, from: null, to: null },
+    },
     player: {
-      x: 0, y: 80, pitch: 0, pz: 0,
+      x: initialPlayer.x, y: initialPlayer.y, pitch: 0, pz: initialPlayer.pz,
       dead: false, lives: 3,
       hp: 3,                 // pontos de dano dentro da vida atual (3 hits → mayday)
       missiles: 100,         // mísseis leves (X)
       heavyMissiles: 10,     // mísseis pesados (B) — dano 5x, supply limitado
       nuclearMissiles: 3,    // mísseis nucleares (N) — devastadores, supply 3
-      speed: 25, throttle: 0.5, stalled: false,
+      speed: 0, throttle: 0.05, stalled: false,
     },
     flags: {
       paused: false,
       missionFailed: false,
       missionCompleteShown: false,
+      rtbAnnounced: false,   // trava re-disparo de nextMission durante o retorno à base
       invincibility: 0,
       shakeTime: 0,
       crashFreezeTime: 0,
       cameraShake: null,
       mayday: false,         // avião perdeu controle, caindo
       maydayTimer: 0,        // segundos restantes antes de ejetar
+      sinking: 0,            // segundos de afundamento na água (WS-5)
+      nukeSlowmo: 0,         // janela restante de slow-mo nuclear (ADR-U4)
+      nukeShockArrival: null,// chegada da onda de choque nuclear {t, intensity}
       damageSmoke: 0,        // timer de emissão de fumaça de dano
+      supportMissilesFired: 0, // contador debug/teste dos mísseis lançados por aliados
     },
   };
 }
@@ -56,6 +100,8 @@ export function resetState() {
   game.score = fresh.score;
   game.timeOfDay = fresh.timeOfDay;
   game.time = fresh.time;
+  game.runtime = fresh.runtime;
+  game.rng = fresh.rng;
   game.kills = fresh.kills;
   game.cycle = fresh.cycle;
   // activeMap persiste entre resets (player escolhe uma vez por sessão)
@@ -66,8 +112,10 @@ export function resetState() {
   game.targets.length = 0;
   game.islands.length = 0;
   game.wingmen.length = 0;
+  game.allyEnemies.length = 0;
   // player
   Object.assign(game.player, fresh.player);
+  game.missionRealism = fresh.missionRealism;
   // flags
   Object.assign(game.flags, fresh.flags);
 }

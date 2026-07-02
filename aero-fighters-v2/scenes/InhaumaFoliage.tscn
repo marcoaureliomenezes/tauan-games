@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://inhauma_foliage"]
+
+[ext_resource type="Script" uid="uid://foliage_spawner" path="res://scripts/foliage_spawner.gd" id="1_spawner"]
+[ext_resource type="Material" uid="uid://m_cel_foliage" path="res://Content/Materials/M_CelFoliage.tres" id="2_mat"]
+
+[node name="InhaumaFoliage" type="Node3D"]
+script = ExtResource("1_spawner")
+
+; FoliageMesh is the single MultiMeshInstance3D that foliage_spawner.gd populates.
+; The MultiMesh (low-poly tree mesh) is configured entirely in code.
+; The material M_CelFoliage is baked into the ArrayMesh surface in foliage_spawner._build_tree_mesh().
+[node name="FoliageMesh" type="MultiMeshInstance3D" parent="."]

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Memory — Product — games-catalog (tauan-games)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+           max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.55;
+           color: #222; background: #fafafa; }
+    h1, h2 { color: #111; }
+    h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+    section { margin-bottom: 2rem; }
+    code { background: #f0f0f0; padding: .1rem .3rem; border-radius: 3px; font-size: .9em; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { padding: .5rem .7rem; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+    th { background: #eee; }
+    .meta { color: #666; font-size: .9em; }
+    nav.crumbs { font-size: .85em; color: #666; margin-bottom: .5rem; }
+    nav.crumbs a { color: #444; text-decoration: none; }
+    nav.crumbs a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<nav class="crumbs"><a href="index.html">← Voltar ao catálogo</a></nav>
+
+<h1>games-catalog</h1>
+<p class="meta">Conceito: jogos/experimentos ativos e seu status · Última atualização: 2026-05-17</p>
+
+<section id="current">
+  <h2>Jogos e experimentos atuais</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Projeto</th>
+        <th>Pasta</th>
+        <th>Descrição</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Tauan T-Rex</td>
+        <td><code>tauan-trex/</code></td>
+        <td>Enhanced Chrome Dino clone personalizado para Tauan — pixel art, high score, day/night.</td>
+        <td>Aprovado + implementado (release <code>tauan-trex-v1</code> arquivada)</td>
+      </tr>
+      <tr>
+        <td>Aero Fighters (nome visível: <em>Aero Strike</em>)</td>
+        <td><code>aero-fighters/</code></td>
+        <td>F-35 Lightning II Ground Strike em Three.js — ataque a alvos militares. O codename
+        <code>aero-fighters</code> é mantido por inércia de paths; o nome exibido ao jogador é
+        “Aero Strike”.</td>
+        <td>Aprovado + implementado (releases <code>aero-fighters-v1</code> e
+        <code>aero-fighters-qa-hardening-v1</code> arquivadas; releases ativas:
+        <code>aero-fighters-inhauma-map-v1</code> e <code>aero-fighters-mission-realism-v1</code>)</td>
+      </tr>
+      <tr>
+        <td>Testing Infrastructure</td>
+        <td><code>tests/</code></td>
+        <td>Playwright smoke + AC quality gate compartilhado por todos os jogos.</td>
+        <td>Aprovado + implementado (release <code>testing-infra-v1</code> arquivada)</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="naming-note">
+  <h2>Nota de nomenclatura</h2>
+  <p>O codename de pasta (<code>aero-fighters/</code>) e o nome visível ao jogador
+  (<em>Aero Strike</em>) divergem por escolha deliberada do operador. Toda referência interna
+  (specs, paths, comandos npm) usa o codename; toda referência visível ao jogador usa o nome
+  comercial. Não renomear pastas sem decisão explícita.</p>
+</section>
+
+</body>
+</html>

@@ -4,14 +4,16 @@
 import { createIslands, islandHeightAt, updateWorld } from '../world.js';
 import { createDesertWorld, desertHeightAt, updateDesertWorld } from './desert.js';
 import { createRioWorld, rioHeightAt, updateRioWorld } from './rio.js';
-import { TARGET_LAYOUT, TARGET_LAYOUT_DESERT, TARGET_LAYOUT_RIO } from '../config.js';
+import { createInhaumaWorld, inhaumaHeightAt, updateInhaumaWorld } from './inhauma.js';
+import { TARGET_LAYOUT, TARGET_LAYOUT_DESERT, TARGET_LAYOUT_RIO, TARGET_LAYOUT_INHAUMA } from '../config.js';
 
-export const MAP_KEYS = ['islands', 'desert', 'rio'];
+export const MAP_KEYS = ['islands', 'desert', 'rio', 'inhauma'];
 
 export const MAP_LABELS = {
   islands: 'Mar do Sul',
   desert:  'Deserto',
   rio:     'Rio de Janeiro',
+  inhauma: 'Inhauma',
 };
 
 export const MAPS = {
@@ -35,6 +37,13 @@ export const MAPS = {
     update:   updateRioWorld,
     layout:   TARGET_LAYOUT_RIO,
     label:    'Rio de Janeiro',
+  },
+  inhauma: {
+    create:   createInhaumaWorld,
+    heightAt: inhaumaHeightAt,
+    update:   updateInhaumaWorld,
+    layout:   TARGET_LAYOUT_INHAUMA,
+    label:    'Inhauma',
   },
 };
 

@@ -3,6 +3,7 @@
 // Mostra ilhas, player e alvos em tempo real.
 
 import { game } from '../state.js';
+import { getAirportForMap } from '../airport.js';
 
 let canvas, ctx;
 const MAP_SIZE = 180;
@@ -76,6 +77,14 @@ export function updateMinimap() {
         ctx.fillRect(x - 2, y - 2, 4, 4);
       }
     }
+  }
+
+  // Pista do aeroporto do mapa ativo (WS-4)
+  {
+    const r = getAirportForMap(game.activeMap).runway;
+    const a = worldToMap(r.center.x - r.width / 2, r.center.z - r.length / 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillRect(a.x, a.y, Math.max(2, r.width * mapScale), Math.max(4, r.length * mapScale));
   }
 
   // Player

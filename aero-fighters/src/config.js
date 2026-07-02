@@ -6,9 +6,17 @@
 export const PLAYER = {
   MAX_SPD: 80,        // m/s — velocidade máxima com throttle 100%
   MIN_SPD: 8,         // m/s — abaixo disso o avião perde sustentação
-  STALL_SPD: 10,      // m/s — limiar para HUD piscar "STALL"
+  STALL_SPD: 14,      // m/s — abaixo disso o nariz cai e os comandos amolecem (WS-3)
   GRAVITY: 14,        // m/s² — puxa o avião para baixo todo frame
+  CLIMB_TRADE: 35,    // m/s de velocidade trocados por atitude (subir drena, mergulhar devolve)
+  DIVE_OVERSPEED: 1.3,// multiplicador de MAX_SPD permitido em mergulho
+  CEILING: 9500,      // m — empuxo só começa a cair perto deste teto (teto prático ~11.500 m)
+  TRIM_RATE: 0.22,    // 1/s — auto-trim suave; não briga contra a subida intencional
+  STALL_NOSE_DROP: 0.45, // rad/s — queda de nariz em stall
+  STALL_CTL: 0.45,    // autoridade de comando durante stall
   PITCH_RATE: 1.45,   // rad/s — quão rápido o nariz sobe/desce
+  PITCH_UP_LIMIT: 0.82,   // rad — permite subida forte sem travar o nariz cedo demais
+  PITCH_DOWN_LIMIT: -0.70, // rad — impede mergulho invertido por input sustentado
   ROLL_RATE: 2.30,    // rad/s — rolagem (banking)
   YAW_RATE: 0.80,     // rad/s — coordenado com roll em viradas
   RUDDER_FACTOR: 0.65,// multiplicador do yaw puro (Q/E)
@@ -17,7 +25,17 @@ export const PLAYER = {
   CONVERGE_RATE: 1.6, // velocidade da convergência para o alvo de throttle
   START_HEIGHT: 80,   // altura inicial em unidades 3D
   SEA_CRASH_Y: 3,     // abaixo disso = crash no mar
-  MOUNTAIN_BUFFER: 10,  // margem em cima do terreno antes de crashar (cobre pico max de noise ~9.3 — T-BF03)
+  MOUNTAIN_BUFFER: 5,   // margem acima do terreno amostrado antes de crashar — alinha colisão com superfície visual
+  // Takeoff rotation parameters
+  V_ROTATE: 32,       // m/s — velocidade mínima para iniciar rotação de decolagem (mais próximo do canLiftoff=42)
+  ROTATE_LIFT: 15,    // m/s² — sustentação extra durante rotação (era 7.5; atinge 4m em ~0.5s)
+  // Landing flare / touchdown parameters (tolerantes — jogo para criança)
+  FLARE_HI: 4.5,      // m — altitude de entrada na fase de flare
+  FLARE_LO: 2.2,      // m — altitude de toque (touchdown ocorre abaixo disso)
+  TOUCHDOWN_DEBOUNCE: 0.4, // s — janela de debounce para evento TOUCHDOWN_SAFE
+  SINK_MAX: -16,      // m/s — taxa de descida insegura
+  SINK_HARD: -26,     // m/s — só uma queda catastrófica (espatifar de propósito) não é pouso
+  LAND_MAX_SPD: 62,   // m/s — acima disso (mergulho a toda) o avião não pousa, passa reto
 };
 
 /** Canhão de tiro rápido */
@@ -82,6 +100,10 @@ export const TARGETS = {
   factory:  { hp: 20, score: 600, hr2: 28, dropChance: 0.5 },
   building: { hp: 14, score: 450, hr2: 18, dropChance: 0.3 },
   convoy:   { hp: 12, score: 380, hr2: 60, dropChance: 0.4 },
+  armedConvoy: { hp: 18, score: 700, hr2: 95, dropChance: 0.45 },
+  helicopter: { hp: 10, score: 650, hr2: 120, dropChance: 0.35 },
+  tank:     { hp: 22, score: 550, hr2: 44, dropChance: 0.4 },   // solo lento, torre mira
+  patrolAir: { hp: 14, score: 720, hr2: 150, dropChance: 0.4 }, // dirigível de patrulha lento (ar)
   aaGun:    { hp:  6, score: 250, hr2:  9, dropChance: 0.1 },
   warship:  { hp: 35, score: 1200, hr2: 80, dropChance: 0.5 },
 };
@@ -98,6 +120,26 @@ export const AA = {
 export const WARSHIP = {
   RANGE: 1200,        // m — engaja bem antes que o player chegue perto
   INTERVAL: 1.0,      // s entre rajadas (burst de 2 balas)
+};
+
+/** Alvos lentos móveis (helicópteros e comboios armados). */
+export const SLOW_TARGETS = {
+  HELI_ALTITUDE: 46,
+  HELI_SPEED: 14,
+  HELI_RANGE: 620,
+  HELI_INTERVAL: 2.3,
+  CONVOY_SPEED: 9,
+  CONVOY_RANGE: 420,
+  CONVOY_INTERVAL: 1.9,
+  // Tanque de solo lento (WS-4)
+  TANK_SPEED: 6,
+  TANK_RANGE: 470,
+  TANK_INTERVAL: 2.6,
+  // Dirigível de patrulha lento no ar (WS-4)
+  PATROLAIR_SPEED: 7,
+  PATROLAIR_ALTITUDE: 95,
+  PATROLAIR_RANGE: 700,
+  PATROLAIR_INTERVAL: 3.0,
 };
 
 /** Estrutura de missões */
@@ -218,6 +260,39 @@ export const TARGET_LAYOUT_RIO = [
   [-1,  -40,  140, 'building'],
   [-1,  150,  240, 'building'],
   [-1,   30,  390, 'base'],
+];
+
+/** Layout de alvos para o mapa Inhauma.
+ * Formato: [regionIdx, dx, dz, tipo] — regionIdx=-1 significa coordenada absoluta.
+ * Alvos civis principais ficam preservados; targets militares usam periferia,
+ * morros/serras, MG-238 e zonas industriais/rurais. */
+// Coords absolutas (regionIdx -1) — o mapa Inhauma usa malha de terreno contínua
+// (uma única região), então alvos de morro são posicionados por coordenada de mundo.
+export const TARGET_LAYOUT_INHAUMA = [
+  [-1,  760, -300, 'aaGun'],   // topo da serra de Sete Lagoas
+  [-1, -380,   40, 'aaGun'],   // morros oeste de Inhauma
+  [-1, -760,  430, 'armedConvoy'],  // MG-238 perto de Cachoeira da Prata
+  [-1, -220,  210, 'helicopter'],   // patrulha baixa sobre a MG-238
+  [-1,  840, -250, 'armedConvoy'],  // MG-238 rumo Sete Lagoas
+  [-1, 1120, -330, 'factory'],
+  [-1, 1310, -520, 'helicopter'],   // escolta de Sete Lagoas
+  [-1,  480, -160, 'tank'],         // tanque lento na periferia leste (WS-4)
+  [-1, -300,  120, 'tank'],         // tanque lento a oeste
+  [-1,  820, -360, 'patrolAir'],    // dirigível de patrulha sobre a serra de Sete Lagoas
+  [-1, -120,  420, 'patrolAir'],    // dirigível de patrulha sobre o reservatório
+  [-1, 1020, -120, 'building'],
+  [-1, -980,  620, 'base'],
+  [-1, -850,  360, 'building'],
+  [-1,  330,  330, 'aaGun'],   // morros sudeste
+  [-1, -520, -310, 'factory'],
+  [-1,  320,  360, 'base'],
+  [-1,  480,  140, 'building'],
+  [-1,  -40, -330, 'aaGun'],   // morro norte
+  [-1, -330,  560, 'armedConvoy'],
+  [-1,  680, -540, 'factory'],
+  [-1, 1450, -260, 'building'],
+  [-1, 1200, -760, 'aaGun'],
+  [-1, -1180, 460, 'factory'],
 ];
 
 /** Definição fixa das 18 ilhas: [centerX, centerZ, radius, peakHeight] */

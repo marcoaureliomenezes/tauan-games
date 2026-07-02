@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<!-- last amended 2026-05-18 — foundation amendment for ADR-V2-G-02 (4-degrau ladder, Godot 3, UE5 4) -->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Memory — Architecture — tauan-games</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+           max-width: 1024px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.55;
+           color: #222; background: #fafafa; }
+    h1, h2, h3 { color: #111; }
+    h1 { border-bottom: 2px solid #333; padding-bottom: .3rem; }
+    h2 { margin-top: 2.2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+    section { margin-bottom: 2rem; }
+    code, pre { background: #f0f0f0; padding: .1rem .3rem; border-radius: 3px; font-size: .9em; }
+    pre { padding: .8rem 1rem; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { padding: .5rem .7rem; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+    th { background: #eee; }
+    .mermaid { background: #fff; padding: 1rem; border: 1px solid #ddd; border-radius: 4px; }
+    .meta { color: #666; font-size: .9em; }
+    .layer { background: #fff; padding: .8rem 1rem; border-left: 3px solid #333; margin: .8rem 0; }
+  </style>
+</head>
+<body>
+
+<h1>Architecture Memory — tauan-games</h1>
+<p class="meta">Última atualização: 2026-05-18 · Derivado de: <code>specs/foundation/SPEC.md</code></p>
+
+<section id="overview">
+  <h2>Visão geral</h2>
+  <p>O repositório <code>tauan-games</code> é um portfólio de jogos independentes, organizados por
+  uma <strong>ladder de quatro engines</strong> de complexidade crescente. Cada jogo vive em uma pasta
+  isolada na raiz do repo e compartilha apenas a infraestrutura transversal de testes
+  Playwright (<code>tests/</code> + <code>package.json</code>) e o diretório de libs vendoradas
+  (<code>vendor/</code>). A arquitetura não tem servidor, build pipeline ou orquestração runtime —
+  os artefatos são <code>index.html</code> + JS estático servidos por <code>npx serve</code>,
+  binários Godot 4 standalone e, no futuro, executáveis UE5 standalone.</p>
+</section>
+
+<section id="engine-ladder">
+  <h2>Ladder das quatro engines</h2>
+  <p>Toda novidade de jogo é classificada em um destes quatro degraus. Pular degraus ou introduzir
+  uma quinta engine exige decisão explícita do operador via <code>product-engineer</code>.</p>
+  <table>
+    <thead>
+      <tr><th>Degrau</th><th>Engine</th><th>Versão</th><th>Tipo</th><th>Jogo de referência</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Phaser.js</td><td>3.60 (CDN, sem build)</td><td>2D web</td><td><code>tauan-trex/</code></td></tr>
+      <tr><td>2</td><td>Three.js</td><td>r165 (vendor local ES module)</td><td>3D web</td><td><code>aero-fighters/</code></td></tr>
+      <tr><td>3</td><td><strong>Godot 4</strong> (NOVO 2026-05-18)</td><td>4.x stable point release</td><td>3D desktop indie</td><td><code>aero-fighters-v2/</code> (UE5 deferred to future release; foundation amended 2026-05-18 per ADR-V2-G-02; hardware-forced from photoreal → stylized → Godot pivot chain)</td></tr>
+      <tr><td>4</td><td>Unreal Engine 5</td><td>Blueprints + C++</td><td>3D desktop AAA</td><td>reservado para futuro release quando hardware permitir (RTX 3060 ou cloud GPU rental)</td></tr>
+    </tbody>
+  </table>
+  <p>A ladder é didática: cada degrau ensina conceitos que o anterior não cobre
+  (loop/input/física 2D → modularização 3D + materiais PBR → scene-graph + scripting +
+  signals + export pipeline indie → pipeline industrial AAA).</p>
+  <p><strong>Emenda 2026-05-18 (ADR-V2-G-02):</strong> Ladder ampliada de 3 para 4 degraus.
+  Drive: UE 5.5 source build no Ubuntu 24.04 + Iris Xe é fundamentalmente hostil
+  (clang-18/libicu74 incompatibilidades, DotNet bundled quebrado, GitDependencies
+  droppando binários Linux x86_64 sistematicamente). Godot 4 entra como Degrau 3
+  (indie 3D desktop) entre Three.js e UE5. UE5 não foi removido; foi deferido para
+  futuro jogo/release. Ver
+  <code>.dadaia/reports/tauan-games/product-engineer/2026-05-18T005834Z-godot-pivot.html</code>.</p>
+</section>
+
+<section id="repo-structure">
+  <h2>Estrutura canônica do repositório</h2>
+  <pre>
+tauan-games/
+├── README.md
+├── AGENTS.md                        ← orientações legadas para agentes (opcional)
+├── index.html                       ← landing page (lista jogos)
+├── package.json                     ← infra Playwright compartilhada
+├── tests/                           ← smoke + AC tests para todos os jogos
+├── vendor/                          ← libs versionadas (Phaser, Three.js)
+├── tauan-trex/                      ← Degrau 1 — Phaser
+├── aero-fighters/                   ← Degrau 2 — Three.js
+├── aero-fighters-v2/                ← Degrau 3 — Godot 4 (UE5 Degrau 4 reservado p/ futuro)
+└── specs/                           ← governance SDD
+    ├── constitution.md
+    ├── foundation/SPEC.md
+    ├── memory/
+    │   ├── architecture.html
+    │   ├── tech-stack.html
+    │   └── product/&lt;concept&gt;.html
+    ├── backlog/
+    ├── releases/                    ← release ativa + ACTIVE.md
+    └── _archive/releases/           ← releases encerradas (read-only)
+  </pre>
+</section>
+
+<section id="game-internal">
+  <h2>Estrutura interna por jogo</h2>
+  <div class="layer"><strong>Degrau 1 (Phaser):</strong> <code>index.html</code> + <code>game.js</code>
+  em arquivo único quando possível. README com instruções de execução é obrigatório. Sem build step.</div>
+  <div class="layer"><strong>Degrau 2 (Three.js):</strong> <code>index.html</code> + <code>src/*.js</code>
+  modularizado em ES modules. Aero Fighters mantém ~15 módulos sob <code>src/</code> com fronteiras
+  explícitas (<code>main.js</code> apenas orquestra; lógica fica em módulos como <code>player.js</code>,
+  <code>missions.js</code>, <code>airport.js</code>, <code>landing-zones.js</code>, <code>ground-physics.js</code>,
+  <code>sortie-state.js</code>, <code>camera-modes.js</code>, <code>service-scene.js</code>,
+  <code>ejection.js</code>, <code>nuclear-fx.js</code>, <code>debug.js</code>). Vendor local de Three.js
+  em <code>vendor/three.module.min.js</code>.</div>
+  <div class="layer"><strong>Degrau 3 (Godot 4):</strong> <code>aero-fighters-v2/</code>.
+  Pipeline: scene tree (<code>scenes/*.tscn</code>) + scripts GDScript (com promoção a C# sob
+  triggers de performance) + Resource files (<code>.tres</code>) para config; Autoload singletons
+  para managers globais (<code>MissionManager.gd</code>, <code>GameConfig.gd</code>,
+  <code>Telemetry.gd</code>); Terrain3D addon para heightmap SRTM; export Linux x64 via Godot CLI.
+  Renderer Forward+ (cabe em Iris Xe @ 1080p nativo). Build standalone, distribuído via README link.</div>
+  <div class="layer"><strong>Degrau 4 (UE5):</strong> reservado para futuro release.
+  Pipeline esperado: Blueprints + C++, build standalone, distribuído via README link.
+  Bloqueado hoje por restrição de hardware (Ubuntu 24.04 + Iris Xe). Será adotado quando
+  hardware permitir (RTX 3060 ou cloud GPU rental).</div>
+</section>
+
+<section id="agent-authority">
+  <h2>Fronteiras de autoridade dos agentes</h2>
+  <p>Apenas três agentes podem <strong>escrever</strong> em <code>repos/tauan-games/</code>. A matriz
+  completa está em <code>.claude/rules/game-agents-coordination.md</code>.</p>
+  <table>
+    <thead>
+      <tr><th>Agente</th><th>Sub-domínio</th><th>Escreve</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>game-developer</code></td><td>Lógica</td><td>C++, JS, Blueprints, IA, física, balística, mecânicas, fixtures de teste</td></tr>
+      <tr><td><code>game-designer</code></td><td>Design</td><td>Assets procedurais, materiais, mapas, áudio, pipeline scripts, specs de assets, HDA</td></tr>
+      <tr><td><code>game-tester</code></td><td>Testes</td><td>Playwright/UE5 automation, reports HTML com evidências</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Exceção exclusiva:</strong> o <code>product-engineer</code> é guardião absoluto de
+  <code>specs/</code> em todos os repos e pode editar SPEC/PLAN/TASKS/memory/foundation/constitution
+  sem nunca tocar em código de jogo. Os demais agentes do workspace
+  (<code>software-architect</code>, <code>software-engineer</code>, <code>frontend-engineer</code>,
+  <code>backend-engineer</code>, <code>qa-engineer</code>, <code>devops-engineer</code>) podem
+  <strong>ler</strong> arquivos para contexto, mas não escrevem.</p>
+</section>
+
+<section id="dependency-rules">
+  <h2>Regras de dependência entre projetos</h2>
+  <pre class="mermaid">
+flowchart TB
+    tests[tests/ Playwright]
+    vendor[vendor/ libs]
+    trex[tauan-trex/]
+    aero[aero-fighters/]
+    aerov2[aero-fighters-v2/ Godot 4]
+    ue5[UE5 futuro release]
+    tests --> trex
+    tests --> aero
+    tests -.future.-> aerov2
+    vendor --> aero
+    aerov2 -.deferred.-> ue5
+  </pre>
+  <p><strong>Proibido:</strong> um jogo depender de outro jogo (acoplamento horizontal entre pastas
+  de projeto). <strong>Permitido:</strong> jogos consumirem <code>vendor/</code> e
+  <code>tests/</code> consumir cada jogo para validação.</p>
+</section>
+
+<section id="sdd-flow">
+  <h2>Fluxo SDD release-based</h2>
+  <p>Releases ativas vivem em <code>specs/releases/&lt;release-id&gt;/</code> com tripleto
+  <code>SPEC.md</code> + <code>PLAN.md</code> + <code>TASKS.md</code>. O ponteiro do release ativo
+  está em <code>specs/releases/ACTIVE.md</code>:</p>
+  <pre>release: &lt;release-id&gt;
+phase: &lt;draft|aprovado|in-progress|closure&gt;</pre>
+  <p>Ao atingir <code>closure</code>, a release migra para <code>specs/_archive/releases/&lt;release-id&gt;/</code>
+  (read-only). Memory files (este arquivo, <code>tech-stack.html</code>, <code>product/*.html</code>)
+  são atualizados como snapshot atômico do estado pós-closure.</p>
+</section>
+
+<section id="distribution">
+  <h2>Distribuição</h2>
+  <ul>
+    <li><strong>Jogos web (degraus 1 e 2):</strong> servidos localmente por <code>npx serve</code>;
+    deploy alvo é GitHub Pages (branch <code>gh-pages</code>, cada jogo em subpasta).</li>
+    <li><strong>Jogos Godot 4 (degrau 3):</strong> export Linux x64 via <code>godot --export-release</code>;
+    binário standalone único; distribuído via README link. Operator-only local runs em v2
+    (sem GitHub Releases, itch.io ou Steam).</li>
+    <li><strong>Jogos UE5 (degrau 4, futuro):</strong> build pipeline a definir; alvo é executável
+    standalone linkado no README do projeto. Bloqueado por hardware atual.</li>
+  </ul>
+</section>
+
+<section id="invariants">
+  <h2>Invariantes arquiteturais</h2>
+  <ol>
+    <li>Nenhum jogo introduz build step, transpilação TypeScript ou bundler nos degraus 1 e 2.</li>
+    <li>Nenhum jogo carrega assets externos via rede em runtime — todos os sprites, sons e modelos
+    são procedurais ou commitados em <code>vendor/</code>.</li>
+    <li>Nenhum agente fora do trio <code>game-*</code> escreve em <code>repos/tauan-games/</code>
+    (exceto <code>product-engineer</code> em <code>specs/</code>).</li>
+    <li>Toda release passa pela harness Playwright antes de ser considerada CLOSURE.</li>
+    <li>A ladder das quatro engines é o único conjunto autorizado — quinta engine exige promoção
+    via <code>product-engineer</code> e edição da foundation.</li>
+  </ol>
+</section>
+
+</body>
+</html>

@@ -10,9 +10,14 @@ import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
 import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, COLORS } from './config.js';
-import { explosion, spawnMissileSmoke, nuclearExplosion } from './fx.js';
+import { explosion, spawnMissileSmoke, nuclearExplosion, spawnScorchMark, scheduleDelayed as fxDelay } from './fx.js';
+import { spawnNuclearFx } from './nuclear-fx.js';
+import { spawnPropFire } from './prop-fire.js';
+import { inhaumaTrees, getInhaumaStructures } from './maps/inhauma-scene.js';
 import { damageTarget } from './targets.js';
-import { deformTerrainNuclear } from './world.js';
+import { deformTerrainNuclear, surfaceInfoAt } from './world.js';
+import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
+import { transitionSortie, SortieEvent } from './sortie-state.js';
 
 // ─── Balas ───────────────────────────────────────────────────────────────────
 // Tracer estilo M61 Vulcan: cilindro alongado amarelo brilhante, trilhando atrás da bala
@@ -133,7 +138,7 @@ function buildMissileMesh(kind) {
 }
 
 /** Lança um míssil em direção a um alvo (homing). @param kind 'light'|'heavy' */
-export function spawnMissile(orig, target, jetQuat, kind = 'light') {
+export function spawnMissile(orig, target, jetQuat, kind = 'light', opts = {}) {
   const cfg = kind === 'heavy' ? MISSILES_HEAVY : MISSILES_LIGHT;
   const mesh = buildMissileMesh(kind);
   mesh.position.copy(orig);
@@ -141,7 +146,18 @@ export function spawnMissile(orig, target, jetQuat, kind = 'light') {
   mesh.quaternion.copy(jetQuat);
   scene.add(mesh);
   const vel = new THREE.Vector3(0, 0, -1).applyQuaternion(jetQuat).multiplyScalar(cfg.INITIAL_SPD);
-  missiles.push({ mesh, target, velocity: vel, life: cfg.LIFE, smokeTimer: 0, cfg, kind });
+  missiles.push({
+    mesh,
+    target,
+    velocity: vel,
+    life: opts.life ?? cfg.LIFE,
+    smokeTimer: 0,
+    cfg,
+    kind,
+    damage: opts.damage ?? cfg.DAMAGE,
+    explosionScale: opts.explosionScale,
+    support: opts.support === true,
+  });
   audio.missile();
 }
 
@@ -188,14 +204,14 @@ export function updateMissiles(dt) {
     if (m.target && !m.target.dead) {
       const hr2 = m.target.hr2 * 2.5;   // raio de impacto generoso (anti-miss)
       if (m.mesh.position.distanceToSquared(m.target.mesh.position) < hr2) {
-        damageTarget(m.target, m.cfg.DAMAGE);
+        damageTarget(m.target, m.damage);
         hit = true;
       }
     }
     if (hit || m.life <= 0) {
-      const scale = m.kind === 'heavy' ? 1.5 : 0.9;
+      const scale = m.explosionScale ?? (m.kind === 'heavy' ? 1.5 : 0.9);
       explosion(m.mesh.position, scale, COLORS.fireYellow);
-      audio.explosion(m.kind === 'heavy' ? 1.2 : 0.5, m.mesh.position);
+      audio.explosion(m.kind === 'heavy' || m.support ? 1.2 : 0.5, m.mesh.position);
       scene.remove(m.mesh);
       missiles.splice(i, 1);
     }
@@ -226,7 +242,7 @@ export function updatePickups(dt, jetPos) {
     p.mesh.position.y += Math.sin(performance.now() * 0.005) * dt * 0.5;
     if (p.mesh.position.distanceTo(jetPos) < 3) {
       // CONTRATO: writer de game.player.missiles
-      game.player.missiles = Math.min(game.player.missiles + 10, MISSILES.MAX);
+      game.player.missiles = Math.min(game.player.missiles + 10, MISSILES_LIGHT.MAX);
       scene.remove(p.mesh); pickups.splice(i, 1); continue;
     }
     if (p.life <= 0) { scene.remove(p.mesh); pickups.splice(i, 1); }
@@ -292,13 +308,24 @@ function applyNuclearShockwave(epicenter) {
       damageTarget(t, dmg);
     }
   }
-  // Player damage check
+  // Player damage check — use MAYDAY for dramatic visual instead of instant life deduction
   const playerPos = new THREE.Vector3(game.player.x, game.player.y, game.player.pz || 0);
   const pd = epicenter.distanceTo(playerPos);
-  if (pd < MISSILES_NUCLEAR.PLAYER_KILL_RADIUS) {
-    game.player.lives = 0;
-  } else if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS) {
-    game.player.lives = Math.max(0, game.player.lives - 1);
+  if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS && !game.flags.mayday) {
+    if (pd < MISSILES_NUCLEAR.PLAYER_KILL_RADIUS) {
+      // Lethal range → force MAYDAY (plane falls on fire, then instant death after timer)
+      game.flags.mayday = true;
+      game.flags.maydayTimer = 0;
+      game.player.hp = 0;
+      game.player.lives = 1; // will be decremented to 0 in _ejectAndRespawn
+      if (game.missionRealism?.enabled) {
+        transitionSortie(game.missionRealism.sortie, SortieEvent.CRITICAL_DAMAGE, {}, game.time);
+      }
+      audio.explosion(1.5, epicenter);
+    } else {
+      // Damage range → lose 1 life; if already dead, trigger MAYDAY
+      game.player.lives = Math.max(0, game.player.lives - 1);
+    }
   }
   // Shake forte em toda a área de dano (proporcional à distância)
   if (pd < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS) {
@@ -308,6 +335,33 @@ function applyNuclearShockwave(epicenter) {
 
   // Deforma o terreno — cria cratera nas ilhas/montanhas dentro do raio
   deformTerrainNuclear(epicenter, MISSILES_NUCLEAR.BLAST_RADIUS);
+}
+
+// WS-5: incendiar árvores e casas dentro do raio da nuke (só o mapa inhauma tem esse
+// cenário rico). Cap rígido de focos + amostragem probabilística longe do epicentro para
+// proteger FPS; spawnPropFire já ignora headless/testMode.
+const NUKE_IGNITE_CAP = 42;
+function igniteNearbyProps(ep) {
+  if (game.activeMap !== 'inhauma') return;
+  const R = MISSILES_NUCLEAR.BLAST_RADIUS;
+  const R2 = R * R, near2 = R2 * 0.25;
+  let lit = 0;
+  for (const tr of inhaumaTrees) {
+    if (lit >= NUKE_IGNITE_CAP) break;
+    const dx = tr.x - ep.x, dz = tr.z - ep.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > R2) continue;
+    if (d2 > near2 && Math.random() > 0.35) continue; // longe: amostra
+    spawnPropFire(tr.x, tr.y + 3, tr.z, 1.0, 24);
+    lit++;
+  }
+  for (const s of getInhaumaStructures()) {
+    if (lit >= NUKE_IGNITE_CAP) break;
+    const dx = s.x - ep.x, dz = s.z - ep.z;
+    if (dx * dx + dz * dz > R2) continue;
+    spawnPropFire(s.x, (s.topY || 6) * 0.6, s.z, 1.8, 34);
+    lit++;
+  }
 }
 
 /** Atualiza mísseis nucleares: homing + impacto + explosão. */
@@ -351,9 +405,40 @@ export function updateNuclears(dt) {
     const expired = n.life <= 0;
 
     if (hitTarget || groundHit || expired) {
-      nuclearExplosion(n.mesh.position.clone());
-      applyNuclearShockwave(n.mesh.position.clone());
-      audio.explosion(1.5, n.mesh.position);
+      const ep = n.mesh.position.clone();
+      nuclearExplosion(ep.clone());
+      spawnNuclearFx(ep.clone());
+      // Decisão do operador (2026-07-01): SEM câmera cinematográfica na detonação —
+      // o jogador assiste ao cogumelo da câmera normal (shake + flash mantidos).
+      applyNuclearShockwave(ep.clone());
+
+      // WS-5: árvores e casas próximas ao epicentro pegam fogo (cap + guarda headless).
+      igniteNearbyProps(ep);
+
+      // ADR-U4: slow-mo global 0.35× por 1.5 s — nunca em testMode/webdriver
+      const _headless = typeof navigator !== 'undefined' && navigator.webdriver === true;
+      if (!game.runtime?.testMode && !_headless) game.flags.nukeSlowmo = 1.5;
+
+      // WS-6: onda de choque chega à câmera com delay físico (dist / 340 m/s)
+      const _pPos = new THREE.Vector3(game.player.x, game.player.y, game.player.pz || 0);
+      const _pd = ep.distanceTo(_pPos);
+      game.flags.nukeShockArrival = {
+        t: _pd / 340,
+        intensity: Math.max(2.5, 16 * Math.max(0.15, 1 - _pd / 1600)),
+      };
+
+      // WS-6: cratera/cicatriz em QUALQUER piso (não só deformação de ilhas)
+      const _surf = surfaceInfoAt(ep.x, ep.z);
+      const _gPos = ep.clone(); _gPos.y = Math.max(_surf.height, 0);
+      spawnScorchMark(_gPos, 120, 0.62);
+      spawnScorchMark(_gPos, 210, 0.24);
+
+      // WS-6: coluna de fumaça residual por 60 s no epicentro
+      const _smokeOwner = { isNukeResidual: true };
+      addSmokeEmitter(ep.x, _gPos.y + 10, ep.z, _smokeOwner);
+      fxDelay(60, () => removeSmokeEmittersOf(_smokeOwner));
+
+      audio.explosion(1.5, ep);
       scene.remove(n.mesh);
       nukes.splice(i, 1);
     }

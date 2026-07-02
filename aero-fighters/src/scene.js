@@ -12,17 +12,17 @@ export const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window
 camera.position.set(0, 90, 20);
 
 // Detecta ambiente automatizado (Playwright/headless) — desliga shadow map nesses casos
-const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
+export const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
 
 export const renderer = new THREE.WebGLRenderer({ antialias: !HEADLESS, powerPreference: 'high-performance' });
 renderer.setPixelRatio(1);
 renderer.setClearColor(WORLD.SKY_COLOR);
 renderer.shadowMap.enabled = !HEADLESS;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = HEADLESS ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
-const RENDER_SCALE = 0.75;
+const RENDER_SCALE = HEADLESS ? 0.35 : 0.75;
 function applyRendererSize() {
   const w = Math.floor(window.innerWidth * RENDER_SCALE);
   const h = Math.floor(window.innerHeight * RENDER_SCALE);
@@ -56,7 +56,7 @@ dirLight.shadow.bias = -0.0008;
 scene.add(dirLight);
 scene.add(dirLight.target);
 
-export const fillLight = new THREE.DirectionalLight(0xaaccff, 0.3);
+export const fillLight = new THREE.DirectionalLight(0xaaccff, 0.5);
 fillLight.position.set(-100, 50, 200);
 scene.add(fillLight);
 
