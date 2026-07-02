@@ -253,9 +253,12 @@ function updateFlight(s, dt) {
   // + PORTÃO DE DISTÂNCIA (2026-07-02): com os corpos na escala de aproximação a
   // gravidade de superfície caiu (Terra ~33 u/s²) e o critério só-por-g engatava
   // overdrive COLADO no planeta. Também é preciso estar LONGE do dominante.
+  // (×12, não ×30: com o Sol ×2 de raio e as órbitas ×4, domR·30 do Sol = 660k
+  //  bloqueava o overdrive no sistema solar EXTERNO inteiro — ×12 libera depois
+  //  de Marte, e para planetas dá ~26k, o mesmo envelope de antes.)
   const domR = g.dominant ? g.dominant.def.radius : 0;
   const farFromBody = !g.dominant ||
-    g.dist > Math.min(domR * 30, (g.dominant.soi || Infinity) * 0.8);
+    g.dist > Math.min(domR * 12, (g.dominant.soi || Infinity) * 0.8);
   const weakG = farFromBody ? Math.max(0, Math.min(1, (40 - g.gravMag) / 30)) : 0;
   if (weakG > (s.overdrive || 0)) s.overdrive = Math.min(weakG, (s.overdrive || 0) + dt / OVERDRIVE.rampIn);
   else s.overdrive = Math.max(weakG, (s.overdrive || 0) - dt / OVERDRIVE.rampOut);
