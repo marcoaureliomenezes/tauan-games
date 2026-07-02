@@ -139,14 +139,16 @@ function rndSeed(s) {
 // Memoizadas por identidade visual: os planetas gêmeos do sistema binário
 // reaproveitam a textura do planeta original (corta 21 gerações de canvas no load
 // e compartilha memória de GPU — essencial para FPS em software-GL).
+// Retorna um BUNDLE { map, lights, rough }: lights/rough só existem para o tipo
+// 'earth' (luzes de cidade no lado noturno + brilho especular do oceano).
 const _texCache = new Map();
 function planetTexture(def) {
   const cacheKey = `${def.kind}|${def.color}|${def.color2 || 0}|${def.radius}|${def.redspot ? 1 : 0}`;
   const hit = _texCache.get(cacheKey);
   if (hit) return hit;
-  const tex = buildPlanetTexture(def);
-  _texCache.set(cacheKey, tex);
-  return tex;
+  const texs = buildPlanetTexture(def);
+  _texCache.set(cacheKey, texs);
+  return texs;
 }
 function buildPlanetTexture(def) {
   const W = 1024, H = 512;
@@ -183,12 +185,17 @@ function buildPlanetTexture(def) {
     const og = ctx.createLinearGradient(0, 0, 0, H);
     og.addColorStop(0, 'rgba(10,40,90,0.5)'); og.addColorStop(0.5, 'rgba(20,90,150,0)'); og.addColorStop(1, 'rgba(10,40,90,0.5)');
     ctx.fillStyle = og; ctx.fillRect(0, 0, W, H);
-    // Continentes (blobs verdes/marrons)
+    // Continentes (blobs verdes/marrons) — posições GUARDADAS para os mapas de
+    // luzes de cidade e de rugosidade (print D.A: Terra com luzes no lado escuro
+    // e reflexo do Sol no oceano).
+    const conts = [];
     for (let i = 0; i < 26; i++) {
       const cx = rnd() * W, cy = H * 0.2 + rnd() * H * 0.6;
+      const cr = 30 + rnd() * 90;
       const land = rnd() < 0.5 ? '#2f7d3a' : '#6b8e3a';
-      paintBlob(ctx, cx, cy, 30 + rnd() * 90, land, rnd, 0.8);
+      paintBlob(ctx, cx, cy, cr, land, rnd, 0.8);
       paintBlob(ctx, cx + (rnd() - 0.5) * 40, cy + (rnd() - 0.5) * 30, 18 + rnd() * 40, '#7a5a2a', rnd, 0.4);
+      conts.push([cx, cy, cr]);
     }
     // Calotas polares
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
@@ -197,6 +204,48 @@ function buildPlanetTexture(def) {
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 60; i++) paintBlob(ctx, rnd() * W, rnd() * H, 20 + rnd() * 70, 'rgba(255,255,255,0.35)', rnd, 1);
     ctx.globalCompositeOperation = 'source-over';
+
+    // MAPA DE LUZES DE CIDADE (emissive): aglomerados de pontos âmbar sobre os
+    // continentes, com viés costeiro — visíveis só onde a luz do Sol não lava.
+    const lcv = document.createElement('canvas'); lcv.width = W; lcv.height = H;
+    const lctx = lcv.getContext('2d');
+    lctx.fillStyle = '#000'; lctx.fillRect(0, 0, W, H);
+    for (const [cx, cy, cr] of conts) {
+      const clusters = 6 + (rnd() * 14) | 0;
+      for (let k = 0; k < clusters; k++) {
+        const a = rnd() * Math.PI * 2;
+        const d = cr * (0.25 + rnd() * 0.65);          // viés para a "costa"
+        const gx = cx + Math.cos(a) * d, gy = cy + Math.sin(a) * d * 0.8;
+        const g = lctx.createRadialGradient(gx, gy, 0, gx, gy, 3 + rnd() * 7);
+        g.addColorStop(0, 'rgba(255,196,120,0.95)');
+        g.addColorStop(1, 'rgba(255,150,60,0)');
+        lctx.fillStyle = g;
+        lctx.beginPath(); lctx.arc(gx, gy, 3 + rnd() * 7, 0, Math.PI * 2); lctx.fill();
+        for (let j = 0; j < 6; j++) {
+          lctx.fillStyle = 'rgba(255,210,140,0.9)';
+          lctx.fillRect((gx + (rnd() - 0.5) * 22) | 0, (gy + (rnd() - 0.5) * 16) | 0, 1, 1);
+        }
+      }
+    }
+    const lightsTex = new THREE.CanvasTexture(lcv);
+    lightsTex.colorSpace = THREE.SRGBColorSpace;
+
+    // MAPA DE RUGOSIDADE: oceano LISO (cinza escuro → glint especular do Sol),
+    // terra e calotas ásperas (branco). O canal usado pelo Standard é o VERDE.
+    const rcv = document.createElement('canvas'); rcv.width = W; rcv.height = H;
+    const rctx = rcv.getContext('2d');
+    rctx.fillStyle = 'rgb(70,70,70)'; rctx.fillRect(0, 0, W, H);
+    rctx.fillStyle = '#fff';
+    for (const [cx, cy, cr] of conts) {
+      rctx.beginPath(); rctx.ellipse(cx, cy, cr, cr * 0.8, 0, 0, Math.PI * 2); rctx.fill();
+    }
+    rctx.fillRect(0, 0, W, H * 0.06); rctx.fillRect(0, H * 0.94, W, H * 0.06);
+    const roughTex = new THREE.CanvasTexture(rcv);
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    return { map: tex, lights: lightsTex, rough: roughTex };
   } else if (def.kind === 'cloud') {
     // Vênus: nuvens cremosas em redemoinho.
     ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
@@ -217,7 +266,7 @@ function buildPlanetTexture(def) {
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  return tex;
+  return { map: tex, lights: null, rough: null };
 }
 
 function paintBlob(ctx, x, y, r, color, rnd, irregular) {
@@ -280,7 +329,8 @@ function ringMesh(ring) {
 }
 
 // ---- Construção de um corpo ----------------------------------------------
-function makeSphere(radius, tex, emissive, def = null) {
+function makeSphere(radius, texs, emissive, def = null) {
+  const tex = texs.map || texs;               // aceita bundle { map, … } ou textura crua
   // HEADLESS (swiftshader/CI): material BASIC — com a escala de aproximação um
   // planeta preenche a TELA INTEIRA e o Standard+bump em software-GL derrubava
   // o FPS do smoke abaixo do piso. Visual de teste não precisa de PBR.
@@ -292,9 +342,22 @@ function makeSphere(radius, tex, emissive, def = null) {
     // ganham sombreamento 3D no terminador em vez de parecerem pintura chapada.
     if (def.kind === 'rock' || def.kind === 'earth' || !def.kind) {
       mat.bumpMap = tex;
-      mat.bumpScale = Math.max(0.5, radius * 0.02);
+      // clamp superior: nos raios pós-escala (Terra 900) bump 18 desenhava AROS
+      // PRETOS ao redor dos continentes — relevo é tempero, não contorno.
+      mat.bumpScale = Math.min(8, Math.max(0.5, radius * 0.02));
     }
-    if (def.kind === 'earth') mat.roughness = 0.62;   // oceano com brilho especular do Sol
+    if (def.kind === 'earth') {
+      // Print D.A: reflexo do Sol no OCEANO (rugosidade por-mapa — água lisa,
+      // terra áspera) + LUZES DE CIDADE âmbar que aparecem no lado noturno
+      // (emissive fraco: de dia a luz do Sol lava, de noite as cidades brilham).
+      if (texs.rough) { mat.roughnessMap = texs.rough; mat.roughness = 1.0; }
+      else mat.roughness = 0.62;
+      if (texs.lights) {
+        mat.emissive = new THREE.Color(0xffb46a);
+        mat.emissiveMap = texs.lights;
+        mat.emissiveIntensity = 0.55;   // de dia o Sol lava; de noite as cidades brilham
+      }
+    }
   }
   // TESSELAÇÃO ALTA (pedido do operador): na aproximação final o arco do limbo
   // precisa ficar RETO até virar plano na colisão — 40 segmentos davam um limbo
@@ -805,7 +868,14 @@ const DISK_FRAG = /* glsl */ `
     float rn = clamp((r - uInner) / (uOuter - uInner), 0.0, 1.0);
     // Rotação diferencial ~Kepler: quanto mais interno, mais rápido o gás circula.
     float rot = uTime * 1.6 * pow(1.0 / (rn + 0.22), 1.5) * 0.22;
-    // Streaks de gás: ruído alongado no ângulo (filamentos orbitais)
+    // ESTRIAS FINAS (referência D.A/Interstellar): dezenas de filamentos
+    // concêntricos — ruído "ridged" com frequência RADIAL alta e angular baixa
+    // (linhas esticadas ao longo da órbita), cisalhadas pela rotação Kepler.
+    // 2 oitavas inline (não fbm completo): as estrias são linhas, não nuvens.
+    vec2 sp = vec2(ang * 2.0 + rot * 1.3, rn * 90.0);
+    float lam = vnoise(sp) * 0.62 + vnoise(sp * 2.13) * 0.38;
+    float stria = pow(1.0 - abs(2.0 * lam - 1.0), 3.0);
+    // Streaks de gás: ruído alongado no ângulo (manchas orbitais largas)
     float streak = fbm(vec2(ang * 3.0 + rot, rn * 22.0));
     float fino = fbm(vec2(ang * 9.0 + rot * 1.6, rn * 55.0));
     // Temperatura de corpo-negro: interna quente (paleta parametrizada — fogo
@@ -815,15 +885,17 @@ const DISK_FRAG = /* glsl */ `
     c = mix(c, uC3, smoothstep(0.45, 0.75, temp));
     c = mix(c, uC4, smoothstep(0.75, 0.97, temp));
     // Doppler beaming: o lado do gás que se aproxima é mais brilhante (lado fixo)
-    float doppler = 1.0 + 0.55 * cos(ang);
-    float bright = (0.30 + 0.90 * streak * (0.55 + 0.45 * fino)) * doppler;
-    // Bordas suaves e brilho interno mais intenso
-    float edge = smoothstep(0.0, 0.05, rn) * (1.0 - smoothstep(0.82, 1.0, rn));
-    vec3 col = c * bright * (0.7 + temp * 1.9) * uGain;
+    float doppler = 1.0 + 0.70 * cos(ang);
+    float bright = (0.20 + 0.55 * streak * (0.5 + 0.5 * fino) + 0.80 * stria) * doppler;
+    // Bordas suaves e brilho interno mais intenso (borda interna QUEIMA de branco)
+    float edge = smoothstep(0.0, 0.04, rn) * (1.0 - smoothstep(0.80, 1.0, rn));
+    vec3 col = c * bright * (0.55 + temp * 2.3) * uGain;
     gl_FragColor = vec4(col, edge * 0.95);
   }
 `;
-const DISK_FIRE = [[0.30, 0.04, 0.01], [1.0, 0.42, 0.10], [1.0, 0.85, 0.55], [0.85, 0.90, 1.0]];
+// Rampa térmica dos prints (EHT/D.A): borda externa marrom-avermelhada profunda
+// → laranja → dourado → borda interna BRANCO-QUENTE (não azul: gás, não síncrotron).
+const DISK_FIRE = [[0.26, 0.05, 0.015], [0.95, 0.38, 0.08], [1.0, 0.78, 0.42], [1.0, 0.97, 0.88]];
 const DISK_SYNCHROTRON = [[0.03, 0.06, 0.22], [0.15, 0.42, 0.95], [0.55, 0.85, 1.0], [0.92, 0.97, 1.0]];
 
 function diskMaterial(inner, outer, gain = 1, palette = DISK_FIRE) {
@@ -857,16 +929,17 @@ function buildBlackHole(def) {
   );
   group.add(horizon);
 
-  // Anel de fótons duplo: halos finos e cravados rente ao horizonte (luz presa).
+  // ANEL DE FÓTONS (prints D.A/EHT): UM aro FINO e ofuscante cravado na borda da
+  // sombra — é a assinatura visual do buraco negro; o bloom faz o resto do glare.
   const photon = new THREE.Mesh(
-    new THREE.TorusGeometry(def.photonRing, def.rs * 0.035, 10, 72),
-    new THREE.MeshBasicMaterial({ color: 0xfff2cc, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.TorusGeometry(def.photonRing, def.rs * 0.020, 10, 96),
+    new THREE.MeshBasicMaterial({ color: 0xfffdf2, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   photon.rotation.x = Math.PI / 2;
   group.add(photon);
   const photon2 = new THREE.Mesh(
-    new THREE.TorusGeometry(def.photonRing * 1.18, def.rs * 0.02, 8, 72),
-    new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.TorusGeometry(def.photonRing * 1.22, def.rs * 0.011, 8, 96),
+    new THREE.MeshBasicMaterial({ color: 0xffe9c0, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   photon2.rotation.x = Math.PI / 2;
   group.add(photon2);
@@ -877,22 +950,63 @@ function buildBlackHole(def) {
   disk.rotation.x = Math.PI / 2 + 0.18;
   group.add(disk);
 
-  // Anel de LENSING: mesmo shader, sempre de frente para a câmera, rente ao
-  // horizonte — a imagem curvada do disco em volta da sombra, de qualquer ângulo.
-  const lensMat = diskMaterial(def.rs * 1.12, def.rs * 2.6, 0.85);
-  const lens = new THREE.Mesh(new THREE.RingGeometry(def.rs * 1.12, def.rs * 2.6, 96, 2), lensMat);
+  // "MONTE" LENSEADO (look Interstellar): a imagem do lado DISTANTE do disco,
+  // curvada por cima/por baixo da sombra — billboard sempre de frente para a
+  // câmera. A física manda: o monte só existe vendo o disco DE LADO; de frente
+  // vê-se o disco inteiro + anel de fótons. Por isso o ganho do halo é modulado
+  // por quão de-quina estamos do plano do disco (uGain por-frame, sem shader novo).
+  // Vão escuro entre a sombra e o halo: o aro de fótons (torus fino) precisa LER
+  // como uma linha — o halo começa mais fora (rs·1.4) e o miolo fica PRETO.
+  const lensMat = diskMaterial(def.rs * 1.4, def.rs * 2.8, 0.6);
+  const lens = new THREE.Mesh(new THREE.RingGeometry(def.rs * 1.4, def.rs * 2.8, 96, 2), lensMat);
   group.add(lens);
+
+  // JATO RELATIVÍSTICO bipolar (print M87*): coluna FINA e tênue ao longo do eixo
+  // do disco — apenas quando o def pede (SMBH). Cilindros aditivos (não sprites —
+  // sprite aditivo + log-depth + bloom = NaN, gotcha 2026-07-02).
+  const jetGroup = new THREE.Group();
+  jetGroup.rotation.x = 0.18;                    // alinhado ao eixo do disco
+  if (def.jet) {
+    const jl = def.rs * 34;
+    for (const s of [1, -1]) {
+      const outer = new THREE.Mesh(
+        new THREE.CylinderGeometry(def.rs * 0.55, def.rs * 0.16, jl, 10, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xbfd8ff, transparent: true, opacity: 0.10, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+      );
+      outer.position.y = s * jl / 2;
+      outer.rotation.x = s > 0 ? 0 : Math.PI;
+      jetGroup.add(outer);
+      const inner = new THREE.Mesh(
+        new THREE.CylinderGeometry(def.rs * 0.18, def.rs * 0.06, jl * 1.05, 8, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xf0f7ff, transparent: true, opacity: 0.30, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+      );
+      inner.position.y = s * jl * 0.525;
+      inner.rotation.x = s > 0 ? 0 : Math.PI;
+      jetGroup.add(inner);
+    }
+    group.add(jetGroup);
+  }
 
   // (Sprite de glow REMOVIDO 2026-07-01: mesmo sutil virava uma bolha branca
   //  gigante de perto — o bloom do pós-processamento já dá o halo do disco.)
 
+  const _diskN = new THREE.Vector3();
+  const _bhPos = new THREE.Vector3();
+  const _toCamBH = new THREE.Vector3();
   const fx = { t: 0, update(dt) {
     this.t += dt;
     diskMat.uniforms.uTime.value = this.t;      // rotação diferencial no shader
     lensMat.uniforms.uTime.value = this.t * 1.4;
     lens.quaternion.copy(camera.quaternion);     // billboard: lente sempre de frente
-    photon.material.opacity = 0.78 + Math.sin(this.t * 3) * 0.12;
-    photon2.material.opacity = 0.35 + Math.sin(this.t * 2.2 + 1.4) * 0.10;
+    // De-quina do plano do disco → monte lenseado forte; de frente → halo some
+    // (a imagem curvada do lado distante só existe quando o disco está de lado).
+    _diskN.set(0, 0, 1).applyQuaternion(disk.quaternion).applyQuaternion(group.quaternion);
+    group.getWorldPosition(_bhPos);
+    _toCamBH.copy(camera.position).sub(_bhPos).normalize();
+    const edgeOn = 1.0 - Math.abs(_diskN.dot(_toCamBH));
+    lensMat.uniforms.uGain.value = 0.08 + 0.62 * edgeOn * edgeOn;
+    photon.material.opacity = 0.88 + Math.sin(this.t * 3) * 0.10;
+    photon2.material.opacity = 0.32 + Math.sin(this.t * 2.2 + 1.4) * 0.10;
   } };
   return { group, horizon, fx };
 }
@@ -955,23 +1069,23 @@ function buildNeutronStar(def) {
   torus.rotation.x = Math.PI / 2;
   axis.add(torus);
 
-  // JATOS relativísticos: cilindros FINOS e longos (não cones gordos), com um
-  // núcleo interno mais cravado — leitura de "agulha de luz".
-  const jetLen = def.radius * 90;
+  // JATOS relativísticos (print Crab D.A): AGULHAS de luz — muito mais FINAS e
+  // LONGAS que qualquer cone; o feixe interno é quase um fio branco-azulado.
+  const jetLen = def.radius * 150;
   const jetMats = [];
   for (const s of [1, -1]) {
     const outer = new THREE.Mesh(
-      new THREE.CylinderGeometry(def.radius * 0.9, def.radius * 0.35, jetLen, 10, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.CylinderGeometry(def.radius * 0.50, def.radius * 0.16, jetLen, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
     );
     outer.position.y = s * jetLen / 2;
     outer.rotation.x = s > 0 ? 0 : Math.PI;
     axis.add(outer);
     const inner = new THREE.Mesh(
-      new THREE.CylinderGeometry(def.radius * 0.30, def.radius * 0.12, jetLen * 1.05, 8, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xeaf4ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.CylinderGeometry(def.radius * 0.16, def.radius * 0.06, jetLen * 1.06, 8, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xeaf4ff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
     );
-    inner.position.y = s * jetLen * 0.525;
+    inner.position.y = s * jetLen * 0.53;
     inner.rotation.x = s > 0 ? 0 : Math.PI;
     axis.add(inner);
     jetMats.push(outer.material, inner.material);
@@ -994,8 +1108,8 @@ function buildNeutronStar(def) {
     torusMat.uniforms.uTime.value = this.t;
     // cintilação dos jatos
     const flick = 0.85 + 0.15 * Math.sin(this.t * 37.3);
-    jetMats[0].opacity = 0.22 * flick; jetMats[1].opacity = 0.6 * flick;
-    jetMats[2].opacity = 0.22 * flick; jetMats[3].opacity = 0.6 * flick;
+    jetMats[0].opacity = 0.18 * flick; jetMats[1].opacity = 0.75 * flick;
+    jetMats[2].opacity = 0.18 * flick; jetMats[3].opacity = 0.75 * flick;
     // FAROL: flash curto e intenso quando o feixe cruza a câmera
     _jetDir.set(0, 1, 0).applyQuaternion(group.quaternion).applyQuaternion(axis.quaternion);
     _toCam.copy(camera.position).sub(group.position).normalize();

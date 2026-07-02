@@ -258,6 +258,45 @@ live (segue-estrela, anti-sucção, espiral); screenshots
 .dadaia/tmp/claude/20260702/sw-*.jpg (horizonte-parede da Terra, núcleo galáctico,
 lente no BN estilo Interstellar, bisseção do globo); suíte completa na CI do PR.
 
+### [x] T-WR-14 — Space-war: estilos dos corpos celestes por REFERÊNCIA VISUAL (operador 2026-07-02, prints em img/)
+
+**Owner:** `game-developer`
+
+O operador entregou 24 prints (vídeo D.A "What Black Holes Look Like At Different
+Distances" — Gaia BH1, Cygnus X-1, HLX-1, Sgr A*, Crab, M87*, TON 618) como referência
+de estilo + pediu a lente gravitacional "de verdade". Entregue:
+1. **Disco de acreção ESTRIADO** (prints Sgr A*/HLX-1): ruído ridged com freq radial
+   alta/angular baixa cisalhado pela rotação Kepler → dezenas de filamentos
+   concêntricos finos; rampa térmica marrom-avermelhado → laranja → dourado → borda
+   interna BRANCO-QUENTE; Doppler beaming 0.55→0.70.
+2. **Anel de fótons** fino e ofuscante (torus rs·0.020, branco 0xfffdf2) + vão escuro
+   até o halo — a sombra volta a ler PRETA com uma linha de luz cravada.
+3. **"Monte" lenseado com física**: o halo billboard agora é modulado por quão
+   de-quina a câmera está do plano do disco (uGain 0.08+0.62·edgeOn²) — de lado,
+   look Interstellar; de frente, disco + anel limpos.
+4. **Lente de tela mais notável que o corpo** ("it's the distortion"): alcance
+   rs·700→rs·1400, mix mais cedo, REDEMOINHO tangencial (frame-dragging visual),
+   aberração cromática nos arcos (3 taps), aro de Einstein mais forte.
+5. **Estrela de nêutrons TAMBÉM lenteia** (lensRs 80) — sem sombra (uShadow 0: pulsar
+   tem superfície, não horizonte); jatos viraram AGULHAS (comprimento 90R→150R, raios
+   ~metade, feixe interno opacity 0.75).
+6. **Jato bipolar do SMBH** (print M87*): cilindros aditivos finos rs·34 no eixo do
+   disco de Sagitário A✦ (def.jet).
+7. **Banda de poeira SÉPIA na Via Láctea** (todos os prints): sopros marrons tênues +
+   grumos de absorção ao longo da banda (1× no canvas, custo zero por frame).
+8. **Terra do print final**: LUZES DE CIDADE âmbar (emissiveMap procedural com viés
+   costeiro, intensity 0.55 — o dia lava, a noite acende) + GLINT do Sol no oceano
+   (roughnessMap: água lisa 70/255, terra/calotas ásperas) + clamp do bumpScale ≤8
+   (18 desenhava contornos pretos nos continentes pós-escala).
+
+**Verify (executado):** smoke space-war 12/12 local (porta 8181; FPS floor e skybox
+verdes); 60 fps medidos no browser real a 9.5k do BN com pipeline completo (estrias +
+lente + croma + bloom); screenshots vs prints em .dadaia/tmp/claude/20260702/
+(sw-bh-final ↔ HLX-1/Interstellar, sw-smbh-jet ↔ M87*, sw-pulsar-v2 ↔ Crab,
+sw-earth-night/glint-v2 ↔ print Terra, sw-bh-far-lens ↔ Cygnus X-1 "visível de longe");
+staging-only: bolha branca na nave = FX de overdrive do pino de teleporte (não ocorre
+em voo real). Suíte completa na CI do PR.
+
 ### [ ] T-WR-06 — QA/fechamento
 
 **Owner:** `qa-engineer` + `code-reviewer`

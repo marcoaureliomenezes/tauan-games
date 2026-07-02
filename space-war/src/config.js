@@ -226,6 +226,7 @@ export const BINARY = {
     mu: 3.0e12,               // gravidade brutal e local
     spin: 1.4,                // pulsar ultrarrápido
     jetTilt: 0.5,
+    lensRs: 80,               // "mesmo não sendo um buraco negro… ela curva o espaço"
     soi: 110_000, gravReach: 110_000,
     // região do vento de pulsar/toro síncrotron: arrasto → ESPIRAL DA MORTE
     // (mesma mecânica do disco de acreção do BN — captura orbital, não sucção)
@@ -359,6 +360,7 @@ export const CORE = {
     soi: 420_000, gravReach: 420_000,
     disk: { inner: 2000, outer: 14_000 },
     photonRing: 1200,
+    jet: true,                // jato relativístico bipolar (print M87*)
   },
   starCount: 12,
   aMin: 70_000,      // semieixo maior mínimo (estrelas menores por dentro)
