@@ -57,14 +57,18 @@ function missionTarget() {
   if (!game.mission) return null;
   const live = game.mission.targets.filter((t) => !t.destroyed);
   if (!live.length) return null;
+  const best = () => {
+    let b = live[0], bd = Infinity;
+    for (const t of live) { const d = t.obj.position.distanceTo(game.ship.pos); if (d < bd) { bd = d; b = t; } }
+    return b;
+  };
   return {
     key: '__mission', name: '◎ OBJETIVO', radius: 8, isMission: true,
-    get pos() {
-      // a base mais próxima da nave
-      let best = live[0], bd = Infinity;
-      for (const t of live) { const d = t.obj.position.distanceTo(game.ship.pos); if (d < bd) { bd = d; best = t; } }
-      return best.obj.position;
-    },
+    get pos() { return best().obj.position; },
+    // corpo que HOSPEDA a base: a Lua/planeta SE MOVE — a auto-aproximação
+    // precisa chegar CO-MÓVEL (senão a velocidade relativa nunca zera e a
+    // chegada nunca conclui) e engatar a órbita em volta do corpo certo.
+    get body() { return best().body; },
   };
 }
 

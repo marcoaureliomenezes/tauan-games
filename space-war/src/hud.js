@@ -69,6 +69,7 @@ export function updateHUD() {
     else if (domKind === 'blackhole' && !s.canEscape) { warn.textContent = '🕳 HORIZONTE DE EVENTOS — FUJA OU MORRA!'; warn.style.display = 'block'; warn.style.color = '#c08aff'; }
     else if (domKind === 'neutron' && !s.canEscape) { warn.textContent = '⭐ GRAVIDADE DA ESTRELA DE NÊUTRONS — TURBO JÁ!'; warn.style.display = 'block'; warn.style.color = '#9fd0ff'; }
     else if (!s.canEscape) { warn.textContent = '⛔ NÃO DÁ PARA FUGIR — TURBO PRA LONGE!'; warn.style.display = 'block'; warn.style.color = '#ff5560'; }
+    else if (s.diskDrag) { warn.textContent = '🌀 ARRASTO DO DISCO DE ACREÇÃO — órbita em DECAIMENTO (espiral da morte)'; warn.style.display = 'block'; warn.style.color = '#c9a2ff'; }
     else if (s.heat > 0.55) { warn.textContent = '🔥 REENTRADA CRÍTICA — CASCO QUEIMANDO!'; warn.style.display = 'block'; warn.style.color = '#ff7a30'; }
     else if (s.spawnGrace > 0) { warn.textContent = `🛡 ESCUDO ${Math.ceil(s.spawnGrace)}s`; warn.style.display = 'block'; warn.style.color = '#66ddff'; }
     else if (s.hp < 30) { warn.textContent = '⚠ CASCO CRÍTICO'; warn.style.display = 'block'; warn.style.color = '#ff5560'; }

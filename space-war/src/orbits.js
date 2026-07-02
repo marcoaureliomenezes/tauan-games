@@ -2,10 +2,12 @@
 //
 //  1. TRILHOS keplerianos (sistemas hierárquicos estáveis): Sol/Betelgeuse e seus
 //     planetas/luas, e o par BN+pulsar em torno do baricentro — previsível, barato.
-//  2. N-CORPOS INTEGRADO (sistemas caóticos: 'chaotic' e 'core'): estrelas e
-//     planetas se atraem de VERDADE — velocity-Verlet (simplético, sem drift
-//     secular de energia), softening de Plummer (F ∝ 1/(r²+ε²)) e passos FIXOS
+//  2. N-CORPOS INTEGRADO (sistema caótico 'chaotic'): estrelas e planetas se
+//     atraem de VERDADE — velocity-Verlet (simplético, sem drift secular de
+//     energia), softening de Plummer (F ∝ 1/(r²+ε²)) e passos FIXOS
 //     sub-amostrados (dt variável quebraria a simpleticidade).
+//     (O núcleo galáctico saiu do integrador em 2026-07-02: estrelas S em
+//      trilho ELÍPTICO kepleriano — calmas, previsíveis e "seguíveis".)
 //
 // Só a NAVE sofre gravidade em gravity.js; aqui é o universo se movendo.
 
@@ -19,7 +21,7 @@ let _acc = 0;
 export function initOrbits() {
   for (const b of game.bodies) {
     if (b.isSun) { b.period = b.def.spin; continue; }
-    if (b.isMoon || b.binaryPair || b.dynamic) continue;
+    if (b.isMoon || b.binaryPair || b.dynamic || b.ellipse) continue;
     if (b.period == null) b.period = EARTH_YEAR * (b.def.periodFactor || 1);
   }
 }
@@ -119,9 +121,32 @@ export function updateOrbits(dt) {
     b.worldAcc.set(c.x, c.y, c.z).sub(b.worldPos).multiplyScalar(w * w);
   }
 
+  // 1b) TRILHO ELÍPTICO KEPLERIANO (estrelas S do núcleo galáctico, errantes):
+  //     r(θ)=p/(1+e·cosθ), avanço por anomalia verdadeira θ̇=h/r² — forma EXATA
+  //     da elipse, custo ~zero, sem drift. A aceleração de FRAME do corpo é a
+  //     gravidade REAL do SMBH no ponto do trilho, a = −μ·r̂/r² (exata p/ elipse,
+  //     melhor que o SHM circular) → orbitar/SEGUIR uma estrela em movimento
+  //     fecha redondo, igual à Terra em volta do Sol.
+  for (const b of game.bodies) {
+    const el = b.ellipse;
+    if (!el) continue;
+    const r0 = el.p / (1 + el.e * Math.cos(el.theta));
+    el.theta += (el.h / (r0 * r0)) * dt * el.dir;
+    const r = el.p / (1 + el.e * Math.cos(el.theta));
+    b.worldPos.copy(el.center)
+      .addScaledVector(el.u, Math.cos(el.theta) * r)
+      .addScaledVector(el.v, Math.sin(el.theta) * r);
+    b.group.position.copy(b.worldPos);
+    if (b.spin && b.mesh) b.mesh.rotation.y += ((Math.PI * 2) / b.spin) * dt;
+    if (!b.worldAcc) b.worldAcc = b.worldPos.clone().set(0, 0, 0);
+    b.worldAcc.copy(el.center).sub(b.worldPos);
+    const d = Math.max(1e-6, b.worldAcc.length());
+    b.worldAcc.multiplyScalar(el.mu / (d * d * d));
+  }
+
   // 2) Planetas/companheiras EM TRILHO em torno do seu centro (Sol, Betelgeuse…).
   for (const b of game.bodies) {
-    if (b.isSun || b.isMoon || b.binaryPair || b.dynamic || !b.orbitCenter) continue;
+    if (b.isSun || b.isMoon || b.binaryPair || b.dynamic || b.ellipse || !b.orbitCenter) continue;
     const w = (Math.PI * 2) / b.period;
     b.angle += w * dt;
     const r = b.orbit;

@@ -23,7 +23,9 @@ export const renderer = new THREE.WebGLRenderer({
 // Teto 1.5 (não 2): em GPU integrada, ratio 2 = 4× fragmentos — com os shaders FBM
 // de estrela/disco/remanescente em tela cheia isso era LAG puro perto dos corpos.
 // A resolução ADAPTATIVA (postfx.js) ainda reduz abaixo disso sob carga.
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+// HEADLESS (swiftshader): 0.5 — rasterização por CPU com planetas em tela cheia.
+const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
+renderer.setPixelRatio(HEADLESS ? 0.5 : Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000007, 1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
