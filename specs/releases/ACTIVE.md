@@ -1,2 +1,2 @@
-release: aero-fighters-world-realism-v1
+release: space-war-celestial-components-v1
 phase: IMPLEMENTATION
