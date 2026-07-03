@@ -18,9 +18,9 @@ orbits.js, config.js, universe.js, celestial/*.
       escoltas enemies.js). Contagens 5/7/9/11/13. **AC-03.**
 - [x] T-BW-04 Base v2 legível + nave capital orbitante (missions.js meshes). **AC-04.**
 - [x] T-BW-05 `nukeMushroom` + duplo flash vácuo (fx.js/weapons.js). **AC-05.**
-- [-] T-BW-06 e2e (solução/curva/caçada/contagens) + smoke+campanha adaptada verdes +
+- [x] T-BW-06 e2e (solução/curva/caçada/contagens) + smoke+campanha adaptada verdes +
       QA + security + push/PR/CI. **AC-06.**
-- [-] T-BW-07 Skybox uplift (demanda do operador mid-release, fotos em
+- [x] T-BW-07 Skybox uplift (demanda do operador mid-release, fotos em
       bug-space-war/): galeria de galáxias em destaque (espirais inclinadas, JATOS
       polares + lóbulo vermelho, discos edge-on com faixa de poeira), +9k estrelas
       de fundo — mais matéria-prima para a lente gravitacional esticar em arcos.

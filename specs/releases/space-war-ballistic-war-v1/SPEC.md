@@ -5,6 +5,7 @@
 **Release ID:** space-war-ballistic-war-v1
 **Owner:** product-engineer
 **Backlog:** `specs/backlog/space-war-ballistic-war-v1.md`
+**Segment:** rc-1 (2026-07-03) — alpha-1 QA APPROVE 6/6 ACs; e2e 21/21; ship conforme TASKS
 
 ## 1. Objective
 
