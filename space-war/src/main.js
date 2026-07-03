@@ -9,9 +9,9 @@ import { buildSolarSystem, updateSOIView, updateBodyFX } from './bodies.js';
 import { initOrbits, updateOrbits } from './orbits.js';
 import { buildShip, updateShip, shipMesh, toggleObservationCamera } from './ship.js';
 import { input, installListeners, onAction } from './input.js';
-import { fireLaser, launchNuke, updateProjectiles } from './weapons.js';
+import { fireLaser, launchNuke, updateProjectiles, enemyBomb } from './weapons.js';
 import { spawnEnemies, updateEnemies } from './enemies.js';
-import { startMissions, beginFlight, updateMissions } from './missions.js';
+import { startMissions, beginFlight, updateMissions, debugCompleteMission } from './missions.js';
 import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
@@ -231,5 +231,13 @@ if (typeof window !== 'undefined') {
       nukeBlast(game.ship.pos.clone().addScaledVector(f, 30));
     },
     boom() { explosion(game.ship.pos.clone(), 1.5); },
+    // Campanha (QA): força a conclusão da missão ativa (gating/unlock testável).
+    winMission() { return debugCompleteMission(); },
+    // Solta uma bomba inimiga parada perto da nave (prova AC-04: gravidade age).
+    dropBomb() {
+      const f = new THREE.Vector3(0, 0, -1).applyQuaternion(game.ship.quat);
+      enemyBomb(game.ship.pos.clone().addScaledVector(f, 220), new THREE.Vector3(0, 0, 0));
+      return game.projectiles.filter((p) => p.isBomb).length;
+    },
   };
 }

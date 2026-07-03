@@ -1,27 +1,38 @@
-// enemies.js — Naves inimigas e estações perto de planetas/luas, com IA simples.
+// enemies.js — Frota inimiga da CAMPANHA: frames BODY-RELATIVOS (o inimigo co-move
+// com o corpo que ele guarda — offset local, não posição absoluta), papéis
+// (fighter patrulha/persegue · interceptor caça de longe · station fixa · bomber
+// lança BOMBAS balísticas sob gravidade), spawn POR FASE e fogo com OCLUSÃO do
+// corpo-âncora + zona segura da Terra.
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { game } from './state.js';
-import { enemyFire } from './weapons.js';
+import { enemyFire, enemyBomb } from './weapons.js';
 
 const _to = new THREE.Vector3();
 const _side = new THREE.Vector3();
+const _ab = new THREE.Vector3();
+const _ap = new THREE.Vector3();
+const _cl = new THREE.Vector3();
 
-const ESCALE = 14;   // escala das naves inimigas (mundo é grande agora)
+const ESCALE = 14;   // escala das naves inimigas (mundo é grande)
 
-function fighterMesh() {
+function fighterMesh(color = 0x551122, eye = 0xff3322) {
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.OctahedronGeometry(2.2, 0),
-    new THREE.MeshStandardMaterial({ color: 0x551122, emissive: 0x330011, metalness: 0.6, roughness: 0.4 }));
+    new THREE.MeshStandardMaterial({ color, emissive: 0x330011, metalness: 0.6, roughness: 0.4 }));
   body.scale.set(1, 0.5, 1.4); g.add(body);
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0xff3322 }));
-  eye.position.set(0, 0, -1.6); g.add(eye);
+  const e = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8),
+    new THREE.MeshBasicMaterial({ color: eye }));
+  e.position.set(0, 0, -1.6); g.add(e);
   g.scale.setScalar(ESCALE);
   return g;
 }
-
+function bomberMesh() {
+  const g = fighterMesh(0x4a3311, 0xffaa33);
+  g.scale.setScalar(ESCALE * 1.5);   // mais gordo — lê como bombardeiro
+  return g;
+}
 function stationMesh() {
   const g = new THREE.Group();
   const ring = new THREE.Mesh(new THREE.TorusGeometry(8, 1.2, 10, 24),
@@ -34,84 +45,146 @@ function stationMesh() {
   return g;
 }
 
+// ── Spawn body-relativo: guarda o OFFSET local (ângulo/raio/altura) — a posição
+// mundial é derivada do worldPos do âncora a cada frame (co-move de graça). ──
 function spawnNear(body, count, opts = {}) {
+  if (!body) return;
   const R = body.def.radius;
   for (let i = 0; i < count; i++) {
-    const isStation = opts.station && i === 0;
-    const g = isStation ? stationMesh() : fighterMesh();
-    const a = Math.random() * Math.PI * 2;
-    const r = R * (1.3 + Math.random() * 0.9);          // patrulha a 1.3–2.2 raios do centro
-    const pos = new THREE.Vector3(
-      body.worldPos.x + Math.cos(a) * r,
-      body.worldPos.y + (Math.random() - 0.5) * R * 0.5,
-      body.worldPos.z + Math.sin(a) * r,
-    );
-    g.position.copy(pos);
+    const role = opts.station && i === 0 ? 'station'
+      : (opts.bombers && i < (opts.station ? 1 : 0) + opts.bombers) ? 'bomber'
+      : 'fighter';
+    const g = role === 'station' ? stationMesh() : role === 'bomber' ? bomberMesh() : fighterMesh();
+    const e = {
+      group: g, dead: false, role, anchor: body, phaseKey: opts.phaseKey || 'solar',
+      hp: role === 'station' ? 220 : role === 'bomber' ? 90 : 50,
+      radius: role === 'station' ? ESCALE * 9 : ESCALE * 3,
+      a: Math.random() * Math.PI * 2,                       // ângulo local
+      r: R * (1.3 + Math.random() * 0.9),                   // raio local (1.3–2.2 R)
+      y: (Math.random() - 0.5) * R * 0.5,                   // altura local
+      spd: role === 'station' ? 0 : dtRate(role),           // taxa angular da patrulha
+      cd: Math.random() * 2,
+      chasing: false,
+    };
+    localToWorld(e, g.position);
     scene.add(g);
-    game.enemies.push({
-      group: g, hp: isStation ? 220 : 50, radius: isStation ? ESCALE * 9 : ESCALE * 3, dead: false,
-      anchor: body, kind: isStation ? 'station' : 'fighter',
-      orbitA: a, orbitR: r, cd: Math.random() * 2,
-    });
+    game.enemies.push(e);
   }
 }
-
-export function spawnEnemies() {
-  const byKey = (k) => game.bodies.find((b) => b.def.key === k);
-  // A vizinhança da Terra (incl. a Lua) é ZONA SEGURA — sem caças inimigos ali, senão
-  // eles abatem a nave ainda na decolagem. Defensores ficam em corpos distantes.
-  spawnNear(byKey('mars'), 4);
-  spawnNear(byKey('jupiter'), 6, { station: true });
-  spawnNear(byKey('saturn'), 4);
+function dtRate(role) { return role === 'bomber' ? 0.16 : 0.3; }
+function localToWorld(e, out) {
+  const b = e.anchor;
+  return out.set(
+    b.worldPos.x + Math.cos(e.a) * e.r,
+    b.worldPos.y + e.y,
+    b.worldPos.z + Math.sin(e.a) * e.r,
+  );
 }
 
-// O jogador só é "engajável" quando está voando, fora da proteção inicial e
-// próximo do corpo-âncora do inimigo (chegou na região defendida).
+// ── Spawns por fase da campanha (chamado por missions.startMissions/advance) ──
+const PHASE_SPAWNS = {
+  solar: [
+    { key: 'mars', n: 4 },
+    { key: 'jupiter', n: 6, station: true, bombers: 2 },
+    { key: 'saturn', n: 4 },
+  ],
+  betelgeuse: [
+    { key: 'brasa', n: 6, bombers: 2 },
+    { key: 'fuligem', n: 4, station: true },
+  ],
+  binary: [
+    { key: 'blackhole', n: 4, station: true, bombers: 1 },
+    { key: 'neutron', n: 2, station: true },
+  ],
+  chaotic: [
+    { key: 'vag2', n: 4, bombers: 1 },
+    { key: 'vag4', n: 4, station: true },
+  ],
+  core: [
+    { key: 's6', n: 5, station: true, bombers: 2 },
+    { key: 'err1', n: 3 },
+  ],
+};
+
+const byKey = (k) => game.bodies.find((b) => b.def.key === k);
+
+export function spawnPhase(phaseKey) {
+  const specs = PHASE_SPAWNS[phaseKey] || [];
+  for (const s of specs) spawnNear(byKey(s.key), s.n, { ...s, phaseKey });
+}
+
+// Compat: main.js chama spawnEnemies() no boot — a campanha agora spawna por fase
+// (missions.startMissions dispara a fase 1); o boot não spawna nada.
+export function spawnEnemies() {}
+
+// ── Oclusão analítica: o segmento inimigo→nave cruza a esfera do corpo-âncora? ──
+// (o âncora é de longe o oclusor dominante — planetas vizinhos raramente alinham)
+function occluded(e, shipPos) {
+  const b = e.anchor;
+  _ab.copy(shipPos).sub(e.group.position);
+  const len2 = _ab.lengthSq();
+  if (len2 < 1e-6) return false;
+  _ap.copy(b.worldPos).sub(e.group.position);
+  const t = Math.max(0, Math.min(1, _ap.dot(_ab) / len2));
+  _cl.copy(e.group.position).addScaledVector(_ab, t);
+  return _cl.distanceTo(b.worldPos) < b.def.radius * 0.98;
+}
+
+// O jogador só é engajável voando, fora da proteção e perto da região defendida.
 function canEngage(e, distToShip) {
   const s = game.ship;
   if (s.landed || s.spawnGrace > 0) return false;
-  return distToShip < (e.kind === 'station' ? 1400 : 1100);
+  const range = e.role === 'station' ? 1400 : e.role === 'bomber' ? 3000 : 1100;
+  if (distToShip > range) return false;
+  return !occluded(e, s.pos);
 }
 
 export function updateEnemies(dt) {
   const ship = game.ship;
   for (const e of game.enemies) {
     if (e.dead) continue;
-    if (e.kind === 'fighter') {
-      // patrulha em torno do corpo-âncora
-      e.orbitA += dt * 0.3;
-      const b = e.anchor;
-      _to.set(b.worldPos.x + Math.cos(e.orbitA) * e.orbitR, b.worldPos.y, b.worldPos.z + Math.sin(e.orbitA) * e.orbitR);
+
+    if (e.role === 'station') {
+      // estação: offset local FIXO — co-move e gira
+      localToWorld(e, e.group.position);
+      e.group.rotation.z += dt * 0.4;
+    } else {
       const distToShip = e.group.position.distanceTo(ship.pos);
-      if (distToShip < 2500) {
-        // persegue o jogador
+      e.chasing = e.role !== 'bomber' && distToShip < 2500;
+      if (e.chasing) {
+        // perseguição: lerp até o jogador + arrasto do frame do âncora
         _to.copy(ship.pos);
         e.group.position.lerp(_to, dt * 0.35);
       } else {
-        e.group.position.lerp(_to, dt * 0.6);
+        // patrulha body-relativa: o offset gira; a posição é DERIVADA do âncora
+        e.a += dt * e.spd;
+        localToWorld(e, _to);
+        e.group.position.lerp(_to, dt * 2.5);   // suaviza transição pós-perseguição
       }
       e.group.lookAt(ship.pos);
-      // atira se em alcance, mirando e o jogador estiver engajável
-      if (canEngage(e, distToShip)) {
-        e.cd -= dt;
-        if (e.cd <= 0) {
-          e.cd = 1.6 + Math.random();
-          _side.copy(ship.pos).sub(e.group.position).normalize();
-          enemyFire(e.group.position.clone().addScaledVector(_side, 3), _side);
-        }
-      }
+    }
+
+    // fogo por papel
+    const distToShip = e.group.position.distanceTo(ship.pos);
+    if (!canEngage(e, distToShip)) continue;
+    e.cd -= dt;
+    if (e.cd > 0) continue;
+    if (e.role === 'bomber') {
+      e.cd = 4.5 + Math.random() * 2;
+      // bomba balística: arremessada na direção do jogador, herdando a
+      // velocidade do frame do âncora — a GRAVIDADE curva o resto do caminho.
+      _side.copy(ship.pos).sub(e.group.position).normalize();
+      const v = _side.multiplyScalar(520);
+      if (e.anchor.worldVel) v.add(e.anchor.worldVel);
+      enemyBomb(e.group.position.clone().addScaledVector(_side, 4), v);
+    } else if (e.role === 'station') {
+      e.cd = 1.3;
+      _side.copy(ship.pos).sub(e.group.position).normalize();
+      enemyFire(e.group.position.clone().addScaledVector(_side, 9), _side);
     } else {
-      // estação: gira e dispara em alcance maior
-      e.group.rotation.z += dt * 0.4;
-      const distToShip = e.group.position.distanceTo(ship.pos);
-      if (canEngage(e, distToShip)) {
-        e.cd -= dt;
-        if (e.cd <= 0) {
-          e.cd = 1.3;
-          _side.copy(ship.pos).sub(e.group.position).normalize();
-          enemyFire(e.group.position.clone().addScaledVector(_side, 9), _side);
-        }
-      }
+      e.cd = 1.6 + Math.random();
+      _side.copy(ship.pos).sub(e.group.position).normalize();
+      enemyFire(e.group.position.clone().addScaledVector(_side, 3), _side);
     }
   }
 }

@@ -1,2 +1,2 @@
-release: space-war-celestial-components-v1
+release: space-war-campaign-v1
 phase: IMPLEMENTATION

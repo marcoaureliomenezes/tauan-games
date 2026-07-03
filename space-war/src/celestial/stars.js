@@ -15,7 +15,15 @@
 import * as THREE from '../../../vendor/three.module.min.js';
 import { Lensflare, LensflareElement } from '../../../vendor/jsm/objects/Lensflare.js';
 import { camera } from '../scene.js';
+import { game } from '../state.js';
 import { CelestialBody } from './body.js';
+
+// Flare LOCAL (bug space-war-solar-flare-universe-overlay): o Lensflare do Three
+// desenha em screen-space sem atenuação — a milhões de u o glare do Sol ainda
+// cobria a tela inteira de OUTRO sistema. O flare agora encolhe com a distância
+// e é CORTADO além da vizinhança solar.
+const FLARE_FULL = 400_000;      // até aqui: tamanho pleno (vizinhança interna)
+const FLARE_CUTOFF = 2_600_000;  // ~1.1× o raio do Sistema Solar: além, invisível
 import {
   HEADLESS, starMaterial, makeRadialSprite, flareTexture,
   diskMaterial, DISK_SYNCHROTRON,
@@ -62,15 +70,20 @@ export class Star extends CelestialBody {
     ]);
     corona.scale.setScalar(def.radius * (def.coronaScale ?? 4.2));
     group.add(corona);
+    let flare = null;
+    let flareElems = null;
     if (def.light) {
       const pl = new THREE.PointLight(def.light.color, def.light.intensity ?? 3.0, def.light.range ?? 1_000_000, 0.0);
       group.add(pl);
       if (def.light.flare && !HEADLESS) {
-        const flare = new Lensflare();
-        flare.addElement(new LensflareElement(flareTexture(true), 640, 0, new THREE.Color(0xfff0c8)));
-        flare.addElement(new LensflareElement(flareTexture(false), 110, 0.55, new THREE.Color(0xffd9a0)));
-        flare.addElement(new LensflareElement(flareTexture(false), 60, 0.85, new THREE.Color(0xaac8ff)));
-        flare.addElement(new LensflareElement(flareTexture(false), 150, 1.2, new THREE.Color(0xff9a70)));
+        flare = new Lensflare();
+        flareElems = [
+          new LensflareElement(flareTexture(true), 640, 0, new THREE.Color(0xfff0c8)),
+          new LensflareElement(flareTexture(false), 110, 0.55, new THREE.Color(0xffd9a0)),
+          new LensflareElement(flareTexture(false), 60, 0.85, new THREE.Color(0xaac8ff)),
+          new LensflareElement(flareTexture(false), 150, 1.2, new THREE.Color(0xff9a70)),
+        ];
+        for (const el of flareElems) { el._baseSize = el.size; flare.addElement(el); }
         pl.add(flare);
       }
     }
@@ -81,6 +94,21 @@ export class Star extends CelestialBody {
       this.t += dt;
       mat.uniforms.uTime.value += dt;
       corona.material.opacity = 0.75 + Math.sin(this.t * 0.9) * 0.12;
+      if (def.light && def.light.flare) {
+        // Flare local: encolhe com a distância e some fora da vizinhança solar.
+        // A POLÍTICA roda mesmo em HEADLESS (sem objeto flare) — o diagnóstico
+        // game.sunFlareVisible é o que o teste de regressão AC-10 assere.
+        const d = camera.position.distanceTo(group.position);
+        const vis = d < FLARE_CUTOFF;
+        game.sunFlareVisible = vis;
+        if (flare) {
+          flare.visible = vis;
+          if (vis) {
+            const f = Math.max(0, Math.min(1, 1 - (d - FLARE_FULL) / (FLARE_CUTOFF - FLARE_FULL)));
+            for (const el of flareElems) el.size = el._baseSize * (0.22 + 0.78 * f);
+          }
+        }
+      }
     } };
   }
 }

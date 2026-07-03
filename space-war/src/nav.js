@@ -93,6 +93,9 @@ export function targetMission() {
   if (m) game.nav.target = m;
 }
 
+// Aponta o nav para um corpo específico (missões `visit` da campanha).
+export function targetBody(b) { if (b) game.nav.target = wrapBody(b); }
+
 export function currentTarget() {
   // re-resolve pelo key para acompanhar alvos dinâmicos (missão)
   const list = navList();
