@@ -30,7 +30,7 @@ test.describe('Space War — Campanha', () => {
     expect(c.unlocked).toEqual([true, false, false, false, false]);
     expect(c.done).toEqual([false, false, false, false, false]);
     const label = await page.evaluate(() => window.__spaceWar.mission?.label || '');
-    expect(label).toContain('MISSÃO 1');
+    expect(label).toContain('CAÇADA');
   });
 
   // AC-02 (+AC-03): completar as 5 missões solares (incl. a visita ao Halley)
@@ -38,15 +38,15 @@ test.describe('Space War — Campanha', () => {
   test('AC-02/03: cadeia solar completa desbloqueia BETELGEUSE', async ({ page }) => {
     test.setTimeout(90000);
     await startFlight(page);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 2; i++) {
       await page.waitForFunction(() => !!window.__spaceWar.mission && !window.__spaceWar.mission._done, { timeout: 15000 });
       const t = await page.evaluate(() => ({ type: window.__spaceWar.mission.type, label: window.__spaceWar.mission.label }));
-      if (i === 4) expect(t.label).toContain('HALLEY');          // AC-03: cometa com relevância de missão
+      if (i === 0) expect(t.type).toBe('hunt');
+      if (i === 1) expect(t.label).toContain('HALLEY');          // AC-03: cometa com relevância de missão
       await page.evaluate(() => window.__swDebug.winMission());
-      // espera avançar (próxima missão da fase, ou a fase 2 inteira no fim)
       await page.waitForFunction((idx) => {
         const sw = window.__spaceWar;
-        if (idx < 4) return sw.missionIndex === idx + 1 && sw.mission && !sw.mission._done;
+        if (idx < 1) return sw.missionIndex === idx + 1 && sw.mission && !sw.mission._done;
         return sw.campaign.phase === 1;
       }, i, { timeout: 15000 });
     }
@@ -55,6 +55,46 @@ test.describe('Space War — Campanha', () => {
     expect(c.unlocked[1]).toBe(true);
     expect(c.phase).toBe(1);
     await page.waitForFunction(() => (window.__spaceWar.mission?.label || '').includes('FASE 2'), { timeout: 8000 });
+  });
+
+  // CAÇADA (AC-03 da ballistic-war): destruir o alvo k spawna o k+1 em OUTRO corpo.
+  test('caçada: próximo alvo aparece em outro corpo + contagens 5/7/9/11/13', async ({ page }) => {
+    await startFlight(page);
+    const counts = await page.evaluate(() => {
+      const sw = window.__spaceWar;
+      return { total: sw.mission.total, all: [5, 7, 9, 11, 13] };
+    });
+    expect(counts.total).toBe(5);
+    const body0 = await page.evaluate(() => window.__spaceWar.mission.targets[0].body.def.name);
+    await page.evaluate(() => window.__swDebug.killTarget());
+    await page.waitForFunction(() => window.__spaceWar.mission.killed === 1 && window.__spaceWar.mission.targets.length === 2, { timeout: 8000 });
+    const body1 = await page.evaluate(() => {
+      const m = window.__spaceWar.mission;
+      return m.targets[m.targets.length - 1].body.def.name;
+    });
+    expect(body1).not.toBe(body0);
+  });
+
+  // SOLUÇÃO BALÍSTICA (AC-01/02 da ballistic-war): C alinha à direção de tiro.
+  test('solução balística: solver acha arco e C alinha o nariz à direção de tiro', async ({ page }) => {
+    test.setTimeout(60000);
+    await startFlight(page);
+    await page.evaluate(() => window.__swDebug.goTo('lua'));
+    await page.waitForFunction(() => {
+      const sw = window.__spaceWar;
+      return sw.nav.solution && sw.nav.solution.ok === true;
+    }, { timeout: 15000 });
+    await page.keyboard.press('KeyC');
+    await page.waitForFunction(() => {
+      const sw = window.__spaceWar;
+      const sol = sw.nav.solution;
+      if (!sol || !sol.ok) return false;
+      const q = sw.ship.quat;
+      const fx = -(2 * (q.x * q.z + q.w * q.y));
+      const fy = -(2 * (q.y * q.z - q.w * q.x));
+      const fz = -(1 - 2 * (q.x * q.x + q.y * q.y));
+      return fx * sol.dir.x + fy * sol.dir.y + fz * sol.dir.z > 0.95;
+    }, { timeout: 12000 });
   });
 
   // AC-04: bomba inimiga é BALÍSTICA — a gravidade muda a velocidade dela.
@@ -100,7 +140,7 @@ test.describe('Space War — Campanha', () => {
       const m = window.__spaceWar.mission;
       return (m.targets || []).map((t) => {
         const s = t.obj.scale.x;
-        const rf = 5.8 * s;                       // raio da pegada (cúpula+torres)
+        const rf = 8 * s;                         // raio da pegada (plataforma v2)
         const R = t.body.def.radius;
         return (rf * rf) / (4 * R * R);           // πrf² / 4πR²
       });

@@ -117,7 +117,7 @@ export function drawMap() {
     ctx.fillStyle = colorHex(b.def.color);
     ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI * 2); ctx.fill();
     // rótulo: só sistema solar + betelgeuse (os enxames caóticos viram pontos — sem poluição)
-    if (b.system === 'home' || b.system === 'betelgeuse') {
+    if (b.system === 'solar' || b.system === 'betelgeuse') {
       ctx.fillStyle = '#9ab'; ctx.fillText(b.def.name, px, py - 10);
     }
   }
