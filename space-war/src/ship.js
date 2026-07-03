@@ -9,6 +9,36 @@ import { game } from './state.js';
 import { computeGravity, surfaceContact } from './gravity.js';
 import { input, consumeMouse } from './input.js';
 import { currentTarget } from './nav.js';
+import { solveBallistic } from './ballistics.js';
+
+// ── SOLUÇÃO DE TIRO (operador 2026-07-03): C aponta para ONDE LANÇAR — o solver
+// simula a nuke sob o computeGravity real e devolve a direção cujo ARCO curvo
+// termina no alvo. Recalculada a cada 0.3 s enquanto um alvo de missão está
+// selecionado (D-3); sem solução (fora de alcance) C cai no apontamento direto.
+const NUKE_SPEED = 1600;
+const _bp = new THREE.Vector3();
+const _bg = new THREE.Vector3();
+function _gravAt(p, out) {
+  _bp.set(p.x, p.y, p.z);
+  computeGravity(_bp, _bg);
+  out.x = _bg.x; out.y = _bg.y; out.z = _bg.z;
+}
+function updateFiringSolution(t) {
+  const s = game.ship;
+  const sol = game.nav.solution;
+  if (sol && sol.targetKey === t.key && game.time - sol.at < 0.3) return sol;
+  const body = t.body;
+  const res = solveBallistic({
+    pos: s.pos, vel: s.vel, speed: NUKE_SPEED,
+    targetPos: { x: t.pos.x, y: t.pos.y, z: t.pos.z },
+    targetVel: body && body.worldVel ? body.worldVel : null,
+    gravityFn: _gravAt,
+  });
+  res.at = game.time;
+  res.targetKey = t.key;
+  game.nav.solution = res;
+  return res;
+}
 
 let mesh, engineGlow, sideGlows = [];
 const accelG = new THREE.Vector3();
@@ -225,11 +255,25 @@ function updateFlight(s, dt) {
   if (input.brake) { s.approach = false; s.orbitAssist = false; }
   if (input.throttleUp || input.throttleDown) s.orbitAssist = false;
 
+  // Solução de tiro viva enquanto um alvo de MISSÃO está selecionado (HUD + F).
+  const _tSol = currentTarget();
+  if (_tSol && _tSol.isMission && !s.landed && game.phase === 'flight') {
+    updateFiringSolution(_tSol);
+  } else if (game.nav.solution) game.nav.solution = null;
+
   if (s.aligning) {
-    // --- Piloto automático de mira: gira o nariz para o alvo de navegação ---
+    // --- Piloto automático de mira ---
+    // Alvo de missão COM solução balística: o nariz vai para a DIREÇÃO DE
+    // LANÇAMENTO (o arco leva a nuke ao alvo); senão, apontamento direto.
     const t = currentTarget();
     if (t) {
-      _m.lookAt(s.pos, t.pos, _up);
+      const sol = game.nav.solution;
+      if (t.isMission && sol && sol.ok) {
+        tmp.set(s.pos.x + sol.dir.x * 2000, s.pos.y + sol.dir.y * 2000, s.pos.z + sol.dir.z * 2000);
+        _m.lookAt(s.pos, tmp, _up);
+      } else {
+        _m.lookAt(s.pos, t.pos, _up);
+      }
       _q.setFromRotationMatrix(_m);
       s.quat.slerp(_q, Math.min(1, SHIP.alignRate * dt));
       if (s.quat.angleTo(_q) < 0.02) s.aligning = false;

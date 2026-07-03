@@ -40,8 +40,10 @@ function localTargets() {
   if (!sys) return [];
   const list = [];
   for (const b of game.bodies) {
-    const sysKey = sys.key === 'solar' ? 'home' : sys.key;
-    if (b.system !== sysKey || b.isMoon) continue;
+    // (fix space-war-solar-system-key-drift: a migração celestial registra o
+    // sistema solar como 'solar' — o mapeamento legado p/ 'home' escondia os
+    // corpos locais do ciclo de alvos)
+    if (b.system !== sys.key || b.isMoon) continue;
     if (b.def.key === sys.primary) continue;   // primária já está na lista global
     list.push(wrapBody(b));
   }
@@ -130,6 +132,43 @@ export function drawNav() {
 
   const t = currentTarget();
   if (!t) return;
+
+  // ── ARCO BALÍSTICO (solução de tiro): a trajetória prevista da nuke sob o
+  // campo real, tracejada até o X de impacto. Verde = solução válida.
+  const sol = game.nav.solution;
+  if (t.isMission && sol) {
+    if (sol.ok && sol.points && sol.points.length > 1) {
+      ctx.strokeStyle = 'rgba(120,255,170,0.55)'; ctx.lineWidth = 1.6;
+      ctx.setLineDash([5, 7]);
+      ctx.beginPath();
+      let started = false;
+      for (const p of sol.points) {
+        _to.set(p.x, p.y, p.z).sub(camera.position);
+        camera.getWorldDirection(_camDir);
+        if (_to.dot(_camDir) <= 0) { started = false; continue; }   // atrás da câmera
+        _v.set(p.x, p.y, p.z).project(camera);
+        const px = (_v.x * 0.5 + 0.5) * W, py = (-_v.y * 0.5 + 0.5) * H;
+        if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // X de impacto previsto + tempo de voo
+      const last = sol.points[sol.points.length - 1];
+      _to.set(last.x, last.y, last.z).sub(camera.position);
+      if (_to.dot(_camDir) > 0) {
+        _v.set(last.x, last.y, last.z).project(camera);
+        const ix = (_v.x * 0.5 + 0.5) * W, iy = (-_v.y * 0.5 + 0.5) * H;
+        ctx.strokeStyle = '#8fffb0'; ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(ix - 7, iy - 7); ctx.lineTo(ix + 7, iy + 7);
+        ctx.moveTo(ix + 7, iy - 7); ctx.lineTo(ix - 7, iy + 7);
+        ctx.stroke();
+        label(ctx, `☢ IMPACTO ${sol.tof.toFixed(0)}s — [F] lança`, ix, iy + 24, '#8fffb0');
+      }
+    } else if (!sol.ok) {
+      label(ctx, 'SEM SOLUÇÃO BALÍSTICA — aproxime-se do alvo', W / 2, H - 150, '#ffaa66');
+    }
+  }
 
   const pos = t.pos;
   const dist = pos.distanceTo(game.ship.pos);

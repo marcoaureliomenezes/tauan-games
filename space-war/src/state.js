@@ -47,8 +47,8 @@ export const game = {
   missionIndex: 0,
   score: 0,
   kills: 0,
-  // Navegação
-  nav: { target: null, aligning: false },
+  // Navegação (solution = solução de tiro balística viva, ballistics.js)
+  nav: { target: null, aligning: false, solution: null },
   // UI
   mapOpen: false,
   // diagnostics

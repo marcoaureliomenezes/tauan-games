@@ -6,7 +6,7 @@ import { game } from './state.js';
 import { COLORS } from './config.js';
 import { shipForward } from './ship.js';
 import { computeGravity, surfaceContact } from './gravity.js';
-import { explosion, nukeBlast } from './fx.js';
+import { explosion, nukeBlast, nukeMushroom, vacuumDoubleFlash } from './fx.js';
 
 const _f = new THREE.Vector3();
 const _p = new THREE.Vector3();
@@ -43,14 +43,19 @@ export function launchNuke() {
   const s = game.ship;
   if (s.nukes <= 0 || s.landed) return false;
   s.nukes--;
-  shipForward(_f);
+  // Solução balística fresca (C): lança na DIREÇÃO DE TIRO — a nuke `aimed`
+  // segue GRAVIDADE PURA (sem a guiagem de espiral) e o arco leva ao alvo.
+  const sol = game.nav.solution;
+  const aimed = !!(sol && sol.ok && game.time - sol.at < 1.2);
+  if (aimed) _f.set(sol.dir.x, sol.dir.y, sol.dir.z);
+  else shipForward(_f);
   const m = new THREE.Mesh(new THREE.SphereGeometry(12, 12, 12),
     new THREE.MeshBasicMaterial({ color: COLORS.nuke }));
   m.position.copy(s.pos).addScaledVector(_f, 40);
   scene.add(m);
   // life LONGA: a nuke agora é um corpo BALÍSTICO sob gravidade — dá para
   // lançá-la em órbita e vê-la dar voltas antes de cair (operador 2026-07-02).
-  game.projectiles.push({ mesh: m, vel: _f.clone().multiplyScalar(1600).add(s.vel), life: 90, friendly: true, dmg: 0, isNuke: true, armed: 0.4 });
+  game.projectiles.push({ mesh: m, vel: _f.clone().multiplyScalar(1600).add(s.vel), life: 90, friendly: true, dmg: 0, isNuke: true, armed: 0.4, aimed });
   return true;
 }
 
@@ -113,8 +118,10 @@ export function updateProjectiles(dt) {
       //  · BN/pulsar: arrasto FORTE do disco de acreção/vento (como a nave)
       //  · estrela: perto dela (r < 6R) espirala ACELERANDO p/ dentro (física:
       //    espiral de decaimento ganha velocidade) até queimar na superfície
+      // Nuke `aimed` (solução de tiro): GRAVIDADE PURA — o arco previsto é a
+      // trajetória real; a guiagem de espiral fica só para o tiro livre.
       const dom = g.dominant;
-      if (dom) {
+      if (dom && !p.aimed) {
         const kind = dom.def.kind;
         const compact = kind === 'blackhole' || kind === 'neutron';
         const dk = compact ? dom.def.disk : null;
@@ -193,6 +200,15 @@ export function updateProjectiles(dt) {
     }
 
     if (p.isNuke && detonate) {
+      // Explosão realista (operador 2026-07-03): impacto em SUPERFÍCIE → cogumelo
+      // orientado pela normal do corpo; detonação no VÁCUO → casca + duplo flash.
+      const surf = surfaceContact(p.mesh.position, 40);
+      if (surf) {
+        _nR.copy(p.mesh.position).sub(surf.body.worldPos).normalize();
+        nukeMushroom(p.mesh.position, _nR, Math.min(2.2, Math.max(0.7, surf.body.def.radius / 900)));
+      } else {
+        vacuumDoubleFlash();
+      }
       nukeBlast(p.mesh.position);
       // dano em área: inimigos
       for (const e of game.enemies) {

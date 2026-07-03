@@ -11,7 +11,7 @@ import { buildShip, updateShip, shipMesh, toggleObservationCamera } from './ship
 import { input, installListeners, onAction } from './input.js';
 import { fireLaser, launchNuke, updateProjectiles, enemyBomb } from './weapons.js';
 import { spawnEnemies, updateEnemies } from './enemies.js';
-import { startMissions, beginFlight, updateMissions, debugCompleteMission } from './missions.js';
+import { startMissions, beginFlight, updateMissions, debugCompleteMission, debugKillTarget } from './missions.js';
 import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
@@ -233,6 +233,8 @@ if (typeof window !== 'undefined') {
     boom() { explosion(game.ship.pos.clone(), 1.5); },
     // Campanha (QA): força a conclusão da missão ativa (gating/unlock testável).
     winMission() { return debugCompleteMission(); },
+    // Caçada (QA): destrói SÓ o alvo atual — testa a cadeia k → k+1.
+    killTarget() { return debugKillTarget(); },
     // Solta uma bomba inimiga parada perto da nave (prova AC-04: gravidade age).
     dropBomb() {
       const f = new THREE.Vector3(0, 0, -1).applyQuaternion(game.ship.quat);

@@ -329,6 +329,60 @@ function dustLane(ctx, x0, x1, yBase, ampl, thick, alpha, rnd) {
 
 // Buraco negro: sombra central + anel de acreção quente + lente/glow externo.
 // Anel = elipse CONTÍNUA suave (gradientes sobrepostos), não pontilhismo de dots.
+// GALÁXIA COM JATOS POLARES (referência do operador distant-galaxy-1: espiral
+// inclinada com jatos azul-brancos cruzados e lóbulo nebular avermelhado).
+function drawJetGalaxy(ctx, x, y, R, rot, rnd) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(rot);
+  ctx.globalCompositeOperation = 'lighter';
+  for (const s of [1, -1]) {
+    const grad = ctx.createLinearGradient(0, 0, 0, s * R * 3.0);
+    grad.addColorStop(0, 'rgba(200,225,255,0.55)');
+    grad.addColorStop(0.4, 'rgba(150,185,255,0.22)');
+    grad.addColorStop(1, 'rgba(110,150,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(-R * 0.05, 0); ctx.lineTo(R * 0.05, 0);
+    ctx.lineTo(R * 0.20, s * R * 3.0); ctx.lineTo(-R * 0.20, s * R * 3.0);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  // lóbulo nebular avermelhado assimétrico (o "véu" do print)
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  puff(ctx, x + R * 1.1, y + R * 1.5, R * 1.3, [190, 60, 55], 0.10);
+  puff(ctx, x + R * 1.6, y + R * 2.1, R * 0.8, [220, 90, 70], 0.07);
+  ctx.restore();
+  // corpo espiral por cima dos jatos (núcleo quente dourado, braços azulados)
+  drawSpiralGalaxy(ctx, x, y, R, 0.62, rot + Math.PI / 2, rnd, [255, 226, 178], [168, 196, 255]);
+}
+
+// GALÁXIA DE PERFIL (edge-on): disco achatado brilhante + bojo central + FAIXA DE
+// POEIRA escura cortando o plano — silhueta clássica tipo NGC 891/Sombrero.
+function drawEdgeOnGalaxy(ctx, x, y, R, rot, rnd) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ellipseBlob(ctx, x, y, R, R * 0.15, rot, [232, 218, 188], 0.42);
+  ellipseBlob(ctx, x, y, R * 0.62, R * 0.10, rot, [255, 236, 200], 0.5);
+  ellipseBlob(ctx, x, y, R * 0.28, R * 0.20, rot, [255, 226, 170], 0.55);   // bojo
+  // pontilhado de estrelas não resolvidas ao longo do plano
+  const ca = Math.cos(rot), sa = Math.sin(rot);
+  for (let i = 0; i < 90; i++) {
+    const d = (rnd() * 2 - 1) * R * 0.95;
+    const h = (rnd() * 2 - 1) * R * 0.07;
+    dot(ctx, x + d * ca - h * sa, y + d * sa + h * ca, 1, '#ffeecd', 0.25 + rnd() * 0.35);
+  }
+  ctx.restore();
+  // faixa de poeira ESCURA (source-over, bloqueia a luz do disco)
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(rot);
+  ctx.fillStyle = 'rgba(6,4,10,0.55)';
+  ctx.beginPath();
+  ctx.ellipse(0, R * 0.015, R * 0.92, R * 0.035, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawBlackHole(ctx, x, y, r, rnd) {
   ctx.save();
   ctx.translate(x, y);
@@ -570,6 +624,32 @@ function paintSky() {
   drawRedshiftGalaxy(ctx, W * 0.22, H * 0.62, 16, rnd);
   drawRedshiftGalaxy(ctx, W * 0.83, H * 0.30, 13, rnd);
   drawRedshiftGalaxy(ctx, W * 0.52, H * 0.86, 15, rnd);
+
+  // -------------------------------------------------------------------------
+  // 7b. GALERIA DE GALÁXIAS EM DESTAQUE (operador 2026-07-03, fotos de referência
+  //     em bug-space-war/): espirais inclinadas GRANDES, uma com JATOS polares +
+  //     lóbulo vermelho, e discos de perfil com faixa de poeira. É o que a lente
+  //     gravitacional (postfx) arrasta em arcos ao redor dos buracos negros.
+  // -------------------------------------------------------------------------
+  drawJetGalaxy(ctx, W * 0.31, H * 0.24, 46, 0.6, rnd);
+  drawSpiralGalaxy(ctx, W * 0.66, H * 0.72, 58, 0.55, 2.1, rnd, [255, 232, 190], [175, 200, 255]);
+  drawSpiralGalaxy(ctx, W * 0.135, H * 0.815, 40, 0.7, 0.9, rnd, [255, 214, 170], [200, 215, 255]);
+  drawSpiralGalaxy(ctx, W * 0.905, H * 0.155, 34, 0.5, 4.0, rnd, [240, 225, 255], [160, 190, 250]);
+  drawEdgeOnGalaxy(ctx, W * 0.475, H * 0.575, 52, 0.35, rnd);
+  drawEdgeOnGalaxy(ctx, W * 0.775, H * 0.885, 38, 2.4, rnd);
+  drawJetGalaxy(ctx, W * 0.055, H * 0.205, 30, 3.6, rnd);
+
+  // 7c. CAMPO PROFUNDO extra (fotos: céu POVOADO): +9k estrelas fracas de fundo e
+  //     +90 estrelas médias com brilho — a lente tem MUITO mais o que esticar.
+  for (let i = 0; i < 9000; i++) {
+    const x = rnd() * W, y = rnd() * H;
+    dot(ctx, x, y, 1, dotColors[(Math.pow(rnd(), 1.6) * dotColors.length) | 0], 0.14 + rnd() * 0.22);
+  }
+  for (let i = 0; i < 90; i++) {
+    const x = rnd() * W, y = rnd() * H;
+    const c = [[190, 210, 255], [255, 244, 220], [255, 226, 176]][(rnd() * 3) | 0];
+    star(ctx, x, y, 1.2 + rnd() * 1.6, c, 0.5);
+  }
 
   // QUASARES — sutis: ponto vermelho pequeno e fraco com halo minúsculo.
   for (let i = 0; i < 24; i++) {

@@ -9,50 +9,47 @@
 import { game } from './state.js';
 import { showOverlay, showToast } from './hud.js';
 
+// Cada fase é uma CAÇADA sequencial (operador 2026-07-03): `hunt` alvos — bases em
+// LUAS/planetas DIFERENTES ou NAVES CAPITAIS orbitando corpos — spawnam UM DE CADA
+// VEZ (destruiu → o próximo aparece em outro corpo). Contagem +2 por fase:
+// 5 → 7 → 9 → 11 → 13. Missões `visit` continuam depois da caçada.
 export const PHASES = [
   {
     key: 'solar', sys: 'solar', name: 'FASE 1 — SISTEMA SOLAR', color: '#7df',
-    brief: 'Liberte o Sistema Solar: Lua, Marte, Io — e colha dados do cometa Halley.',
+    brief: 'Cace as 5 instalações da invasão — cada uma numa lua diferente — e colha dados do Halley.',
+    hunt: 5,
     missions: [
-      { label: 'MISSÃO 1 — Bombardeie a base alienígena na LUA (☢ nuke)', type: 'bomb', bodies: [{ key: 'moon', n: 1 }] },
-      { label: 'MISSÃO 2 — Destrua 5 caças inimigos perto de MARTE', type: 'clear', kills: 5 },
-      { label: 'MISSÃO 3 — Bombardeie 2 bases em MARTE (☢ nuke)', type: 'bomb', bodies: [{ key: 'mars', n: 2 }] },
-      { label: 'MISSÃO 4 — Bombardeie a fortaleza alienígena em IO (Júpiter)', type: 'bomb', bodies: [{ key: 'io', n: 1 }] },
-      { label: 'MISSÃO 5 — Colha dados do cometa HALLEY (aproxime-se a 2.5k u)', type: 'visit', key: 'halley', dist: 2500 },
+      { label: 'FASE 1·FINAL — Colha dados do cometa HALLEY (aproxime-se a 2.5k u)', type: 'visit', key: 'halley', dist: 2500 },
     ],
   },
   {
     key: 'betelgeuse', sys: 'betelgeuse', name: 'FASE 2 — BETELGEUSE', color: '#ffb080',
-    brief: 'A supergigante morre. Expulse a frota dos planetas carbonizados e sonde a companheira Siwarha.',
+    brief: 'Cace os 7 postos da frota nos planetas carbonizados e sonde a companheira Siwarha.',
+    hunt: 7,
     missions: [
-      { label: 'FASE 2·M1 — Destrua 6 caças na órbita de BRASA', type: 'clear', kills: 6 },
-      { label: 'FASE 2·M2 — Bombardeie 2 bases em FULIGEM (☢ nuke)', type: 'bomb', bodies: [{ key: 'fuligem', n: 2 }] },
-      { label: 'FASE 2·M3 — Sonde SIWARHA dentro do envelope de poeira (14k u)', type: 'visit', key: 'siwarha', dist: 14000 },
+      { label: 'FASE 2·FINAL — Sonde SIWARHA dentro do envelope de poeira (14k u)', type: 'visit', key: 'siwarha', dist: 14000 },
     ],
   },
   {
     key: 'binary', sys: 'binary', name: 'FASE 3 — BINÁRIO BN+PULSAR', color: '#cfe0ff',
-    brief: 'Dentro do remanescente de supernova: destrua as estações e roce o farol do pulsar.',
+    brief: 'Sem superfícies aqui: cace as 9 NAVES CAPITAIS orbitando o buraco negro e o pulsar.',
+    hunt: 9,
     missions: [
-      { label: 'FASE 3·M1 — Destrua 6 hostis guardando o remanescente', type: 'clear', kills: 6 },
-      { label: 'FASE 3·M2 — Roce o PULSAR — chegue a 30k u e sobreviva', type: 'visit', key: 'neutron', dist: 30000 },
+      { label: 'FASE 3·FINAL — Roce o PULSAR — chegue a 30k u e sobreviva', type: 'visit', key: 'neutron', dist: 30000 },
     ],
   },
   {
     key: 'chaotic', sys: 'chaotic', name: 'FASE 4 — BINÁRIO CAÓTICO', color: '#bcd2ff',
-    brief: 'Duas estrelas, planetas em caos de 3 corpos — e a frota escondida entre eles.',
-    missions: [
-      { label: 'FASE 4·M1 — Bombardeie as bases em VAGANTE-II e VAGANTE-IV (☢)', type: 'bomb', bodies: [{ key: 'vag2', n: 1 }, { key: 'vag4', n: 1 }] },
-      { label: 'FASE 4·M2 — Destrua 6 caças no enxame caótico', type: 'clear', kills: 6 },
-    ],
+    brief: 'Cace os 11 alvos escondidos entre os planetas do caos de 3 corpos.',
+    hunt: 11,
+    missions: [],
   },
   {
     key: 'core', sys: 'core', name: 'FASE 5 — NÚCLEO DA GALÁXIA', color: '#ffd27a',
-    brief: 'Sagitário A✦. A fortaleza final orbita as estrelas S do buraco negro supermassivo.',
+    brief: 'A frota final: 13 alvos entre os errantes e as estrelas S de Sagitário A✦.',
+    hunt: 13,
     missions: [
-      { label: 'FASE 5·M1 — Roce o anel de fótons de SGR A✦ (22k u) e sobreviva', type: 'visit', key: 'sgr', dist: 22000 },
-      { label: 'FASE 5·M2 — Destrua a fortaleza na órbita da Estrela S6 (7 abates)', type: 'clear', kills: 7 },
-      { label: 'FASE 5·M3 — Bombardeie as 3 bases nos planetas ERRANTES (☢)', type: 'bomb', bodies: [{ key: 'err1', n: 1 }, { key: 'err2', n: 1 }, { key: 'err3', n: 1 }] },
+      { label: 'FASE 5·FINAL — Roce o anel de fótons de SGR A✦ (22k u) e sobreviva', type: 'visit', key: 'sgr', dist: 22000 },
     ],
   },
 ];

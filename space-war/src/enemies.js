@@ -113,6 +113,9 @@ export function spawnPhase(phaseKey) {
   for (const s of specs) spawnNear(byKey(s.key), s.n, { ...s, phaseKey });
 }
 
+// Escolta de alvo da caçada: 3 caças nascem junto com cada base/nave capital.
+export function spawnEscort(body, phaseKey) { spawnNear(body, 3, { phaseKey }); }
+
 // Compat: main.js chama spawnEnemies() no boot — a campanha agora spawna por fase
 // (missions.startMissions dispara a fase 1); o boot não spawna nada.
 export function spawnEnemies() {}
