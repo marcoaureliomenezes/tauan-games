@@ -5,6 +5,7 @@
 **Release ID:** space-war-celestial-components-v1
 **Owner:** product-engineer
 **Opened:** 2026-07-03
+**Segment:** rc-1 (2026-07-03) — alpha-1 fechado com QA APPROVE 10/10; operador escolheu SHIP (push + PR)
 **Backlog:** `specs/backlog/space-war-celestial-body-component-library.md` (candidate → promovido por esta release)
 **Referência científica:** NASA — Types of Stars <https://science.nasa.gov/universe/stars/types/>
 
