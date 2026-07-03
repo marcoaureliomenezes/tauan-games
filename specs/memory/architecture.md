@@ -10,8 +10,8 @@ tags:
   - design
 agent_tier: self-pull
 token_estimate: 0
-last_updated: "2026-06-12"
-release_origin: aero-fighters-uplift-v1
+last_updated: "2026-07-03"
+release_origin: space-war-campaign-v1
 ---
 
 ## Visão geral
@@ -31,7 +31,7 @@ explícita do operador via product-engineer:
 | Degrau | Engine | Tipo | Jogo |
 |--------|--------|------|------|
 | 1 | Phaser.js 3.60 (CDN) | 2D web | `tauan-trex/` |
-| 2 | Three.js r165 (vendor local) | 3D web | `aero-fighters/` |
+| 2 | Three.js r165 (vendor local) | 3D web | `aero-fighters/`, `space-war/` |
 | 3 | Godot 4.x | 3D desktop indie | `aero-fighters-v2/` (PAUSADO 2026-06-12) |
 | 4 | Unreal Engine 5 | 3D desktop AAA | reservado (bloqueado por hardware) |
 
@@ -48,6 +48,12 @@ Estrutura interna por jogo:
   `ground-physics.js`, `physics-core.js`, `sortie-state.js`, `camera-modes.js`,
   `service-scene.js`, `ejection.js`, `nuclear-fx.js`, `maps/*.js`). Vendor local em
   `vendor/three.module.min.js`.
+- **Degrau 2 — Space War:** `space-war/src/` separa física de conteúdo: a biblioteca
+  `celestial/` (physics puro testável em node, átomos visuais, `CelestialBody` +
+  hierarquia `Star` da taxonomia NASA parametrizada por massa, componentes de
+  movimento) é consumida por `universe.js` (os 6 sistemas como DADOS) e por
+  `campaign.js` (as 5 fases como dados; `missions.js` executa). `gravity.js` e
+  `orbits.js` consomem o record canônico dos corpos e não conhecem as classes.
 - **Degrau 3 (Godot 4):** `aero-fighters-v2/` — scene tree + GDScript + Autoload
   singletons; export Linux x64 via Godot CLI. Trabalho pausado em 2026-06-12.
 
@@ -59,10 +65,13 @@ flowchart TB
     vendor[vendor/ libs]
     trex[tauan-trex/]
     aero[aero-fighters/]
+    sw[space-war/]
     aerov2[aero-fighters-v2/ Godot 4]
     tests --> trex
     tests --> aero
+    tests --> sw
     vendor --> aero
+    vendor --> sw
 ```
 
 - Proibido: um jogo depender de outro jogo (acoplamento horizontal entre pastas).

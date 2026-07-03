@@ -1,8 +1,9 @@
 ---
 title: Space War celestial-body component library (simulation-first componentization)
-status: candidate
+status: delivered
 opened: 2026-07-03
 release: space-war-celestial-components-v1
+delivered: 2026-07-03 — PR #10 (fd72604); CLOSURE em specs/_archive/releases/space-war-celestial-components-v1/
 description: Replace the hand-wired per-system celestial-body construction in space-war with a reusable, parametrized component library — a CelestialBody physics base, a Star superclass with NASA-taxonomy subclasses (main sequence, red dwarf, red giant, red supergiant, white dwarf, neutron star, black hole, brown dwarf), plus planets, moons and comets — so any body is instantiated by passing physical parameters (mass, angular velocity, orbit) and automatically interacts in systems, making new/refined systems (binaries, black holes, galactic cores) declarative instead of bespoke code.
 intents:
   - subject:

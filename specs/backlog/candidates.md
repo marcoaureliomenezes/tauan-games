@@ -42,3 +42,12 @@ discovery + grill-me + SPEC Aprovado pelo product-engineer.
 - tauan-trex → release `tauan-trex-v1` (encerrado; SPEC final em `_archive/releases/tauan-trex-v1/SPEC.md`)
 - testing-infra → release `testing-infra-v1` (encerrado; SPEC final em `_archive/releases/testing-infra-v1/SPEC.md`)
 - security (baseline) → release `security-baseline-v1` (encerrado em estado "In Review", todas as tasks done; SPEC final em `_archive/releases/security-baseline-v1/SPEC.md`)
+- repo-hygiene-playwright-report — Remover `tests/playwright-report/` (e screenshots de
+  runs) do tracking do repo: artefato de test-runner proibido pela regra de higiene;
+  flagged por QA e security nas releases space-war de 2026-07-03. Inclui corrigir os 5
+  backlog entries antigos sem `intents[]` (BL-SCHEMA). (owner: project-manager)
+- release-naming-canon-reconciliation — Todos os releases do repo usam slugs legados
+  (`<jogo>-vN`) e o doctor exige canon SemVer (SPEC-DOC-016/027, ERR no space-war-v1
+  arquivado). Renomear quebra referências históricas — decidir: adotar SemVer daqui
+  em diante + allowlist dos legados, ou renomear em massa. (owner: project-manager,
+  decisão do operador)
