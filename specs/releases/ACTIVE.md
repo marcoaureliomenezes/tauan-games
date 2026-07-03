@@ -1,2 +1,2 @@
-release: space-war-ballistic-war-v1
+release: aero-fighters-world-realism-v1
 phase: IMPLEMENTATION

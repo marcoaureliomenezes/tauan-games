@@ -11,7 +11,7 @@ tags:
 agent_tier: self-pull
 token_estimate: 0
 last_updated: "2026-07-03"
-release_origin: space-war-campaign-v1
+release_origin: space-war-ballistic-war-v1
 ---
 
 ## Visão geral
@@ -54,6 +54,9 @@ Estrutura interna por jogo:
   movimento) é consumida por `universe.js` (os 6 sistemas como DADOS) e por
   `campaign.js` (as 5 fases como dados; `missions.js` executa). `gravity.js` e
   `orbits.js` consomem o record canônico dos corpos e não conhecem as classes.
+  `ballistics.js` (solver de solução de tiro — puro, testável em node) consome o
+  campo via `gravityFn` injetada (= `computeGravity`) e serve `ship.js` (mira C),
+  `nav.js` (arco no HUD) e `weapons.js` (nuke `aimed` sob gravidade pura).
 - **Degrau 3 (Godot 4):** `aero-fighters-v2/` — scene tree + GDScript + Autoload
   singletons; export Linux x64 via Godot CLI. Trabalho pausado em 2026-06-12.
 

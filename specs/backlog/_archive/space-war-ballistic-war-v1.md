@@ -1,6 +1,7 @@
 ---
 title: Space War ballistic strike warfare (playtest round 2026-07-03)
-status: candidate
+status: delivered
+delivered_in: space-war-ballistic-war-v1
 opened: 2026-07-03
 release: space-war-ballistic-war-v1
 description: Operator playtest demand: C computes a BALLISTIC firing solution (aim where to launch, not at the target — the nuke curves under the real gravity field of the componentized bodies into the target); launched ordnance follows honest gravity arcs; target hunt chain across different moons/capital ships (5/7/9/11/13 per phase, next target appears when one dies); legible enemy base anatomy + big capital ships; realistic nuke explosion (mushroom on surfaces).
