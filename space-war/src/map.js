@@ -2,6 +2,7 @@
 
 import { game } from './state.js';
 import { SYSTEMS } from './config.js';
+import { phaseStatus } from './campaign.js';
 
 let canvas, ctx;
 
@@ -47,16 +48,32 @@ export function drawMap() {
   ctx.font = '12px monospace'; ctx.textAlign = 'center';
   ctx.fillStyle = '#7df'; ctx.fillText('MAPA GALÁCTICO — 5 SISTEMAS (escala log)  —  [M] fecha', cx, 28);
 
-  // Marcadores dos 5 sistemas: anel + nome no centro de cada um.
+  // Marcadores dos sistemas: anel + nome + ESTADO DE CAMPANHA (✔ vencido /
+  // ▶ fase atual / 🔒 bloqueado / LIVRE = fora da campanha, ex.: Véu).
   for (const sys of SYSTEMS) {
     if (sys.key === 'solar') continue;
     const [mx, my] = project(sys.center[0], sys.center[2]);
-    ctx.strokeStyle = 'rgba(255,210,122,0.45)';
+    const st = phaseStatus(sys.key);
+    const ringCol = st === 'done' ? 'rgba(110,255,140,0.55)'
+      : st === 'active' ? 'rgba(122,214,255,0.7)'
+      : st === 'locked' ? 'rgba(150,150,170,0.35)'
+      : 'rgba(255,210,122,0.45)';
+    ctx.strokeStyle = ringCol;
     ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.arc(mx, my, 16, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#ffd27a';
-    ctx.fillText(sys.name, mx, my - 22);
+    ctx.fillStyle = st === 'locked' ? '#99a' : '#ffd27a';
+    const badge = st === 'done' ? '✔ ' : st === 'active' ? '▶ ' : st === 'locked' ? '🔒 ' : '';
+    ctx.fillText(`${badge}${sys.name}${st === null ? ' (livre)' : ''}`, mx, my - 22);
+  }
+
+  // Estado da fase solar (o centro do mapa é o Sol — sem marcador próprio).
+  const solarSt = phaseStatus('solar');
+  if (solarSt) {
+    ctx.fillStyle = solarSt === 'done' ? '#6f8' : '#7df';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${solarSt === 'done' ? '✔' : '▶'} SISTEMA SOLAR — fase ${solarSt === 'done' ? 'vencida' : 'atual'}`, 18, 52);
+    ctx.textAlign = 'center';
   }
 
   // Anéis de distância (escala log legível)

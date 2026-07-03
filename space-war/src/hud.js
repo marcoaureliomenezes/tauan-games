@@ -56,10 +56,13 @@ export function updateHUD() {
   if (hg) hg.style.opacity = Math.min(0.92, (s.heat || 0)).toFixed(2);
 
   set('hp', `CASCO: ${Math.max(0, s.hp | 0)}%`);
-  set('nukes', `☢ NUKES: ${s.nukes}`);
+  // Recarga de nukes (campanha): mostra o timer quando a reserva não está cheia.
+  const regen = s.nukes < 4 ? ` ⟳${Math.max(0, 20 - (s.nukeRegen || 0)) | 0}s` : '';
+  set('nukes', `☢ NUKES: ${s.nukes}${regen}`);
   set('score', `SCORE: ${String(game.score).padStart(6, '0')}`);
   set('kills', `ABATES: ${game.kills}`);
   if (game.mission) set('mission', game.mission.label);
+  else if (game.campaign && game.phase === 'flight') set('mission', 'CAMPANHA — aguarde a próxima missão…');
 
   const warn = el('warning');
   if (warn) {

@@ -61,11 +61,43 @@ export function enemyFire(pos, dir) {
   game.projectiles.push({ mesh: m, vel: dir.clone().multiplyScalar(1500), life: 3, friendly: false, dmg: 6, isNuke: false });
 }
 
+// BOMBA inimiga (campanha): ordnance pesada BALÍSTICA — o mesmo campo gravitacional
+// da nave/nukes a puxa (computeGravity), SEM guiagem orbital (D-4/D-5). Detona por
+// proximidade do jogador ou contato de superfície, com dano em área.
+export function enemyBomb(pos, vel) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(9, 10, 10),
+    new THREE.MeshBasicMaterial({ color: 0xff7744 }));
+  m.position.copy(pos);
+  scene.add(m);
+  game.projectiles.push({ mesh: m, vel: vel.clone(), life: 30, friendly: false, dmg: 24, isNuke: false, isBomb: true });
+}
+
+// Recarga de nukes (D-7): reserva máxima 4, +1 a cada 20 s — efetivamente ilimitadas
+// sem tirar o custo tático do disparo (o decremento imediato é preservado).
+export const NUKE_MAX = 4;
+export const NUKE_REGEN_S = 20;
+export function updateNukeRegen(dt) {
+  const s = game.ship;
+  if (s.nukes >= NUKE_MAX) { s.nukeRegen = 0; return; }
+  s.nukeRegen += dt;
+  if (s.nukeRegen >= NUKE_REGEN_S) {
+    s.nukeRegen = 0;
+    s.nukes++;
+  }
+}
+
 export function updateProjectiles(dt) {
+  updateNukeRegen(dt);
   const arr = game.projectiles;
   for (let i = arr.length - 1; i >= 0; i--) {
     const p = arr[i];
     p.life -= dt;
+    // BOMBA inimiga: gravidade pura (sem a guiagem orbital das nukes do jogador).
+    if (p.isBomb) {
+      computeGravity(p.mesh.position, _gPull);
+      p.vel.addScaledVector(_gPull, dt);
+      if (surfaceContact(p.mesh.position, 6)) p.surfaceHit = true;
+    }
     // NUKE SOB GRAVIDADE (operador 2026-07-02): a nuke é um corpo balístico —
     // o MESMO campo da nave (dominante + marés de todo corpo próximo) a puxa:
     // ela orbita, faz estilingue, e cai em ESPIRAL no disco de acreção.
@@ -140,6 +172,15 @@ export function updateProjectiles(dt) {
           if (t.destroyed) continue;
           if (t.obj.position.distanceTo(p.mesh.position) < 1800) { detonate = true; break; }
         }
+      }
+    } else if (p.isBomb) {
+      // bomba: espoleta de proximidade contra o jogador (ou contato de superfície)
+      if (p.surfaceHit || p.mesh.position.distanceTo(game.ship.pos) < 140) detonate = true;
+      if (detonate) {
+        const d = p.mesh.position.distanceTo(game.ship.pos);
+        const protectedNow = game.ship.landed || game.ship.spawnGrace > 0;
+        if (!protectedNow && d < 400) game.ship.hp -= p.dmg * (1 - d / 400);
+        explosion(p.mesh.position, 1.6, 0xff7744);
       }
     } else {
       // inimigo vs jogador (sem dano enquanto pousado ou na proteção inicial)
