@@ -32,11 +32,16 @@ export const game = {
     inAtmosphere: false,
     noReturn: false,      // dentro da zona de não-retorno (Sol / buraco negro / nêutrons)
     spawnGrace: 0,        // segundos de proteção pós-decolagem (sem dano / inimigos seguram fogo)
+    nukeRegen: 0,         // s acumulados p/ recarregar 1 nuke (armas efetivamente ilimitadas)
   },
   // Combate
   enemies: [],
   projectiles: [],
   particles: [],
+  // Campanha em fases (campaign.js): { phase, unlocked[], done[] }
+  campaign: null,
+  // Flare do Sol (diagnóstico do bug space-war-solar-flare-universe-overlay)
+  sunFlareVisible: true,
   // Missões
   mission: null,
   missionIndex: 0,
