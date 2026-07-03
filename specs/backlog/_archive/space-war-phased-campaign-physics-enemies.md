@@ -1,8 +1,9 @@
 ---
 title: Space War phased campaign, physics, and enemy overhaul
-status: candidate
+status: delivered
 opened: 2026-07-03
 release: space-war-campaign-v1
+delivered: 2026-07-03 — PR #11 (8ae4b75); CLOSURE em specs/_archive/releases/space-war-campaign-v1/
 description: Convert Space War from a fully open five-system sandbox into an ordered campaign that starts in the Solar System, unlocks the remaining systems in sequence, improves Solar System scale and gravity, and makes enemies, bases, bombs, and mission progression physically credible.
 intents:
   - subject:
