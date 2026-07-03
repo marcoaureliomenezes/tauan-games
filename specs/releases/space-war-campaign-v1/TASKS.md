@@ -50,7 +50,7 @@ frontmatter do backlog entry. **PROIBIDO:** `gravity.js`, `orbits.js`, `config.j
       **AC-09.**
 
 ### Wave 5 — Verificação e ship
-- [-] T-CP-06 `tests/space-war/campaign.spec.js` (gating, unlock, bomba-gravidade,
+- [x] T-CP-06 `tests/space-war/campaign.spec.js` (gating, unlock, bomba-gravidade,
       base ≤3%, flare, regen) verde + smoke 12/12 verde; QA review; disposição do
       bug (`resolved --release space-war-campaign-v1`); security push-verdict;
       push + PR + CI verde. **AC-08, AC-11.**

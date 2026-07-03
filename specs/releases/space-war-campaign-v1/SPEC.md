@@ -5,6 +5,7 @@
 **Release ID:** space-war-campaign-v1
 **Owner:** product-engineer
 **Opened:** 2026-07-03
+**Segment:** rc-1 (2026-07-03) — alpha-1 fechado com QA APPROVE 11/11 (unit 26 + smoke 12 + campanha 7 verdes); ship conforme TASKS T-CP-06
 **Backlog:** `specs/backlog/space-war-phased-campaign-physics-enemies.md` (candidate → promovido)
 **Bugs:** `space-war-solar-flare-universe-overlay` (MEDIUM — SEMPRE resolvido: lei bug-always-solved)
 **Depende de:** `space-war-celestial-components-v1` (rc-1, PR #10) — branch empilhado nela.

@@ -69,7 +69,7 @@ export function enemyBomb(pos, vel) {
     new THREE.MeshBasicMaterial({ color: 0xff7744 }));
   m.position.copy(pos);
   scene.add(m);
-  game.projectiles.push({ mesh: m, vel: vel.clone(), life: 30, friendly: false, dmg: 24, isNuke: false, isBomb: true });
+  game.projectiles.push({ mesh: m, vel: vel.clone(), life: 30, friendly: false, dmg: 22, isNuke: false, isBomb: true });
 }
 
 // Recarga de nukes (D-7): reserva máxima 4, +1 a cada 20 s — efetivamente ilimitadas
