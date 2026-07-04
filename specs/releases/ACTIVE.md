@@ -1,2 +1,2 @@
-release: space-war-physics-fidelity-v1
+release: space-war-interstellar-journey-v1
 phase: IMPLEMENTATION
