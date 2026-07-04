@@ -15,5 +15,5 @@
 - [x] **T-IE-04** — Testes: unit trapezoide; journey.spec platô; novo
   `journey-experience.spec.js` (coast β≥0.98, streaks/growth uniforms, imunidade);
   suíte completa. Write set: `tests/space-war/**`.
-- [-] **T-IE-05** — QA end-of-alpha + security push-verdict + push + PR stacked
+- [x] **T-IE-05** — QA end-of-alpha + security push-verdict + push + PR stacked
   (base main) + CI verde. Write set: `.dadaia/handoff/**`, `specs/**`.

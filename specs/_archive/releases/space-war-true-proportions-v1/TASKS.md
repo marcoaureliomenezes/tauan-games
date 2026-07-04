@@ -24,7 +24,7 @@
 - [x] **T-TP-06** — Testes por LEIS: unit sweep re-derivado; physics.spec AC-06
   reescrito (proporções); novo `proportions.spec.js`; ajustes journey/
   photometric/campaign. Write set: `tests/space-war/**`.
-- [-] **T-TP-07** — QA end-of-alpha + security push-verdict + push + PR stacked
+- [x] **T-TP-07** — QA end-of-alpha + security push-verdict + push + PR stacked
   (base main) + CI verde. Write set: `.dadaia/handoff/**`, `specs/**`.
 - [x] **T-TP-08** — (drift rc-2, bug operator-reported
   `space-war-gravbomb-higgs-keys-dead`) Registro de ações AUTO-CRIADO em

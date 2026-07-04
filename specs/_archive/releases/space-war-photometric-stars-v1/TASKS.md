@@ -27,7 +27,7 @@
 - [x] **T-PS-07** — E2E `photometric.spec.js` (AC-01..05) + suíte completa local
   verde (AC-07).
   Write set: `tests/space-war/photometric.spec.js`.
-- [-] **T-PS-08** — Revisões (QA end-of-alpha + security push-verdict), push,
+- [x] **T-PS-08** — Revisões (QA end-of-alpha + security push-verdict), push,
   PR stacked (base feature/space-war-interstellar-journey-v1), CI verde.
   Write set: `.dadaia/handoff/**`, `specs/**` (docs).
 - [x] **T-PS-09** — (drift rc-1) Root-cause do flake pré-existente do solver
