@@ -9,7 +9,7 @@ import { buildSolarSystem, updateSOIView, updateBodyFX } from './bodies.js';
 import { initOrbits, updateOrbits } from './orbits.js';
 import { buildShip, updateShip, shipMesh, toggleObservationCamera } from './ship.js';
 import { input, installListeners, onAction } from './input.js';
-import { fireLaser, launchNuke, updateProjectiles, enemyBomb } from './weapons.js';
+import { fireLaser, launchNuke, launchGravBomb, launchHiggs, updateProjectiles, enemyBomb } from './weapons.js';
 import { spawnEnemies, updateEnemies } from './enemies.js';
 import { startMissions, beginFlight, updateMissions, debugCompleteMission, debugKillTarget } from './missions.js';
 import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
@@ -67,6 +67,8 @@ onAction('start', () => {
   else if (game.phase === 'win' || game.phase === 'gameover') { location.reload(); }
 });
 onAction('nuke', () => { if (game.phase === 'flight') { if (!launchNuke()) showToast('Sem nukes ou nave pousada', 1500); } });
+onAction('gravbomb', () => { if (game.phase === 'flight') { if (!launchGravBomb()) showToast('Decole para lançar a traçadora', 1500); } });
+onAction('higgs', () => { if (game.phase === 'flight') { if (!launchHiggs()) showToast('Bomba de Higgs recarregando (ou nave pousada)', 1500); } });
 onAction('map', () => { if (game.phase === 'flight' || game.mapOpen) toggleMap(); });
 onAction('target', () => { if (game.phase === 'flight') cycleTarget(1); });
 onAction('targetPrev', () => { if (game.phase === 'flight') cycleTarget(-1); });
@@ -207,6 +209,8 @@ if (typeof window !== 'undefined') {
   const _up = new THREE.Vector3(0, 1, 0);
   window.__swDebug = {
     list: () => game.bodies.map((b) => b.def.key || b.def.name),
+    launchGravBomb: () => launchGravBomb(),
+    launchHiggs(outcome = null) { game.higgsForceOutcome = outcome; return launchHiggs(); },
     // Teleporta a nave para o lado iluminado de um corpo e aponta o nariz para ele.
     goTo(name, distMul = 3.2, elev = 0.6) {
       const key = String(name).toLowerCase();

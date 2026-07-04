@@ -132,6 +132,20 @@ export function computeGravity(pos, out, shipVel = null) {
     if (!interstellar && dominant.worldAcc) out.add(dominant.worldAcc);
   }
 
+  // POÇOS GRAVITACIONAIS TRANSIENTES (bomba de Higgs, D-2): perturbação ADITIVA
+  // sem SOI própria — nave, projéteis e plasma sentem o MESMO poço. Nunca vira
+  // `dominant` (HUD estável); entra no gravMag (portões de overdrive/aviso).
+  if (game.wells && game.wells.length) {
+    for (const w of game.wells) {
+      if (game.time > w.until) continue;                 // limpeza em updateProjectiles
+      _tmp.copy(w.pos).sub(pos);
+      const dW = Math.max(_tmp.length(), w.soft || 350); // núcleo suavizado (sem singularidade)
+      const aW = w.mu / (dW * dW);
+      out.addScaledVector(_tmp.normalize(), aW);
+      gravMag += aW;
+    }
+  }
+
   const surf = dominant.def.radius;
   const r = Math.max(domDist, surf * 0.85);
   // HUD honesto perto de compactos: v_circ/v_esc do potencial PW (divergem no r_s).

@@ -28,6 +28,8 @@ export function installListeners() {
   window.addEventListener('keydown', (e) => {
     if (DOWN[e.code]) { input[DOWN[e.code]] = true; if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault(); }
     if (e.code === 'KeyF') emit('nuke');
+    if (e.code === 'KeyG') emit('gravbomb');
+    if (e.code === 'KeyH') emit('higgs');
     if (e.code === 'KeyM') emit('map');
     if (e.code === 'KeyP') emit('pause');
     if (e.code === 'KeyT') emit(e.shiftKey ? 'targetPrev' : 'target');

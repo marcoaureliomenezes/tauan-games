@@ -58,7 +58,8 @@ export function updateHUD() {
   set('hp', `CASCO: ${Math.max(0, s.hp | 0)}%`);
   // Recarga de nukes (campanha): mostra o timer quando a reserva não está cheia.
   const regen = s.nukes < 4 ? ` ⟳${Math.max(0, 20 - (s.nukeRegen || 0)) | 0}s` : '';
-  set('nukes', `☢ NUKES: ${s.nukes}${regen}`);
+  const higgs = s.higgsCd > 0 ? `${Math.ceil(s.higgsCd)}s` : 'PRONTA';
+  set('nukes', `☢ NUKES: ${s.nukes}${regen} · ✦[G] ∞ · Ħ[H] ${higgs}`);
   set('score', `SCORE: ${String(game.score).padStart(6, '0')}`);
   set('kills', `ABATES: ${game.kills}`);
   if (game.mission) set('mission', game.mission.label);
