@@ -121,6 +121,44 @@ export function tidalGradient(mu, r, h) {
   return 2 * mu * h / Math.pow(Math.max(r, 1e-6), 3);
 }
 
+// ── Viagem brachistochrone (interstellar-journey, AC-02) ────────────────────
+// Queima contínua flip-and-burn: a = 4D/T²; v_pico = 2D/T no meio; perfil
+// x/D = 2s² (s ≤ ½) e 1 − 2(1−s)² (s > ½), com v simétrico v(s) = v(1−s).
+export function journeyProfile(D, T, t) {
+  const a = 4 * D / (T * T);
+  const s = Math.max(0, Math.min(1, t / T));
+  let x, v;
+  if (s <= 0.5) {
+    x = 2 * D * s * s;
+    v = a * (s * T);
+  } else {
+    const u = 1 - s;
+    x = D * (1 - 2 * u * u);
+    v = a * (u * T);
+  }
+  return { x, v, s, a, vPeak: 2 * D / T };
+}
+
+// Duração ∝ distância entre os limites do operador (3:00–6:00 min).
+export function journeyDuration(D, dMin, dMax) {
+  const f = Math.max(0, Math.min(1, (D - dMin) / Math.max(1, dMax - dMin)));
+  return 180 + 180 * f;
+}
+
+// Aberração relativística (forma APARENTE: repouso → observador em movimento):
+// cos θ_ap = (cos θ + β)/(1 + β cos θ) — o céu AGRUPA à frente ("headlight");
+// uma estrela a 90° do rumo aparece em arccos β (8.1° a β=0.99).
+export function aberrateCos(cosTheta, beta) {
+  return (cosTheta + beta) / (1 + beta * cosTheta);
+}
+
+// Fator Doppler δ = 1/(γ(1 − β cos θ')) — corpo negro permanece corpo negro com
+// T' = δ·T; intensidade observada ∝ δ⁴ (beaming).
+export function dopplerFactor(cosThetaObs, beta) {
+  const gamma = 1 / Math.sqrt(1 - beta * beta);
+  return 1 / (gamma * (1 - beta * cosThetaObs));
+}
+
 // Raios da dança binária em torno do baricentro: r_i ∝ μ do PARCEIRO.
 export function barycentricRadii(separation, mu1, mu2) {
   const total = mu1 + mu2;

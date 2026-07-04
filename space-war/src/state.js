@@ -51,6 +51,7 @@ export const game = {
   // Navegação (solution = solução de tiro balística viva, ballistics.js)
   nav: { target: null, aligning: false, solution: null },
   wells: [],              // poços gravitacionais transientes {pos, mu, until, soft} — bomba de Higgs
+  journey: null,          // viagem interestelar brachistochrone {active, s, T, D, beta, ...}
   // UI
   mapOpen: false,
   // diagnostics

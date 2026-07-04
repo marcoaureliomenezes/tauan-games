@@ -7,6 +7,7 @@ import { scene, camera, renderer } from './scene.js';
 import { SHIP, ATMO, OVERDRIVE } from './config.js';
 import { game } from './state.js';
 import { computeGravity, surfaceContact } from './gravity.js';
+import { updateJourney } from './journey.js';
 import { input, consumeMouse } from './input.js';
 import { currentTarget } from './nav.js';
 import { solveBallistic } from './ballistics.js';
@@ -41,6 +42,7 @@ function updateFiringSolution(t) {
 }
 
 let mesh, engineGlow, sideGlows = [];
+let plasmaJet = null, plasmaCore = null, wingLights = [];
 const accelG = new THREE.Vector3();
 const tmp = new THREE.Vector3();
 const fwd = new THREE.Vector3();
@@ -149,6 +151,39 @@ export function buildShip() {
     mesh.add(g2); sideGlows.push(g2);
   }
 
+  // JATO DE PLASMA (T-IJ-05, pedido do operador: "change the way the propulsion
+  // emits the plasma jet"): cone gradiente duplo — bainha azul + núcleo branco-
+  // quente — cujo COMPRIMENTO respira com o throttle. NormalBlending (gotcha NaN).
+  plasmaJet = new THREE.Mesh(
+    new THREE.ConeGeometry(0.17, 1.6, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x66baff, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  plasmaJet.rotation.x = -Math.PI / 2;             // boca no motor, ponta p/ trás (+Z)
+  plasmaJet.position.set(0, -0.02, 2.35);
+  mesh.add(plasmaJet);
+  plasmaCore = new THREE.Mesh(
+    new THREE.ConeGeometry(0.08, 1.1, 10, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  plasmaCore.rotation.x = -Math.PI / 2;
+  plasmaCore.position.set(0, -0.02, 2.1);
+  mesh.add(plasmaCore);
+
+  // LUZES VERMELHAS nas pontas das asas (pulso de navegação) + reflexo no casco:
+  // uma PointLight fraca presa à nave faz o metal do casco LER na escuridão.
+  wingLights = [];
+  for (const s of [-1, 1]) {
+    const lamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.075, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff2a2a }),
+    );
+    lamp.position.set(s * 1.58, 0.03, 0.75);
+    mesh.add(lamp); wingLights.push(lamp);
+  }
+  const rim = new THREE.PointLight(0xbfd4ff, 1.1, 60, 1.2);
+  rim.position.set(0, 2.2, -0.4);
+  mesh.add(rim);
+
   mesh.scale.setScalar(SHIP.size);
   scene.add(mesh);
 
@@ -179,8 +214,41 @@ function makeGlow() {
   return sp;
 }
 
+// FX visuais da nave (motor/jato/luzes) — compartilhado com a viagem
+// interestelar (que suspende o resto do voo mas mantém a nave VIVA na tela).
+export function updateShipVisualFX(thr) {
+  engineGlow.scale.setScalar(0.35 + thr * 0.8);
+  engineGlow.material.opacity = Math.min(0.8, 0.05 + thr * 0.55);
+  for (const g of sideGlows) {
+    g.scale.setScalar(0.24 + thr * 0.5);
+    g.material.opacity = Math.min(0.6, 0.03 + thr * 0.5);
+  }
+  if (plasmaJet) {
+    const breathe = 0.92 + 0.08 * Math.sin(game.time * 21);
+    plasmaJet.scale.set(1, Math.max(0.08, thr * 1.7) * breathe, 1);
+    plasmaJet.material.opacity = 0.08 + thr * 0.5;
+    plasmaCore.scale.set(1, Math.max(0.06, thr * 1.5) * breathe, 1);
+    plasmaCore.material.opacity = 0.12 + thr * 0.7;
+  }
+  // pulso de navegação 1.2 Hz nas wingtips (sempre visível — nave legível)
+  const pulse = 0.55 + 0.45 * Math.sin(game.time * Math.PI * 2 * 1.2);
+  for (const w of wingLights) w.material.color.setRGB(0.55 + 0.45 * pulse, 0.06, 0.06);
+}
+
 export function updateShip(dt) {
   const s = game.ship;
+
+  // VIAGEM INTERESTELAR (T-IJ-01): a queima brachistochrone domina a dinâmica
+  // (~10³× qualquer gravidade local) — o autopilot integra posição/velocidade/
+  // atitude e o resto do voo é suspenso durante o corredor.
+  if (game.journey && game.journey.active) {
+    updateJourney(dt);
+    mesh.position.copy(s.pos);
+    mesh.quaternion.copy(s.quat);
+    updateShipVisualFX(1.0);           // queima contínua: jato pleno
+    updateCamera(s, dt);
+    return;
+  }
 
   // --- Velocidade da Terra (diferença finita) p/ acompanhar a órbita ao decolar ---
   _earthVel.copy(earthBody.worldPos).sub(lastEarthPos).multiplyScalar(dt > 0 ? 1 / dt : 0);
@@ -205,12 +273,7 @@ export function updateShip(dt) {
   // Idle QUASE apagado (2026-07-02): com bloom, os 3 sprites aditivos somavam
   // acima do threshold e viravam um GLOBO branco em volta da nave nas fotos.
   const thr = s.throttle * (s.boost ? 1.5 : 1);
-  engineGlow.scale.setScalar(0.35 + thr * 0.8);
-  engineGlow.material.opacity = Math.min(0.8, 0.05 + thr * 0.55);
-  for (const g of sideGlows) {
-    g.scale.setScalar(0.24 + thr * 0.5);
-    g.material.opacity = Math.min(0.6, 0.03 + thr * 0.5);
-  }
+  updateShipVisualFX(thr);
 
   updateCamera(s, dt);
 }

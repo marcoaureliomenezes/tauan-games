@@ -5,7 +5,8 @@
 // Tudo é pintado UMA vez numa textura equiretangular 4096×2048 — custo zero por frame.
 
 import * as THREE from '../../vendor/three.module.min.js';
-import { RENDER } from './config.js';
+import { RENDER, SYSTEMS } from './config.js';
+import { game } from './state.js';
 
 // PRNG seeded (mulberry32) para um céu estável e testável.
 function mulberry32(seed) {
@@ -706,6 +707,64 @@ function paintSky() {
   // -------------------------------------------------------------------------
   drawBlackHole(ctx, W * 0.85, H * 0.46, 34, rnd);
   drawBlackHole(ctx, W * 0.10, H * 0.50, 22, rnd);
+
+  // -------------------------------------------------------------------------
+  // 11. BULBO GALÁCTICO na direção do NÚCLEO (interstellar-journey, AC-05).
+  // Apontou [T] para Sagitário A✦ → o céu naquela direção é a Grande Nuvem de
+  // Sagitário: bulbo AMARELO-QUENTE (a região mais brilhante da Via Láctea) com
+  // as fendas de poeira do Great Rift NA FRENTE e janelas de Baade brilhantes.
+  // HONESTO: Sgr A* é invisível no óptico (~30 mag de extinção) — SEM ponto
+  // central. Mapeamento equirect do SphereGeometry: u = atan2(z,−x)/2π, v = acos(y)/π.
+  // -------------------------------------------------------------------------
+  {
+    const core = SYSTEMS[4].center;
+    const len = Math.hypot(core[0], core[1], core[2]) || 1;
+    const d = [core[0] / len, core[1] / len, core[2] / len];
+    let u = Math.atan2(d[2], -d[0]) / (Math.PI * 2);
+    if (u < 0) u += 1;
+    const v = Math.acos(Math.max(-1, Math.min(1, d[1]))) / Math.PI;
+    const bx = u * W, by = v * H;
+    const rx = W * 0.075, ry = H * 0.11;
+    // nuvem quente multi-blob (gaussiana elíptica)
+    for (let i = 0; i < 42; i++) {
+      const a = rnd() * Math.PI * 2, rr = Math.sqrt(rnd());
+      const x = bx + Math.cos(a) * rx * rr, y = by + Math.sin(a) * ry * rr;
+      const warm = [[255, 217, 160], [255, 190, 110], [255, 240, 205]][i % 3];
+      puff(ctx, x, y, 60 + rnd() * 150, warm, 0.055 + rnd() * 0.05);
+    }
+    // froth de estrelas denso do bulbo
+    for (let i = 0; i < 900; i++) {
+      const a = rnd() * Math.PI * 2, rr = Math.sqrt(rnd());
+      const x = bx + Math.cos(a) * rx * rr * 1.1, y = by + Math.sin(a) * ry * rr * 1.1;
+      ctx.fillStyle = `rgba(255,${215 + (rnd() * 40 | 0)},${150 + (rnd() * 70 | 0)},${0.25 + rnd() * 0.5})`;
+      ctx.fillRect(x, y, rnd() < 0.85 ? 1 : 2, rnd() < 0.85 ? 1 : 2);
+    }
+    // núcleo BRILHANTE da nuvem (a Grande Nuvem de Sagitário é a região mais
+    // luminosa da Via Láctea a olho nu)
+    puff(ctx, bx, by, rx * 0.55, [255, 224, 170], 0.30);
+    puff(ctx, bx - rx * 0.2, by + ry * 0.1, rx * 0.4, [255, 205, 135], 0.22);
+    puff(ctx, bx + rx * 0.25, by - ry * 0.12, rx * 0.35, [255, 235, 200], 0.20);
+    // GREAT RIFT: fendas de poeira escuras cruzando o bulbo — FORA do miolo
+    // (as janelas de Baade existem porque há buracos na poeira)
+    const laneOff = [-0.55, 0.28, 0.62];
+    for (let lane = 0; lane < 3; lane++) {
+      const y0 = by + ry * laneOff[lane] + (rnd() - 0.5) * 12;
+      for (let i = 0; i < 26; i++) {
+        const x = bx - rx * 1.15 + (i / 26) * rx * 2.3;
+        const y = y0 + Math.sin(i * 0.7 + lane * 2.1) * ry * 0.12;
+        darkPuff(ctx, x, y, 26 + rnd() * 44, 0.16 + rnd() * 0.12);
+      }
+    }
+    // janelas de Baade: dois "furos" de baixa poeira, mais brilhantes
+    puff(ctx, bx - rx * 0.34, by + ry * 0.30, 34, [255, 235, 190], 0.22);
+    puff(ctx, bx + rx * 0.42, by + ry * 0.18, 26, [255, 228, 175], 0.18);
+    // diagnóstico p/ e2e (AC-05): MÉDIA 6×6 no miolo do bulbo (robusto a grãos)
+    const img = ctx.getImageData(Math.round(bx) - 3, Math.round(by) - 3, 6, 6).data;
+    let rr = 0, gg = 0, bb = 0;
+    for (let i = 0; i < img.length; i += 4) { rr += img[i]; gg += img[i + 1]; bb += img[i + 2]; }
+    const n = img.length / 4;
+    if (typeof game === 'object') game.bulgeProbe = { u, v, r: rr / n, g: gg / n, b: bb / n };
+  }
 
   return canvas;
 }
