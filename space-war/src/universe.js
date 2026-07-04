@@ -35,12 +35,14 @@ const VEIL = {
     name: 'Braseiro', key: 'veilgiant',
     mass: 5,                    // 5 M☉ → μ 5.0e12 derivado (D-3)
     radius: 30_000,
+    lum: 8,                     // gigante inchada (default do kind, explícito)
     soi: 130_000, gravReach: 200_000, spin: 700,
     light: { color: 0xffb080, intensity: 2.4, range: 600_000 },
   },
   dwarf: {
     name: 'Véspera', key: 'veildwarf',
     mass: 0.9,                  // 0.9 M☉ num corpo do tamanho da Terra
+    lum: 0.02,                  // anã branca: brilho de superfície alto, L ínfima
     soi: 40_000, gravReach: 90_000, spin: 60,
   },
   separation: 90_000,
@@ -65,6 +67,7 @@ function solarSystem() {
       ...SUN,
       cellScale: 26,            // granulação fina (vs células gigantes de supergigante)
       coronaScale: 5.0,
+      lum: 1.0,                 // gauge fotométrico do jogo (I=1 a PHOTO_D0)
       light: { color: SUN.light, intensity: 3.2, range: 1_000_000, flare: true },
     }).withMotion(new Pinned(ORIGIN));
     game.sun = sun;
@@ -212,7 +215,7 @@ function coreSystem() {
       const soi = Math.min(Math.max(0.55 * rHill, 2.2 * radius), 30_000);
       stars.push(new MainSequenceStar({
         name: `Estrela S${i + 1}`, key: `s${i + 1}`,
-        radius, color: pal.color, color2: pal.color2, mu: pal.mu,
+        radius, color: pal.color, color2: pal.color2, mu: pal.mu, lum: pal.lum,
         soi, gravReach: 90_000, spin: 200 + Math.random() * 300,
         cellScale: pal.cellScale, coronaScale: 5.5,
       }).withMotion(new EllipseRail(center, {

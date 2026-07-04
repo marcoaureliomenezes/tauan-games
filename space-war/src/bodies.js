@@ -11,7 +11,7 @@
 //   celestial/motion.js  — Pinned/KeplerRail/MoonRail/EllipseRail/BinaryPair/NBody
 //   celestial/stars.js   — Star + taxonomia NASA (main sequence → buraco negro)
 //   celestial/planets.js — Planet, Moon, Comet
-//   celestial/system.js  — builder único + beacons + culling + decorações
+//   celestial/system.js  — builder único + culling + decorações (glows: starlod)
 //   universe.js          — OS SISTEMAS, como dados
 
 import { buildUniverse, updateBodyFX, updateSOIView } from './celestial/system.js';

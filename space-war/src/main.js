@@ -19,6 +19,7 @@ import { initMap, toggleMap, drawMap } from './map.js';
 import { buildNav, initNavHUD, drawNav, cycleTarget, targetBody } from './nav.js';
 import { initPostFx, renderFrame, updateAdaptiveRes, setLens, setJourneyBeta } from './postfx.js';
 import { buildStarfield, updateStarfield } from './starfield.js';
+import { buildFarStars, updateFarStars } from './celestial/starlod.js';
 
 // --- Construir o mundo ---
 const skybox = createSkybox();
@@ -29,6 +30,7 @@ initOrbits();
 updateOrbits(0.0001);
 buildShip();
 buildStarfield();
+buildFarStars();
 spawnEnemies();
 installListeners();
 initMap();
@@ -153,6 +155,7 @@ function loop() {
   drawMap();
   updateGravLens();
   updateStarfield();
+  updateFarStars();
   setJourneyBeta(game.journey && game.journey.active ? game.journey.beta : 0);
   renderFrame();
 
@@ -258,6 +261,28 @@ if (typeof window !== 'undefined') {
       s.pos.copy(b.worldPos).addScaledVector(toSun, r * distMul).addScaledVector(_up, r * elev);
       const m = new THREE.Matrix4().lookAt(s.pos, b.worldPos, _up);
       s.quat.setFromRotationMatrix(m);    // nariz (-Z) aponta para o corpo
+      return true;
+    },
+    // Teleporta a nave para PERTO DO OBJETIVO da missão atual (radialmente acima
+    // da base / ao lado da nave capital) e aponta o nariz. Determinístico p/ QA:
+    // o goTo por corpo depende da FASE ORBITAL aleatória de boot + posição
+    // aleatória da base na superfície — uma loteria que flakeava o teste do
+    // solver balístico (pré-existente; corrigido na photometric-stars rc-1).
+    goToObjective(dist = 7000) {
+      const m = game.mission;
+      const t = m && m.targets ? m.targets[m.targets.length - 1] : null;
+      if (!t || t.destroyed) return false;
+      game.phase = 'flight';
+      const s = game.ship;
+      s.landed = false; s.throttle = 0;
+      // CO-MÓVEL com o corpo do alvo: sem isto a nave deriva ~250 u/s em relação
+      // à base (a Lua anda!) e cai do encontro durante a espera do teste.
+      if (t.body.worldVel) s.vel.copy(t.body.worldVel); else s.vel.set(0, 0, 0);
+      const up = new THREE.Vector3().copy(t.obj.position).sub(t.body.worldPos);
+      if (up.lengthSq() < 1e-6) up.set(0, 1, 0); else up.normalize();
+      s.pos.copy(t.obj.position).addScaledVector(up, dist);
+      const mLook = new THREE.Matrix4().lookAt(s.pos, t.obj.position, _up);
+      s.quat.setFromRotationMatrix(mLook);
       return true;
     },
     // Detona uma nuke logo à frente da nave (espetáculo de teste).

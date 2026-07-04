@@ -147,3 +147,57 @@ test('config: massas respeitam a física (TOV, hierarquia SMBH, companheira)', a
   assert.ok(Math.abs(CORE.smbh.photonRing / CORE.smbh.rs - 2.6) < 0.01);
   assert.ok(Math.abs(CORE.smbh.disk.inner / CORE.smbh.rs - 3.0) < 0.01);
 });
+
+// ═══════════ FOTOMETRIA DE FONTES PONTUAIS (photometric-stars, AC-01/02) ═════
+
+test('fotometria: fluxo inverso-quadrado e gauge', async () => {
+  const { pointIntensity, PHOTO_D0 } = await import('../../../space-war/src/celestial/physics.js');
+  // I(L=1, d=D0) = 1 (gauge); dobrar d divide I por 4 (F ∝ L/d²)
+  assert.ok(Math.abs(pointIntensity(1, PHOTO_D0) - 1) < 1e-12);
+  const I1 = pointIntensity(3, 500_000);
+  const I2 = pointIntensity(3, 1_000_000);
+  assert.ok(Math.abs(I1 / I2 - 4) < 1e-9, 'dobrar d deve dividir o fluxo por 4');
+  // magnitude de Pogson consistente: Δm = −2.5·log10(I2/I1) = +1.505 (mais fraca)
+  const dm = -2.5 * Math.log10(I2 / I1);
+  assert.ok(Math.abs(dm - 1.50515) < 1e-3);
+});
+
+test('fotometria: PSF — núcleo fixo, glare √(I−1), teto e cobertura sub-pixel', async () => {
+  const { pointPx, pointAlpha } = await import('../../../space-war/src/celestial/physics.js');
+  // Sub-saturada (I ≤ 1): tamanho NÃO muda (núcleo fixo) — só a opacidade cai
+  assert.equal(pointPx(0.04), pointPx(1.0));
+  assert.ok(Math.abs(pointAlpha(0.04) - 0.04) < 1e-12, 'α = I (fade por cobertura)');
+  assert.equal(pointAlpha(7), 1);
+  // Saturada: cresce ∝ √(I−1) (Spencer 1995), monótona, com teto
+  const p2 = pointPx(2), p5 = pointPx(5), p1e4 = pointPx(1e4);
+  assert.ok(p2 > pointPx(1) && p5 > p2, 'glare cresce com I');
+  assert.ok(Math.abs((p5 - 2.2) / (p2 - 2.2) - 2) < 1e-9, '√(5−1)/√(2−1) = 2');
+  assert.equal(p1e4, 26, 'teto maxPx');
+});
+
+test('fotometria: LOD ponto↔disco com histerese 2px↑/1px↓', async () => {
+  const { lodStep, discPx } = await import('../../../space-war/src/celestial/physics.js');
+  // θ_px: NS (R=30) a 90k u com pixel de 1.67 mrad → sub-pixel (modo ponto)
+  const pxAngle = 1.67e-3;
+  assert.ok(discPx(30, 90_000, pxAngle) < 1, 'NS é sub-pixel a 90k');
+  assert.ok(discPx(110_000, 5_000_000, pxAngle) > 2, 'Sol a 5M ainda é disco resolvível');
+  // histerese: sobe a disco só em ≥2px; desce a ponto só em <1px; banda mantém
+  assert.equal(lodStep('point', 1.5), 'point');
+  assert.equal(lodStep('point', 2.0), 'disc');
+  assert.equal(lodStep('disc', 1.5), 'disc');
+  assert.equal(lodStep('disc', 0.9), 'point');
+});
+
+test('fotometria: hierarquia de luminosidades declaradas (D-7)', async () => {
+  const { lumForStar, STAR_LUM_DEFAULTS } = await import('../../../space-war/src/celestial/physics.js');
+  const { BINARY, BETELGEUSE, CHAOTIC } = await import('../../../space-war/src/config.js');
+  // O pulsar é a fonte PONTUAL mais brilhante do jogo (Crab comprimido)
+  assert.ok(lumForStar(BINARY.neutronStar) > lumForStar(BETELGEUSE.star));
+  assert.ok(lumForStar(BETELGEUSE.star) > 1, 'supergigante ≫ Sol');
+  assert.ok(lumForStar(CHAOTIC.stars[0]) < 1 && lumForStar(CHAOTIC.stars[0]) > 0);
+  // defaults por kind: BN e planetas não emitem (0 → sem ponto fotométrico)
+  assert.equal(lumForStar({ kind: 'blackhole' }), 0);
+  assert.equal(lumForStar({ kind: 'rock' }), 0);
+  assert.equal(lumForStar({ kind: 'neutron' }), STAR_LUM_DEFAULTS.neutron);
+  assert.equal(lumForStar({ kind: 'neutron', lum: 5 }), 5, 'override declarado manda');
+});
