@@ -338,7 +338,7 @@ the reality of when we approach celestial bodies???"), com causa-raiz e fix:
 não-retorno do Sol, nav, FPS); probes numéricos live (maré/Lagrange, espiral da nuke,
 overdrive nos 3 regimes); screenshots sw2-*.jpeg. Suíte completa na CI do PR.
 
-### [ ] T-WR-06 — QA/fechamento
+### [-] T-WR-06 — QA/fechamento (reservada 2026-07-03 — suíte completa em execução)
 
 **Owner:** `qa-engineer` + `code-reviewer`
 
