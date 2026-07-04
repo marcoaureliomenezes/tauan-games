@@ -84,9 +84,18 @@ export function enemyBomb(pos, vel) {
 // e com TRILHA persistente do caminho percorrido. Sente corpos, marés E poços
 // de Higgs — o mesmo computeGravity de tudo.
 const TRACER_TRAIL_N = 320;          // pontos da trilha (~38 s a 1 ponto/0.12 s)
+const TRACER_MAX_ACTIVE = 6;         // munição INFINITA ≠ simultâneas ilimitadas:
+let _lastTracerAt = -10;             // FIFO + cooldown curto (auto-repeat da tecla)
 export function launchGravBomb() {
   const s = game.ship;
   if (s.landed) return false;
+  if (game.time - _lastTracerAt < 0.35) return true;   // debounce (segue "infinita")
+  _lastTracerAt = game.time;
+  const live = game.projectiles.filter((p) => p.isTracer);
+  if (live.length >= TRACER_MAX_ACTIVE) {
+    const old = live[0];                               // descarta a mais VELHA
+    old.life = 0;                                      // updateProjectiles limpa (mesh+trilha)
+  }
   shipForward(_f);
   const m = new THREE.Mesh(new THREE.SphereGeometry(8, 10, 10),
     new THREE.MeshBasicMaterial({ color: 0xfff2c0 }));
@@ -335,7 +344,11 @@ export function updateProjectiles(dt) {
     }
 
     if (detonate || p.life <= 0) {
-      scene.remove(p.mesh); p.mesh.material.dispose();
+      scene.remove(p.mesh);
+      p.mesh.traverse((o) => {         // inclui filhos (casca do Higgs/traçadora)
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
       if (p.trail) { scene.remove(p.trail); p.trail.geometry.dispose(); p.trail.material.dispose(); }
       arr.splice(i, 1);
     }

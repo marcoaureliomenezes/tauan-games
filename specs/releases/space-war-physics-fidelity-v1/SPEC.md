@@ -9,8 +9,8 @@
 Elevar o space-war a simulador validável por físicos: corrigir as 4 violações (P1),
 aplicar os 8 upgrades de fidelidade (P2), entregar o arsenal gravitacional de 3 armas
 (nuke existente + bomba traçadora gravitacional + bomba de bóson de Higgs) — todas
-acopladas ao campo gravitacional real — e a escala dinâmica de aproximação (corpos
-crescem ≥10× até virarem PAREDE de horizonte reto antes da colisão).
+acopladas ao campo gravitacional real — e a ESCALA DE PAREDE (corpos ×10:
+horizonte reto em voo rasante, luas re-espaçadas por Kepler — ver AC-06 emendado).
 
 ## 2. Física de referência (briefs 2026-07-04)
 
@@ -50,12 +50,18 @@ crescem ≥10× até virarem PAREDE de horizonte reto antes da colisão).
   antes do fim do pulso → SUPERNOVA multicolorida (cascas + filamentos H/O/S + flash +
   shockwave + dano em área). e2e: as 3 armas disparam, tracer conta ∞, poço altera
   computeGravity mensuravelmente.
-- **AC-06 (escala de aproximação):** corpos rochosos/luas crescem visualmente ≥10× na
-  aproximação final (renderScale monotônico com a distância); contato/pouso/gravidade
-  usam o raio EFETIVO; órbitas de luas expandem com o pai (sem sobreposição);
-  horizonte "vira reta": a 0.15·R_eff de altitude a flecha do arco do limbo na largura
-  da tela < 4% (probe geométrico). Estrelas crescem com cap próprio (Sol ≤3×,
-  zona de não-retorno AC-04b preservada); compactos (BN/NS) NÃO escalam (física).
+- **AC-06 (escala de parede — EMENDADO na implementação):** o mecanismo dinâmico
+  (renderScale por distância) foi DESCARTADO durante a implementação: contato no
+  raio visual dinâmico gera geometria degenerada (superfície-Zenão: o chão foge ou
+  persegue a nave) e luas engolfadas. Entregue o equivalente ESTÁTICO consistente:
+  planetas e luas ×10 permanentes (μ ∝ f — v_circ/v_esc de superfície preservadas),
+  órbitas de luas re-espaçadas (piso 2.1·R) com períodos REDERIVADOS por Kepler
+  (T ∝ √(a³/μ) — velocidade linear original preservada, luas alcançáveis pela
+  balística), órbitas planetárias ×2, SOIs condicionais (varrido de sobreposição no
+  unit test), Sol ×5 (μ ×5: v_esc de superfície idêntica — zona de não-retorno
+  AC-04b verificada por unit test), Betelgeuse ×2.5 (segue a maior), compactos NÃO
+  escalam. Terra R=22000: a 300 u de altitude o mergulho do horizonte é 9.4° —
+  a "reta" pedida. e2e: Terra ≥ 22000, luas dentro da SOI, voo rasante são.
 - **AC-07 (regressão):** suíte space-war completa verde (smoke 12 + campanha 9 + unit
   celestial/balística) com retunes documentados; aero intocado.
 

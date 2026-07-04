@@ -22,13 +22,15 @@
   re-estabiliza (licença documentada). Roll no ARM: 30% instável→supernova ao fim do
   pulso; mergulho (surfaceContact da bomba com a estrela durante o pulso) → supernova
   imediata.
-- **D-5 (escala de aproximação):** `renderScale` por corpo: s(d) suave 1→S_max entre
-  d=10·R e d=2.2·R (smoothstep), aplicado ao `group.scale`; raio efetivo
-  `R_eff = R·s` usado em surfaceContact, clamp de gravidade, pouso, bases e HUD de
-  altitude. Luas: raio do TRILHO multiplicado pelo s do pai (expande junto — sem
-  engolfo). S_max: rochosos/luas 10, gigantes 6, estrelas 3 (Sol 2.5 — AC-04b
-  re-verificado), BN/NS 1 (compactos não escalam). Contato acontece onde d = R_eff(d)
-  — resolver monotônico: s clampado a ≤ 0.92·d/R (nunca "engole" a nave).
+- **D-5 (escala de parede — REVISADO):** o renderScale dinâmico foi abandonado
+  (drift: contato em raio dependente da distância = superfície-Zenão degenerada;
+  luas engolfadas pelo pai crescido). Implementado o rescale ESTÁTICO
+  auto-consistente `wallScale()` em config.js: planetas ×10, luas ×10 c/ órbitas
+  re-espaçadas E períodos Kepler √(k³/f), órbitas ×2 (periodFactor ×√(8/5)),
+  SOIs ×2.2 (com luas) / ×1.6 (sem), Sol ×5/μ×5, Betelgeuse ×2.5, anel de
+  vizinhos ×1.75, render/skybox ×2, overdrive ×18. Invariantes garantidos por
+  varrido geométrico no test-physics-unit (sobreposição de SOIs, folga
+  Mercúrio-Sol, luas ⊂ SOI, ordem de tamanhos, gauge v_esc do Sol).
 - **D-6 (assist fade em SOI):** autoridade do assist ×(1 − 0.65·band) onde band =
   smoothstep(1.5·R_eff → 0.5·SOI) — decolagem/pouso plenos, altitude orbital com
   inércia honesta; overdrive e [N]/[O] inalterados.

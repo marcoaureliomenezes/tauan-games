@@ -178,7 +178,7 @@ export function updateHiggs(dt) {
     }
 
     if (e.phase === 'dead') {
-      for (const arm of e.arms) for (const b of arm.blobs) { scene.remove(b); b.material.dispose(); }
+      for (const arm of e.arms) for (const b of arm.blobs) { scene.remove(b); b.material.dispose(); b.geometry.dispose(); }
       active.splice(i, 1);
     }
   }

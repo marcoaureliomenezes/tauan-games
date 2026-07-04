@@ -26,4 +26,4 @@
 - [x] T-PF-08 Escala dinâmica de aproximação (D-5): renderScale, raio efetivo em
       contato/gravidade/pouso/bases, trilhos de luas expandem, caps por tipo,
       probe de horizonte-reto. **AC-06.**
-- [-] T-PF-09 e2e novos + suíte completa verde + QA + security + push/PR/CI. **AC-07.**
+- [x] T-PF-09 e2e novos + suíte completa verde + QA + security + push/PR/CI. **AC-07.**

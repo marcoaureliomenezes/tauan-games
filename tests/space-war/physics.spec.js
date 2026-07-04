@@ -78,17 +78,23 @@ test.describe('Space War — Fidelidade Física', () => {
     test.setTimeout(60000);
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('terra', 4));
-    const okAll = await page.evaluate(() => {
-      const a = window.__swDebug.launchGravBomb();
-      const b = window.__swDebug.launchGravBomb();
-      const c = window.__swDebug.launchGravBomb();
-      return a && b && c;                          // infinita: nunca nega por munição
-    });
-    expect(okAll).toBe(true);
+    const ok = await page.evaluate(() => window.__swDebug.launchGravBomb());
+    expect(ok).toBe(true);                         // infinita: nunca nega por munição
     await page.waitForFunction(() => {
       const ts = window.__spaceWar.projectiles.filter((p) => p.isTracer);
-      return ts.length === 3 && ts[0].trailN > 4;  // trilha registrando o caminho
+      return ts.length >= 1 && ts[0].trailN > 4;   // trilha registrando o caminho
     }, { timeout: 8000 });
+    // FLOOD (auto-repeat da tecla): munição infinita ≠ simultâneas ilimitadas —
+    // debounce + FIFO seguram o teto de 6 ativas (achado LOW da QA).
+    const flood = await page.evaluate(async () => {
+      for (let i = 0; i < 15; i++) {
+        window.__swDebug.launchGravBomb();
+        await new Promise((r) => setTimeout(r, 260));
+      }
+      return window.__spaceWar.projectiles.filter((p) => p.isTracer).length;
+    });
+    expect(flood).toBeGreaterThanOrEqual(1);
+    expect(flood).toBeLessThanOrEqual(6);
   });
 
   // AC-05b: bomba de Higgs — poço transiente entra em game.wells, puxa DE VERDADE
