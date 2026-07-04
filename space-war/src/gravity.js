@@ -16,6 +16,16 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { MAX_ESCAPE_SPEED } from './config.js';
 import { game } from './state.js';
+import { pwAccel, pwCircularSpeed, pwEscapeSpeed } from './celestial/physics.js';
+
+// r_s efetivo de um corpo compacto: BN declara `rs`; NS usa compacidade real
+// R ≈ 2.5·r_s (R/r_s = 2.4–2.9 nas medidas NICER).
+function _rsOf(def) {
+  return def.rs ?? def.radius / 2.5;
+}
+function _isCompact(def) {
+  return def.kind === 'blackhole' || def.kind === 'neutron';
+}
 
 // 'core' saiu do regime somado (2026-07-02): as estrelas S agora andam em trilho
 // elíptico com SOI de Hill — patched-conics + aceleração de frame exata é o que
@@ -25,6 +35,8 @@ const DYNAMIC_SYSTEMS = new Set(['chaotic']);
 
 function _accelOf(b, dist) {
   const r = Math.max(dist, b.def.radius * 0.85);
+  // Paczyński–Wiita p/ compactos (P2-5): ISCO real em 3·r_s + mergulho abaixo.
+  if (_isCompact(b.def)) return pwAccel(b.mu, r, _rsOf(b.def));
   return b.mu / (r * r);
 }
 
@@ -122,8 +134,12 @@ export function computeGravity(pos, out, shipVel = null) {
 
   const surf = dominant.def.radius;
   const r = Math.max(domDist, surf * 0.85);
-  const circVel = Math.sqrt(dominant.mu / r);
-  const escapeVel = circVel * Math.SQRT2;
+  // HUD honesto perto de compactos: v_circ/v_esc do potencial PW (divergem no r_s).
+  const compact = _isCompact(dominant.def);
+  const circVel = compact ? pwCircularSpeed(dominant.mu, r, _rsOf(dominant.def))
+    : Math.sqrt(dominant.mu / r);
+  const escapeVel = compact ? pwEscapeSpeed(dominant.mu, r, _rsOf(dominant.def))
+    : circVel * Math.SQRT2;
   const canEscape = MAX_ESCAPE_SPEED > escapeVel * 1.05;
   const noReturn = !canEscape;
 

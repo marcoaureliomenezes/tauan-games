@@ -124,15 +124,19 @@ function binarySystem() {
     bodies: () => {
       bhBody = new BlackHole({ ...bh })
         .withMotion(new BinaryPair(center, { pairRadius: rBH, period, phase: 0 }));
-      nsBody = new NeutronStar({
-        ...ns,
-        light: { color: 0xcfe0ff, intensity: 3.0, range: 900_000 },
-      }).withMotion(new BinaryPair(center, { pairRadius: rNS, period, phase: Math.PI }));
+      nsBody = new NeutronStar({ ...ns })   // light vem do config (fonte única — P1-1)
+        .withMotion(new BinaryPair(center, { pairRadius: rNS, period, phase: Math.PI }));
       return [bhBody, nsBody];
     },
     decorations: () => [
-      // Transferência de massa visível: gás do pulsar espiralando para o disco do BN.
-      accretionStream(nsBody, bhBody),
+      // Gás do REMANESCENTE caindo no disco do BN (P1-4): uma estrela de nêutrons
+      // (v_esc ≈ 0.6c) NUNCA doa massa — quem alimenta o disco é o casulo da
+      // supernova. Fonte = ponto fixo na casca interna do remanescente.
+      accretionStream({
+        def: { radius: 2600 },
+        worldPos: new THREE.Vector3(center.x + BINARY.remnant.radius * 0.62, center.y + 9_000, center.z - 24_000),
+        group: { visible: true },
+      }, bhBody),
       // A casca da estrela que MORREU para criar o BN — envolve o sistema inteiro.
       supernovaRemnant({ ...BINARY.remnant, center, cullKey: 'binary' }),
     ],

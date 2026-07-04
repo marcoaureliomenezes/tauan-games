@@ -217,20 +217,25 @@ export const BINARY = {
     radius: 160,
     mu: 5.0e12,               // monstruoso e local
     soi: 150_000, gravReach: 150_000,
-    disk: { inner: 340, outer: 3200 },   // disco de acreção GRANDE (visível de longe)
-    photonRing: 215,
+    disk: { inner: 480, outer: 3200 },   // borda interna na ISCO = 3·rs (nada orbita dentro — vão escuro)
+    tideKillR: 2600,          // zona de MARÉ (P2-8): BN ESTELAR estraçalha longe do horizonte
+    photonRing: 416,          // anel na BORDA DA SOMBRA = 2.6·rs (EHT M87*/Sgr A*)
   },
   neutronStar: {
     name: 'Estrela de Nêutrons', key: 'neutron', kind: 'neutron',
     radius: 30,               // minúscula (≈ uma cidade), densíssima — de propósito
-    mu: 3.0e12,               // gravidade brutal e local
-    spin: 1.4,                // pulsar ultrarrápido
+    mu: 2.0e12,               // 2.0 M☉ — ≤ limite TOV ~2.2 (PSR J0740+6620: 2.08 M☉)
+    // Pulsar jovem BRILHA (P1-1): Ė = 4π²IṖ/P³ ≈ 1.2e5 L☉ (Crab) — luz azul-branca
+    // que ilumina o remanescente e o lado do disco do BN voltado para ela.
+    light: { color: 0x9bbcff, intensity: 4.0, range: 500_000 },
+    spin: 1.4,                // rotação visual dos jatos/toro (farol)
     jetTilt: 0.5,
     lensRs: 80,               // "mesmo não sendo um buraco negro… ela curva o espaço"
     soi: 110_000, gravReach: 110_000,
     // região do vento de pulsar/toro síncrotron: arrasto → ESPIRAL DA MORTE
     // (mesma mecânica do disco de acreção do BN — captura orbital, não sucção)
     disk: { inner: 90, outer: 2200 },
+    tideKillR: 420,           // maré de NS: letal só bem perto (calibrado p/ visita ao pulsar)
   },
 };
 
@@ -255,8 +260,8 @@ export const BETELGEUSE = {
   // orbitando DENTRO do envelope estendido da gigante.
   companion: {
     name: 'Siwarha', key: 'siwarha', kind: 'star',
-    radius: 900, color: 0xcfe0ff, color2: 0x8fb0f0, mu: 5.0e10,
-    soi: 9000, gravReach: 30_000, spin: 120, cellScale: 12,
+    radius: 2200, color: 0xcfe0ff, color2: 0x8fb0f0, mu: 1.15e12,   // ~1.15 M☉ (α Ori B real ≈ 1–1.5)
+    soi: 20_000, gravReach: 60_000, spin: 120, cellScale: 12,
     orbit: 86_000, periodFactor: 2.4,
   },
   planets: [
@@ -378,10 +383,14 @@ export const CORE = {
   smbh: {
     name: 'Sagitário A✦', key: 'sgr', kind: 'blackhole',
     rs: 900, radius: 900,
-    mu: 4.0e12,
+    mu: 4.0e13,               // SMBH: ≫ qualquer BN estelar (real: 4.15e6 M☉ — comprimido ~1e5×,
+                              // hierarquia preservada; trilhos das estrelas S rederivam deste μ)
     soi: 420_000, gravReach: 420_000,
-    disk: { inner: 2000, outer: 14_000 },
-    photonRing: 1200,
+    disk: { inner: 2700, outer: 14_000 },   // ISCO = 3·rs
+    photonRing: 2340,         // borda da sombra = 2.6·rs
+    diskGain: 0.4,            // Sgr A* real é QUIESCENTE (~1e-9 L_Edd) — disco tênue vs o binário
+    // SEM tideKillR: maré no horizonte ∝ 1/M² — um SMBH deixa a nave CRUZAR
+    // intacta (a espaguetificação é assinatura de BN ESTELAR, não de SMBH).
     jet: true,                // jato relativístico bipolar (print M87*)
   },
   starCount: 12,

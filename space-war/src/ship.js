@@ -436,7 +436,18 @@ function updateFlight(s, dt) {
       const domK = g.dominant && g.dominant.def.kind;
       const compact = domK === 'blackhole' || domK === 'neutron' || domK === 'star' ||
         domK === 'redsupergiant' || (g.dominant && g.dominant.isSun);
-      const strong = compact ? Math.max(0, Math.min(1, (g.gravMag - 60) / 240)) : 0;
+      let strong = compact ? Math.max(0, Math.min(1, (g.gravMag - 60) / 240)) : 0;
+      // FADE EM SOI DE PLANETA (P2-12): em altitude ORBITAL o damping transverso
+      // do assist é arrasto anisotrópico que DESTRÓI momento angular (ḣ=r×F/m≠0
+      // — Vallado/Battin). Abaixo de 1.5·R o assist segue PLENO (decolagem,
+      // pouso, voo rasante p/ as crianças); de 1.5·R até 0.5·SOI a autoridade
+      // decai (máx. 65% de redução) e o empuxo vira progressivamente newtoniano.
+      if (!compact && g.dominant && !g.interstellar) {
+        const R = g.dominant.def.radius;
+        const lo = R * 1.5, hi = Math.max((g.dominant.soi || R * 12) * 0.5, lo * 1.6);
+        const band = Math.max(0, Math.min(1, (g.dist - lo) / (hi - lo)));
+        strong = Math.max(strong, 0.65 * band * band * (3 - 2 * band));
+      }
       s.newtonBlend = strong;
       s.vel.lerp(desiredV, Math.min(1, SHIP.assistSteer * odThrust * dt) * (1 - strong * strong));
       if (strong > 0) {
@@ -486,6 +497,21 @@ function updateFlight(s, dt) {
   } else {
     s.heat = Math.max(0, (s.heat || 0) - dt * 0.9);
     s.atmoBody = null;
+  }
+
+  // --- ZONA DE MARÉ (P2-8): espaguetificação perto de BN/NS ESTELARES ---
+  // ∂g = 2μh/r³ — o gradiente estraçalha ~100·r_s ANTES do horizonte num BN
+  // estelar; num SMBH a maré no horizonte é ∝ 1/M² → desprezível (sem tideKillR
+  // no Sgr A✦ de propósito: dá para cruzar). Dano rampa ∝ (r_kill/r)³ − 1
+  // (a forma do gradiente real), escapável — aviso no HUD via s.tideWarn.
+  s.tideWarn = false;
+  if (dom && dom.def.tideKillR && !s.landed && s.spawnGrace <= 0) {
+    const ratio = dom.def.tideKillR / Math.max(g.dist, 1);
+    const tideDmg = Math.min(85, 55 * Math.max(0, ratio * ratio * ratio - 1));
+    if (tideDmg > 0.5) {
+      s.hp -= tideDmg * dt;
+      s.tideWarn = true;
+    }
   }
 
   // --- ESPIRAL DA MORTE: arrasto do disco de acreção (2026-07-02) ---
