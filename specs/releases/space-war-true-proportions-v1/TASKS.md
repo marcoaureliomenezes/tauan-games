@@ -26,3 +26,10 @@
   photometric/campaign. Write set: `tests/space-war/**`.
 - [-] **T-TP-07** — QA end-of-alpha + security push-verdict + push + PR stacked
   (base main) + CI verde. Write set: `.dadaia/handoff/**`, `specs/**`.
+- [x] **T-TP-08** — (drift rc-2, bug operator-reported
+  `space-war-gravbomb-higgs-keys-dead`) Registro de ações AUTO-CRIADO em
+  input.js: o mapa fixo + `?.push` engolia handlers em silêncio — [G]/[H]
+  NUNCA dispararam pelo teclado (a cobertura usava __swDebug, não teclas).
+  Novo `arsenal-keys.spec.js` com TECLAS REAIS (G traçadora + H poço que a
+  ATRAI + F regressão), 6/6 em 2 repeats. Write set: `space-war/src/input.js`,
+  `tests/space-war/arsenal-keys.spec.js`.

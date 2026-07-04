@@ -10,8 +10,12 @@ export const input = {
   mouseDX: 0, mouseDY: 0, pointerLocked: false,
 };
 
-const listeners = { nuke: [], map: [], pause: [], start: [], target: [], align: [], targetPrev: [], assist: [], approach: [], orbit: [], look: [] };
-export function onAction(name, fn) { listeners[name]?.push(fn); }
+// Registro AUTO-CRIADO (bug space-war-gravbomb-higgs-keys-dead): o mapa fixo +
+// `?.push` engolia SILENCIOSAMENTE handlers de ações não listadas — [G]/[H]
+// nunca dispararam pelo teclado (só a nuke tinha entrada). Auto-criar a lista
+// mata a classe inteira do bug: nenhum onAction pode mais cair no vazio.
+const listeners = {};
+export function onAction(name, fn) { (listeners[name] ??= []).push(fn); }
 function emit(name) { for (const fn of (listeners[name] || [])) fn(); }
 
 const DOWN = {
