@@ -18,5 +18,5 @@
 - [x] T-IJ-04 Bulbo galáctico no skybox na direção do core (sem ponto central). **AC-05.**
 - [x] T-IJ-05 Nave visível: jato de plasma shader, wingtips vermelhas pulsantes,
       rim+PointLight de reflexo. **AC-06.**
-- [-] T-IJ-06 Unit (perfil) + e2e (engate/warp/uniforms/chegada/nave) + suíte completa
+- [x] T-IJ-06 Unit (perfil) + e2e (engate/warp/uniforms/chegada/nave) + suíte completa
       + QA + security + push/PR/CI. **AC-07.**

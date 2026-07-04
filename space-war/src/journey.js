@@ -9,6 +9,7 @@
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
+import { surfaceContact } from './gravity.js';
 import { SYSTEMS } from './config.js';
 import { currentTarget, currentSystem } from './nav.js';
 import { showToast } from './hud.js';
@@ -111,6 +112,14 @@ export function updateJourney(dt) {
   s.pos.copy(j.from).addScaledVector(_dir, prof.x);
   s.vel.copy(_dir).multiplyScalar(prof.v);
   s.speed = prof.v;
+
+  // colisão SEGUE ativa no corredor (PLAN D-1/R-2): cruzar um corpo aborta a
+  // queima — o frame seguinte devolve o voo normal (dano/morte pelas regras).
+  const hit = surfaceContact(s.pos, 24);
+  if (hit) {
+    journeyAbort(`impacto: ${hit.body.def.name}`);
+    return true;
+  }
 
   // nariz gruda na direção do voo (a nave "surfa" a própria queima)
   _m.lookAt(s.pos, _to, _up);

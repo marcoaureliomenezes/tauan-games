@@ -100,7 +100,7 @@ onAction('assist', () => {
   // [Z] CONTEXTUAL (decisão do operador): alvo de OUTRO sistema → engata/aborta
   // a viagem interestelar; alvo local → toggle de assist (comportamento clássico).
   if ((game.journey && game.journey.active) || journeyEligible()) {
-    journeyToggle();
+    if (journeyToggle() === null) showToast('⭒ Decole antes de engatar a viagem interestelar', 2200);
     return;
   }
   game.ship.flightAssist = !game.ship.flightAssist;
