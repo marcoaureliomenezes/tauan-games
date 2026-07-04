@@ -234,16 +234,16 @@ if (typeof window !== 'undefined') {
     },
     shipReport() {
       const m = shipMesh();
-      let pointLights = 0, redLamps = 0, cones = 0;
+      let pointLights = 0, redLamps = 0, cones = 0, rimIntensity = 0;
       m.traverse((o) => {
-        if (o.isPointLight) pointLights++;
+        if (o.isPointLight) { pointLights++; rimIntensity = Math.max(rimIntensity, o.intensity); }
         if (o.isMesh && o.material && o.material.color && o.material.color.r > 0.5
             && o.material.color.g < 0.35 && o.material.color.b < 0.35
             && o.geometry && o.geometry.type === 'SphereGeometry') redLamps++;
         if (o.isMesh && o.geometry && o.geometry.type === 'ConeGeometry'
             && o.material && o.material.transparent) cones++;
       });
-      return { pointLights, redLamps, cones };
+      return { pointLights, redLamps, cones, rimIntensity };
     },
     // Teleporta a nave para o lado iluminado de um corpo e aponta o nariz para ele.
     goTo(name, distMul = 3.2, elev = 0.6) {

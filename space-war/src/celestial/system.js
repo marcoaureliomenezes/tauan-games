@@ -8,7 +8,7 @@
 
 import * as THREE from '../../../vendor/three.module.min.js';
 import { SYSTEMS } from '../config.js';
-import { scene } from '../scene.js';
+import { scene, camera } from '../scene.js';
 import { game } from '../state.js';
 import { HEADLESS, diskMaterial, REMNANT_VERT, REMNANT_FRAG } from './atoms.js';
 
@@ -43,13 +43,14 @@ export function updateBodyFX(dt) {
 // sistema distante agora é o GLOW fotométrico de celestial/starlod.js — fluxo
 // somado dos membros, mesma regra de visibilidade 0.9·raio.)
 
-// ── CULLING POR SISTEMA: sistemas distantes ficam invisíveis (zero draw calls);
-// no lugar brilha o glow fotométrico (starlod). Corpos com def.alwaysVisible
-// nunca somem (ex.: Betelgeuse — uma supergigante é visível de qualquer lugar).
+// ── CULLING POR SISTEMA (universal — proporções verdadeiras): sistemas
+// distantes ficam invisíveis (zero draw calls); no lugar brilha o glow
+// fotométrico (starlod). O SOLAR culla como qualquer um: de outro sistema, a
+// anos-luz, seria impossível ver Saturno (bug space-war-cross-system-visibility).
+// def.alwaysVisible continua respeitado para exceções deliberadas.
 const _sysCenter = new THREE.Vector3();
 export function updateSOIView(shipPos) {
   for (const sys of SYSTEMS) {
-    if (sys.key === 'solar') continue;
     _sysCenter.set(...sys.center);
     const near = shipPos.distanceTo(_sysCenter) < sys.radius * 1.15;
     for (const b of game.bodies) {
@@ -69,13 +70,16 @@ export function updateSOIView(shipPos) {
 // transferência de massa VISÍVEL, reposicionada a cada frame (ex-binário BN+pulsar).
 export function accretionStream(source, sink, { cullKey = null } = {}) {
   const group = new THREE.Group();
+  // WISPY, não cano (bug space-war-blackhole-look-not-approved): opacidade
+  // baixa e afunilamento LARGO na fonte — lê como gás difuso caindo, e a
+  // espiral local do BN (stars.js) assume a queda final no plano do disco.
   const streamMat = new THREE.MeshBasicMaterial({
-    color: 0xaad4ff, transparent: true, opacity: 0.28,
+    color: 0xaad4ff, transparent: true, opacity: 0.08,
     blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   });
-  const sinkR = sink.def.disk ? sink.def.disk.inner * 0.14 : sink.def.radius * 0.3;
+  const sinkR = sink.def.disk ? sink.def.disk.outer * 0.5 : sink.def.radius * 0.3;
   const stream = new THREE.Mesh(
-    new THREE.CylinderGeometry(sinkR, source.def.radius * 0.5, 1, 10, 1, true),
+    new THREE.CylinderGeometry(sinkR, source.def.radius * 1.6, 1, 12, 1, true),
     streamMat,
   );
   group.add(stream);
@@ -91,13 +95,18 @@ export function accretionStream(source, sink, { cullKey = null } = {}) {
     stream.position.copy(source.worldPos).addScaledVector(_sDir, dist * 0.5);
     stream.scale.set(1, dist * 0.88, 1);
     stream.quaternion.setFromUnitVectors(_sUp, _sDir);
-    streamMat.opacity = 0.09 + 0.05 * Math.sin(this.t * 2.3);
+    streamMat.opacity = 0.05 + 0.03 * Math.sin(this.t * 2.3);
   } };
   return { group, fx, cullKey };
 }
 
 // Casca de remanescente de supernova: esfera gigante com filamentos FBM, borda
 // realçada (look de CASCA), 2 cores (Hα + O III), expansão sutil contínua.
+// FADE POR DISTÂNCIA (bug space-war-blackhole-look-not-approved, AC-05): a
+// "bola de plasma" é visível NA APROXIMAÇÃO desde longe (rampa suave) em vez
+// do pop do cull duro de 1.15×raio — e some de vez só além de FAR_OUT.
+const REMNANT_FULL = 1_200_000;    // até aqui: opacidade plena
+const REMNANT_FAR = 3_500_000;     // daqui p/ fora: invisível (e mesh desligada)
 export function supernovaRemnant({ radius, color1, color2, center, cullKey = null }) {
   const group = new THREE.Group();
   const mat = new THREE.ShaderMaterial({
@@ -105,6 +114,7 @@ export function supernovaRemnant({ radius, color1, color2, center, cullKey = nul
     fragmentShader: REMNANT_FRAG,
     uniforms: {
       uTime: { value: 0 },
+      uFade: { value: 1 },
       uCol1: { value: new THREE.Color(color1) },
       uCol2: { value: new THREE.Color(color2) },
     },
@@ -124,6 +134,11 @@ export function supernovaRemnant({ radius, color1, color2, center, cullKey = nul
     shell.rotation.y += dt * 0.002;                 // deriva lenta dos filamentos
     const grow = 1 + this.t * 0.00012;              // expansão sutil contínua
     shell.scale.setScalar(Math.min(1.25, grow));
+    const d = camera.position.distanceTo(group.position);
+    const fade = 1 - THREE.MathUtils.smoothstep(d, REMNANT_FULL, REMNANT_FAR);
+    mat.uniforms.uFade.value = fade;
+    shell.visible = fade > 0.01;
+    game.remnantFade = fade;                        // diagnóstico p/ e2e (AC-05)
   } };
   return { group, fx, cullKey };
 }

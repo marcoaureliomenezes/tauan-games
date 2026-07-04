@@ -62,6 +62,16 @@ horizonte reto em voo rasante, luas re-espaçadas por Kepler — ver AC-06 emend
   AC-04b verificada por unit test), Betelgeuse ×2.5 (segue a maior), compactos NÃO
   escalam. Terra R=22000: a 300 u de altitude o mergulho do horizonte é 9.4° —
   a "reta" pedida. e2e: Terra ≥ 22000, luas dentro da SOI, voo rasante são.
+  > **SUPERSEDED (2026-07-04, release space-war-true-proportions-v1):** o operador
+  > RETIFICOU a demanda ("I cannot see the sun so bigger from the earth, it's
+  > fake... bigger while we approach, small as we travel — like in nature"): a
+  > inflação ESTÁTICA ×10/×5 quebrava os volumes aparentes (Sol ~30° do céu da
+  > Terra; Saturno disco gigante; sistemas vizinhos visíveis). A escala vigente é
+  > a das PROPORÇÕES VERDADEIRAS (θ = 2R/d honesto) — ver
+  > `specs/releases/space-war-true-proportions-v1/SPEC.md` e o bug
+  > `space-war-fake-apparent-proportions`. As LEIS deste AC que sobrevivem:
+  > μ ∝ f (gauge de superfície), Kepler √(k³/f) nas luas, varrido de SOIs,
+  > compactos fora de escala estática.
 - **AC-07 (regressão):** suíte space-war completa verde (smoke 12 + campanha 9 + unit
   celestial/balística) com retunes documentados; aero intocado.
 

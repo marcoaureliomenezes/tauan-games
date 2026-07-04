@@ -17,9 +17,9 @@
 export const MU_EARTH_GAME = 3.0e6;
 export const MU_SUN_GAME = 1.0e12;
 
-// Raio do Sol na escala do jogo (config.js: 11000 × 2 pós-escala) — âncora da
-// derivação massa→raio de main sequence.
-export const SUN_RADIUS_GAME = 22000;
+// Raio do Sol na escala do jogo (config.js: 11000, proporções verdadeiras) —
+// âncora da derivação massa→raio de main sequence.
+export const SUN_RADIUS_GAME = 11000;
 
 export function muFromEarthMasses(mEarth) { return MU_EARTH_GAME * mEarth; }
 export function muFromSolarMasses(mSun) { return MU_SUN_GAME * mSun; }
@@ -168,7 +168,7 @@ export function dopplerFactor(cosThetaObs, beta) {
 // energia — Spencer et al., SIGGRAPH 1995). Sub-saturada: esmaece por
 // cobertura (α = I), nunca encolhe abaixo do núcleo. Cânone Stellarium/Celestia/
 // Gaia Sky (ver revisão 2026-07-04, apêndice A).
-export const PHOTO_D0 = 1_000_000;   // gauge das estrelas de SISTEMA (L do Sol = 1)
+export const PHOTO_D0 = 2_000_000;   // gauge das estrelas de SISTEMA (L do Sol = 1)
 
 export function pointIntensity(L, d, d0 = PHOTO_D0) {
   const dd = Math.max(d, 1e-6);

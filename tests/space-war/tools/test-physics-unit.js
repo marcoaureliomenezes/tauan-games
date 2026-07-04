@@ -65,7 +65,7 @@ test('maré: gradiente ∝ 1/r³ (dobrar r divide o gradiente por 8)', () => {
   assert.ok(Math.abs(g1 / g2 - 8) < 1e-9);
 });
 
-test('escala de parede: geometria do sistema solar é consistente (T-PF-08)', async () => {
+test('proporções verdadeiras: geometria do sistema solar é consistente (T-TP-01)', async () => {
   const { SUN, PLANETS, BETELGEUSE } = await import('../../../space-war/src/config.js');
   // 1. Nenhum par de SOIs planetários vizinhos se sobrepõe.
   const sorted = [...PLANETS].sort((a, b) => a.orbit - b.orbit);
@@ -85,16 +85,59 @@ test('escala de parede: geometria do sistema solar é consistente (T-PF-08)', as
       assert.ok(m.orbit > p.radius * 2.0, `lua ${m.name} colada em ${p.name}`);
     }
   }
-  // 4. Ordem de tamanhos: Betelgeuse > Sol > todo planeta; Terra ≥ 22000 (parede).
+  // 4. Ordem de tamanhos: Betelgeuse > Sol > todo planeta; Terra grande vs a
+  //    NAVE (≥ 275 naves de raio) — a "parede" vem de CHEGAR PERTO (retificação
+  //    do operador 2026-07-04: inflação estática de raio foi rejeitada).
   const maxPlanet = Math.max(...PLANETS.map((p) => p.radius));
   assert.ok(BETELGEUSE.star.radius > SUN.radius, 'Betelgeuse segue a maior estrela');
   assert.ok(SUN.radius > maxPlanet, 'Sol maior que qualquer planeta');
   const earth = PLANETS.find((p) => p.key === 'earth' || /terra/i.test(p.name));
-  assert.ok(earth.radius >= 22000, `Terra ${earth.radius} deve ser PAREDE (≥ 22000 = 10× a rodada anterior)`);
-  // 5. Gauge: v_esc de superfície do Sol preservada dentro de ±5% do valor
-  //    pré-escala (μ e R cresceram juntos ×5) — a zona de não-retorno vive.
+  assert.ok(earth.radius >= 2200, `Terra ${earth.radius} pequena demais vs a nave`);
+  // 4b. HONESTIDADE ANGULAR (θ = 2R/d — bug space-war-fake-apparent-proportions):
+  //     o Sol do chão da Terra entre ~1.1° e ~8.6° (nunca ~30° de céu);
+  //     Saturno visto da Terra na conjunção < 0.7° (não um disco gigante).
+  const thetaSun = 2 * SUN.radius / earth.orbit;
+  assert.ok(thetaSun > 0.02 && thetaSun < 0.15,
+    `Sol da Terra subtende ${(thetaSun * 57.3).toFixed(1)}° — fora de [1.1°, 8.6°]`);
+  const saturn = PLANETS.find((p) => /saturno/i.test(p.name));
+  const thetaSat = 2 * (saturn.ring ? saturn.ring.outer : saturn.radius) / (saturn.orbit - earth.orbit);
+  assert.ok(thetaSat < 0.022, `Saturno da Terra subtende ${(thetaSat * 57.3).toFixed(2)}° — deve ser < ~1.26° (joia, não disco)`);
+  // 5. Gauge: v_esc de superfície do Sol preservada (μ/R re-gauge exato —
+  //    a zona de não-retorno vive; derivado do CONFIG, não constante mágica).
   const vEsc = Math.sqrt(2 * SUN.mu / SUN.radius);
   assert.ok(Math.abs(vEsc - 14142) / 14142 < 0.05, `v_esc do Sol ${vEsc.toFixed(0)} ≠ ~14142`);
+});
+
+test('proporções verdadeiras: anos-luz entre sistemas + compactos das referências', async () => {
+  const { SYSTEMS, BINARY, CORE, SUN } = await import('../../../space-war/src/config.js');
+  const solar = SYSTEMS.find((x) => x.key === 'solar');
+  // Sistemas vizinhos a ≥ 4× o raio do solar (nenhum disco cruza o vazio).
+  for (const s of SYSTEMS) {
+    if (s.key === 'solar') continue;
+    const d = Math.hypot(...s.center);
+    assert.ok(d > 4 * solar.radius, `${s.key} a ${(d / 1e6).toFixed(1)}M — perto demais do solar`);
+    // De lá, o Sol subtende < 0.11° — invisível como disco (só ponto/glow).
+    assert.ok(2 * SUN.radius / d < 2e-3, `Sol visível como disco de ${s.key}`);
+  }
+  // BN das referências: 3× horizonte, disco 5× (ISCO 3·rs, sombra 2.6·rs, o
+  // disco DOMINA a cena >30·rs), maré ~16·rs, jato ligado.
+  const bh = BINARY.blackHole;
+  assert.equal(bh.rs, 480);
+  assert.ok(Math.abs(bh.disk.inner / bh.rs - 3.0) < 0.01, 'ISCO = 3·rs');
+  assert.ok(Math.abs(bh.photonRing / bh.rs - 2.6) < 0.01, 'sombra = 2.6·rs');
+  assert.ok(bh.disk.outer / bh.rs > 30, 'disco domina a cena (>30·rs)');
+  assert.ok(bh.disk.outer >= 16_000, 'disco 5× (operador)');
+  assert.equal(bh.jet, true, 'jato bipolar (referências)');
+  assert.ok(bh.tideKillR > bh.rs * 12 && bh.tideKillR < bh.rs * 22, 'maré ~16·rs');
+  // Sgr A* 3× coerente (ISCO/sombra); disco NÃO invade o periélio das estrelas S.
+  assert.ok(Math.abs(CORE.smbh.disk.inner / CORE.smbh.rs - 3.0) < 0.01);
+  assert.ok(Math.abs(CORE.smbh.photonRing / CORE.smbh.rs - 2.6) < 0.01);
+  assert.ok(CORE.smbh.disk.outer < CORE.aMin * (1 - CORE.eMax), 'disco de Sgr A* invade periélio das S');
+  // NS das referências: 3× visual, TOV intacto, maré fora da superfície.
+  const ns = BINARY.neutronStar;
+  assert.equal(ns.radius, 90);
+  assert.ok(ns.mu / 1e12 <= 2.2, 'TOV');
+  assert.ok(ns.tideKillR > ns.radius, 'zona de maré fora da superfície');
 });
 
 test('viagem brachistochrone: perfil flip-and-burn correto (AC-02 journey)', () => {

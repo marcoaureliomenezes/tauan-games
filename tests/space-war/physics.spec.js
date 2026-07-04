@@ -134,9 +134,11 @@ test.describe('Space War — Fidelidade Física', () => {
     await page.waitForFunction(() => (window.__spaceWar.supernovaCount || 0) >= 1, { timeout: 90000 });
   });
 
-  // AC-06: escala de parede — Terra ≥ 22000 (10×), dominância e altitude sãs
-  // em voo rasante; a lua re-espaçada continua DENTRO da SOI da Terra.
-  test('AC-06: parede de horizonte — Terra 10×, luas coerentes', async ({ page }) => {
+  // AC-06 (SUPERSEDED por space-war-true-proportions-v1): a inflação estática
+  // de raios foi retificada pelo operador — a Terra é grande vs a NAVE (2200 =
+  // 275 naves) e a "parede" vem de CHEGAR PERTO (θ = 2R/d honesto); luas
+  // coerentes (dentro da SOI, fora de 2·R) continuam LEI.
+  test('AC-06: proporções — Terra grande vs nave, luas coerentes', async ({ page }) => {
     await startFlight(page);
     const g = await page.evaluate(() => {
       const sw = window.__spaceWar;
@@ -148,7 +150,7 @@ test.describe('Space War — Fidelidade Física', () => {
         earthSoi: earth.soi,
       };
     });
-    expect(g.earthR).toBeGreaterThanOrEqual(22000);
+    expect(g.earthR).toBeGreaterThanOrEqual(2200);
     if (g.moonOrbit) {
       expect(g.moonOrbit).toBeGreaterThan(g.earthR * 2.0);
       expect(g.moonOrbit).toBeLessThan(g.earthSoi);

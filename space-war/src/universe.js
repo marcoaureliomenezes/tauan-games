@@ -26,7 +26,9 @@ const ORIGIN = new THREE.Vector3(0, 0, 0);
 // Autorado 100% aqui — config.js intocado; o registro em SYSTEMS é aditivo.
 const VEIL_SYSTEM = {
   key: 'veil', name: 'Véu — Gigante+Anã',
-  center: [4_200_000, 105_000, 3_325_000], radius: 200_000, primary: 'veilgiant',   // ×1.75 (anel novo)
+  // ×5 manual (proporções verdadeiras): este def nasce AQUI, depois do bloco
+  // de escala do config — o loop de centros de lá não o alcança.
+  center: [21_000_000, 525_000, 16_625_000], radius: 200_000, primary: 'veilgiant',
 };
 SYSTEMS.push(VEIL_SYSTEM);
 
@@ -96,7 +98,8 @@ function betelgeuseSystem() {
     const star = new RedSupergiant({
       ...BETELGEUSE.star,
       coronaScale: 3.6,
-      alwaysVisible: true,      // visível de qualquer lugar do mapa (como a real)
+      // alwaysVisible saiu (proporções verdadeiras): a 26M u a supergigante é
+      // um PONTO fotométrico/glow — nenhuma malha cruza o vazio interestelar.
       light: { color: BETELGEUSE.star.light, intensity: 2.6, range: 700_000 },
     }).withMotion(new Pinned(center));
 
@@ -141,7 +144,9 @@ function binarySystem() {
         group: { visible: true },
       }, bhBody),
       // A casca da estrela que MORREU para criar o BN — envolve o sistema inteiro.
-      supernovaRemnant({ ...BINARY.remnant, center, cullKey: 'binary' }),
+      // SEM cullKey: o fade por distância (AC-05) é quem governa a visibilidade —
+      // a "bola de plasma" acende na aproximação em vez de pipocar no cull.
+      supernovaRemnant({ ...BINARY.remnant, center }),
     ],
   };
 }
