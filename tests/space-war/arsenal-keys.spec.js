@@ -36,23 +36,24 @@ test.describe('Space War — Arsenal por TECLAS REAIS', () => {
       () => window.__spaceWar.wells.length >= 1,
       undefined, { timeout: 60000 },
     );
-    const v0 = await page.evaluate(() => {
+    const v0ok = await page.evaluate(() => {
       const t = window.__spaceWar.projectiles.find((p) => p.isTracer);
-      return t ? { x: t.vel.x, y: t.vel.y, z: t.vel.z } : null;
+      if (!t) return false;
+      window.__arsenalV0 = { x: t.vel.x, y: t.vel.y, z: t.vel.z };
+      return true;
     });
-    expect(v0).not.toBeNull();
-    await page.waitForTimeout(2000);
-    const curved = await page.evaluate((a) => {
+    expect(v0ok).toBe(true);
+    // espera a CONDIÇÃO (não um relógio de parede — runner 2-core encolhe o
+    // tempo de sim): o poço vive 8s de sim, a curvatura CHEGA; dot<0.99 ou dv>30
+    await page.waitForFunction(() => {
       const t = window.__spaceWar.projectiles.find((p) => p.isTracer);
-      if (!t) return null;
+      const a = window.__arsenalV0;
+      if (!t || !a) return false;
       const b = t.vel;
       const ma = Math.hypot(a.x, a.y, a.z), mb = Math.hypot(b.x, b.y, b.z);
       const dot = (a.x * b.x + a.y * b.y + a.z * b.z) / (ma * mb);
-      return { dot, dv: Math.abs(mb - ma) };
-    }, v0);
-    expect(curved).not.toBeNull();
-    // o poço dobra a traçadora com força: direção OU módulo mudam MUITO
-    expect(curved.dot < 0.99 || curved.dv > 30).toBe(true);
+      return dot < 0.99 || Math.abs(mb - ma) > 30;
+    }, undefined, { timeout: 30000 });
   });
 
   test('KeyH lança a bomba de Higgs e o POÇO gravitacional nasce', async ({ page }) => {
