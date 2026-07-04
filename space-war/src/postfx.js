@@ -33,6 +33,7 @@ const LENS_SHADER = {
     uAspect: { value: 1.0 },
     uMix: { value: 0.0 },
     uShadow: { value: 1.0 },     // 1 = buraco negro (sombra); 0 = estrela de nêutrons
+    uJBeta: { value: 0.0 },      // β da viagem interestelar → aberração/Doppler de tela
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -46,6 +47,7 @@ const LENS_SHADER = {
     uniform float uAspect;
     uniform float uMix;
     uniform float uShadow;
+    uniform float uJBeta;
     varying vec2 vUv;
     // amostra o fundo lenseado com uma força de deflexão dada; fora da tela → base
     vec4 sampleLensed(vec4 base, vec2 d, float pull, float swirl) {
@@ -59,7 +61,25 @@ const LENS_SHADER = {
       return texture2D(tDiffuse, uv2);
     }
     void main() {
-      vec4 base = texture2D(tDiffuse, vUv);
+      // RELATIVIDADE DE TELA (viagem interestelar, AC-04): o skybox/fundo
+      // converge suavemente p/ frente (aberração — o nariz cola na direção do
+      // voo, então o centro da tela É a direção do movimento) + Doppler:
+      // azul à frente, vermelho na periferia. Realista e leve (sem warp-tunnel).
+      vec2 uvW = vUv;
+      vec3 jTint = vec3(1.0);
+      if (uJBeta > 0.001) {
+        vec2 dc = vUv - vec2(0.5);
+        dc.x *= uAspect;
+        float rj = length(dc);
+        uvW = mix(vUv, vec2(0.5), uJBeta * 0.20 * (1.0 - smoothstep(0.0, 0.75, rj)));
+        float blue = uJBeta * (1.0 - smoothstep(0.0, 0.5, rj));
+        float red  = uJBeta * smoothstep(0.35, 0.9, rj) * 0.55;
+        jTint = vec3(1.0 - 0.20 * blue + 0.16 * red,
+                     1.0 - 0.05 * blue - 0.05 * red,
+                     1.0 + 0.28 * blue - 0.20 * red);
+      }
+      vec4 base = texture2D(tDiffuse, uvW);
+      base.rgb *= jTint;
       if (uMix <= 0.001 || uTheta <= 0.0005) { gl_FragColor = base; return; }
       // a lente é de TELA (sem profundidade): protege a região da NAVE — objeto
       // em primeiro plano não pode ser esticado pela lente do fundo.
@@ -163,6 +183,11 @@ export function setLens(ndcX, ndcY, thetaScreen, mix, shipNdcX = 0, shipNdcY = -
   u.uAspect.value = window.innerWidth / window.innerHeight;
   u.uMix.value = mix;
   u.uShadow.value = shadow;
+}
+
+// β da viagem p/ o tint relativístico de tela (chamado pelo loop principal).
+export function setJourneyBeta(beta) {
+  if (_lensPass) _lensPass.uniforms.uJBeta.value = beta;
 }
 
 export function renderFrame() {

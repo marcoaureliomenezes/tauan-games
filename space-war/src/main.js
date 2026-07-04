@@ -10,13 +10,15 @@ import { initOrbits, updateOrbits } from './orbits.js';
 import { buildShip, updateShip, shipMesh, toggleObservationCamera } from './ship.js';
 import { input, installListeners, onAction } from './input.js';
 import { fireLaser, launchNuke, launchGravBomb, launchHiggs, updateProjectiles, enemyBomb } from './weapons.js';
+import { journeyToggle, journeyEligible, journeyWarp } from './journey.js';
 import { spawnEnemies, updateEnemies } from './enemies.js';
 import { startMissions, beginFlight, updateMissions, debugCompleteMission, debugKillTarget } from './missions.js';
 import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
-import { buildNav, initNavHUD, drawNav, cycleTarget } from './nav.js';
-import { initPostFx, renderFrame, updateAdaptiveRes, setLens } from './postfx.js';
+import { buildNav, initNavHUD, drawNav, cycleTarget, targetBody } from './nav.js';
+import { initPostFx, renderFrame, updateAdaptiveRes, setLens, setJourneyBeta } from './postfx.js';
+import { buildStarfield, updateStarfield } from './starfield.js';
 
 // --- Construir o mundo ---
 const skybox = createSkybox();
@@ -26,6 +28,7 @@ initOrbits();
 // Avança a simulação 1 passo para posicionar os corpos antes de criar a nave.
 updateOrbits(0.0001);
 buildShip();
+buildStarfield();
 spawnEnemies();
 installListeners();
 initMap();
@@ -94,6 +97,12 @@ onAction('look', () => {
 });
 onAction('assist', () => {
   if (game.phase !== 'flight') return;
+  // [Z] CONTEXTUAL (decisão do operador): alvo de OUTRO sistema → engata/aborta
+  // a viagem interestelar; alvo local → toggle de assist (comportamento clássico).
+  if ((game.journey && game.journey.active) || journeyEligible()) {
+    if (journeyToggle() === null) showToast('⭒ Decole antes de engatar a viagem interestelar', 2200);
+    return;
+  }
   game.ship.flightAssist = !game.ship.flightAssist;
   showToast(game.ship.flightAssist ? '🛟 PILOTO ASSISTIDO: LIGADO' : '🚀 NEWTONIANO: inércia real (assist desligado)', 2200);
 });
@@ -143,6 +152,8 @@ function loop() {
   drawNav();
   drawMap();
   updateGravLens();
+  updateStarfield();
+  setJourneyBeta(game.journey && game.journey.active ? game.journey.beta : 0);
   renderFrame();
 
   // fps
@@ -211,6 +222,26 @@ if (typeof window !== 'undefined') {
     list: () => game.bodies.map((b) => b.def.key || b.def.name),
     launchGravBomb: () => launchGravBomb(),
     launchHiggs(outcome = null) { game.higgsForceOutcome = outcome; return launchHiggs(); },
+    journeyToggle: () => journeyToggle(),
+    journeyWarp: (s) => journeyWarp(s),
+    target(key) {
+      const b = game.bodies.find((x) => (x.def.key || '').toLowerCase() === String(key).toLowerCase());
+      if (b) targetBody(b);
+      return !!b;
+    },
+    shipReport() {
+      const m = shipMesh();
+      let pointLights = 0, redLamps = 0, cones = 0;
+      m.traverse((o) => {
+        if (o.isPointLight) pointLights++;
+        if (o.isMesh && o.material && o.material.color && o.material.color.r > 0.5
+            && o.material.color.g < 0.35 && o.material.color.b < 0.35
+            && o.geometry && o.geometry.type === 'SphereGeometry') redLamps++;
+        if (o.isMesh && o.geometry && o.geometry.type === 'ConeGeometry'
+            && o.material && o.material.transparent) cones++;
+      });
+      return { pointLights, redLamps, cones };
+    },
     // Teleporta a nave para o lado iluminado de um corpo e aponta o nariz para ele.
     goTo(name, distMul = 3.2, elev = 0.6) {
       const key = String(name).toLowerCase();

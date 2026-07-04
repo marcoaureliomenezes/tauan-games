@@ -12,6 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   pwAccel, pwCircularSpeed, tidalGradient, MU_SUN_GAME,
+  journeyProfile, journeyDuration, aberrateCos, dopplerFactor,
 } from '../../../space-war/src/celestial/physics.js';
 
 // Integra órbita 2D no potencial PW com semi-implícito Euler (mesma família de
@@ -94,6 +95,42 @@ test('escala de parede: geometria do sistema solar é consistente (T-PF-08)', as
   //    pré-escala (μ e R cresceram juntos ×5) — a zona de não-retorno vive.
   const vEsc = Math.sqrt(2 * SUN.mu / SUN.radius);
   assert.ok(Math.abs(vEsc - 14142) / 14142 < 0.05, `v_esc do Sol ${vEsc.toFixed(0)} ≠ ~14142`);
+});
+
+test('viagem brachistochrone: perfil flip-and-burn correto (AC-02 journey)', () => {
+  const D = 5_000_000, T = 300;
+  // extremos exatos
+  assert.ok(Math.abs(journeyProfile(D, T, 0).x) < D * 0.001);
+  assert.ok(Math.abs(journeyProfile(D, T, T).x - D) < D * 0.01, 'x(T) = D');
+  // pico de velocidade no MEIO = 2D/T; aceleração a = 4D/T²
+  const mid = journeyProfile(D, T, T / 2);
+  assert.ok(Math.abs(mid.v - 2 * D / T) / (2 * D / T) < 0.01, 'v_pico = 2D/T em s=½');
+  assert.ok(Math.abs(mid.a - 4 * D / (T * T)) < 1e-9);
+  // simetria: v(s) = v(1−s) (desacelera na MESMA proporção — demanda do operador)
+  for (const s of [0.1, 0.25, 0.4]) {
+    const va = journeyProfile(D, T, s * T).v;
+    const vb = journeyProfile(D, T, (1 - s) * T).v;
+    assert.ok(Math.abs(va - vb) / va < 1e-9, `v(${s}) = v(${1 - s})`);
+  }
+  // duração clampada aos limites do operador (3:00–6:00)
+  assert.equal(journeyDuration(0, 1e6, 9e6), 180);
+  assert.equal(journeyDuration(1e9, 1e6, 9e6), 360);
+  const dMid = journeyDuration(5e6, 1e6, 9e6);
+  assert.ok(dMid > 180 && dMid < 360);
+});
+
+test('relatividade: aberração agrupa à FRENTE e Doppler azula o rumo (AC-04)', () => {
+  // estrela a 90° do rumo aparece em arccos β (headlight effect)
+  const b = 0.99;
+  assert.ok(Math.abs(aberrateCos(0, b) - b) < 1e-12, 'cos θ_ap(90°) = β');
+  const thetaAp = Math.acos(aberrateCos(0, b)) * 180 / Math.PI;
+  assert.ok(thetaAp < 9, `a β=0.99 a estrela de 90° aparece a ${thetaAp.toFixed(1)}° do nariz`);
+  // à frente: blueshift (δ>1); atrás: redshift (δ<1)
+  assert.ok(dopplerFactor(1, 0.9) > 3, 'frente fortemente azulada');
+  assert.ok(dopplerFactor(-1, 0.9) < 0.3, 'trás fortemente avermelhada');
+  // β=0 → identidade
+  assert.ok(Math.abs(aberrateCos(0.5, 0) - 0.5) < 1e-12);
+  assert.ok(Math.abs(dopplerFactor(0.5, 0) - 1) < 1e-12);
 });
 
 test('config: massas respeitam a física (TOV, hierarquia SMBH, companheira)', async () => {

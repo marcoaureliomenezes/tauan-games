@@ -62,7 +62,12 @@ export function updateHUD() {
   set('nukes', `☢ NUKES: ${s.nukes}${regen} · ✦[G] ∞ · Ħ[H] ${higgs}`);
   set('score', `SCORE: ${String(game.score).padStart(6, '0')}`);
   set('kills', `ABATES: ${game.kills}`);
-  if (game.mission) set('mission', game.mission.label);
+  if (game.journey && game.journey.active) {
+    const j = game.journey;
+    const rem = Math.max(0, j.T - j.t);
+    const bar = '▓'.repeat(Math.round(j.s * 10)).padEnd(10, '░');
+    set('mission', `⭒ QUEIMA → ${j.targetName} ${bar} ETA ${Math.floor(rem / 60)}:${String(Math.round(rem % 60)).padStart(2, '0')} · β ${j.beta.toFixed(2)}${j.s > 0.5 ? ' · FREANDO' : ''}`);
+  } else if (game.mission) set('mission', game.mission.label);
   else if (game.campaign && game.phase === 'flight') set('mission', 'CAMPANHA — aguarde a próxima missão…');
 
   const warn = el('warning');
