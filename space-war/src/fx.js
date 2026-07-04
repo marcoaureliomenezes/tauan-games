@@ -116,6 +116,44 @@ export function nukeMushroom(pos, up, scale = 1) {
   if (flash) { flash.style.transition = 'none'; flash.style.opacity = '0.95'; requestAnimationFrame(() => { flash.style.transition = 'opacity 1.6s'; flash.style.opacity = '0'; }); }
 }
 
+// ── SUPERNOVA (bomba de Higgs, T-PF-07) ─────────────────────────────────────
+// "Explosão maravilhosa de plasma com muitas cores" — paleta REAL dos
+// filamentos do remanescente do Crab: Hα VERMELHO, O III VERDE-AZUL, S II
+// ÂMBAR + choque branco. 3 cascas esféricas em expansão + ~140 filamentos
+// radiais multicoloridos + anel de choque equatorial + flash de tela.
+const novaShells = [];
+const NOVA_COLORS = [0xff5a4a, 0x4ad8c8, 0xffd24a];       // Hα · O III · S II
+export function supernovaFx(pos, R) {
+  for (let i = 0; i < 3; i++) {
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 28, 18),
+      new THREE.MeshBasicMaterial({
+        color: NOVA_COLORS[i], transparent: true, opacity: 0.42 - i * 0.08,
+        depthWrite: false, side: THREE.DoubleSide,
+      }),
+    );
+    m.position.copy(pos);
+    m.scale.setScalar(R * (1.05 + i * 0.12));
+    scene.add(m);
+    novaShells.push({ mesh: m, t: 0, life: 11 + i * 2.5, grow: R * (0.55 - i * 0.1) });
+  }
+  // filamentos multicoloridos (velocidades ∝ R — cascas rasgadas de plasma)
+  const cols = [0xff5a4a, 0xff8a5c, 0x4ad8c8, 0x66aaff, 0xffd24a, 0xffffff];
+  for (let i = 0; i < 140; i++) {
+    const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+    const spd = R * (0.10 + Math.random() * 0.5);
+    particle(pos, dir.multiplyScalar(spd), cols[i % cols.length], R * (0.05 + Math.random() * 0.08), 5 + Math.random() * 7);
+  }
+  // anel de choque equatorial (rasga o plano do sistema)
+  for (let i = 0; i < 56; i++) {
+    const a = (i / 56) * Math.PI * 2;
+    const dir = new THREE.Vector3(Math.cos(a), (Math.random() - 0.5) * 0.08, Math.sin(a));
+    particle(pos, dir.multiplyScalar(R * 0.62), 0xeaf4ff, R * 0.05, 6.5);
+  }
+  const flash = document.getElementById('flash');
+  if (flash) { flash.style.transition = 'none'; flash.style.opacity = '1.0'; requestAnimationFrame(() => { flash.style.transition = 'opacity 2.4s'; flash.style.opacity = '0'; }); }
+}
+
 // Duplo flash no VÁCUO (assinatura real de detonação nuclear no espaço: dois
 // pulsos de luz, sem cogumelo — não há atmosfera para formar a nuvem).
 export function vacuumDoubleFlash() {
@@ -130,6 +168,17 @@ export function vacuumDoubleFlash() {
 }
 
 export function updateParticles(dt) {
+  // cascas de supernova: expandem e esmaecem (multicoloridas, ~11-16 s)
+  for (let i = novaShells.length - 1; i >= 0; i--) {
+    const n = novaShells[i];
+    n.t += dt;
+    n.mesh.scale.addScalar(n.grow * dt);
+    n.mesh.material.opacity = Math.max(0, (1 - n.t / n.life)) * 0.42;
+    if (n.t >= n.life) {
+      scene.remove(n.mesh); n.mesh.material.dispose(); n.mesh.geometry.dispose();
+      novaShells.splice(i, 1);
+    }
+  }
   const arr = game.particles;
   for (let i = arr.length - 1; i >= 0; i--) {
     const p = arr[i];

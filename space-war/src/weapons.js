@@ -7,6 +7,7 @@ import { COLORS } from './config.js';
 import { shipForward } from './ship.js';
 import { computeGravity, surfaceContact } from './gravity.js';
 import { explosion, nukeBlast, nukeMushroom, vacuumDoubleFlash } from './fx.js';
+import { activateHiggs, higgsPlunge, updateHiggs, HIGGS_COOLDOWN_S } from './higgs.js';
 
 const _f = new THREE.Vector3();
 const _p = new THREE.Vector3();
@@ -77,6 +78,88 @@ export function enemyBomb(pos, vel) {
   game.projectiles.push({ mesh: m, vel: vel.clone(), life: 30, friendly: false, dmg: 22, isNuke: false, isBomb: true });
 }
 
+// ── BOMBA TRAÇADORA GRAVITACIONAL [G] (T-PF-06) ─────────────────────────────
+// A sonda de VALIDAÇÃO do campo: INFINITA, balística sob gravidade PURA (Newton 1
+// — sem empuxo, o arco desenhado É o campo), LUMINOSA (núcleo + casca emissiva)
+// e com TRILHA persistente do caminho percorrido. Sente corpos, marés E poços
+// de Higgs — o mesmo computeGravity de tudo.
+const TRACER_TRAIL_N = 320;          // pontos da trilha (~38 s a 1 ponto/0.12 s)
+const TRACER_MAX_ACTIVE = 6;         // munição INFINITA ≠ simultâneas ilimitadas:
+let _lastTracerAt = -10;             // FIFO + cooldown curto (auto-repeat da tecla)
+export function launchGravBomb() {
+  const s = game.ship;
+  if (s.landed) return false;
+  if (game.time - _lastTracerAt < 0.35) return true;   // debounce (segue "infinita")
+  _lastTracerAt = game.time;
+  const live = game.projectiles.filter((p) => p.isTracer);
+  if (live.length >= TRACER_MAX_ACTIVE) {
+    const old = live[0];                               // descarta a mais VELHA
+    old.life = 0;                                      // updateProjectiles limpa (mesh+trilha)
+  }
+  shipForward(_f);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(8, 10, 10),
+    new THREE.MeshBasicMaterial({ color: 0xfff2c0 }));
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(14, 10, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.35, depthWrite: false }));
+  m.add(shell);
+  m.position.copy(s.pos).addScaledVector(_f, 40);
+  scene.add(m);
+  const trailArr = new Float32Array(TRACER_TRAIL_N * 3);
+  const trailGeo = new THREE.BufferGeometry();
+  trailGeo.setAttribute('position', new THREE.BufferAttribute(trailArr, 3));
+  trailGeo.setDrawRange(0, 0);
+  const trail = new THREE.Line(trailGeo,
+    new THREE.LineBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.75, depthWrite: false }));
+  trail.frustumCulled = false;
+  scene.add(trail);
+  game.projectiles.push({
+    mesh: m, vel: _f.clone().multiplyScalar(900).add(s.vel), life: 120,
+    friendly: true, dmg: 0, isNuke: false, isTracer: true,
+    trail, trailArr, trailN: 0, trailTick: 0,
+  });
+  return true;
+}
+
+// ── BOMBA DE BÓSON DE HIGGS [H] (T-PF-07) ───────────────────────────────────
+// Balística até armar (1.2 s); armada, vira um POÇO gravitacional transiente
+// (~0.5 M☉ por 8 s) que TODOS sentem — nave, projéteis, plasma. Perto de uma
+// estrela: extração de plasma (70%) ou instabilidade → SUPERNOVA (30%); se a
+// bomba mergulhar na fotosfera antes do fim do pulso, supernova GARANTIDA
+// (a bomba também cai no campo da estrela — lançar perto = mergulho).
+export function launchHiggs() {
+  const s = game.ship;
+  if (s.landed || s.higgsCd > 0) return false;
+  s.higgsCd = HIGGS_COOLDOWN_S;
+  shipForward(_f);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(14, 14, 12),
+    new THREE.MeshBasicMaterial({ color: 0xd8c8ff }));
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(22, 12, 10),
+    new THREE.MeshBasicMaterial({ color: 0x9a6aff, transparent: true, opacity: 0.30, depthWrite: false, wireframe: true }));
+  m.add(shell);
+  m.position.copy(s.pos).addScaledVector(_f, 48);
+  scene.add(m);
+  game.projectiles.push({
+    mesh: m, vel: _f.clone().multiplyScalar(1100).add(s.vel), life: 60,
+    friendly: true, dmg: 0, isNuke: false, isHiggs: true, armed: 1.2, wellOn: false, shell,
+  });
+  return true;
+}
+
+// Dano em área (supernova / usos futuros): inimigos, alvos de missão e nave.
+export function areaDamage(pos, radius, dmg) {
+  for (const e of game.enemies) {
+    if (!e.dead && e.group.position.distanceTo(pos) < radius) killEnemy(e);
+  }
+  if (game.mission) for (const t of game.mission.targets) {
+    if (!t.destroyed && t.obj.position.distanceTo(pos) < radius) destroyTarget(t);
+  }
+  const s = game.ship;
+  const d = s.pos.distanceTo(pos);
+  if (d < radius && !s.landed && s.spawnGrace <= 0) {
+    s.hp -= dmg * (1 - d / radius);
+  }
+}
+
 // Recarga de nukes (D-7): reserva máxima 4, +1 a cada 20 s — efetivamente ilimitadas
 // sem tirar o custo tático do disparo (o decremento imediato é preservado).
 export const NUKE_MAX = 4;
@@ -93,6 +176,7 @@ export function updateNukeRegen(dt) {
 
 export function updateProjectiles(dt) {
   updateNukeRegen(dt);
+  updateHiggs(dt);
   const arr = game.projectiles;
   for (let i = arr.length - 1; i >= 0; i--) {
     const p = arr[i];
@@ -102,6 +186,45 @@ export function updateProjectiles(dt) {
       computeGravity(p.mesh.position, _gPull);
       p.vel.addScaledVector(_gPull, dt);
       if (surfaceContact(p.mesh.position, 6)) p.surfaceHit = true;
+    }
+    // TRAÇADORA [G]: gravidade pura + trilha do caminho (sonda de validação).
+    if (p.isTracer) {
+      computeGravity(p.mesh.position, _gPull);
+      p.vel.addScaledVector(_gPull, dt);
+      p.trailTick -= dt;
+      if (p.trailTick <= 0) {
+        p.trailTick = 0.12;
+        if (p.trailN >= 320) {          // ring: descarta o ponto mais velho
+          p.trailArr.copyWithin(0, 3);
+          p.trailN = 319;
+        }
+        p.trailArr[p.trailN * 3] = p.mesh.position.x;
+        p.trailArr[p.trailN * 3 + 1] = p.mesh.position.y;
+        p.trailArr[p.trailN * 3 + 2] = p.mesh.position.z;
+        p.trailN++;
+        p.trail.geometry.setDrawRange(0, p.trailN);
+        p.trail.geometry.attributes.position.needsUpdate = true;
+      }
+      if (surfaceContact(p.mesh.position, 6)) {
+        p.surfaceHit = true;            // queima na superfície com um flash curto
+        explosion(p.mesh.position, 0.6, 0xffd24a);
+      }
+    }
+    // BOMBA DE HIGGS [H]: balística; ao armar vira poço transiente (higgs.js).
+    if (p.isHiggs) {
+      computeGravity(p.mesh.position, _gPull);
+      p.vel.addScaledVector(_gPull, dt);
+      if (p.armed <= 0 && !p.wellOn) {
+        p.wellOn = true;
+        activateHiggs(p);
+      }
+      if (p.shell) p.shell.scale.setScalar(1 + 0.25 * Math.sin(game.time * 9));
+      const hitStar = surfaceContact(p.mesh.position, 10);
+      if (hitStar) {
+        // mergulho com poço ativo → supernova garantida (higgs.js decide)
+        if (p.wellOn) higgsPlunge(p);
+        p.surfaceHit = true;
+      }
     }
     // NUKE SOB GRAVIDADE (operador 2026-07-02): a nuke é um corpo balístico —
     // o MESMO campo da nave (dominante + marés de todo corpo próximo) a puxa:
@@ -157,11 +280,11 @@ export function updateProjectiles(dt) {
       if (hit) p.surfaceHit = true;
     }
     p.mesh.position.addScaledVector(p.vel, dt);
-    if (p.isNuke && p.armed > 0) p.armed -= dt;
+    if ((p.isNuke || p.isHiggs) && p.armed > 0) p.armed -= dt;
 
     let detonate = !!p.surfaceHit, hitPos = p.mesh.position;
 
-    if (p.friendly) {
+    if (p.friendly && !p.isTracer && !p.isHiggs) {
       // vs inimigos
       for (const e of game.enemies) {
         if (e.dead) continue;
@@ -220,7 +343,15 @@ export function updateProjectiles(dt) {
       }
     }
 
-    if (detonate || p.life <= 0) { scene.remove(p.mesh); p.mesh.material.dispose(); arr.splice(i, 1); }
+    if (detonate || p.life <= 0) {
+      scene.remove(p.mesh);
+      p.mesh.traverse((o) => {         // inclui filhos (casca do Higgs/traçadora)
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+      if (p.trail) { scene.remove(p.trail); p.trail.geometry.dispose(); p.trail.material.dispose(); }
+      arr.splice(i, 1);
+    }
   }
 }
 

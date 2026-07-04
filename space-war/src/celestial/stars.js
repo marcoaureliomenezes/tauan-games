@@ -22,13 +22,13 @@ import { CelestialBody } from './body.js';
 // desenha em screen-space sem atenuação — a milhões de u o glare do Sol ainda
 // cobria a tela inteira de OUTRO sistema. O flare agora encolhe com a distância
 // e é CORTADO além da vizinhança solar.
-const FLARE_FULL = 400_000;      // até aqui: tamanho pleno (vizinhança interna)
-const FLARE_CUTOFF = 2_600_000;  // ~1.1× o raio do Sistema Solar: além, invisível
+const FLARE_FULL = 700_000;      // até aqui: tamanho pleno (vizinhança interna)
+const FLARE_CUTOFF = 4_200_000;  // < anel de vizinhos (4.5M): lá fora, invisível
 import {
   HEADLESS, starMaterial, makeRadialSprite, flareTexture,
   diskMaterial, DISK_SYNCHROTRON,
 } from './atoms.js';
-import { muFromSolarMasses, solarMassesFromMu, spectralFromMass, radiusFromMass } from './physics.js';
+import { muFromSolarMasses, solarMassesFromMu, spectralFromMass, radiusFromMass, lightForMass } from './physics.js';
 
 // ── Superclasse ──────────────────────────────────────────────────────────────
 export class Star extends CelestialBody {
@@ -73,7 +73,11 @@ export class Star extends CelestialBody {
     let flare = null;
     let flareElems = null;
     if (def.light) {
-      const pl = new THREE.PointLight(def.light.color, def.light.intensity ?? 3.0, def.light.range ?? 1_000_000, 0.0);
+      // def.light aceita número (só cor) ou objeto; intensity/range ausentes
+      // derivam da MASSA (L ∝ M^3.5 comprimido — physics.lightForMass, P2-11).
+      const L = typeof def.light === 'object' ? def.light : { color: def.light };
+      const auto = lightForMass(def.mass ?? solarMassesFromMu(def.mu));
+      const pl = new THREE.PointLight(L.color, L.intensity ?? auto.intensity, L.range ?? auto.range, 0.0);
       group.add(pl);
       if (def.light.flare && !HEADLESS) {
         flare = new Lensflare();
@@ -246,24 +250,36 @@ export class NeutronStar extends Star {
       group.add(new THREE.PointLight(def.light.color, def.light.intensity ?? 3.0, def.light.range ?? 900_000, 0.0));
     }
 
-    // Núcleo: pequeno, branco-azulado, BRILHANTE (satura via bloom, não via sprite).
+    // Núcleo OFUSCANTE (P1-1): superfície a ~1e6 K — brilho superficial visível
+    // ~173× o do Sol; qualquer T ≳ 30.000 K satura na mesma cromaticidade
+    // azul-branca (sRGB ≈ 155,188,255). De perto o modo de falha correto é
+    // ficar CEGO, não às escuras.
     const core = new THREE.Mesh(
       new THREE.SphereGeometry(def.radius, 48, 32),
-      new THREE.MeshBasicMaterial({ color: 0xf4f8ff }),
+      new THREE.MeshBasicMaterial({ color: 0xffffff }),
     );
     group.add(core);
-    // Brilho pontual curto (gradiente que MORRE cedo)
-    const glint = makeRadialSprite(['rgba(235,244,255,0.85)', 'rgba(160,200,255,0.15)', 'rgba(0,0,0,0)']);
-    glint.scale.setScalar(def.radius * 2.6);
+    // Glint interno intenso (satura com o bloom)
+    const glint = makeRadialSprite(['rgba(255,255,255,1.0)', 'rgba(190,215,255,0.45)', 'rgba(0,0,0,0)']);
+    glint.scale.setScalar(def.radius * 8);
     group.add(glint);
+    // Corona pontual (estilo anã branca, mais forte): o farol visível de longe.
+    const corona = makeRadialSprite(['rgba(200,222,255,0.75)', 'rgba(130,170,255,0.22)', 'rgba(0,0,0,0)']);
+    corona.scale.setScalar(def.radius * 26);
+    group.add(corona);
+    // Halo externo tênue: presença a grandes distâncias (pulsar = fonte pontual).
+    const halo = makeRadialSprite(['rgba(155,188,255,0.28)', 'rgba(110,150,240,0.08)', 'rgba(0,0,0,0)']);
+    halo.scale.setScalar(def.radius * 90);
+    group.add(halo);
 
     // Eixo magnético (inclinado vs rotação) → jatos + toro carregados por ele.
     const axis = new THREE.Group();
     axis.rotation.z = def.jetTilt;
     group.add(axis);
 
-    // TORO DE VENTO síncrotron (equatorial ao eixo magnético).
-    const torusMat = diskMaterial(def.radius * 3.2, def.radius * 14, 0.85, DISK_SYNCHROTRON);
+    // TORO DE VENTO síncrotron (equatorial ao eixo magnético) — nebulosa do vento
+    // de pulsar à la Crab/Chandra, VIVA (a nebulosa sozinha irradia ~3e4 L☉).
+    const torusMat = diskMaterial(def.radius * 3.2, def.radius * 14, 1.25, DISK_SYNCHROTRON);
     const torus = new THREE.Mesh(
       new THREE.RingGeometry(def.radius * 3.2, def.radius * 14, 96, 3),
       torusMat,
@@ -309,17 +325,22 @@ export class NeutronStar extends Star {
       // rotação ultrarrápida do pulsar (jatos + toro varrem o céu)
       group.rotation.y += dt * (Math.PI * 2 / def.spin);
       torusMat.uniforms.uTime.value = this.t;
-      // cintilação dos jatos
+      // cintilação dos jatos (mais vivos — P1-1)
       const flick = 0.85 + 0.15 * Math.sin(this.t * 37.3);
-      jetMats[0].opacity = 0.18 * flick; jetMats[1].opacity = 0.75 * flick;
-      jetMats[2].opacity = 0.18 * flick; jetMats[3].opacity = 0.75 * flick;
+      jetMats[0].opacity = 0.26 * flick; jetMats[1].opacity = 0.90 * flick;
+      jetMats[2].opacity = 0.26 * flick; jetMats[3].opacity = 0.90 * flick;
+      // STROBE ÓPTICO ~30 Hz: o Crab pulsa em LUZ VISÍVEL a ~30 Hz (Cocke+ 1969).
+      // Em 60 fps vira um shimmer de quadros alternados — assinatura do pulsar.
+      const strobe = 0.82 + 0.18 * (0.5 + 0.5 * Math.sin(this.t * Math.PI * 2 * 30));
+      game.pulsarStrobe = strobe;                        // diagnóstico p/ e2e (AC-01)
       // FAROL: flash curto e intenso quando o feixe cruza a câmera
       _jetDir.set(0, 1, 0).applyQuaternion(group.quaternion).applyQuaternion(axis.quaternion);
       _toCam.copy(camera.position).sub(group.position).normalize();
       const sweep = Math.pow(Math.abs(_jetDir.dot(_toCam)), 24);
-      glint.material.opacity = Math.min(0.95, 0.5 + sweep * 0.45);
-      glint.scale.setScalar(def.radius * (2.6 + sweep * 2.2));
-      core.material.color.setRGB(0.92 + sweep * 0.08, 0.95 + sweep * 0.05, 1.0);
+      glint.material.opacity = Math.min(1.0, (0.8 + sweep * 0.2) * strobe);
+      glint.scale.setScalar(def.radius * (8 + sweep * 5) * strobe);
+      corona.material.opacity = (0.6 + sweep * 0.25) * strobe;
+      halo.material.opacity = 0.24 * strobe;
     } };
   }
 }
@@ -366,8 +387,8 @@ export class BlackHole extends Star {
     group.add(photon2);
 
     // Disco de acreção plano (shader) — levemente inclinado.
-    const disk0 = def.disk ?? { inner: def.rs * 2.1, outer: def.rs * 20 };
-    const diskMat = diskMaterial(disk0.inner, disk0.outer, 1.0);
+    const disk0 = def.disk ?? { inner: def.rs * 3.0, outer: def.rs * 20 };   // ISCO = 3·rs
+    const diskMat = diskMaterial(disk0.inner, disk0.outer, def.diskGain ?? 1.0);
     const disk = new THREE.Mesh(new THREE.RingGeometry(disk0.inner, disk0.outer, 160, 4), diskMat);
     disk.rotation.x = Math.PI / 2 + 0.18;
     group.add(disk);

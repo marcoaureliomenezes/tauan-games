@@ -20,6 +20,7 @@ export const game = {
     landed: true,
     hp: 100,
     nukes: 4,
+    higgsCd: 0,           // recarga da bomba de Higgs (0 = pronta)
     altitude: 0,          // distância à superfície do corpo dominante
     dominant: null,       // corpo gravitacional dominante (quem mais puxa agora)
     gravMag: 0,           // magnitude da gravidade atual (u/s²)
@@ -49,6 +50,7 @@ export const game = {
   kills: 0,
   // Navegação (solution = solução de tiro balística viva, ballistics.js)
   nav: { target: null, aligning: false, solution: null },
+  wells: [],              // poços gravitacionais transientes {pos, mu, until, soft} — bomba de Higgs
   // UI
   mapOpen: false,
   // diagnostics

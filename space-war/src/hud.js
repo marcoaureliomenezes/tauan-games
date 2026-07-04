@@ -58,7 +58,8 @@ export function updateHUD() {
   set('hp', `CASCO: ${Math.max(0, s.hp | 0)}%`);
   // Recarga de nukes (campanha): mostra o timer quando a reserva não está cheia.
   const regen = s.nukes < 4 ? ` ⟳${Math.max(0, 20 - (s.nukeRegen || 0)) | 0}s` : '';
-  set('nukes', `☢ NUKES: ${s.nukes}${regen}`);
+  const higgs = s.higgsCd > 0 ? `${Math.ceil(s.higgsCd)}s` : 'PRONTA';
+  set('nukes', `☢ NUKES: ${s.nukes}${regen} · ✦[G] ∞ · Ħ[H] ${higgs}`);
   set('score', `SCORE: ${String(game.score).padStart(6, '0')}`);
   set('kills', `ABATES: ${game.kills}`);
   if (game.mission) set('mission', game.mission.label);
@@ -72,6 +73,7 @@ export function updateHUD() {
     else if (domKind === 'blackhole' && !s.canEscape) { warn.textContent = '🕳 HORIZONTE DE EVENTOS — FUJA OU MORRA!'; warn.style.display = 'block'; warn.style.color = '#c08aff'; }
     else if (domKind === 'neutron' && !s.canEscape) { warn.textContent = '⭐ GRAVIDADE DA ESTRELA DE NÊUTRONS — TURBO JÁ!'; warn.style.display = 'block'; warn.style.color = '#9fd0ff'; }
     else if (!s.canEscape) { warn.textContent = '⛔ NÃO DÁ PARA FUGIR — TURBO PRA LONGE!'; warn.style.display = 'block'; warn.style.color = '#ff5560'; }
+    else if (s.tideWarn) { warn.textContent = '🫀 MARÉ EXTREMA — ESPAGUETIFICAÇÃO! Afaste-se do corpo compacto'; warn.style.display = 'block'; warn.style.color = '#ff8a5c'; }
     else if (s.diskDrag) { warn.textContent = '🌀 ARRASTO DO DISCO DE ACREÇÃO — órbita em DECAIMENTO (espiral da morte)'; warn.style.display = 'block'; warn.style.color = '#c9a2ff'; }
     else if (s.heat > 0.55) { warn.textContent = '🔥 REENTRADA CRÍTICA — CASCO QUEIMANDO!'; warn.style.display = 'block'; warn.style.color = '#ff7a30'; }
     else if (s.spawnGrace > 0) { warn.textContent = `🛡 ESCUDO ${Math.ceil(s.spawnGrace)}s`; warn.style.display = 'block'; warn.style.color = '#66ddff'; }

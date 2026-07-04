@@ -362,8 +362,9 @@ export const DISK_FRAG = /* glsl */ `
     vec3 c = mix(uC1, uC2, smoothstep(0.0, 0.45, temp));
     c = mix(c, uC3, smoothstep(0.45, 0.75, temp));
     c = mix(c, uC4, smoothstep(0.75, 0.97, temp));
-    // Doppler beaming: o lado do gás que se aproxima é mais brilhante (lado fixo)
-    float doppler = 1.0 + 0.70 * cos(ang);
+    // Doppler beaming (P2-9): I_obs = δ^(3+α)·I_emit com v~0.4c na ISCO → o lado
+    // que se APROXIMA é ~10× mais brilhante (EHT M87*: assimetria ~10:1).
+    float doppler = pow(1.0 + 0.60 * cos(ang), 1.8);
     float bright = (0.20 + 0.55 * streak * (0.5 + 0.5 * fino) + 0.80 * stria) * doppler;
     // Bordas suaves e brilho interno mais intenso (borda interna QUEIMA de branco)
     float edge = smoothstep(0.0, 0.04, rn) * (1.0 - smoothstep(0.80, 1.0, rn));

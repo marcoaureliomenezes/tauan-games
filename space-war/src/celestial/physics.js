@@ -65,6 +65,20 @@ export function remnantTypeForMass(mSun) {
   return 'white-dwarf';
 }
 
+// ── Luminosidade → luz de cena (P2-11) ──────────────────────────────────────
+// Main sequence real: L ∝ M^3.5 — proxy JOGÁVEL monótono em M (o renderer não
+// aguenta 3.5 décadas de dinâmica; expoente comprimido + clamps). ANCORADO no
+// Sol do jogo (massa de gauge 2.2 pós-escala ×2.2): Sol → intensity 3.0 /
+// range 1e6 — idêntico ao valor calibrado pré-release (continuidade visual).
+export const SUN_MASS_GAUGE = 2.2;
+export function lightForMass(mSun) {
+  const m = Math.max(mSun ?? 1, 0.05) / SUN_MASS_GAUGE;
+  return {
+    intensity: Math.min(8, Math.max(1.2, 3 * Math.pow(m, 1.2))),
+    range: Math.min(4e6, Math.max(3e5, 1e6 * Math.sqrt(m))),
+  };
+}
+
 // ── Mecânica orbital ────────────────────────────────────────────────────────
 // SOI de Hill no pior caso (periélio): r_H = r_peri · ∛(μ_corpo / 3μ_pai).
 export function hillSoi(rPeri, mu, muParent) {
@@ -83,6 +97,28 @@ export function keplerPeriod(a, mu) { return 2 * Math.PI * Math.sqrt(a ** 3 / mu
 // Alcance gravitacional default (mesma regra de config.defaultGravReach).
 export function defaultGravReach(def) {
   return Math.max((def.soi || def.radius * 12) * 4, def.radius * 120);
+}
+
+// ── Paczyński–Wiita (1980): pseudo-potencial p/ corpos COMPACTOS ─────────────
+// Φ = −μ/(r − r_s) → a = μ/(r − r_s)². Reproduz EXATAMENTE a ISCO de
+// Schwarzschild em 3·r_s (órbitas circulares abaixo dela são instáveis → mergulho)
+// e a órbita marginalmente ligada em 2·r_s, com integrador newtoniano puro.
+// Longe do horizonte (r ≫ r_s) converge ao newtoniano — só BN/NS usam.
+export function pwAccel(mu, r, rs) {
+  const d = Math.max(r - rs, rs * 0.05);
+  return mu / (d * d);
+}
+// Velocidade circular no potencial PW: v²/r = μ/(r−r_s)² → v = √(μ·r)/(r−r_s).
+export function pwCircularSpeed(mu, r, rs) {
+  return Math.sqrt(mu * r) / Math.max(r - rs, rs * 0.05);
+}
+// Velocidade de escape PW: ½v² = μ/(r−r_s) → v = √(2μ/(r−r_s)).
+export function pwEscapeSpeed(mu, r, rs) {
+  return Math.sqrt(2 * mu / Math.max(r - rs, rs * 0.05));
+}
+// Gradiente de maré (espaguetificação): ∂g = 2μ·h/r³ p/ um corpo de meia-altura h.
+export function tidalGradient(mu, r, h) {
+  return 2 * mu * h / Math.pow(Math.max(r, 1e-6), 3);
 }
 
 // Raios da dança binária em torno do baricentro: r_i ∝ μ do PARCEIRO.

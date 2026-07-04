@@ -217,20 +217,25 @@ export const BINARY = {
     radius: 160,
     mu: 5.0e12,               // monstruoso e local
     soi: 150_000, gravReach: 150_000,
-    disk: { inner: 340, outer: 3200 },   // disco de acreção GRANDE (visível de longe)
-    photonRing: 215,
+    disk: { inner: 480, outer: 3200 },   // borda interna na ISCO = 3·rs (nada orbita dentro — vão escuro)
+    tideKillR: 2600,          // zona de MARÉ (P2-8): BN ESTELAR estraçalha longe do horizonte
+    photonRing: 416,          // anel na BORDA DA SOMBRA = 2.6·rs (EHT M87*/Sgr A*)
   },
   neutronStar: {
     name: 'Estrela de Nêutrons', key: 'neutron', kind: 'neutron',
     radius: 30,               // minúscula (≈ uma cidade), densíssima — de propósito
-    mu: 3.0e12,               // gravidade brutal e local
-    spin: 1.4,                // pulsar ultrarrápido
+    mu: 2.0e12,               // 2.0 M☉ — ≤ limite TOV ~2.2 (PSR J0740+6620: 2.08 M☉)
+    // Pulsar jovem BRILHA (P1-1): Ė = 4π²IṖ/P³ ≈ 1.2e5 L☉ (Crab) — luz azul-branca
+    // que ilumina o remanescente e o lado do disco do BN voltado para ela.
+    light: { color: 0x9bbcff, intensity: 4.0, range: 500_000 },
+    spin: 1.4,                // rotação visual dos jatos/toro (farol)
     jetTilt: 0.5,
     lensRs: 80,               // "mesmo não sendo um buraco negro… ela curva o espaço"
     soi: 110_000, gravReach: 110_000,
     // região do vento de pulsar/toro síncrotron: arrasto → ESPIRAL DA MORTE
     // (mesma mecânica do disco de acreção do BN — captura orbital, não sucção)
     disk: { inner: 90, outer: 2200 },
+    tideKillR: 420,           // maré de NS: letal só bem perto (calibrado p/ visita ao pulsar)
   },
 };
 
@@ -255,8 +260,8 @@ export const BETELGEUSE = {
   // orbitando DENTRO do envelope estendido da gigante.
   companion: {
     name: 'Siwarha', key: 'siwarha', kind: 'star',
-    radius: 900, color: 0xcfe0ff, color2: 0x8fb0f0, mu: 5.0e10,
-    soi: 9000, gravReach: 30_000, spin: 120, cellScale: 12,
+    radius: 2200, color: 0xcfe0ff, color2: 0x8fb0f0, mu: 1.15e12,   // ~1.15 M☉ (α Ori B real ≈ 1–1.5)
+    soi: 20_000, gravReach: 60_000, spin: 120, cellScale: 12,
     orbit: 86_000, periodFactor: 2.4,
   },
   planets: [
@@ -366,6 +371,73 @@ OVERDRIVE.mult = 12;
 OVERDRIVE.thrustMult = 9;
 
 // ---------------------------------------------------------------------------
+// ESCALA DE PAREDE (T-PF-08, operador 2026-07-04): "os planetas devem ficar
+// pelo menos 10× maiores antes da colisão; orbitando tangente, o arco do
+// horizonte vira uma RETA — o mesmo para as estrelas".
+//  - Planetas ×10 e luas ×10 (μ ∝ f: v_circ/v_esc de SUPERFÍCIE preservadas —
+//    o gauge de T-WR-15), órbitas de luas re-espaçadas (piso 2.1·R novo).
+//  - Órbitas planetárias ×2 e SOIs ×3.4 (contêm as luas re-espaçadas; varrido:
+//    sem sobreposição de SOIs vizinhos — ver test-physics-unit).
+//  - Sol ×5 (110k; μ ×5 preserva a zona de não-retorno — AC-04b) — Mercúrio a
+//    208k segue FORA com 54k de folga. Betelgeuse ×2.5 (150k): segue a MAIOR.
+//  - Anel de sistemas vizinhos ×1.75 (4.5–5.8M), render/skybox ×2, overdrive
+//    ×18 (travessias seguem em ~1-2 min).
+//  - Terra: R 22.000 — a 300 u de altitude o horizonte mergulha 9.4°: RETA.
+//  - Compactos (BN/NS/anã branca) NÃO escalam — compacidade é a física deles.
+// ---------------------------------------------------------------------------
+function wallScale(p, f, soiF) {
+  p.radius *= f;
+  p.mu *= f;
+  p.soi *= soiF;
+  if (p.ring) { p.ring.inner *= f; p.ring.outer *= f; }
+  if (p.moons && p.moons.length) {
+    let k = 1;
+    for (const m of p.moons) {
+      m.radius *= f;
+      m.mu *= f;
+      m.soi = Math.max(m.soi * 2.2, m.radius * 2.2);
+      const floor = Math.max(p.radius * 2.1, p.ring ? p.ring.outer * 1.12 : 0) + m.radius * 2;
+      k = Math.max(k, floor / m.orbit);
+    }
+    for (const m of p.moons) {
+      m.orbit *= k;
+      // Kepler: T ∝ √(a³/μ_pai) → período × √(k³/f). Com k=f=10: período ×10 —
+      // a VELOCIDADE linear da lua volta EXATAMENTE à original (v ∝ a/T), o que
+      // mantém luas alcançáveis pela solução balística (nuke 1600 u/s) e o
+      // trilho consistente com a gravidade (lição T-WR-11).
+      m.period *= Math.sqrt((k * k * k) / f);
+    }
+  }
+}
+// SOI ×2.2 p/ quem precisa CONTER luas re-espaçadas; sem luas, ×1.6 basta.
+// Dois vínculos simultâneos, ADJUDICADOS pelo varrido do test-physics-unit:
+// (a) SOI ⊇ órbita da lua mais externa + SOI dela; (b) SOIs vizinhas ∌ overlap.
+for (const p of PLANETS) {
+  wallScale(p, 10, (p.moons && p.moons.length) ? 2.2 : 1.6);
+  p.orbit *= 2;
+  p.periodFactor *= Math.sqrt(8 / 5);   // Kepler c/ μ_Sol ×5: T ∝ √(a³/μ) = √(2³/5)
+}
+SUN.radius *= 5;
+SUN.mu *= 5;
+SUN.soi = 4_700_000;
+SUN.gravReach = 4_700_000;
+BETELGEUSE.star.radius *= 2.5;
+BETELGEUSE.star.mu *= 2.5;
+BETELGEUSE.star.soi *= 2;
+BETELGEUSE.star.gravReach *= 2;
+BETELGEUSE.companion.orbit *= 2.6;        // fora do novo raio da gigante (223k vs 150k)
+for (const p of BETELGEUSE.planets) { wallScale(p, 4, 1.8); p.orbit *= 2.2; }
+for (const s of SYSTEMS) {
+  if (s.key === 'solar') { s.radius = 4_700_000; continue; }
+  if (s.key === 'betelgeuse') s.radius *= 2.2;
+  for (let i = 0; i < 3; i++) s.center[i] *= 1.75;
+}
+RENDER.far = 19_000_000;
+RENDER.skyboxRadius = 11_000_000;
+OVERDRIVE.mult = 18;
+OVERDRIVE.thrustMult = 13;
+
+// ---------------------------------------------------------------------------
 // SISTEMA 5 — NÚCLEO DA GALÁXIA (rework 2026-07-02, pedido do operador): as
 // estrelas S andam em ELIPSES KEPLERIANAS calmas em trilho — como as órbitas
 // REAIS medidas em volta de Sagitário A* (S2 e companhia) — mais DISTANTES e
@@ -378,10 +450,14 @@ export const CORE = {
   smbh: {
     name: 'Sagitário A✦', key: 'sgr', kind: 'blackhole',
     rs: 900, radius: 900,
-    mu: 4.0e12,
+    mu: 4.0e13,               // SMBH: ≫ qualquer BN estelar (real: 4.15e6 M☉ — comprimido ~1e5×,
+                              // hierarquia preservada; trilhos das estrelas S rederivam deste μ)
     soi: 420_000, gravReach: 420_000,
-    disk: { inner: 2000, outer: 14_000 },
-    photonRing: 1200,
+    disk: { inner: 2700, outer: 14_000 },   // ISCO = 3·rs
+    photonRing: 2340,         // borda da sombra = 2.6·rs
+    diskGain: 0.4,            // Sgr A* real é QUIESCENTE (~1e-9 L_Edd) — disco tênue vs o binário
+    // SEM tideKillR: maré no horizonte ∝ 1/M² — um SMBH deixa a nave CRUZAR
+    // intacta (a espaguetificação é assinatura de BN ESTELAR, não de SMBH).
     jet: true,                // jato relativístico bipolar (print M87*)
   },
   starCount: 12,
