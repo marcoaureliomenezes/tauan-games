@@ -10,8 +10,8 @@ tags:
   - design
 agent_tier: self-pull
 token_estimate: 0
-last_updated: "2026-07-03"
-release_origin: space-war-ballistic-war-v1
+last_updated: "2026-07-04"
+release_origin: space-war-interstellar-experience-v1
 ---
 
 ## Visão geral
@@ -57,6 +57,12 @@ Estrutura interna por jogo:
   `ballistics.js` (solver de solução de tiro — puro, testável em node) consome o
   campo via `gravityFn` injetada (= `computeGravity`) e serve `ship.js` (mira C),
   `nav.js` (arco no HUD) e `weapons.js` (nuke `aimed` sob gravidade pura).
+  `celestial/physics.js` concentra as leis puras node-testáveis (fotometria de fonte
+  pontual, perfis de viagem brachistochrone e trapezóide 30/40/30, gauges de escala);
+  `journey.js` (autopilot interestelar T/O/Z) e `starfield.js` (corredor galáctico em
+  quads instanciados com relatividade no vertex shader) as consomem, e
+  `celestial/starlod.js` faz o LOD ponto↔disco + glows de sistema por cima da mesma
+  fotometria.
 - **Degrau 3 (Godot 4):** `aero-fighters-v2/` — scene tree + GDScript + Autoload
   singletons; export Linux x64 via Godot CLI. Trabalho pausado em 2026-06-12.
 

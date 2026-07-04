@@ -1,6 +1,7 @@
 ---
 title: Space War interstellar journey — travel the galaxy between systems (operator 2026-07-04)
-status: picked
+status: delivered
+delivered_in: space-war-interstellar-journey-v1
 opened: 2026-07-04
 release: space-war-interstellar-journey-v1
 description: Operator demand (verbatim intent): navigating between systems today is "into the nothing". New flow — [T] target another system, [O] orient to it, [Z] engage the interstellar burn (context-sensitive Z: cross-system target = journey, in-system = assist toggle, operator-approved). Journey is a BRACHISTOCHRONE, accelerate to midpoint then decelerate symmetrically, time-normalized ~3:00-6:00 min proportional to distance. The galaxy must EXIST between systems: thousands of stars streaming past with PARALLAX that intensifies with speed (some near, some far), star systems and nebulae (Ha red / OIII teal / reflection blue) crossed en route, the galactic-bulge star cloud visible when pointing at Sagittarius A*, and REALISTIC relativistic visuals at peak speed (aberration bunching stars forward, Doppler blue/redshift — operator picked realistic over cinematic). Also ship visibility - stronger plasma engine jet, red wingtip lights, reflex/rim so the ship reads on screen.
