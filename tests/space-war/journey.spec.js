@@ -66,8 +66,9 @@ test.describe('Space War — Viagem Interestelar', () => {
     expect(after.assist).toBe(!before);
   });
 
-  // AC-03/AC-04: corredor vivo no meio da viagem — fade alto, β≈0.985 no meio,
-  // caindo simetricamente depois (FREANDO); chegada desliga a queima.
+  // AC-03/AC-04 (adaptado ao TRAPEZOIDE 30/40/30 da experience-v1): corredor
+  // vivo no meio — fade alto, β≈0.995 no CRUZEIRO, caindo na frenagem (s>0.7);
+  // chegada desliga a queima.
   test('AC-03/04: starfield + relatividade sobem até o meio e desfazem na chegada', async ({ page }) => {
     test.setTimeout(120000);
     await startFlight(page);
@@ -79,17 +80,18 @@ test.describe('Space War — Viagem Interestelar', () => {
     expect(fadeHome).toBeLessThanOrEqual(0.05);          // dentro do sistema: céu limpo
     await page.evaluate(() => window.__swDebug.journeyToggle());
     await page.waitForFunction(() => window.__spaceWar.journey.active, { timeout: 5000 });
-    // meio da viagem: β máximo (~0.985) e corredor pleno
+    // meio da viagem = CRUZEIRO: β máximo (~0.995) e corredor pleno
     await page.evaluate(() => window.__swDebug.journeyWarp(0.5));
     await page.waitForTimeout(500);
     const mid = await page.evaluate(() => ({
       beta: window.__spaceWar.starfieldBeta, fade: window.__spaceWar.starfieldFade,
-      s: window.__spaceWar.journey.s,
+      s: window.__spaceWar.journey.s, phase: window.__spaceWar.journey.phase,
     }));
+    expect(mid.phase).toBe('coast');
     expect(mid.beta).toBeGreaterThan(0.9);
     expect(mid.fade).toBeGreaterThanOrEqual(0.8);
-    // 80% do caminho: FREANDO — β caiu vs o meio (desfaz na mesma proporção)
-    await page.evaluate(() => window.__swDebug.journeyWarp(0.8));
+    // 90% do caminho: FREANDO fundo — β caiu p/ ~⅓ do cruzeiro
+    await page.evaluate(() => window.__swDebug.journeyWarp(0.9));
     await page.waitForTimeout(400);
     const late = await page.evaluate(() => window.__spaceWar.starfieldBeta);
     expect(late).toBeLessThan(mid.beta * 0.6);

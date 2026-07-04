@@ -66,7 +66,8 @@ export function updateHUD() {
     const j = game.journey;
     const rem = Math.max(0, j.T - j.t);
     const bar = '▓'.repeat(Math.round(j.s * 10)).padEnd(10, '░');
-    set('mission', `⭒ QUEIMA → ${j.targetName} ${bar} ETA ${Math.floor(rem / 60)}:${String(Math.round(rem % 60)).padStart(2, '0')} · β ${j.beta.toFixed(2)}${j.s > 0.5 ? ' · FREANDO' : ''}`);
+    const fase = j.phase === 'coast' ? ' · CRUZEIRO v_max' : j.phase === 'decel' ? ' · FREANDO' : ' · ACELERANDO';
+    set('mission', `⭒ QUEIMA → ${j.targetName} ${bar} ETA ${Math.floor(rem / 60)}:${String(Math.round(rem % 60)).padStart(2, '0')} · β ${j.beta.toFixed(2)}${fase}`);
   } else if (game.mission) set('mission', game.mission.label);
   else if (game.campaign && game.phase === 'flight') set('mission', 'CAMPANHA — aguarde a próxima missão…');
 
