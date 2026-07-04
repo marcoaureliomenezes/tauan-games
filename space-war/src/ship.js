@@ -180,7 +180,9 @@ export function buildShip() {
     lamp.position.set(s * 1.58, 0.03, 0.75);
     mesh.add(lamp); wingLights.push(lamp);
   }
-  const rim = new THREE.PointLight(0xbfd4ff, 1.1, 60, 1.2);
+  // Reflexo SUTIL (AC-06): 1.1/60 estourava um retângulo branco no casco
+  // (screenshot 10-37-31 do operador) — meia intensidade, alcance curto.
+  const rim = new THREE.PointLight(0xbfd4ff, 0.55, 38, 1.2);
   rim.position.set(0, 2.2, -0.4);
   mesh.add(rim);
 

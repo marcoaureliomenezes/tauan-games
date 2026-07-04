@@ -327,6 +327,8 @@ export const DISK_FRAG = /* glsl */ `
   uniform float uInner;
   uniform float uOuter;
   uniform float uGain;
+  uniform float uSpiral;
+  uniform float uRim;
   uniform vec3 uC1;
   uniform vec3 uC2;
   uniform vec3 uC3;
@@ -365,10 +367,18 @@ export const DISK_FRAG = /* glsl */ `
     // Doppler beaming (P2-9): I_obs = δ^(3+α)·I_emit com v~0.4c na ISCO → o lado
     // que se APROXIMA é ~10× mais brilhante (EHT M87*: assimetria ~10:1).
     float doppler = pow(1.0 + 0.60 * cos(ang), 1.8);
-    float bright = (0.20 + 0.55 * streak * (0.5 + 0.5 * fino) + 0.80 * stria) * doppler;
+    // BRAÇOS ESPIRAIS (referências Sagitário do operador): estrias turbulentas
+    // enrolando p/ dentro em espirais LOGARÍTMICAS — coordenada ang + k·ln(r)
+    // cisalhada pela rotação diferencial.
+    float su = ang + 3.6 * log(max(r, 1.0)) + rot * 0.8;
+    float sarm = fbm(vec2(su * 2.2, rn * 6.0));
+    float spiral = pow(smoothstep(0.35, 0.95, sarm), 1.6) * uSpiral;
+    float bright = (0.20 + 0.55 * streak * (0.5 + 0.5 * fino) + 0.80 * stria + 1.35 * spiral) * doppler;
     // Bordas suaves e brilho interno mais intenso (borda interna QUEIMA de branco)
     float edge = smoothstep(0.0, 0.04, rn) * (1.0 - smoothstep(0.80, 1.0, rn));
     vec3 col = c * bright * (0.55 + temp * 2.3) * uGain;
+    // ARO INTERNO BRANCO-QUENTE (refs): o anel mais interno satura de branco.
+    col += vec3(1.0, 0.96, 0.90) * smoothstep(0.14, 0.0, rn) * 2.2 * uRim;
     gl_FragColor = vec4(col, edge * 0.95);
   }
 `;
@@ -376,7 +386,7 @@ export const DISK_FRAG = /* glsl */ `
 export const DISK_FIRE = [[0.26, 0.05, 0.015], [0.95, 0.38, 0.08], [1.0, 0.78, 0.42], [1.0, 0.97, 0.88]];
 export const DISK_SYNCHROTRON = [[0.03, 0.06, 0.22], [0.15, 0.42, 0.95], [0.55, 0.85, 1.0], [0.92, 0.97, 1.0]];
 
-export function diskMaterial(inner, outer, gain = 1, palette = DISK_FIRE) {
+export function diskMaterial(inner, outer, gain = 1, palette = DISK_FIRE, { spiral = 0, rim = 0 } = {}) {
   return new THREE.ShaderMaterial({
     vertexShader: DISK_VERT,
     fragmentShader: DISK_FRAG,
@@ -385,6 +395,8 @@ export function diskMaterial(inner, outer, gain = 1, palette = DISK_FIRE) {
       uInner: { value: inner },
       uOuter: { value: outer },
       uGain: { value: gain },
+      uSpiral: { value: spiral },
+      uRim: { value: rim },
       uC1: { value: new THREE.Vector3(...palette[0]) },
       uC2: { value: new THREE.Vector3(...palette[1]) },
       uC3: { value: new THREE.Vector3(...palette[2]) },
@@ -400,6 +412,7 @@ export function diskMaterial(inner, outer, gain = 1, palette = DISK_FIRE) {
 // ---- Casca de remanescente de supernova (shader) ---------------------------
 export const REMNANT_FRAG = /* glsl */ `
   uniform float uTime;
+  uniform float uFade;
   uniform vec3 uCol1;
   uniform vec3 uCol2;
   varying vec3 vDir;
@@ -418,7 +431,7 @@ export const REMNANT_FRAG = /* glsl */ `
     float mu_ = abs(dot(normalize(vN), normalize(vView)));
     float shell = pow(1.0 - mu_, 2.2);
     vec3 c = mix(uCol1, uCol2, smoothstep(0.3, 0.75, fil2));
-    float alpha = (0.05 + 0.75 * f) * shell * 0.55;
+    float alpha = (0.05 + 0.75 * f) * shell * 0.55 * uFade;
     if (alpha < 0.004) discard;
     gl_FragColor = vec4(c, alpha);
   }

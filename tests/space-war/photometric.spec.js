@@ -35,13 +35,14 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     expect(field.photo.maxPx).toBeLessThanOrEqual(16); // teto do glare de campo
   });
 
-  // AC-02: LOD ponto↔disco ao VIVO — a NS (R=30) é sub-pixel a 3000·R e vira
-  // PONTO fotométrico saturado; a 400·R resolve o DISCO com a anatomia viva.
+  // AC-02: LOD ponto↔disco ao VIVO — a NS (R=90) é sub-pixel a 1500·R (135k,
+  // dentro de 0.9·raio do binário) e vira PONTO fotométrico saturado; a 400·R
+  // resolve o DISCO com a anatomia viva.
   test('AC-02/04: pulsar — ponto fotométrico ofuscante no sistema, disco de perto', async ({ page }) => {
     test.setTimeout(60000);
     await startFlight(page);
     // dentro do sistema binário, longe da NS: modo PONTO, brilho saturado no teto
-    await page.evaluate(() => window.__swDebug.goTo('neutron', 3000));
+    await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
       () => window.__spaceWar.starLod.neutron && window.__spaceWar.starLod.neutron.mode === 'point',
       undefined, { timeout: 8000 },
@@ -87,27 +88,35 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     expect(home.flareVis).toBe(true);
     expect(home.flareF).toBe(1);
     expect(home.sun.mode).toBe('disc');
-    // no binário (d(Sol) ≈ 4.8M): flare cortado; corona do Sol colada ao disco.
-    // (espera a CHASE CAM chegar — o teleporte é da nave; a câmera persegue)
-    await page.evaluate(() => window.__swDebug.goTo('neutron', 3000));
+    // em Netuno (d(Sol) ≈ 3.8M, ainda no solar): flare ∝ fluxo (mínimo), disco
+    // do Sol pequeno com corona COLADA (teto 1.15×disco além de CORONA_FAR).
+    await page.evaluate(() => window.__swDebug.goTo('neptune', 8));
     await page.waitForFunction(
-      () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.discPx < 50,
+      () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.discPx < 30,
       undefined, { timeout: 8000 },
     );
     const away = await page.evaluate(() => ({
-      flareVis: window.__spaceWar.sunFlareVisible,
       flareF: window.__spaceWar.sunFlareFactor,
       sun: window.__spaceWar.starLod.sun,
-      betel: window.__spaceWar.starLod.betelgeuse,
     }));
-    expect(away.flareVis).toBe(false);
-    expect(away.flareF).toBe(0);
-    // Sol e Betelgeuse continuam DISCOS resolvíveis (honesto), mas o glow é justo:
-    // corona ≤ 1.3× o diâmetro do disco na tela (era 2.5× + flare de 141px)
+    expect(away.flareF).toBeLessThan(0.1);             // fluxo (0.7/3.8)² ≈ 0.03 — sem piso
     expect(away.sun.mode).toBe('disc');
     expect(away.sun.coronaPx).toBeLessThanOrEqual(away.sun.discPx * 1.3);
-    expect(away.betel.mode).toBe('disc');
-    expect(away.betel.coronaPx).toBeLessThanOrEqual(away.betel.discPx * 1.3);
+    // no binário (d(Sol) ≈ 22M — "anos-luz"): flare CORTADO e o Sol nem é disco:
+    // vira o glow do sistema (cluster) — proporções verdadeiras.
+    await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
+    await page.waitForFunction(
+      () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.mode === 'cluster',
+      undefined, { timeout: 8000 },
+    );
+    const veryFar = await page.evaluate(() => ({
+      flareVis: window.__spaceWar.sunFlareVisible,
+      flareF: window.__spaceWar.sunFlareFactor,
+      solarGlow: window.__spaceWar.sysGlow.solar,
+    }));
+    expect(veryFar.flareVis).toBe(false);
+    expect(veryFar.flareF).toBe(0);
+    expect(veryFar.solarGlow.visible).toBe(true);
   });
 
   // AC-04 (metade interestelar) + AC-05: de OUTRO sistema, o farol do binário
@@ -127,8 +136,10 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     expect(fromSolar.glows.binary.visible).toBe(true);
     expect(fromSolar.glows.binary.I).toBeGreaterThan(1);
     expect(fromSolar.glows.binary.px).toBeGreaterThanOrEqual(4);
+    // em CASA o glow do próprio solar fica suprimido (sistema resolvido)
+    expect(fromSolar.glows.solar.visible).toBe(false);
     // todos os sistemas cullados têm glow fotométrico dentro dos tetos (AC-05)
-    for (const key of ['binary', 'chaotic', 'core', 'veil']) {
+    for (const key of ['binary', 'chaotic', 'core', 'veil', 'betelgeuse']) {
       const g = fromSolar.glows[key];
       expect(g).toBeTruthy();
       expect(g.px).toBeLessThanOrEqual(30);
@@ -138,7 +149,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     expect(fromSolar.ns.mode).toBe('cluster');
     expect(fromSolar.s1.mode).toBe('cluster');
     // resolvendo o binário: glow some, membro assume
-    await page.evaluate(() => window.__swDebug.goTo('neutron', 3000));
+    await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
       () => window.__spaceWar.sysGlow.binary.visible === false,
       undefined, { timeout: 8000 },

@@ -1,2 +1,2 @@
-release: space-war-photometric-stars-v1
+release: space-war-true-proportions-v1
 phase: IMPLEMENTATION

@@ -32,7 +32,9 @@ import { pixelAngle } from '../starfield.js';
 const CORONA_NEAR = 700_000;
 const CORONA_FAR = 3_000_000;
 // Gauge dos glows de sistema (marcos de navegação — flux somado, não-resolvido).
-const D0_SYS = 2_500_000;
+// Anel de sistemas a 19–29M (proporções verdadeiras): 8M mantém o binário/
+// Betelgeuse como faróis vivos e o solar como a estrela fraca que ele É de lá.
+const D0_SYS = 8_000_000;
 const GLOW_TINTS = {
   binary: ['rgba(220,232,255,0.98)', 'rgba(150,185,255,0.55)', 'rgba(150,90,230,0.18)', 'rgba(0,0,0,0)'],
   chaotic: ['rgba(200,220,255,0.95)', 'rgba(255,180,110,0.45)', 'rgba(120,80,50,0.12)', 'rgba(0,0,0,0)'],
@@ -80,11 +82,10 @@ export function buildFarStars() {
     });
   }
 
-  // Glows de sistema: todos menos Betelgeuse e o solar — a supergigante
-  // alwaysVisible e o Sol (disco sempre resolvível dentro do alcance de render)
-  // são os próprios marcos. L = Σ lum das estrelas-membro.
+  // Glows de sistema: TODOS (proporções verdadeiras: com o cull universal e os
+  // sistemas a 19–29M, nenhum disco cruza o vazio — o glow é o único marco;
+  // o solar visto do binário é só mais uma estrela fraca, como manda o céu).
   for (const sys of SYSTEMS) {
-    if (sys.key === 'betelgeuse' || sys.key === 'solar') continue;
     let lum = 0;
     for (const e of _stars) if (e.body.system === sys.key) lum += e.lum;
     if (!lum) continue;

@@ -4,7 +4,7 @@
 //   npm run test:space-war:unit
 
 import {
-  MU_EARTH_GAME, MU_SUN_GAME,
+  MU_EARTH_GAME, MU_SUN_GAME, SUN_RADIUS_GAME,
   muFromEarthMasses, muFromSolarMasses, solarMassesFromMu,
   spectralFromMass, radiusFromMass, remnantTypeForMass,
   hillSoi, visVivaSpeed, circularSpeed, keplerPeriod,
@@ -44,7 +44,7 @@ for (const m of [0.1, 0.3, 0.6, 1, 2, 5, 10, 20, 50]) {
   prev = r;
 }
 check('raio não-decrescente com a massa', mono);
-check('raio(1 M☉) = raio do Sol do jogo', close(radiusFromMass(1), 22000));
+check('raio(1 M☉) = raio do Sol do jogo', close(radiusFromMass(1), SUN_RADIUS_GAME));  // lei, não número mágico (proporções verdadeiras: 11000)
 
 console.log('· escada de destino evolutivo (NASA)');
 check('3 M☉ → white-dwarf', remnantTypeForMass(3) === 'white-dwarf');

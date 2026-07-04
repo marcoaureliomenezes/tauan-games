@@ -26,10 +26,15 @@ function particle(pos, vel, color, size, life, fade = true) {
 }
 
 export function thruster(pos, back, throttle) {
+  // Rastro FINO (proporções/AC-06): partículas de 5–9u viravam uma BOLA azul do
+  // tamanho da nave colada à cauda (screenshots do operador). Agora: grão
+  // pequeno ∝ throttle, vida curta, jato colimado.
   if (throttle < 0.05 || Math.random() > throttle) return;
-  const v = back.clone().multiplyScalar(40 + Math.random() * 60);
-  v.x += (Math.random() - 0.5) * 14; v.y += (Math.random() - 0.5) * 14; v.z += (Math.random() - 0.5) * 14;
-  particle(pos, v, 0x66ccff, 5 + Math.random() * 4, 0.5);
+  const v = back.clone().multiplyScalar(50 + Math.random() * 70);
+  v.x += (Math.random() - 0.5) * 6; v.y += (Math.random() - 0.5) * 6; v.z += (Math.random() - 0.5) * 6;
+  const grain = 1.2 + throttle * 1.2 + Math.random() * 0.6;
+  game.thrusterGrain = grain;                        // diagnóstico p/ e2e (AC-06)
+  particle(pos, v, 0x66ccff, grain, 0.35);
 }
 
 const FXS = 26;   // escala global dos efeitos (mundo grande)

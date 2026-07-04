@@ -290,20 +290,21 @@ export class NeutronStar extends Star {
     torus.rotation.x = Math.PI / 2;
     axis.add(torus);
 
-    // JATOS relativísticos: AGULHAS de luz finas e longas.
-    const jetLen = def.radius * 150;
+    // JATOS relativísticos: AGULHAS de luz finas, LONGAS e brilhantes
+    // (referências do operador: needles atravessando os DOIS polos).
+    const jetLen = def.radius * 220;
     const jetMats = [];
     for (const s of [1, -1]) {
       const outer = new THREE.Mesh(
-        new THREE.CylinderGeometry(def.radius * 0.50, def.radius * 0.16, jetLen, 10, 1, true),
-        new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.CylinderGeometry(def.radius * 0.34, def.radius * 0.12, jetLen, 10, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
       );
       outer.position.y = s * jetLen / 2;
       outer.rotation.x = s > 0 ? 0 : Math.PI;
       axis.add(outer);
       const inner = new THREE.Mesh(
-        new THREE.CylinderGeometry(def.radius * 0.16, def.radius * 0.06, jetLen * 1.06, 8, 1, true),
-        new THREE.MeshBasicMaterial({ color: 0xeaf4ff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.CylinderGeometry(def.radius * 0.12, def.radius * 0.04, jetLen * 1.06, 8, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xeaf4ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
       );
       inner.position.y = s * jetLen * 0.53;
       inner.rotation.x = s > 0 ? 0 : Math.PI;
@@ -311,11 +312,11 @@ export class NeutronStar extends Star {
       jetMats.push(outer.material, inner.material);
     }
 
-    // Gaiola dipolo: poucas linhas, bem tênues (estrutura, não neon).
-    for (let i = 0; i < 6; i++) {
-      const phi = (i / 6) * Math.PI * 2;
+    // Gaiola dipolo VISÍVEL (refs: linhas de campo emoldurando a esfera).
+    for (let i = 0; i < 10; i++) {
+      const phi = (i / 10) * Math.PI * 2;
       const line = dipoleFieldLine(def.radius * 6.5, phi, def.radius);
-      line.material.opacity = 0.09;
+      line.material.opacity = 0.14;
       axis.add(line);
     }
 
@@ -389,10 +390,12 @@ export class BlackHole extends Star {
     photon2.rotation.x = Math.PI / 2;
     group.add(photon2);
 
-    // Disco de acreção plano (shader) — levemente inclinado.
+    // Disco de acreção DOMINANTE (referências Sagitário do operador): estrias
+    // em braços espirais + aro interno branco-quente — levemente inclinado.
     const disk0 = def.disk ?? { inner: def.rs * 3.0, outer: def.rs * 20 };   // ISCO = 3·rs
-    const diskMat = diskMaterial(disk0.inner, disk0.outer, def.diskGain ?? 1.0);
-    const disk = new THREE.Mesh(new THREE.RingGeometry(disk0.inner, disk0.outer, 160, 4), diskMat);
+    const diskMat = diskMaterial(disk0.inner, disk0.outer, def.diskGain ?? 1.0,
+      undefined, { spiral: 1, rim: 1 });
+    const disk = new THREE.Mesh(new THREE.RingGeometry(disk0.inner, disk0.outer, 160, 6), diskMat);
     disk.rotation.x = Math.PI / 2 + 0.18;
     group.add(disk);
 
@@ -401,6 +404,24 @@ export class BlackHole extends Star {
     const lensMat = diskMaterial(def.rs * 1.4, def.rs * 2.8, 0.6);
     const lens = new THREE.Mesh(new THREE.RingGeometry(def.rs * 1.4, def.rs * 2.8, 96, 2), lensMat);
     group.add(lens);
+
+    // GÁS ESPIRALANDO PARA DENTRO (referências do operador): tubo em espiral
+    // logarítmica no plano do disco, da borda externa até a ISCO — a queda é
+    // VISÍVEL como caminho, não um cano reto. Gira devagar com o disco.
+    const spiralPts = [];
+    const TURNS = 2.2, SEGS = 90;
+    for (let i = 0; i <= SEGS; i++) {
+      const t = i / SEGS;
+      const angS = t * TURNS * Math.PI * 2;
+      const rS = disk0.outer * 0.98 * Math.pow((disk0.inner * 1.1) / (disk0.outer * 0.98), t);
+      spiralPts.push(new THREE.Vector3(Math.cos(angS) * rS, Math.sin(angS) * rS, (1 - t) * def.rs * 0.25));
+    }
+    const spiral = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(spiralPts), HEADLESS ? 40 : 120, def.rs * 0.16, 6, false),
+      new THREE.MeshBasicMaterial({ color: 0xffc27a, transparent: true, opacity: 0.34, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    spiral.rotation.x = Math.PI / 2 + 0.18;          // mesmo plano do disco
+    group.add(spiral);
 
     // JATO RELATIVÍSTICO bipolar (M87*) — apenas quando o def pede (SMBH).
     // Cilindros aditivos (não sprites — sprite aditivo + log-depth + bloom = NaN).
@@ -436,6 +457,7 @@ export class BlackHole extends Star {
       this.t += dt;
       diskMat.uniforms.uTime.value = this.t;      // rotação diferencial no shader
       lensMat.uniforms.uTime.value = this.t * 1.4;
+      spiral.rotation.z += dt * 0.10;             // a espiral de gás enrola devagar
       lens.quaternion.copy(camera.quaternion);     // billboard: lente sempre de frente
       // De-quina do plano do disco → monte lenseado forte; de frente → halo some.
       _diskN.set(0, 0, 1).applyQuaternion(disk.quaternion).applyQuaternion(group.quaternion);
