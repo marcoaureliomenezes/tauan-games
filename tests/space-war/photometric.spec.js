@@ -44,7 +44,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.evaluate(() => window.__swDebug.goTo('neutron', 3000));
     await page.waitForFunction(
       () => window.__spaceWar.starLod.neutron && window.__spaceWar.starLod.neutron.mode === 'point',
-      { timeout: 8000 },
+      undefined, { timeout: 8000 },
     );
     const far = await page.evaluate(() => window.__spaceWar.starLod.neutron);
     expect(far.discPx).toBeLessThan(1);
@@ -65,7 +65,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.evaluate(() => window.__swDebug.goTo('neutron', 400));
     await page.waitForFunction(
       () => window.__spaceWar.starLod.neutron.mode === 'disc',
-      { timeout: 8000 },
+      undefined, { timeout: 8000 },
     );
     const near = await page.evaluate(() => window.__spaceWar.starLod.neutron);
     expect(near.discPx).toBeGreaterThanOrEqual(2);
@@ -92,7 +92,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.evaluate(() => window.__swDebug.goTo('neutron', 3000));
     await page.waitForFunction(
       () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.discPx < 50,
-      { timeout: 8000 },
+      undefined, { timeout: 8000 },
     );
     const away = await page.evaluate(() => ({
       flareVis: window.__spaceWar.sunFlareVisible,
@@ -141,7 +141,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.evaluate(() => window.__swDebug.goTo('neutron', 3000));
     await page.waitForFunction(
       () => window.__spaceWar.sysGlow.binary.visible === false,
-      { timeout: 8000 },
+      undefined, { timeout: 8000 },
     );
     const resolved = await page.evaluate(() => ({
       glow: window.__spaceWar.sysGlow.binary,

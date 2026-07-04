@@ -30,3 +30,9 @@
 - [-] **T-PS-08** — Revisões (QA end-of-alpha + security push-verdict), push,
   PR stacked (base feature/space-war-interstellar-journey-v1), CI verde.
   Write set: `.dadaia/handoff/**`, `specs/**` (docs).
+- [x] **T-PS-09** — (drift rc-1) Root-cause do flake pré-existente do solver
+  balístico (4/6 falhas na base journey; CI vermelho): setup determinístico
+  `goToObjective` (co-móvel com o corpo do alvo) + correção do arg-slot de
+  `waitForFunction` (options no 3º parâmetro — op-timeouts valiam nada).
+  Evidência: 10/10 repeats verdes. Write set: `space-war/src/main.js`,
+  `tests/space-war/campaign.spec.js`, `tests/space-war/photometric.spec.js`.

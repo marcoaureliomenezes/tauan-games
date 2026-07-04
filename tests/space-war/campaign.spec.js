@@ -76,14 +76,21 @@ test.describe('Space War — Campanha', () => {
   });
 
   // SOLUÇÃO BALÍSTICA (AC-01/02 da ballistic-war): C alinha à direção de tiro.
+  // Setup DETERMINÍSTICO via goToObjective: o antigo goTo('lua') dependia da
+  // fase orbital aleatória de boot + posição aleatória da base na superfície —
+  // ~1/3 dos boots deixava o alvo fora do alcance balístico (flake pré-existente,
+  // 4/6 falhas medidas na base journey; corrigido na photometric-stars rc-1).
   test('solução balística: solver acha arco e C alinha o nariz à direção de tiro', async ({ page }) => {
     test.setTimeout(60000);
     await startFlight(page);
-    await page.evaluate(() => window.__swDebug.goTo('lua'));
+    await page.evaluate(() => window.__swDebug.goToObjective(7000));
+    // NB: options são o 3º parâmetro de waitForFunction — passar {timeout} no 2º
+    // (o slot de ARG) silenciosamente vira argumento da função e o op-timeout
+    // NUNCA vale (era por isso que cada falha queimava os 60s do teste).
     await page.waitForFunction(() => {
       const sw = window.__spaceWar;
       return sw.nav.solution && sw.nav.solution.ok === true;
-    }, { timeout: 15000 });
+    }, undefined, { timeout: 15000 });
     await page.keyboard.press('KeyC');
     await page.waitForFunction(() => {
       const sw = window.__spaceWar;
@@ -94,7 +101,7 @@ test.describe('Space War — Campanha', () => {
       const fy = -(2 * (q.y * q.z - q.w * q.x));
       const fz = -(1 - 2 * (q.x * q.x + q.y * q.y));
       return fx * sol.dir.x + fy * sol.dir.y + fz * sol.dir.z > 0.95;
-    }, { timeout: 12000 });
+    }, undefined, { timeout: 12000 });
   });
 
   // AC-04: bomba inimiga é BALÍSTICA — a gravidade muda a velocidade dela.
