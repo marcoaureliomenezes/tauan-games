@@ -26,7 +26,7 @@ const ORIGIN = new THREE.Vector3(0, 0, 0);
 // Autorado 100% aqui — config.js intocado; o registro em SYSTEMS é aditivo.
 const VEIL_SYSTEM = {
   key: 'veil', name: 'Véu — Gigante+Anã',
-  center: [2_400_000, 60_000, 1_900_000], radius: 200_000, primary: 'veilgiant',
+  center: [4_200_000, 105_000, 3_325_000], radius: 200_000, primary: 'veilgiant',   // ×1.75 (anel novo)
 };
 SYSTEMS.push(VEIL_SYSTEM);
 

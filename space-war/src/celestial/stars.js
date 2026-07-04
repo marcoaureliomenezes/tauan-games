@@ -22,8 +22,8 @@ import { CelestialBody } from './body.js';
 // desenha em screen-space sem atenuação — a milhões de u o glare do Sol ainda
 // cobria a tela inteira de OUTRO sistema. O flare agora encolhe com a distância
 // e é CORTADO além da vizinhança solar.
-const FLARE_FULL = 400_000;      // até aqui: tamanho pleno (vizinhança interna)
-const FLARE_CUTOFF = 2_600_000;  // ~1.1× o raio do Sistema Solar: além, invisível
+const FLARE_FULL = 700_000;      // até aqui: tamanho pleno (vizinhança interna)
+const FLARE_CUTOFF = 4_200_000;  // < anel de vizinhos (4.5M): lá fora, invisível
 import {
   HEADLESS, starMaterial, makeRadialSprite, flareTexture,
   diskMaterial, DISK_SYNCHROTRON,

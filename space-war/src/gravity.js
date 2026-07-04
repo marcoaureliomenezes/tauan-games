@@ -140,7 +140,10 @@ export function computeGravity(pos, out, shipVel = null) {
       if (game.time > w.until) continue;                 // limpeza em updateProjectiles
       _tmp.copy(w.pos).sub(pos);
       const dW = Math.max(_tmp.length(), w.soft || 350); // núcleo suavizado (sem singularidade)
-      const aW = w.mu / (dW * dW);
+      // Saturação do poço (cap 600 u/s²): um poço PONTUAL de 0.5 M☉ sem cap seria
+      // um buraco negro (r_s ≈ 1.5 km) — a condensação satura; e a nave que LANÇA
+      // a bomba não pode ser estilingada a 10⁵ u/s² pelo próprio tiro.
+      const aW = Math.min(w.mu / (dW * dW), w.cap ?? 600);
       out.addScaledVector(_tmp.normalize(), aW);
       gravMag += aW;
     }

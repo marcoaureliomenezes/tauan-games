@@ -61,15 +61,21 @@ function buildArm(star, seed) {
 
 // Chamado pelo weapons.js quando a bomba ARMA: cria o poço e engaja a estrela.
 export function activateHiggs(p) {
-  const well = { pos: p.mesh.position, mu: HIGGS_MU, until: game.time + HIGGS_PULL_S, soft: 350 };
+  const well = { pos: p.mesh.position, mu: HIGGS_MU, until: game.time + HIGGS_PULL_S, soft: 1000 };
   game.wells.push(well);
-  // Estrela mais próxima (normalizada pelo raio) dentro do alcance de engajamento.
+  // Engajamento FÍSICO (critério de Roche): a estrela só é perturbada se a maré
+  // do poço na fotosfera vencer ~2% da gravidade de superfície dela —
+  // (d − R) ≤ √(μ_H / (0.02·g_surf)), g_surf = μ*/R². Consequência honesta:
+  // anãs compactas (g_surf alto) são MUITO mais difíceis de perturbar que
+  // gigantes infladas — exatamente como na física de binárias.
   let star = null, best = Infinity;
   for (const b of game.bodies) {
     if (!isStarBody(b)) continue;
+    const R = b.def.radius;
     const d = b.worldPos.distanceTo(p.mesh.position);
-    const norm = d / b.def.radius;
-    if (norm < best && d < b.def.radius * 9 + 26_000) { best = norm; star = b; }
+    const gSurf = b.mu / (R * R);
+    const reach = Math.sqrt(HIGGS_MU / (0.02 * gSurf));
+    if (d - R < reach && d / R < best) { best = d / R; star = b; }
   }
   let outcome = null;
   if (star) {

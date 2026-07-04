@@ -100,9 +100,10 @@ test.describe('Space War — Campanha', () => {
   // AC-04: bomba inimiga é BALÍSTICA — a gravidade muda a velocidade dela.
   test('AC-04: bomba inimiga acelera sob gravidade', async ({ page }) => {
     await startFlight(page);
-    // alto sobre Júpiter: gravidade mensurável e SEM risco de contato de
-    // superfície no intervalo da amostra (a bomba nasce em repouso e cai)
-    await page.evaluate(() => window.__swDebug.goTo('jupiter'));
+    // baixo sobre Júpiter (1.3·R): com a escala de parede (μ ∝ f) o g relativo
+    // caiu ×10 — mais perto + janela maior mantêm o sinal mensurável, ainda sem
+    // risco de contato (queda de ~10 u em 1.5 s vs altitude ~20k)
+    await page.evaluate(() => window.__swDebug.goTo('jupiter', 1.3));
     await page.waitForTimeout(150);
     const n = await page.evaluate(() => window.__swDebug.dropBomb());
     expect(n).toBeGreaterThan(0);
@@ -110,13 +111,15 @@ test.describe('Space War — Campanha', () => {
       const b = window.__spaceWar.projectiles.find((p) => p.isBomb);
       return Math.hypot(b.vel.x, b.vel.y, b.vel.z);
     });
-    await page.waitForTimeout(900);
+    // headless slow-mo: dt de sim é clampado — 1 s de parede ≈ 0.3 s de sim.
+    // Janela larga + limiar por Δv de SIM (~0.75 s → +5.8 a g=7.8).
+    await page.waitForTimeout(2500);
     const v1 = await page.evaluate(() => {
       const b = window.__spaceWar.projectiles.find((p) => p.isBomb);
       return b ? Math.hypot(b.vel.x, b.vel.y, b.vel.z) : -1;
     });
     // solta em repouso → só a gravidade pode tê-la acelerado
-    expect(v1).toBeGreaterThan(v0 + 5);
+    expect(v1).toBeGreaterThan(v0 + 3);
   });
 
   // AC-05: nukes efetivamente ilimitadas — a reserva RECARREGA após disparo.

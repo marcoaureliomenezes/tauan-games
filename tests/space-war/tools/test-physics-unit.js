@@ -64,6 +64,38 @@ test('maré: gradiente ∝ 1/r³ (dobrar r divide o gradiente por 8)', () => {
   assert.ok(Math.abs(g1 / g2 - 8) < 1e-9);
 });
 
+test('escala de parede: geometria do sistema solar é consistente (T-PF-08)', async () => {
+  const { SUN, PLANETS, BETELGEUSE } = await import('../../../space-war/src/config.js');
+  // 1. Nenhum par de SOIs planetários vizinhos se sobrepõe.
+  const sorted = [...PLANETS].sort((a, b) => a.orbit - b.orbit);
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i], b = sorted[i + 1];
+    const gap = b.orbit - a.orbit;
+    assert.ok(gap > a.soi + b.soi,
+      `SOIs de ${a.name} (${a.soi}) e ${b.name} (${b.soi}) não cabem no gap ${gap}`);
+  }
+  // 2. Mercúrio (órbita mais interna) fora do Sol com folga ≥ 1.3×.
+  assert.ok(sorted[0].orbit - sorted[0].soi > SUN.radius * 1.3,
+    `${sorted[0].name} precisa de folga do Sol (R=${SUN.radius})`);
+  // 3. Toda lua orbita DENTRO da SOI do pai (patched-conics íntegro) e fora de 2·R.
+  for (const p of PLANETS) {
+    for (const m of (p.moons || [])) {
+      assert.ok(m.orbit + m.soi < p.soi, `lua ${m.name} (${m.orbit}+${m.soi}) fora da SOI de ${p.name} (${p.soi})`);
+      assert.ok(m.orbit > p.radius * 2.0, `lua ${m.name} colada em ${p.name}`);
+    }
+  }
+  // 4. Ordem de tamanhos: Betelgeuse > Sol > todo planeta; Terra ≥ 22000 (parede).
+  const maxPlanet = Math.max(...PLANETS.map((p) => p.radius));
+  assert.ok(BETELGEUSE.star.radius > SUN.radius, 'Betelgeuse segue a maior estrela');
+  assert.ok(SUN.radius > maxPlanet, 'Sol maior que qualquer planeta');
+  const earth = PLANETS.find((p) => p.key === 'earth' || /terra/i.test(p.name));
+  assert.ok(earth.radius >= 22000, `Terra ${earth.radius} deve ser PAREDE (≥ 22000 = 10× a rodada anterior)`);
+  // 5. Gauge: v_esc de superfície do Sol preservada dentro de ±5% do valor
+  //    pré-escala (μ e R cresceram juntos ×5) — a zona de não-retorno vive.
+  const vEsc = Math.sqrt(2 * SUN.mu / SUN.radius);
+  assert.ok(Math.abs(vEsc - 14142) / 14142 < 0.05, `v_esc do Sol ${vEsc.toFixed(0)} ≠ ~14142`);
+});
+
 test('config: massas respeitam a física (TOV, hierarquia SMBH, companheira)', async () => {
   const { BINARY, CORE, BETELGEUSE } = await import('../../../space-war/src/config.js');
   const nsSun = BINARY.neutronStar.mu / MU_SUN_GAME;
