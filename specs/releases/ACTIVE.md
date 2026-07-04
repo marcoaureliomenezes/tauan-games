@@ -1,2 +1,2 @@
-release: space-war-interstellar-journey-v1
+release: space-war-photometric-stars-v1
 phase: IMPLEMENTATION

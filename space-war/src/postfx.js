@@ -49,6 +49,13 @@ const LENS_SHADER = {
     uniform float uShadow;
     uniform float uJBeta;
     varying vec2 vUv;
+    // SANITIZAÇÃO PRÉ-BLOOM (AC-06): este é o último passe antes do bloom — um
+    // único NaN/Inf aqui vira mancha branca espalhada por TODOS os mips (gotcha
+    // aditivo+log-depth). NaN → 0; clamp [0, 64] mata Inf/overbright.
+    vec4 sanitize(vec4 c) {
+      if (c.r != c.r || c.g != c.g || c.b != c.b) c.rgb = vec3(0.0);
+      return vec4(min(max(c.rgb, vec3(0.0)), vec3(64.0)), c.a);
+    }
     // amostra o fundo lenseado com uma força de deflexão dada; fora da tela → base
     vec4 sampleLensed(vec4 base, vec2 d, float pull, float swirl) {
       vec2 d2 = d * (1.0 - pull);
@@ -78,16 +85,16 @@ const LENS_SHADER = {
                      1.0 - 0.05 * blue - 0.05 * red,
                      1.0 + 0.28 * blue - 0.20 * red);
       }
-      vec4 base = texture2D(tDiffuse, uvW);
+      vec4 base = sanitize(texture2D(tDiffuse, uvW));
       base.rgb *= jTint;
-      if (uMix <= 0.001 || uTheta <= 0.0005) { gl_FragColor = base; return; }
+      if (uMix <= 0.001 || uTheta <= 0.0005) { gl_FragColor = sanitize(base); return; }
       // a lente é de TELA (sem profundidade): protege a região da NAVE — objeto
       // em primeiro plano não pode ser esticado pela lente do fundo.
       vec2 ds = vUv - uShip;
       ds.x *= uAspect;
       float protectShip = smoothstep(0.045, 0.15, length(ds));
       float mixEff = uMix * protectShip;
-      if (mixEff <= 0.001) { gl_FragColor = base; return; }
+      if (mixEff <= 0.001) { gl_FragColor = sanitize(base); return; }
       vec2 d = vUv - uBH;
       d.x *= uAspect;                       // círculo de verdade na tela
       float r = max(length(d), 1e-5);
@@ -111,7 +118,7 @@ const LENS_SHADER = {
       float ring = smoothstep(uTheta * 0.20, 0.0, abs(r - uTheta)) * (0.2 + 0.3 * uShadow);
       vec4 c = mix(base, lensed, mixEff);
       c.rgb = c.rgb * (1.0 - shadow * mixEff) + vec3(1.0, 0.88, 0.62) * ring * mixEff;
-      gl_FragColor = c;
+      gl_FragColor = sanitize(c);
     }
   `,
 };

@@ -228,6 +228,7 @@ export const BINARY = {
     // Pulsar jovem BRILHA (P1-1): Ė = 4π²IṖ/P³ ≈ 1.2e5 L☉ (Crab) — luz azul-branca
     // que ilumina o remanescente e o lado do disco do BN voltado para ela.
     light: { color: 0x9bbcff, intensity: 4.0, range: 500_000 },
+    lum: 80,                  // fonte PONTUAL mais brilhante do jogo (Crab comprimido — D-7)
     spin: 1.4,                // rotação visual dos jatos/toro (farol)
     jetTilt: 0.5,
     lensRs: 80,               // "mesmo não sendo um buraco negro… ela curva o espaço"
@@ -253,6 +254,7 @@ export const BETELGEUSE = {
     mu: 1.6e13,               // ~16 massas solares (na escala μ do jogo)
     soi: 300_000, gravReach: 300_000,
     spin: 900, light: 0xffb080,
+    lum: 60,                  // supergigante: L real ~1.26e5 L☉ comprimida (D-7)
     cellScale: 1.8,           // freq. do FBM: 2-4 células de convecção GIGANTES no disco
     lumpyLimb: 0.045,         // deslocamento de vértice low-freq — silhueta assimétrica (ALMA)
   },
@@ -261,6 +263,7 @@ export const BETELGEUSE = {
   companion: {
     name: 'Siwarha', key: 'siwarha', kind: 'star',
     radius: 2200, color: 0xcfe0ff, color2: 0x8fb0f0, mu: 1.15e12,   // ~1.15 M☉ (α Ori B real ≈ 1–1.5)
+    lum: 0.9,
     soi: 20_000, gravReach: 60_000, spin: 120, cellScale: 12,
     orbit: 86_000, periodFactor: 2.4,
   },
@@ -283,10 +286,10 @@ export const BETELGEUSE = {
 export const CHAOTIC = {
   stars: [
     { name: 'Azurak', key: 'azurak', kind: 'star',
-      radius: 6500, color: 0xbcd2ff, color2: 0x7a9cf0, mu: 6.0e11,
+      radius: 6500, color: 0xbcd2ff, color2: 0x7a9cf0, mu: 6.0e11, lum: 0.5,
       soi: 90_000, gravReach: 260_000, spin: 300, light: 0xcfe0ff, cellScale: 9.0 },
     { name: 'Karvon', key: 'karvon', kind: 'star',
-      radius: 3800, color: 0xffa04a, color2: 0xd06018, mu: 2.5e11,
+      radius: 3800, color: 0xffa04a, color2: 0xd06018, mu: 2.5e11, lum: 0.18,
       soi: 60_000, gravReach: 260_000, spin: 380, light: 0xffd0a0, cellScale: 7.0 },
   ],
   pairSep: 42_000,            // separação inicial do par
@@ -469,12 +472,12 @@ export const CORE = {
   // paleta espectral (M vermelha → O azul), MAIOR e mais massiva que antes;
   // ordenada da MENOR para a MAIOR: o raio cresce com o semieixo (Hill maior fora)
   starPalette: [
-    { color: 0xff6a3a, color2: 0xb03a12, radius: 2800, mu: 2.3e11, cellScale: 5 },
-    { color: 0xff9a52, color2: 0xd06020, radius: 3300, mu: 2.9e11, cellScale: 6 },
-    { color: 0xffd27a, color2: 0xd09838, radius: 3800, mu: 3.6e11, cellScale: 7 },
-    { color: 0xfff2cc, color2: 0xe0c080, radius: 4600, mu: 4.6e11, cellScale: 8 },
-    { color: 0xcfe0ff, color2: 0x93b0e8, radius: 5400, mu: 5.8e11, cellScale: 9 },
-    { color: 0xa8c4ff, color2: 0x6a8ce0, radius: 6500, mu: 7.2e11, cellScale: 10 },
+    { color: 0xff6a3a, color2: 0xb03a12, radius: 2800, mu: 2.3e11, cellScale: 5, lum: 0.3 },
+    { color: 0xff9a52, color2: 0xd06020, radius: 3300, mu: 2.9e11, cellScale: 6, lum: 0.4 },
+    { color: 0xffd27a, color2: 0xd09838, radius: 3800, mu: 3.6e11, cellScale: 7, lum: 0.5 },
+    { color: 0xfff2cc, color2: 0xe0c080, radius: 4600, mu: 4.6e11, cellScale: 8, lum: 0.6 },
+    { color: 0xcfe0ff, color2: 0x93b0e8, radius: 5400, mu: 5.8e11, cellScale: 9, lum: 0.75 },
+    { color: 0xa8c4ff, color2: 0x6a8ce0, radius: 6500, mu: 7.2e11, cellScale: 10, lum: 0.9 },
   ],
   planetCount: 3,
 };

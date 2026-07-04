@@ -1,14 +1,19 @@
-// starfield.js — O CORREDOR GALÁCTICO (T-IJ-02/03, AC-03/AC-04).
+// starfield.js — O CORREDOR GALÁCTICO (T-IJ-02/03; rewrite fotométrico T-PS-03).
 //
 // A galáxia EXISTE entre os sistemas: duas camadas de estrelas 3D em "wrap
 // infinito" (posição ≡ mod L ao redor da câmera — recycling determinístico sem
-// alocação), com PARALAXE real (posições 3D: as próximas varrem rápido, as
-// distantes deslizam) e RELATIVIDADE REALISTA no shader (brief 2026-07-04):
+// alocação), com PARALAXE real e RELATIVIDADE REALISTA no shader:
 //   aberração   cos θ_ap = (cos θ + β)/(1 + β cos θ) (céu agrupa à frente)
 //   Doppler     δ = 1/(γ(1 − β cos θ'))               (T' = δ·T: recolor térmico)
 //   beaming     I ∝ δ⁴ (clamp)                        (frente brilha, trás apaga)
-// Sem "starbow" (mito — McKinley & Doherty 1979) e sem achatar malhas
-// (Terrell–Penrose): TODA a relatividade vive aqui e no tint do postfx.
+//
+// FOTOMETRIA (bug space-war-starfield-fixed-size-points): estrela é fonte
+// NÃO-RESOLVIDA — QUADS INSTANCIADOS (não GL_POINTS: spec WebGL só garante 1px
+// de teto; WebGPU nem tem gl_PointSize) com núcleo de tamanho FIXO em pixels e
+// BRILHO pelo fluxo I = L·(D0/d)² (espelho GLSL de celestial/physics.js —
+// pointIntensity/pointPx/pointAlpha, unit-provadas). Nascem APAGADAS na borda
+// da célula do wrap e ACENDEM ao aproximar; só CRESCEM na passagem rasante
+// (glare ∝ √(I−1), Spencer 1995 — conserva energia).
 // Nebulosas: billboards esparsos (Hα vermelho / O III teal / reflexão azul).
 
 import * as THREE from '../../vendor/three.module.min.js';
@@ -39,9 +44,11 @@ function rng(seed) {
   };
 }
 
+// d0: gauge de CAMPO (I=1 p/ L=1 a d0) — típico I 0.05–1 ("poeira que acende");
+// rasante satura e o glare cresce. corePx/glareK/maxPx: PSF do campo.
 const LAYERS = [
-  { count: HEADLESS ? 1400 : 3600, span: 900_000, size: 900, seed: 1234567 },   // NEAR: paralaxe forte
-  { count: HEADLESS ? 700 : 1800, span: 3_200_000, size: 2600, seed: 7654321 }, // FAR: deriva lenta
+  { count: HEADLESS ? 1400 : 3600, span: 900_000, d0: 120_000, corePx: 1.9, glareK: 2.2, maxPx: 12, seed: 1234567 },   // NEAR: paralaxe forte
+  { count: HEADLESS ? 700 : 1800, span: 3_200_000, d0: 260_000, corePx: 1.6, glareK: 1.8, maxPx: 9, seed: 7654321 },  // FAR: deriva lenta
 ];
 
 const VERT = `
@@ -50,15 +57,24 @@ uniform float uSpan;
 uniform float uBeta;
 uniform vec3 uDir;
 uniform float uFade;
-uniform float uBase;
-attribute vec3 aColor;
+uniform float uD0;
+uniform float uCorePx;
+uniform float uGlareK;
+uniform float uMaxPx;
+uniform float uPxAngle;
+uniform vec3 uCamRight;
+uniform vec3 uCamUp;
+attribute vec3 iPos;
+attribute vec3 iColor;
+attribute float iLum;
 varying vec3 vColor;
-varying float vBoost;
+varying float vAlpha;
+varying vec2 vQuad;
 void main() {
   // wrap infinito: posição ≡ mod(span) centrada na câmera (recycling puro-GPU)
-  vec3 p = mod(position - uCam + 0.5 * uSpan, uSpan) - 0.5 * uSpan;
-  float dist = max(length(p), 1.0);
-  vec3 dir = p / dist;
+  vec3 c = mod(iPos - uCam + 0.5 * uSpan, uSpan) - 0.5 * uSpan;
+  float dist = max(length(c), 1.0);
+  vec3 dir = c / dist;
   float ct = dot(dir, uDir);
   // ABERRAÇÃO relativística — forma APARENTE (+β): o céu agrupa À FRENTE
   // (headlight effect); a 90° do rumo a estrela aparece em arccos β.
@@ -68,31 +84,38 @@ void main() {
   vec3 dirA = (pl > 1e-5)
     ? normalize(uDir * ctA + (perp / pl) * sqrt(max(0.0, 1.0 - ctA * ctA)))
     : dir;
-  vec3 pA = uCam + dirA * dist;
+  // FOTOMETRIA (espelho de physics.pointIntensity/pointPx/pointAlpha):
+  // I = L·(D0/d)²; núcleo FIXO + glare √(I−1) com teto; α = clamp(I,0,1).
+  float I = iLum * (uD0 * uD0) / (dist * dist);
+  float px = min(uCorePx + ((I > 1.0) ? uGlareK * sqrt(I - 1.0) : 0.0), uMaxPx);
+  // fade na borda da célula do wrap: nasce APAGADA, acende ao entrar (20% finais)
+  vec3 an = abs(c) / (0.5 * uSpan);
+  float edge = 1.0 - smoothstep(0.80, 1.0, max(an.x, max(an.y, an.z)));
   // DOPPLER: δ = 1/(γ(1−β·cosθ')) — recolor térmico + beaming δ⁴ (clamp 5)
   float gamma = 1.0 / sqrt(max(1.0 - uBeta * uBeta, 1e-4));
   float delta = 1.0 / max(gamma * (1.0 - uBeta * ctA), 1e-3);
-  vBoost = clamp(pow(delta, 4.0), 0.06, 5.0) * uFade;
+  float boost = clamp(pow(delta, 4.0), 0.06, 5.0);
   // corpo negro fica corpo negro com T' = δT: desloca a cor ao longo do locus
-  // (aprox. jogável: δ>1 puxa p/ azul-branco, δ<1 p/ vermelho-escuro)
-  vec3 c = aColor;
   float shift = clamp(delta - 1.0, -0.6, 1.2);
-  vColor = mix(c, (shift > 0.0) ? vec3(0.75, 0.85, 1.0) : vec3(1.0, 0.45, 0.25), abs(shift) * 0.75);
-  vec4 mv = modelViewMatrix * vec4(pA, 1.0);
-  gl_Position = projectionMatrix * mv;
-  gl_PointSize = clamp(uBase * 3000.0 / max(-mv.z, 1.0), 0.7, 7.0);
+  vColor = mix(iColor, (shift > 0.0) ? vec3(0.75, 0.85, 1.0) : vec3(1.0, 0.45, 0.25), abs(shift) * 0.75) * boost;
+  vAlpha = clamp(I, 0.0, 1.0) * edge * uFade * min(boost, 1.0);
+  vQuad = position.xy * 2.0;                       // −1..1 no quad
+  // billboard subtendendo px PIXELS: tamanho de mundo = px·d·θ_pixel
+  float world = px * dist * uPxAngle;
+  vec3 pA = uCam + dirA * dist + (uCamRight * position.x + uCamUp * position.y) * world;
+  gl_Position = projectionMatrix * viewMatrix * vec4(pA, 1.0);
 }
 `;
 
 const FRAG = `
 varying vec3 vColor;
-varying float vBoost;
+varying float vAlpha;
+varying vec2 vQuad;
 void main() {
-  vec2 uv = gl_PointCoord - 0.5;
-  float d = length(uv);
-  if (d > 0.5) discard;
-  float glow = smoothstep(0.5, 0.0, d);
-  gl_FragColor = vec4(vColor * vBoost, glow * min(vBoost, 1.0));
+  float r2 = dot(vQuad, vQuad);
+  if (r2 > 1.0) discard;
+  float psf = exp(-3.2 * r2);                      // PSF gaussiana
+  gl_FragColor = vec4(vColor, psf * vAlpha);
 }
 `;
 
@@ -100,24 +123,41 @@ const layers = [];
 const nebulae = [];
 const _c = new THREE.Vector3();
 const _dirFlight = new THREE.Vector3(0, 0, -1);
+const _right = new THREE.Vector3();
+const _up = new THREE.Vector3();
+
+// Ângulo de 1 pixel: θ_px = 2·tan(fov/2)/altura — base do "px na tela".
+export function pixelAngle() {
+  const h = (typeof window !== 'undefined' && window.innerHeight) || 1080;
+  return 2 * Math.tan((camera.fov * Math.PI / 180) / 2) / h;
+}
 
 export function buildStarfield() {
   for (const L of LAYERS) {
     const rand = rng(L.seed);
     const pos = new Float32Array(L.count * 3);
     const col = new Float32Array(L.count * 3);
+    const lum = new Float32Array(L.count);
     const c = new THREE.Color();
     for (let i = 0; i < L.count; i++) {
       pos[i * 3] = rand() * L.span;
       pos[i * 3 + 1] = rand() * L.span;
       pos[i * 3 + 2] = rand() * L.span;
       c.set(pickColor(rand()));
-      const lum = 0.5 + rand() * 0.5;
-      col[i * 3] = c.r * lum; col[i * 3 + 1] = c.g * lum; col[i * 3 + 2] = c.b * lum;
+      const tone = 0.5 + rand() * 0.5;
+      col[i * 3] = c.r * tone; col[i * 3 + 1] = c.g * tone; col[i * 3 + 2] = c.b * tone;
+      // classe de luminosidade: maioria fraca, raras brilhantes (cauda ∝ r³)
+      const r = rand();
+      lum[i] = 0.25 + 3.75 * r * r * r;
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+    const quad = new THREE.PlaneGeometry(1, 1);
+    const geo = new THREE.InstancedBufferGeometry();
+    geo.index = quad.index;
+    geo.setAttribute('position', quad.getAttribute('position'));
+    geo.setAttribute('iPos', new THREE.InstancedBufferAttribute(pos, 3));
+    geo.setAttribute('iColor', new THREE.InstancedBufferAttribute(col, 3));
+    geo.setAttribute('iLum', new THREE.InstancedBufferAttribute(lum, 1));
+    geo.instanceCount = L.count;
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uCam: { value: new THREE.Vector3() },
@@ -125,7 +165,13 @@ export function buildStarfield() {
         uBeta: { value: 0 },
         uDir: { value: new THREE.Vector3(0, 0, -1) },
         uFade: { value: 0 },
-        uBase: { value: L.size },
+        uD0: { value: L.d0 },
+        uCorePx: { value: L.corePx },
+        uGlareK: { value: L.glareK },
+        uMaxPx: { value: L.maxPx },
+        uPxAngle: { value: 0.001 },
+        uCamRight: { value: new THREE.Vector3(1, 0, 0) },
+        uCamUp: { value: new THREE.Vector3(0, 1, 0) },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -133,11 +179,11 @@ export function buildStarfield() {
       depthWrite: false,
       blending: THREE.NormalBlending,     // gotcha: aditivo + log-depth + bloom = NaN
     });
-    const points = new THREE.Points(geo, mat);
-    points.frustumCulled = false;
-    points.renderOrder = -8;              // atrás dos corpos, na frente do skybox
-    scene.add(points);
-    layers.push({ points, mat });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = -8;                // atrás dos corpos, na frente do skybox
+    scene.add(mesh);
+    layers.push({ mesh, mat });
   }
 
   // Nebulosas esparsas (grade grande, reposicionadas por wrap na CPU — poucas)
@@ -160,7 +206,12 @@ export function buildStarfield() {
     scene.add(sp);
     nebulae.push(sp);
   }
-  game.starfield = { layers: layers.length, stars: LAYERS.reduce((a, l) => a + l.count, 0) };
+  game.starfield = {
+    layers: layers.length,
+    stars: LAYERS.reduce((a, l) => a + l.count, 0),
+    mode: 'instanced-quads',
+  };
+  game.starfieldPhoto = { d0: LAYERS[0].d0, corePx: LAYERS[0].corePx, maxPx: LAYERS[0].maxPx };
 }
 
 // Fade fora dos sistemas: dentro do raio do sistema → 0; no vazio → 1.
@@ -181,12 +232,20 @@ export function updateStarfield() {
   const beta = j && j.active ? Math.min(0.985, j.beta) : 0;
   if (s.vel && s.vel.lengthSq() > 1) _dirFlight.copy(s.vel).normalize();
   const fade = Math.max(systemFade(camera.position), j && j.active ? 0.85 : 0);
+  const pxA = pixelAngle();
+  const e = camera.matrixWorld.elements;
+  _right.set(e[0], e[1], e[2]).normalize();
+  _up.set(e[4], e[5], e[6]).normalize();
 
   for (const L of layers) {
-    L.mat.uniforms.uCam.value.copy(camera.position);
-    L.mat.uniforms.uBeta.value = beta;
-    L.mat.uniforms.uDir.value.copy(_dirFlight);
-    L.mat.uniforms.uFade.value = fade;
+    const u = L.mat.uniforms;
+    u.uCam.value.copy(camera.position);
+    u.uBeta.value = beta;
+    u.uDir.value.copy(_dirFlight);
+    u.uFade.value = fade;
+    u.uPxAngle.value = pxA;
+    u.uCamRight.value.copy(_right);
+    u.uCamUp.value.copy(_up);
   }
   game.starfieldFade = fade;                 // diagnóstico p/ e2e
   game.starfieldBeta = beta;

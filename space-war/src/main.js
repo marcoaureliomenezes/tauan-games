@@ -19,6 +19,7 @@ import { initMap, toggleMap, drawMap } from './map.js';
 import { buildNav, initNavHUD, drawNav, cycleTarget, targetBody } from './nav.js';
 import { initPostFx, renderFrame, updateAdaptiveRes, setLens, setJourneyBeta } from './postfx.js';
 import { buildStarfield, updateStarfield } from './starfield.js';
+import { buildFarStars, updateFarStars } from './celestial/starlod.js';
 
 // --- Construir o mundo ---
 const skybox = createSkybox();
@@ -29,6 +30,7 @@ initOrbits();
 updateOrbits(0.0001);
 buildShip();
 buildStarfield();
+buildFarStars();
 spawnEnemies();
 installListeners();
 initMap();
@@ -153,6 +155,7 @@ function loop() {
   drawMap();
   updateGravLens();
   updateStarfield();
+  updateFarStars();
   setJourneyBeta(game.journey && game.journey.active ? game.journey.beta : 0);
   renderFrame();
 

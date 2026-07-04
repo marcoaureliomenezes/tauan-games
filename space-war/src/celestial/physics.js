@@ -159,6 +159,59 @@ export function dopplerFactor(cosThetaObs, beta) {
   return 1 / (gamma * (1 - beta * cosThetaObs));
 }
 
+// ── Fotometria de fontes pontuais (photometric-stars, AC-01/02) ─────────────
+// Estrela é fonte NÃO-RESOLVIDA: um ponto de PSF cujo tamanho é ~fixo e cuja
+// ENERGIA varia — F ∝ L/d², m = −2.5·log₁₀F, I = 10^(0.4(m_ref−m)). A forma
+// jogável equivalente ancora a magnitude de referência numa distância de gauge:
+//   I = L·(D0/d)²  (I=1 ⇔ estrela de L=1 vista de D0)
+// Saturou (I>1): a energia excedente vira GLARE de raio ∝ √(I−1) (conserva
+// energia — Spencer et al., SIGGRAPH 1995). Sub-saturada: esmaece por
+// cobertura (α = I), nunca encolhe abaixo do núcleo. Cânone Stellarium/Celestia/
+// Gaia Sky (ver revisão 2026-07-04, apêndice A).
+export const PHOTO_D0 = 1_000_000;   // gauge das estrelas de SISTEMA (L do Sol = 1)
+
+export function pointIntensity(L, d, d0 = PHOTO_D0) {
+  const dd = Math.max(d, 1e-6);
+  return L * (d0 / dd) * (d0 / dd);
+}
+
+// Tamanho do ponto em PIXELS: núcleo fixo + glare √(I−1), com teto.
+export function pointPx(I, corePx = 2.2, glareK = 2.6, maxPx = 26) {
+  const glare = I > 1 ? glareK * Math.sqrt(I - 1) : 0;
+  return Math.min(corePx + glare, maxPx);
+}
+
+// Opacidade do ponto: cobertura sub-pixel (fade flux-conserving abaixo de I=1).
+export function pointAlpha(I) {
+  return Math.max(0, Math.min(1, I));
+}
+
+// Tamanho angular do DISCO em pixels: θ = 2R/d sobre o ângulo de 1 pixel.
+export function discPx(radius, d, pxAngle) {
+  return (2 * radius / Math.max(d, 1e-6)) / Math.max(pxAngle, 1e-9);
+}
+
+// LOD ponto↔disco com HISTERESE (sobe a disco em 2px, desce a ponto em 1px —
+// escada Celestia/Gaia Sky, anti-flicker).
+export const LOD_UP_PX = 2.0;
+export const LOD_DOWN_PX = 1.0;
+export function lodStep(prevMode, dPx) {
+  if (prevMode === 'point') return dPx >= LOD_UP_PX ? 'disc' : 'point';
+  return dPx < LOD_DOWN_PX ? 'point' : 'disc';
+}
+
+// Luminosidade VISUAL declarada (D-7): massas/raios do jogo são comprimidos p/
+// jogabilidade — derivar L deles (M^3.5 / R²T⁴) inverte a hierarquia visual.
+// `def.lum` manda; defaults por kind (pulsar: Crab ≈ 1.2e5 L☉ comprimido — a
+// fonte pontual mais brilhante do jogo, doutrina do μ do Sgr A*).
+export const STAR_LUM_DEFAULTS = {
+  star: 0.6, redgiant: 8, redsupergiant: 60, whitedwarf: 0.02, neutron: 80,
+};
+export function lumForStar(def) {
+  if (def.lum != null) return def.lum;
+  return STAR_LUM_DEFAULTS[def.kind] ?? 0;
+}
+
 // Raios da dança binária em torno do baricentro: r_i ∝ μ do PARCEIRO.
 export function barycentricRadii(separation, mu1, mu2) {
   const total = mu1 + mu2;

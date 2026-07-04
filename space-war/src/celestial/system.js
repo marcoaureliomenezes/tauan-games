@@ -3,20 +3,19 @@
 // Consome o mapa declarativo de universe.js: cada sistema é { def (entrada de
 // config.SYSTEMS), bodies() → instâncias de CelestialBody com motion plugado,
 // decorations() → decorações do sistema }. Aqui só existe mecânica genérica:
-// registrar corpos, coletar fx, montar beacons e cull por proximidade.
+// registrar corpos, coletar fx e cull por proximidade (glows: starlod.js).
 // As 5 funções bespoke de bodies.js morreram nesta release.
 
 import * as THREE from '../../../vendor/three.module.min.js';
 import { SYSTEMS } from '../config.js';
 import { scene } from '../scene.js';
 import { game } from '../state.js';
-import { HEADLESS, makeRadialSprite, diskMaterial, REMNANT_VERT, REMNANT_FRAG } from './atoms.js';
+import { HEADLESS, diskMaterial, REMNANT_VERT, REMNANT_FRAG } from './atoms.js';
 
 // Hooks de animação por-frame (discos, jatos, caudas, pulsos, correntes).
 const bodyFx = [];
 // Decorações culladas junto com o sistema dono ({ group, cullKey }).
 const _culledDecorations = [];
-const _beacons = [];
 
 export function buildUniverse(systems) {
   game.dynBodies = game.dynBodies || [];
@@ -32,7 +31,6 @@ export function buildUniverse(systems) {
       if (deco.cullKey) _culledDecorations.push(deco);
     }
   }
-  buildSystemBeacons();
   return game.bodies;
 }
 
@@ -41,30 +39,13 @@ export function updateBodyFX(dt) {
   for (const f of bodyFx) f.update(dt);
 }
 
-// ── Beacons: um farol colorido por sistema distante ─────────────────────────
-const BEACON_TINTS = {
-  binary: ['rgba(220,232,255,0.98)', 'rgba(150,185,255,0.55)', 'rgba(150,90,230,0.18)', 'rgba(0,0,0,0)'],
-  chaotic: ['rgba(200,220,255,0.95)', 'rgba(255,180,110,0.45)', 'rgba(120,80,50,0.12)', 'rgba(0,0,0,0)'],
-  core: ['rgba(255,240,220,0.98)', 'rgba(255,190,120,0.5)', 'rgba(160,80,200,0.20)', 'rgba(0,0,0,0)'],
-  veil: ['rgba(255,214,170,0.98)', 'rgba(255,140,90,0.5)', 'rgba(190,235,255,0.18)', 'rgba(0,0,0,0)'],
-};
-const BEACON_DEFAULT = ['rgba(240,240,255,0.95)', 'rgba(190,200,255,0.5)', 'rgba(120,110,200,0.15)', 'rgba(0,0,0,0)'];
-
-function buildSystemBeacons() {
-  for (const sys of SYSTEMS) {
-    if (sys.key === 'solar') continue;
-    if (sys.key === 'betelgeuse') continue;   // a própria supergigante é o farol
-    const sp = makeRadialSprite(BEACON_TINTS[sys.key] || BEACON_DEFAULT);
-    sp.scale.setScalar(40000);
-    sp.position.set(...sys.center);
-    scene.add(sp);
-    _beacons.push({ sys, sprite: sp });
-  }
-}
+// (Os beacons fixos de 40k morreram na release photometric-stars: quem marca um
+// sistema distante agora é o GLOW fotométrico de celestial/starlod.js — fluxo
+// somado dos membros, mesma regra de visibilidade 0.9·raio.)
 
 // ── CULLING POR SISTEMA: sistemas distantes ficam invisíveis (zero draw calls);
-// no lugar brilha o beacon. Corpos com def.alwaysVisible nunca somem (ex.:
-// Betelgeuse — uma supergigante é visível de qualquer lugar do mapa).
+// no lugar brilha o glow fotométrico (starlod). Corpos com def.alwaysVisible
+// nunca somem (ex.: Betelgeuse — uma supergigante é visível de qualquer lugar).
 const _sysCenter = new THREE.Vector3();
 export function updateSOIView(shipPos) {
   for (const sys of SYSTEMS) {
@@ -79,10 +60,6 @@ export function updateSOIView(shipPos) {
     for (const deco of _culledDecorations) {
       if (deco.cullKey === sys.key) deco.group.visible = near;
     }
-  }
-  for (const bc of _beacons) {
-    _sysCenter.set(...bc.sys.center);
-    bc.sprite.visible = shipPos.distanceTo(_sysCenter) > bc.sys.radius * 0.9;
   }
 }
 

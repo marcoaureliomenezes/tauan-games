@@ -99,17 +99,20 @@ export class Star extends CelestialBody {
       mat.uniforms.uTime.value += dt;
       corona.material.opacity = 0.75 + Math.sin(this.t * 0.9) * 0.12;
       if (def.light && def.light.flare) {
-        // Flare local: encolhe com a distância e some fora da vizinhança solar.
-        // A POLÍTICA roda mesmo em HEADLESS (sem objeto flare) — o diagnóstico
-        // game.sunFlareVisible é o que o teste de regressão AC-10 assere.
+        // Flare local ∝ FLUXO (bug space-war-distant-suns-oversized): o glare é
+        // artefato de instrumento — escala com a energia recebida (FLARE_FULL/d)²,
+        // SEM piso (o antigo 0.22 fixava 141px de flare a 4M u). A POLÍTICA roda
+        // mesmo em HEADLESS — o diagnóstico game.sunFlareVisible/Factor é o que
+        // os testes de regressão asserem.
         const d = camera.position.distanceTo(group.position);
         const vis = d < FLARE_CUTOFF;
         game.sunFlareVisible = vis;
+        const fFlux = Math.min(1, (FLARE_FULL / Math.max(d, 1)) ** 2);
+        game.sunFlareFactor = vis ? fFlux : 0;
         if (flare) {
           flare.visible = vis;
           if (vis) {
-            const f = Math.max(0, Math.min(1, 1 - (d - FLARE_FULL) / (FLARE_CUTOFF - FLARE_FULL)));
-            for (const el of flareElems) el.size = el._baseSize * (0.22 + 0.78 * f);
+            for (const el of flareElems) el.size = el._baseSize * fFlux;
           }
         }
       }
