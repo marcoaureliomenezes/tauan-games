@@ -139,6 +139,33 @@ export function journeyProfile(D, T, t) {
   return { x, v, s, a, vPeak: 2 * D / T };
 }
 
+// Perfil TRAPEZOIDAL (interstellar-experience, operador 2026-07-04): 30% do
+// tempo acelerando, 40% em VELOCIDADE MÁXIMA (o cruzeiro onde a relatividade
+// dura), 30% freando. D = v_max·(0.15 + 0.4 + 0.15)·T → v_max = D/(0.7T);
+// a = v_max/(0.3T). Substitui o brachistochrone (acima, mantido como lei
+// documentada da v1) na viagem interestelar.
+export function journeyProfileTrapezoid(D, T, t) {
+  const s = Math.max(0, Math.min(1, t / T));
+  const vMax = D / (0.7 * T);
+  const a = vMax / (0.3 * T);
+  let x, v, phase;
+  if (s <= 0.3) {
+    v = a * s * T;
+    x = 0.5 * a * (s * T) * (s * T);
+    phase = 'accel';
+  } else if (s <= 0.7) {
+    v = vMax;
+    x = 0.15 * vMax * T + vMax * (s - 0.3) * T;
+    phase = 'coast';
+  } else {
+    const u = 1 - s;                     // ≤ 0.3
+    v = a * u * T;
+    x = D - 0.5 * a * (u * T) * (u * T);
+    phase = 'decel';
+  }
+  return { x, v, s, a, vMax, phase };
+}
+
 // Duração ∝ distância entre os limites do operador (3:00–6:00 min).
 export function journeyDuration(D, dMin, dMax) {
   const f = Math.max(0, Math.min(1, (D - dMin) / Math.max(1, dMax - dMin)));

@@ -244,3 +244,30 @@ test('fotometria: hierarquia de luminosidades declaradas (D-7)', async () => {
   assert.equal(lumForStar({ kind: 'neutron' }), STAR_LUM_DEFAULTS.neutron);
   assert.equal(lumForStar({ kind: 'neutron', lum: 5 }), 5, 'override declarado manda');
 });
+
+test('viagem trapezoidal 30/40/30: cruzeiro plano em v_max = D/(0.7T) (AC-01 experience)', async () => {
+  const { journeyProfileTrapezoid } = await import('../../../space-war/src/celestial/physics.js');
+  const D = 20_000_000, T = 300;
+  const vMax = D / (0.7 * T);
+  // extremos exatos
+  assert.ok(Math.abs(journeyProfileTrapezoid(D, T, 0).x) < 1e-6);
+  assert.ok(Math.abs(journeyProfileTrapezoid(D, T, T).x - D) / D < 1e-9, 'x(T) = D exato');
+  // fases nos pontos certos
+  assert.equal(journeyProfileTrapezoid(D, T, 0.15 * T).phase, 'accel');
+  assert.equal(journeyProfileTrapezoid(D, T, 0.5 * T).phase, 'coast');
+  assert.equal(journeyProfileTrapezoid(D, T, 0.85 * T).phase, 'decel');
+  // cruzeiro PLANO em v_max durante todo o miolo
+  for (const s of [0.31, 0.5, 0.69]) {
+    assert.ok(Math.abs(journeyProfileTrapezoid(D, T, s * T).v - vMax) / vMax < 1e-9, `v(s=${s}) = v_max`);
+  }
+  // continuidade da velocidade nas junções 0.3/0.7
+  const eps = 1e-4;
+  assert.ok(Math.abs(journeyProfileTrapezoid(D, T, (0.3 - eps) * T).v - vMax) / vMax < 1e-3);
+  assert.ok(Math.abs(journeyProfileTrapezoid(D, T, (0.7 + eps) * T).v - vMax) / vMax < 1e-3);
+  // simetria da frenagem: v(0.8) = v(0.2)
+  assert.ok(Math.abs(journeyProfileTrapezoid(D, T, 0.8 * T).v - journeyProfileTrapezoid(D, T, 0.2 * T).v) < 1e-6);
+  // posição monótona e contínua nas junções
+  const x1 = journeyProfileTrapezoid(D, T, (0.3 - eps) * T).x;
+  const x2 = journeyProfileTrapezoid(D, T, (0.3 + eps) * T).x;
+  assert.ok(x2 > x1 && (x2 - x1) < vMax * T * 1e-3, 'x contínua em s=0.3');
+});

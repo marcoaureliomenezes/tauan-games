@@ -47,9 +47,13 @@ function rng(seed) {
 // d0: gauge de CAMPO (I=1 p/ L=1 a d0) — típico I 0.05–1 ("poeira que acende");
 // rasante satura e o glare cresce. corePx/glareK/maxPx: PSF do campo.
 const LAYERS = [
-  { count: HEADLESS ? 1400 : 3600, span: 900_000, d0: 120_000, corePx: 1.9, glareK: 2.2, maxPx: 12, seed: 1234567 },   // NEAR: paralaxe forte
-  { count: HEADLESS ? 700 : 1800, span: 3_200_000, d0: 260_000, corePx: 1.6, glareK: 1.8, maxPx: 9, seed: 7654321 },  // FAR: deriva lenta
+  { count: HEADLESS ? 1400 : 3600, span: 900_000, d0: 120_000, corePx: 1.9, glareK: 2.2, maxPx: 12, radMax: 3200, seed: 1234567 },   // NEAR: paralaxe forte
+  { count: HEADLESS ? 700 : 1800, span: 3_200_000, d0: 260_000, corePx: 1.6, glareK: 1.8, maxPx: 9, radMax: 1400, seed: 7654321 },  // FAR: deriva lenta
 ];
+// Passagem rasante (AC-02, operador): teto do crescimento angular (2·R/d) e
+// ganho dos RISCOS tangenciais (AC-04: comprimento ∝ ω = v·senθ/d).
+const CLOSE_MAX_PX = 48;
+const STREAK_K = 12;
 
 const VERT = `
 uniform vec3 uCam;
@@ -62,11 +66,15 @@ uniform float uCorePx;
 uniform float uGlareK;
 uniform float uMaxPx;
 uniform float uPxAngle;
+uniform float uSpeed;
+uniform float uCloseMax;
+uniform float uStreakK;
 uniform vec3 uCamRight;
 uniform vec3 uCamUp;
 attribute vec3 iPos;
 attribute vec3 iColor;
 attribute float iLum;
+attribute float iRad;
 varying vec3 vColor;
 varying float vAlpha;
 varying vec2 vQuad;
@@ -88,21 +96,40 @@ void main() {
   // I = L·(D0/d)²; núcleo FIXO + glare √(I−1) com teto; α = clamp(I,0,1).
   float I = iLum * (uD0 * uD0) / (dist * dist);
   float px = min(uCorePx + ((I > 1.0) ? uGlareK * sqrt(I - 1.0) : 0.0), uMaxPx);
+  // PASSAGEM RASANTE (AC-02): tamanho ANGULAR honesto 2·R/d — estrela com
+  // parâmetro de impacto pequeno (perto do centro da tela) CRESCE antes de
+  // cruzarmos; as que se afastam do rumo continuam pontos.
+  px = min(px + (2.0 * iRad / dist) / uPxAngle, uCloseMax);
   // fade na borda da célula do wrap: nasce APAGADA, acende ao entrar (20% finais)
   vec3 an = abs(c) / (0.5 * uSpan);
   float edge = 1.0 - smoothstep(0.80, 1.0, max(an.x, max(an.y, an.z)));
   // DOPPLER: δ = 1/(γ(1−β·cosθ')) — recolor térmico + beaming δ⁴ (clamp 5)
   float gamma = 1.0 / sqrt(max(1.0 - uBeta * uBeta, 1e-4));
   float delta = 1.0 / max(gamma * (1.0 - uBeta * ctA), 1e-3);
-  float boost = clamp(pow(delta, 4.0), 0.06, 5.0);
+  float boost = clamp(pow(delta, 4.0), 0.02, 9.0);   // headlight FORTE (AC-03)
   // corpo negro fica corpo negro com T' = δT: desloca a cor ao longo do locus
   float shift = clamp(delta - 1.0, -0.6, 1.2);
   vColor = mix(iColor, (shift > 0.0) ? vec3(0.75, 0.85, 1.0) : vec3(1.0, 0.45, 0.25), abs(shift) * 0.75) * boost;
-  vAlpha = clamp(I, 0.0, 1.0) * edge * uFade * min(boost, 1.0);
+  // RISCOS TANGENCIAIS (AC-04): a taxa angular aparente ω = v·senθ'/d explode
+  // na passagem — o ponto vira um risco RADIAL de tela (persistência de visão,
+  // como nos sims de referência). streak em múltiplos da largura do quad.
+  float sinA = sqrt(max(0.0, 1.0 - ctA * ctA));
+  float streak = clamp(uStreakK * uSpeed * sinA / max(dist, 1.0), 0.0, 10.0);
+  // eixos do quad: A = direção radial-de-tela do fluxo (⊥ dirA), B = ⊥ ambos —
+  // o plano continua de frente p/ a câmera; streak 0 → PSF circular idêntica.
+  vec3 radial = dirA - uDir * dot(dirA, uDir);
+  vec3 aR = radial - dirA * dot(radial, dirA);
+  float al = length(aR);
+  vec3 axisA = (al > 1e-4) ? aR / al : uCamRight;
+  vec3 axisB = normalize(cross(dirA, axisA));
+  // energia se espalha pelo risco: α cai com o alongamento (conservação)
+  vAlpha = clamp(I, 0.0, 1.0) * edge * uFade * min(boost, 1.0) / (1.0 + 0.5 * streak);
   vQuad = position.xy * 2.0;                       // −1..1 no quad
-  // billboard subtendendo px PIXELS: tamanho de mundo = px·d·θ_pixel
+  // quad subtendendo px PIXELS (eixo A alongado pelo risco)
   float world = px * dist * uPxAngle;
-  vec3 pA = uCam + dirA * dist + (uCamRight * position.x + uCamUp * position.y) * world;
+  vec3 pA = uCam + dirA * dist
+    + axisA * position.x * world * (1.0 + streak)
+    + axisB * position.y * world;
   gl_Position = projectionMatrix * viewMatrix * vec4(pA, 1.0);
 }
 `;
@@ -138,6 +165,7 @@ export function buildStarfield() {
     const pos = new Float32Array(L.count * 3);
     const col = new Float32Array(L.count * 3);
     const lum = new Float32Array(L.count);
+    const rad = new Float32Array(L.count);
     const c = new THREE.Color();
     for (let i = 0; i < L.count; i++) {
       pos[i * 3] = rand() * L.span;
@@ -149,6 +177,10 @@ export function buildStarfield() {
       // classe de luminosidade: maioria fraca, raras brilhantes (cauda ∝ r³)
       const r = rand();
       lum[i] = 0.25 + 3.75 * r * r * r;
+      // pseudo-raio (AC-02): estrelas SÃO sóis — passagens rasantes mostram
+      // disco/glare crescendo (2R/d); maioria pequena, raras gigantes (∝ r²)
+      const rr = rand();
+      rad[i] = L.radMax * (0.18 + 0.82 * rr * rr);
     }
     const quad = new THREE.PlaneGeometry(1, 1);
     const geo = new THREE.InstancedBufferGeometry();
@@ -157,6 +189,7 @@ export function buildStarfield() {
     geo.setAttribute('iPos', new THREE.InstancedBufferAttribute(pos, 3));
     geo.setAttribute('iColor', new THREE.InstancedBufferAttribute(col, 3));
     geo.setAttribute('iLum', new THREE.InstancedBufferAttribute(lum, 1));
+    geo.setAttribute('iRad', new THREE.InstancedBufferAttribute(rad, 1));
     geo.instanceCount = L.count;
     const mat = new THREE.ShaderMaterial({
       uniforms: {
@@ -170,6 +203,9 @@ export function buildStarfield() {
         uGlareK: { value: L.glareK },
         uMaxPx: { value: L.maxPx },
         uPxAngle: { value: 0.001 },
+        uSpeed: { value: 0 },
+        uCloseMax: { value: CLOSE_MAX_PX },
+        uStreakK: { value: STREAK_K },
         uCamRight: { value: new THREE.Vector3(1, 0, 0) },
         uCamUp: { value: new THREE.Vector3(0, 1, 0) },
       },
@@ -229,7 +265,7 @@ export function updateStarfield() {
   if (!layers.length) return;
   const s = game.ship;
   const j = game.journey;
-  const beta = j && j.active ? Math.min(0.985, j.beta) : 0;
+  const beta = j && j.active ? Math.min(0.995, j.beta) : 0;
   if (s.vel && s.vel.lengthSq() > 1) _dirFlight.copy(s.vel).normalize();
   const fade = Math.max(systemFade(camera.position), j && j.active ? 0.85 : 0);
   const pxA = pixelAngle();
@@ -244,9 +280,11 @@ export function updateStarfield() {
     u.uDir.value.copy(_dirFlight);
     u.uFade.value = fade;
     u.uPxAngle.value = pxA;
+    u.uSpeed.value = j && j.active ? j.v : (s.speed || 0);
     u.uCamRight.value.copy(_right);
     u.uCamUp.value.copy(_up);
   }
+  game.starfieldFx = { closeMaxPx: CLOSE_MAX_PX, streakK: STREAK_K, beta };
   game.starfieldFade = fade;                 // diagnóstico p/ e2e
   game.starfieldBeta = beta;
 

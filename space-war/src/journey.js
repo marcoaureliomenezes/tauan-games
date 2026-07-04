@@ -1,21 +1,22 @@
-// journey.js — VIAGEM INTERESTELAR brachistochrone (T-IJ-01, AC-01/AC-02).
+// journey.js — VIAGEM INTERESTELAR trapezoidal (T-IE-02, operador 2026-07-04):
 //
-// Física: queima contínua "flip-and-burn" — acelera até o MEIO do caminho, vira,
-// desacelera espelhado (Atomic Rockets/torchship; brief interstellar-travel):
-//   a = 4D/T²  ·  v_pico = 2D/T (em s = ½)  ·  x/D = 2s² (s≤½), 1 − 2(1−s)² (s>½)
-// O tempo é NORMALIZADO pela distância entre sistemas (D_min→3:00, D_max→6:00 —
-// demanda do operador). β_visual = 0.985·v/v_pico alimenta a relatividade
-// (aberração/Doppler) do starfield e do postfx — realista, sem warp de cinema.
+// Perfil 30/40/30 — 30% do tempo ACELERANDO, 40% em VELOCIDADE MÁXIMA
+// (cruzeiro: é onde a relatividade DURA na tela), 30% FREANDO:
+//   v_max = D/(0.7T)  ·  a = v_max/(0.3T)  (physics.journeyProfileTrapezoid)
+// O tempo é NORMALIZADO pela distância entre sistemas (D_min→3:00, D_max→6:00).
+// β_visual = 0.995·v/v_max alimenta a relatividade (aberração/Doppler/beaming)
+// do starfield e do postfx — a 0.995, uma estrela a 90° aparece a ~5.7° do rumo
+// (headlight forte, realista). IMUNIDADE a colisão durante a queima (D-4:
+// reverte o abort-por-impacto do rc-1 por demanda explícita do operador).
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
-import { surfaceContact } from './gravity.js';
 import { SYSTEMS } from './config.js';
 import { currentTarget, currentSystem } from './nav.js';
 import { showToast } from './hud.js';
 // Leis PURAS em celestial/physics.js (node-testável): perfil + duração.
-import { journeyProfile, journeyDuration } from './celestial/physics.js';
-export { journeyProfile, journeyDuration };
+import { journeyProfile, journeyProfileTrapezoid, journeyDuration } from './celestial/physics.js';
+export { journeyProfile, journeyProfileTrapezoid, journeyDuration };
 
 // Menor/maior distância entre pares de centros de sistemas (inclui o Véu,
 // registrado em runtime — SYSTEMS é o array vivo).
@@ -58,9 +59,10 @@ export function journeyToggle() {
   const D = s.pos.distanceTo(_to);
   const T = journeyDuration(D, dMin, dMax);
   game.journey = {
-    active: true, t: 0, T, D, s: 0, beta: 0, v: 0,
+    active: true, t: 0, T, D, s: 0, beta: 0, v: 0, phase: 'accel',
+    immune: true,                        // sem colisão durante a queima (AC-05)
     from: s.pos.clone(), targetKey: t.key, targetName: t.name,
-    arriveDist, vPeak: 2 * D / T,
+    arriveDist, vMax: D / (0.7 * T),
   };
   s.orbitAssist = false; s.aligning = false;
   showToast(`⭒ VIAGEM INTERESTELAR → ${t.name} · ${fmtT(T)} de queima contínua`, 3200);
@@ -104,22 +106,19 @@ export function updateJourney(dt) {
   _to.addScaledVector(_dir, -j.arriveDist);
   const D = j.from.distanceTo(_to);
 
-  const prof = journeyProfile(D, j.T, j.t);
-  j.s = prof.s; j.v = prof.v; j.D = D;
-  j.beta = 0.985 * (prof.v / Math.max(1, prof.vPeak));
+  const prof = journeyProfileTrapezoid(D, j.T, j.t);
+  j.s = prof.s; j.v = prof.v; j.D = D; j.phase = prof.phase;
+  j.vMax = prof.vMax;
+  j.beta = 0.995 * (prof.v / Math.max(1, prof.vMax));
 
   // posição no corredor + velocidade real (projéteis/HUD herdam)
   s.pos.copy(j.from).addScaledVector(_dir, prof.x);
   s.vel.copy(_dir).multiplyScalar(prof.v);
   s.speed = prof.v;
 
-  // colisão SEGUE ativa no corredor (PLAN D-1/R-2): cruzar um corpo aborta a
-  // queima — o frame seguinte devolve o voo normal (dano/morte pelas regras).
-  const hit = surfaceContact(s.pos, 24);
-  if (hit) {
-    journeyAbort(`impacto: ${hit.body.def.name}`);
-    return true;
-  }
+  // IMUNIDADE (AC-05, reverte D-1 do rc-1 da journey por ordem do operador:
+  // "retire a possibilidade de colidirmos com estrelas"): o autopilot da queima
+  // atravessa o corredor sem abort nem dano — chegada e aborto manual intactos.
 
   // nariz gruda na direção do voo (a nave "surfa" a própria queima)
   _m.lookAt(s.pos, _to, _up);
