@@ -26,8 +26,8 @@ const ORIGIN = new THREE.Vector3(0, 0, 0);
 // Autorado 100% aqui — config.js intocado; o registro em SYSTEMS é aditivo.
 const VEIL_SYSTEM = {
   key: 'veil', name: 'Véu — Gigante+Anã',
-  // ×5 manual (proporções verdadeiras): este def nasce AQUI, depois do bloco
-  // de escala do config — o loop de centros de lá não o alcança.
+  // Valores finais literais — como TODO o config desde T-PR-04 (as passadas de
+  // escala in-place foram colapsadas; não existe mais "lado do bloco de escala").
   center: [21_000_000, 525_000, 16_625_000], radius: 200_000, primary: 'veilgiant',
 };
 SYSTEMS.push(VEIL_SYSTEM);

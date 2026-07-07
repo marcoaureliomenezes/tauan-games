@@ -11,9 +11,9 @@
   Write set: `space-war/src/gravity.js`, `higgs.js`, `tests/space-war/**`.
 - [x] **T-PR-03** — P0 nuke capture gate (v_rel < 1.5·v_esc). Write set:
   `space-war/src/weapons.js`, `tests/space-war/**`.
-- [-] **T-PR-04** — P1 config.js literais finais + de-alias (snapshot-diff=0).
+- [x] **T-PR-04** — P1 config.js literais finais + de-alias (snapshot-diff=0).
   Write set: `space-war/src/config.js`, `universe.js`, `tests/space-war/**`.
-- [ ] **T-PR-05** — P1 SystemRuntime+dispose; dead-code sweep; rename
+- [-] **T-PR-05** — P1 SystemRuntime+dispose; dead-code sweep; rename
   game.phase→game.screen; dados por sistema no SYSTEMS registry. Write set:
   `space-war/src/**`, `tests/space-war/**`.
 - [ ] **T-PR-06** — P2 fases: build/dispose por sistema na origem; travel
