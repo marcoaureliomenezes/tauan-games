@@ -13,10 +13,10 @@
   `space-war/src/weapons.js`, `tests/space-war/**`.
 - [x] **T-PR-04** — P1 config.js literais finais + de-alias (snapshot-diff=0).
   Write set: `space-war/src/config.js`, `universe.js`, `tests/space-war/**`.
-- [-] **T-PR-05** — P1 SystemRuntime+dispose; dead-code sweep; rename
+- [x] **T-PR-05** — P1 SystemRuntime+dispose; dead-code sweep; rename
   game.phase→game.screen; dados por sistema no SYSTEMS registry. Write set:
   `space-war/src/**`, `tests/space-war/**`.
-- [ ] **T-PR-06** — P2 fases: build/dispose por sistema na origem; travel
+- [-] **T-PR-06** — P2 fases: build/dispose por sistema na origem; travel
   phase; nav/map/starlod/journey por descritores; debug loadSystem. Write set:
   `space-war/src/**`, `tests/space-war/**`.
 - [ ] **T-PR-07** — P3 física nova: eggletonLobe/l1Distance + teardrop shader

@@ -89,7 +89,7 @@ export function phaseStatus(sysKey) {
 }
 
 export function winFinal() {
-  game.phase = 'win';
+  game.screen = 'win';
   showOverlay(`<div style="color:#ffd27a">🌌 GALÁXIA LIBERTADA!</div>
     <div class="sub">As 5 fases da campanha foram vencidas — do Sistema Solar a Sagitário A✦.<br>
     Score final: ${game.score} · Abates: ${game.kills}<br><br>[Enter] para reiniciar</div>`);

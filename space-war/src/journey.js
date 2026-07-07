@@ -15,8 +15,7 @@ import { SYSTEMS } from './config.js';
 import { currentTarget, currentSystem } from './nav.js';
 import { showToast } from './hud.js';
 // Leis PURAS em celestial/physics.js (node-testável): perfil + duração.
-import { journeyProfile, journeyProfileTrapezoid, journeyDuration } from './celestial/physics.js';
-export { journeyProfile, journeyProfileTrapezoid, journeyDuration };
+import { journeyProfileTrapezoid, journeyDuration } from './celestial/physics.js';
 
 // Menor/maior distância entre pares de centros de sistemas (inclui o Véu,
 // registrado em runtime — SYSTEMS é o array vivo).

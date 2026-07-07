@@ -69,7 +69,7 @@ export function updateHUD() {
     const fase = j.phase === 'coast' ? ' · CRUZEIRO v_max' : j.phase === 'decel' ? ' · FREANDO' : ' · ACELERANDO';
     set('mission', `⭒ QUEIMA → ${j.targetName} ${bar} ETA ${Math.floor(rem / 60)}:${String(Math.round(rem % 60)).padStart(2, '0')} · β ${j.beta.toFixed(2)}${fase}`);
   } else if (game.mission) set('mission', game.mission.label);
-  else if (game.campaign && game.phase === 'flight') set('mission', 'CAMPANHA — aguarde a próxima missão…');
+  else if (game.campaign && game.screen === 'flight') set('mission', 'CAMPANHA — aguarde a próxima missão…');
 
   const warn = el('warning');
   if (warn) {

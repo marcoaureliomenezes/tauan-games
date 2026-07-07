@@ -116,10 +116,6 @@ export function spawnPhase(phaseKey) {
 // Escolta de alvo da caçada: 3 caças nascem junto com cada base/nave capital.
 export function spawnEscort(body, phaseKey) { spawnNear(body, 3, { phaseKey }); }
 
-// Compat: main.js chama spawnEnemies() no boot — a campanha agora spawna por fase
-// (missions.startMissions dispara a fase 1); o boot não spawna nada.
-export function spawnEnemies() {}
-
 // ── Oclusão analítica: o segmento inimigo→nave cruza a esfera do corpo-âncora? ──
 // (o âncora é de longe o oclusor dominante — planetas vizinhos raramente alinham)
 function occluded(e, shipPos) {

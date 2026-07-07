@@ -16,7 +16,7 @@ async function startFlight(page) {
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 4000 });
+  await page.waitForFunction(() => window.__spaceWar.screen === 'flight', { timeout: 4000 });
 }
 
 test.describe('Space War — Fidelidade Física', () => {
@@ -119,7 +119,7 @@ test.describe('Space War — Fidelidade Física', () => {
     // transiente: o poço morre sozinho (~8 s de pulso ≈ 30-45 s de parede headless)
     await page.waitForFunction(() => window.__spaceWar.wells.length === 0, { timeout: 60000 });
     // e a nave SOBREVIVEU ao arrasto (sim vivo — não congelou em gameover)
-    const phase = await page.evaluate(() => window.__spaceWar.phase);
+    const phase = await page.evaluate(() => window.__spaceWar.screen);
     expect(phase).toBe('flight');
   });
 

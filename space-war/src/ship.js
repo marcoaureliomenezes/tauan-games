@@ -322,7 +322,7 @@ function updateFlight(s, dt) {
 
   // Solução de tiro viva enquanto um alvo de MISSÃO está selecionado (HUD + F).
   const _tSol = currentTarget();
-  if (_tSol && _tSol.isMission && !s.landed && game.phase === 'flight') {
+  if (_tSol && _tSol.isMission && !s.landed && game.screen === 'flight') {
     updateFiringSolution(_tSol);
   } else if (game.nav.solution) game.nav.solution = null;
 

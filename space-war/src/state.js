@@ -1,9 +1,10 @@
 // state.js — Estado global do jogo, exposto em window.__spaceWar para testes/diagnóstico.
 
 export const game = {
-  started: false,
   paused: false,
-  phase: 'menu',          // menu | flight | gameover | win
+  // TELA da UI (ex-`phase`, renomeado no audit T-PR-05: "phase" agora é
+  // reservado p/ fases de campanha/sistema): menu | briefing | flight | win | gameover
+  screen: 'menu',
   time: 0,                // tempo de jogo (s)
   // Mundo
   bodies: [],             // todos os corpos: { def, group, mesh, worldPos:Vector3, mu, soi, isMoon, parent }
@@ -41,7 +42,8 @@ export const game = {
   particles: [],
   // Campanha em fases (campaign.js): { phase, unlocked[], done[] }
   campaign: null,
-  // Flare do Sol (diagnóstico do bug space-war-solar-flare-universe-overlay)
+  // Flare do Sol (diagnóstico do bug space-war-solar-flare-universe-overlay;
+  // escrito por celestial/stars.js a cada frame)
   sunFlareVisible: true,
   // Missões
   mission: null,

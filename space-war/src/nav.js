@@ -122,7 +122,7 @@ export function initNavHUD() {
 function resize() { if (canvas) { canvas.width = window.innerWidth; canvas.height = window.innerHeight; } }
 
 export function drawNav() {
-  if (!ctx || game.phase !== 'flight' || game.mapOpen) { if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+  if (!ctx || game.screen !== 'flight' || game.mapOpen) { if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
 

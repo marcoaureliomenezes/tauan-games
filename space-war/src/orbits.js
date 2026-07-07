@@ -33,14 +33,6 @@ function computeDynAccels() {
   for (let i = 0; i < dyn.length; i++) {
     const A = dyn[i];
     const eps2A = A.softening * A.softening;
-    // âncora estática (SMBH pinado no centro do núcleo galáctico)
-    if (A.anchor) {
-      const P = A.anchor.worldPos;
-      const dx = P.x - A.worldPos.x, dy = P.y - A.worldPos.y, dz = P.z - A.worldPos.z;
-      const r2 = dx * dx + dy * dy + dz * dz + eps2A;
-      const inv = A.anchor.mu / (r2 * Math.sqrt(r2));
-      A.acc.x += dx * inv; A.acc.y += dy * inv; A.acc.z += dz * inv;
-    }
     for (let j = i + 1; j < dyn.length; j++) {
       const B = dyn[j];
       if (A.system !== B.system) continue;

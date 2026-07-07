@@ -202,8 +202,7 @@ export function debugCompleteMission() {
   if (m.type === 'hunt') {
     for (const t of m.targets) { if (!t.destroyed) { t.destroyed = true; if (t.obj.parent) t.obj.parent.remove(t.obj); } }
     m.killed = m.total;
-  } else if (m.type === 'clear') game.kills = m.baseKills + m.kills;
-  else if (m.type === 'visit') m._forceDone = true;
+  } else if (m.type === 'visit') m._forceDone = true;
   return true;
 }
 // QA/debug: destrói SÓ o alvo atual da caçada (testa a cadeia k → k+1).
@@ -257,8 +256,7 @@ export function updateMissions() {
       }
     }
     done = m.killed >= m.total;
-  } else if (m.type === 'clear') done = (game.kills - m.baseKills) >= m.kills;
-  else if (m.type === 'visit') {
+  } else if (m.type === 'visit') {
     const b = findBody(m.key);
     done = m._forceDone || (b && game.ship.pos && !game.ship.landed
       && game.ship.pos.distanceTo(b.worldPos) < m.dist + b.def.radius);

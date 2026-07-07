@@ -15,7 +15,7 @@ async function startFlight(page) {
   await page.keyboard.press('Enter');      // menu -> briefing
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');      // briefing -> flight
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 4000 });
+  await page.waitForFunction(() => window.__spaceWar.screen === 'flight', { timeout: 4000 });
 }
 
 test.describe('Space War — Smoke / AC', () => {
@@ -29,7 +29,7 @@ test.describe('Space War — Smoke / AC', () => {
     const st = await page.evaluate(() => ({
       hasState: typeof window.__spaceWar === 'object',
       bodies: window.__spaceWar.bodies.length,
-      phase: window.__spaceWar.phase,
+      phase: window.__spaceWar.screen,
     }));
     expect(st.hasState).toBe(true);
     expect(st.phase).toBe('menu');
@@ -189,7 +189,7 @@ test.describe('Space War — Smoke / AC', () => {
   test('AC-11: sobrevive ao início e à decolagem', async ({ page }) => {
     await startFlight(page);
     await page.waitForTimeout(3000);             // parado na plataforma
-    let s = await page.evaluate(() => ({ hp: window.__spaceWar.ship.hp, phase: window.__spaceWar.phase, landed: window.__spaceWar.ship.landed }));
+    let s = await page.evaluate(() => ({ hp: window.__spaceWar.ship.hp, phase: window.__spaceWar.screen, landed: window.__spaceWar.ship.landed }));
     expect(s.hp).toBe(100);
     expect(s.phase).toBe('flight');
     expect(s.landed).toBe(true);
@@ -198,7 +198,7 @@ test.describe('Space War — Smoke / AC', () => {
     await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 12000 });
     await page.waitForTimeout(1500);
     await page.keyboard.up('KeyW');
-    s = await page.evaluate(() => ({ hp: window.__spaceWar.ship.hp, phase: window.__spaceWar.phase }));
+    s = await page.evaluate(() => ({ hp: window.__spaceWar.ship.hp, phase: window.__spaceWar.screen }));
     expect(s.hp).toBeGreaterThan(70);
     expect(s.phase).toBe('flight');
   });
