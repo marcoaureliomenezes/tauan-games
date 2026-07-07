@@ -24,8 +24,8 @@
   `tests/space-war/tools/**`.
 - [x] **T-PR-08** — P3 roster swap + remaps (campaign/missions/enemies/map/
   starlod/gravity/menu). Write set: `space-war/src/**`, `tests/space-war/**`.
-- [-] **T-PR-09** — P4 polish (inimigos×wells; laser worldVel; SOI blend;
+- [x] **T-PR-09** — P4 polish (inimigos×wells; laser worldVel; SOI blend;
   margens detonação; pinch gate; solver dt). Write set: `space-war/src/**`,
   `tests/space-war/**`.
-- [ ] **T-PR-10** — QA + security push-verdict + push + PR + CI verde. Write
+- [-] **T-PR-10** — QA + security push-verdict + push + PR + CI verde. Write
   set: `.dadaia/handoff/**`, `specs/**`.

@@ -128,7 +128,14 @@ export function computeGravity(pos, out, shipVel = null) {
     // (trilho ao redor da sua estrela). A nave cai JUNTO com ele — sem isto a
     // órbita relativa fica excêntrica e deriva. Com isto, Kepler puro no frame
     // do corpo → a órbita fecha REDONDA (não conta no gravMag do HUD).
-    if (!interstellar && dominant.worldAcc) out.add(dominant.worldAcc);
+    // POLISH (audit T-PR-09): BLEND na borda do SOI — a aceleração de frame
+    // desvanece nos 10% externos em vez de ligar num degrau (era o "kink"
+    // visível nas trilhas das traçadoras ao cruzar fronteiras de SOI).
+    if (!interstellar && dominant.worldAcc) {
+      const tEdge = Math.max(0, Math.min(1, (domDist / Math.max(domSoi, 1) - 0.90) / 0.10));
+      const w = 1 - tEdge * tEdge * (3 - 2 * tEdge);
+      out.addScaledVector(dominant.worldAcc, w);
+    }
   }
 
   // POÇOS GRAVITACIONAIS TRANSIENTES (bomba de Higgs, D-2): perturbação ADITIVA

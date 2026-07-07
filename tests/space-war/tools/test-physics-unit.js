@@ -109,7 +109,7 @@ test('proporções verdadeiras: geometria do sistema solar é consistente (T-TP-
 });
 
 test('proporções verdadeiras: anos-luz entre sistemas + compactos das referências', async () => {
-  const { SYSTEMS, BINARY, CORE, SUN } = await import('../../../space-war/src/config.js');
+  const { SYSTEMS, BINARY, PULSAR, CORE, SUN } = await import('../../../space-war/src/config.js');
   const solar = SYSTEMS.find((x) => x.key === 'solar');
   // Sistemas vizinhos a ≥ 4× o raio do solar (nenhum disco cruza o vazio).
   for (const s of SYSTEMS) {
@@ -133,8 +133,9 @@ test('proporções verdadeiras: anos-luz entre sistemas + compactos das referên
   assert.ok(Math.abs(CORE.smbh.disk.inner / CORE.smbh.rs - 3.0) < 0.01);
   assert.ok(Math.abs(CORE.smbh.photonRing / CORE.smbh.rs - 2.6) < 0.01);
   assert.ok(CORE.smbh.disk.outer < CORE.aMin * (1 - CORE.eMax), 'disco de Sgr A* invade periélio das S');
-  // NS das referências: 3× visual, TOV intacto, maré fora da superfície.
-  const ns = BINARY.neutronStar;
+  // NS das referências (roster T-PR-08: mora no sistema PULSAR): 3× visual,
+  // TOV intacto, maré fora da superfície.
+  const ns = PULSAR.neutronStar;
   assert.equal(ns.radius, 90);
   assert.ok(ns.mu / 1e12 <= 2.2, 'TOV');
   assert.ok(ns.tideKillR > ns.radius, 'zona de maré fora da superfície');
@@ -177,13 +178,18 @@ test('relatividade: aberração agrupa à FRENTE e Doppler azula o rumo (AC-04)'
 });
 
 test('config: massas respeitam a física (TOV, hierarquia SMBH, companheira)', async () => {
-  const { BINARY, CORE, BETELGEUSE } = await import('../../../space-war/src/config.js');
-  const nsSun = BINARY.neutronStar.mu / MU_SUN_GAME;
+  const { BINARY, PULSAR, CORE, BETELGEUSE } = await import('../../../space-war/src/config.js');
+  const nsSun = PULSAR.neutronStar.mu / MU_SUN_GAME;
   assert.ok(nsSun <= 2.2, `NS ${nsSun} M☉ deve respeitar o limite TOV (~2.2)`);
   assert.ok(CORE.smbh.mu > BINARY.blackHole.mu,
     'SMBH deve ser mais massivo que qualquer BN estelar (hierarquia)');
   const compSun = BETELGEUSE.companion.mu / MU_SUN_GAME;
   assert.ok(compSun >= 0.08, `companheira ${compSun} M☉ ≥ limite de fusão de H (0.08)`);
+  // Devorador (T-PR-08): a gigante ENCHE o lóbulo de Roche — raio ≈ R_L (±5%)
+  const { eggletonLobeRadius } = await import('../../../space-war/src/celestial/physics.js');
+  const rl = eggletonLobeRadius(BINARY.separation, BINARY.giant.mu / BINARY.blackHole.mu);
+  assert.ok(Math.abs(BINARY.giant.radius - rl) / rl < 0.05,
+    `gigante ${BINARY.giant.radius} vs lóbulo ${rl.toFixed(0)} — transbordo exato`);
   // Geometria EHT: anel na borda da sombra (2.6·r_s), disco interno na ISCO (3·r_s)
   assert.ok(Math.abs(BINARY.blackHole.photonRing / BINARY.blackHole.rs - 2.6) < 0.01);
   assert.ok(Math.abs(BINARY.blackHole.disk.inner / BINARY.blackHole.rs - 3.0) < 0.01);
@@ -233,11 +239,11 @@ test('fotometria: LOD ponto↔disco com histerese 2px↑/1px↓', async () => {
 
 test('fotometria: hierarquia de luminosidades declaradas (D-7)', async () => {
   const { lumForStar, STAR_LUM_DEFAULTS } = await import('../../../space-war/src/celestial/physics.js');
-  const { BINARY, BETELGEUSE, CHAOTIC } = await import('../../../space-war/src/config.js');
+  const { PULSAR, BINARY, BETELGEUSE } = await import('../../../space-war/src/config.js');
   // O pulsar é a fonte PONTUAL mais brilhante do jogo (Crab comprimido)
-  assert.ok(lumForStar(BINARY.neutronStar) > lumForStar(BETELGEUSE.star));
+  assert.ok(lumForStar(PULSAR.neutronStar) > lumForStar(BETELGEUSE.star));
   assert.ok(lumForStar(BETELGEUSE.star) > 1, 'supergigante ≫ Sol');
-  assert.ok(lumForStar(CHAOTIC.stars[0]) < 1 && lumForStar(CHAOTIC.stars[0]) > 0);
+  assert.ok(lumForStar(PULSAR.companion) < 1 && lumForStar(PULSAR.companion) > 0);
   // defaults por kind: BN e planetas não emitem (0 → sem ponto fotométrico)
   assert.equal(lumForStar({ kind: 'blackhole' }), 0);
   assert.equal(lumForStar({ kind: 'rock' }), 0);

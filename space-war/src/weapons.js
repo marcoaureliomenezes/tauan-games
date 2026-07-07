@@ -60,11 +60,15 @@ export function launchNuke() {
   return true;
 }
 
-export function enemyFire(pos, dir) {
+export function enemyFire(pos, dir, frameVel = null) {
   const m = boltMesh(COLORS.enemyLaser);
   m.position.copy(pos);
   scene.add(m);
-  game.projectiles.push({ mesh: m, vel: dir.clone().multiplyScalar(1500), life: 3, friendly: false, dmg: 6, isNuke: false });
+  // POLISH (T-PR-09): bolt herda a velocidade do frame do atirador (paridade
+  // com o laser do jogador, que soma s.vel, e com as bombas do bomber).
+  const vel = dir.clone().multiplyScalar(1500);
+  if (frameVel) vel.add(frameVel);
+  game.projectiles.push({ mesh: m, vel, life: 3, friendly: false, dmg: 6, isNuke: false });
 }
 
 // BOMBA inimiga (campanha): ordnance pesada BALÍSTICA — o mesmo campo gravitacional
@@ -216,7 +220,7 @@ export function updateProjectiles(dt) {
     if (p.isBomb) {
       computeGravity(p.mesh.position, _gPull);
       p.vel.addScaledVector(_gPull, dt);
-      if (surfaceContact(p.mesh.position, 6)) p.surfaceHit = true;
+      if (surfaceContact(p.mesh.position, 9)) p.surfaceHit = true;   // margem = raio do mesh (T-PR-09)
     }
     // TRAÇADORA [G]: gravidade pura + trilha do caminho (sonda de validação).
     if (p.isTracer) {
@@ -236,7 +240,7 @@ export function updateProjectiles(dt) {
         p.trail.geometry.setDrawRange(0, p.trailN);
         p.trail.geometry.attributes.position.needsUpdate = true;
       }
-      if (surfaceContact(p.mesh.position, 6)) {
+      if (surfaceContact(p.mesh.position, 8)) {                     // margem = raio do mesh (T-PR-09)
         p.surfaceHit = true;            // queima na superfície com um flash curto
         explosion(p.mesh.position, 0.6, 0xffd24a);
       }
@@ -250,7 +254,7 @@ export function updateProjectiles(dt) {
         activateHiggs(p);
       }
       if (p.shell) p.shell.scale.setScalar(1 + 0.25 * Math.sin(game.time * 9));
-      const hitStar = surfaceContact(p.mesh.position, 10);
+      const hitStar = surfaceContact(p.mesh.position, 14);          // margem = raio do mesh (T-PR-09)
       if (hitStar) {
         // mergulho com poço ativo → supernova garantida (higgs.js decide)
         if (p.wellOn) higgsPlunge(p);
@@ -314,7 +318,7 @@ export function updateProjectiles(dt) {
         }
       }
       // horizonte/superfície engole a nuke → detona no impacto
-      const hit = surfaceContact(p.mesh.position, 6);
+      const hit = surfaceContact(p.mesh.position, 12);               // margem = raio do mesh (T-PR-09)
       if (hit) p.surfaceHit = true;
     }
     p.mesh.position.addScaledVector(p.vel, dt);

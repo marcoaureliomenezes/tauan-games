@@ -8,6 +8,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { game } from './state.js';
 import { enemyFire, enemyBomb } from './weapons.js';
+import { higgsWellAccel } from './celestial/physics.js';
 
 const _to = new THREE.Vector3();
 const _side = new THREE.Vector3();
@@ -151,6 +152,26 @@ function canEngage(e, distToShip) {
   return !occluded(e, s.pos);
 }
 
+const _wellPull = new THREE.Vector3();
+// POLISH (audit T-PR-09): inimigos SENTEM os poços de Higgs. A IA cinemática
+// compensa a gravidade dos corpos com empuxo (crível), mas um poço TRANSIENTE
+// de 600 u/s² ninguém compensa — sem isto, o poço vergava todo projétil da
+// cena e deixava os caças parados (quebra visível da fantasia "todos sentem").
+// Bias por deslocamento: o offset local não muda; a posição desenhada desloca.
+function applyWellBias(e, dt) {
+  if (!game.wells || !game.wells.length) return;
+  for (const w of game.wells) {
+    if (game.time > w.until) continue;
+    _wellPull.copy(w.pos).sub(e.group.position);
+    const d = _wellPull.length();
+    const a = higgsWellAccel(d, w);
+    if (a <= 0) continue;
+    // deslocamento ~½·a·dt² acumulado como arrasto direto (IA sem velocidade
+    // própria): desloca rumo ao poço proporcional à força
+    e.group.position.addScaledVector(_wellPull.normalize(), a * dt * dt * 18);
+  }
+}
+
 export function updateEnemies(dt) {
   const ship = game.ship;
   for (const e of game.enemies) {
@@ -160,6 +181,7 @@ export function updateEnemies(dt) {
       // estação: offset local FIXO — co-move e gira
       localToWorld(e, e.group.position);
       e.group.rotation.z += dt * 0.4;
+      applyWellBias(e, dt);
     } else {
       const distToShip = e.group.position.distanceTo(ship.pos);
       e.chasing = e.role !== 'bomber' && distToShip < 2500;
@@ -173,6 +195,7 @@ export function updateEnemies(dt) {
         localToWorld(e, _to);
         e.group.position.lerp(_to, dt * 2.5);   // suaviza transição pós-perseguição
       }
+      applyWellBias(e, dt);
       e.group.lookAt(ship.pos);
     }
 
@@ -192,11 +215,14 @@ export function updateEnemies(dt) {
     } else if (e.role === 'station') {
       e.cd = 1.3;
       _side.copy(ship.pos).sub(e.group.position).normalize();
-      enemyFire(e.group.position.clone().addScaledVector(_side, 9), _side);
+      // POLISH (T-PR-09): o laser herda a velocidade do FRAME do âncora — como
+      // as bombas do bomber já faziam; sem isto, perto de corpos railed
+      // rápidos, os bolts atrasavam sistematicamente atrás do atirador.
+      enemyFire(e.group.position.clone().addScaledVector(_side, 9), _side, e.anchor.worldVel);
     } else {
       e.cd = 1.6 + Math.random();
       _side.copy(ship.pos).sub(e.group.position).normalize();
-      enemyFire(e.group.position.clone().addScaledVector(_side, 3), _side);
+      enemyFire(e.group.position.clone().addScaledVector(_side, 3), _side, e.anchor.worldVel);
     }
   }
 }
