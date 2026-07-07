@@ -247,6 +247,11 @@ export function rocheStream(donor, accretor, {
       mat.uniforms.uTideDir.value.copy(_tideLocal);
       mat.uniforms.uTideAmp.value = tideAmp;
     }
+    // Diagnóstico p/ e2e (QA AC-06): corrente construída + teardrop aplicado.
+    game.rocheStream = {
+      built, sep: +sep.toFixed(0), tideAmp,
+      spotVisible: !!(group.userData.spot && group.visible),
+    };
   } };
   return { group, fx, cullKey };
 }

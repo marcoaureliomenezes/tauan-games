@@ -280,6 +280,14 @@ if (typeof window !== 'undefined') {
       if (game.world.systemKey !== sys.key && !sysLoad(sys.key)) return false;
       return this.goTo(sys.primary, distMul);
     },
+    // QA (AC-05): evidência de dispose — memória viva do renderer entre fases.
+    rendererInfo() {
+      return {
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
+        programs: renderer.info.programs ? renderer.info.programs.length : 0,
+      };
+    },
     shipReport() {
       const m = shipMesh();
       let pointLights = 0, redLamps = 0, cones = 0, rimIntensity = 0;

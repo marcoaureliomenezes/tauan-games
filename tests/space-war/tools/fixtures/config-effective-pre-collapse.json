@@ -1,0 +1,491 @@
+{
+ "SUN": {
+  "name": "Sol",
+  "key": "sun",
+  "radius": 11000,
+  "color": 16773823,
+  "mu": 1100000000000,
+  "soi": 4200000,
+  "gravReach": 4200000,
+  "spin": 540,
+  "light": 16774358
+ },
+ "PLANETS": [
+  {
+   "name": "Mercúrio",
+   "key": "mercury",
+   "radius": 836,
+   "color": 10128253,
+   "color2": 7036240,
+   "kind": "rock",
+   "orbit": 208000,
+   "periodFactor": 0.964,
+   "tilt": 0.12,
+   "spin": 90,
+   "mu": 3630000,
+   "soi": 12800,
+   "moons": []
+  },
+  {
+   "name": "Vênus",
+   "key": "venus",
+   "radius": 2090,
+   "color": 15125906,
+   "color2": 13215071,
+   "kind": "cloud",
+   "orbit": 320000,
+   "periodFactor": 2.46,
+   "tilt": 0.06,
+   "spin": 240,
+   "mu": 53790000,
+   "soi": 25600,
+   "atmosphere": 15125906,
+   "hasAtmo": true,
+   "moons": []
+  },
+  {
+   "name": "Terra",
+   "key": "earth",
+   "radius": 2200,
+   "color": 1861296,
+   "color2": 3112250,
+   "kind": "earth",
+   "orbit": 440000,
+   "periodFactor": 4,
+   "tilt": 0,
+   "spin": 60,
+   "mu": 66000000,
+   "soi": 33600,
+   "atmosphere": 7321343,
+   "hasAtmo": true,
+   "ocean": true,
+   "moons": [
+    {
+     "name": "Lua",
+     "radius": 594,
+     "color": 12566468,
+     "orbit": 5808,
+     "period": 80,
+     "spin": 80,
+     "mu": 811800,
+     "soi": 1800
+    }
+   ]
+  },
+  {
+   "name": "Marte",
+   "key": "mars",
+   "radius": 1166,
+   "color": 11880748,
+   "color2": 8204060,
+   "kind": "rock",
+   "orbit": 624000,
+   "periodFactor": 7.524,
+   "tilt": 0.03,
+   "spin": 62,
+   "mu": 7062000,
+   "soi": 20800,
+   "atmosphere": 14256746,
+   "hasAtmo": true,
+   "moons": [
+    {
+     "name": "Fobos",
+     "radius": 66,
+     "color": 8022620,
+     "orbit": 2580.6,
+     "period": 12,
+     "spin": 12,
+     "mu": 0.1188,
+     "soi": 145.20000000000002
+    },
+    {
+     "name": "Deimos",
+     "radius": 55,
+     "color": 8877672,
+     "orbit": 4301,
+     "period": 24,
+     "spin": 24,
+     "mu": 0.0165,
+     "soi": 121.00000000000001
+    }
+   ]
+  },
+  {
+   "name": "Júpiter",
+   "key": "jupiter",
+   "radius": 6600,
+   "color": 13215864,
+   "color2": 9202250,
+   "kind": "gas",
+   "bands": true,
+   "redspot": true,
+   "orbit": 1200000,
+   "periodFactor": 47.44,
+   "tilt": 0.02,
+   "spin": 26,
+   "mu": 5720400000,
+   "soi": 179200,
+   "atmosphere": 14203024,
+   "hasAtmo": true,
+   "moons": [
+    {
+     "name": "Io",
+     "radius": 638,
+     "color": 15127402,
+     "orbit": 15136.000000000002,
+     "period": 24,
+     "spin": 24,
+     "mu": 990000,
+     "soi": 1403.6000000000001
+    },
+    {
+     "name": "Europa",
+     "radius": 528,
+     "color": 13483950,
+     "orbit": 21190.4,
+     "period": 40,
+     "spin": 40,
+     "mu": 528000,
+     "soi": 1161.6000000000001
+    },
+    {
+     "name": "Ganimedes",
+     "radius": 902,
+     "color": 10194301,
+     "orbit": 28253.86666666667,
+     "period": 64,
+     "spin": 64,
+     "mu": 1650000,
+     "soi": 1984.4
+    },
+    {
+     "name": "Calisto",
+     "radius": 836,
+     "color": 7299928,
+     "orbit": 37335.46666666667,
+     "period": 110,
+     "spin": 110,
+     "mu": 1187999.9999999998,
+     "soi": 1839.2
+    }
+   ]
+  },
+  {
+   "name": "Saturno",
+   "key": "saturn",
+   "radius": 5490,
+   "color": 14207130,
+   "color2": 11573866,
+   "kind": "gas",
+   "bands": true,
+   "orbit": 1960000,
+   "periodFactor": 117.84,
+   "tilt": 0.09,
+   "spin": 28,
+   "mu": 1713600000,
+   "soi": 140800,
+   "atmosphere": 15128752,
+   "hasAtmo": true,
+   "ring": {
+    "inner": 6900,
+    "outer": 12900,
+    "color": 14272672,
+    "tilt": 0.47
+   },
+   "moons": [
+    {
+     "name": "Titã",
+     "radius": 880,
+     "color": 14262858,
+     "orbit": 22880,
+     "period": 90,
+     "spin": 90,
+     "mu": 1485000,
+     "soi": 1936.0000000000002
+    },
+    {
+     "name": "Reia",
+     "radius": 264,
+     "color": 12103844,
+     "orbit": 14976,
+     "period": 54,
+     "spin": 54,
+     "mu": 26400,
+     "soi": 580.8000000000001
+    }
+   ]
+  },
+  {
+   "name": "Urano",
+   "key": "uranus",
+   "radius": 3600,
+   "color": 10477796,
+   "color2": 7587532,
+   "kind": "ice",
+   "orbit": 2960000,
+   "periodFactor": 336,
+   "tilt": 1.4,
+   "spin": 34,
+   "mu": 391500000,
+   "soi": 96000,
+   "atmosphere": 11530484,
+   "hasAtmo": true,
+   "ring": {
+    "inner": 4680,
+    "outer": 6300,
+    "color": 8958132,
+    "tilt": 1.5
+   },
+   "moons": [
+    {
+     "name": "Titânia",
+     "radius": 264,
+     "color": 11051168,
+     "orbit": 8088.000000000001,
+     "period": 64,
+     "spin": 64,
+     "mu": 39599.99999999999,
+     "soi": 580.8000000000001
+    },
+    {
+     "name": "Oberon",
+     "radius": 264,
+     "color": 9866894,
+     "orbit": 10976.57142857143,
+     "period": 90,
+     "spin": 90,
+     "mu": 33000,
+     "soi": 580.8000000000001
+    }
+   ]
+  },
+  {
+   "name": "Netuno",
+   "key": "neptune",
+   "radius": 3465,
+   "color": 3495124,
+   "color2": 2177184,
+   "kind": "ice",
+   "orbit": 3840000,
+   "periodFactor": 659.2,
+   "tilt": 0.49,
+   "spin": 32,
+   "mu": 461700000.00000006,
+   "soi": 96000,
+   "atmosphere": 5929200,
+   "hasAtmo": true,
+   "moons": [
+    {
+     "name": "Tritão",
+     "radius": 462,
+     "color": 13222080,
+     "orbit": 8200.5,
+     "period": 60,
+     "spin": 60,
+     "mu": 237600,
+     "soi": 1016.4000000000001,
+     "retrograde": true
+    }
+   ]
+  }
+ ],
+ "RENDER": {
+  "skyboxRadius": 40000000,
+  "far": 60000000,
+  "near": 0.3
+ },
+ "OVERDRIVE": {
+  "mult": 24,
+  "thrustMult": 16,
+  "rampIn": 2.5,
+  "rampOut": 1.2
+ },
+ "MAX_ESCAPE_SPEED": 14300,
+ "CORE": {
+  "smbh": {
+   "name": "Sagitário A✦",
+   "key": "sgr",
+   "kind": "blackhole",
+   "rs": 2700,
+   "radius": 2700,
+   "mu": 40000000000000,
+   "soi": 420000,
+   "gravReach": 420000,
+   "disk": {
+    "inner": 8100,
+    "outer": 28000
+   },
+   "photonRing": 7020,
+   "diskGain": 0.4,
+   "jet": true
+  },
+  "starCount": 12,
+  "aMin": 70000,
+  "aMax": 260000,
+  "eMin": 0.12,
+  "eMax": 0.5,
+  "inclMax": 0.55,
+  "starPalette": [
+   {
+    "color": 16738874,
+    "color2": 11549202,
+    "radius": 2800,
+    "mu": 230000000000,
+    "cellScale": 5,
+    "lum": 0.3
+   },
+   {
+    "color": 16751186,
+    "color2": 13656096,
+    "radius": 3300,
+    "mu": 290000000000,
+    "cellScale": 6,
+    "lum": 0.4
+   },
+   {
+    "color": 16765562,
+    "color2": 13670456,
+    "radius": 3800,
+    "mu": 360000000000,
+    "cellScale": 7,
+    "lum": 0.5
+   },
+   {
+    "color": 16773836,
+    "color2": 14729344,
+    "radius": 4600,
+    "mu": 460000000000,
+    "cellScale": 8,
+    "lum": 0.6
+   },
+   {
+    "color": 13623551,
+    "color2": 9679080,
+    "radius": 5400,
+    "mu": 580000000000,
+    "cellScale": 9,
+    "lum": 0.75
+   },
+   {
+    "color": 11060479,
+    "color2": 6982880,
+    "radius": 6500,
+    "mu": 720000000000,
+    "cellScale": 10,
+    "lum": 0.9
+   }
+  ],
+  "planetCount": 3
+ },
+ "BETELGEUSE": {
+  "star": {
+   "name": "Betelgeuse",
+   "key": "betelgeuse",
+   "kind": "redsupergiant",
+   "radius": 60000,
+   "color": 16751181,
+   "color2": 8006924,
+   "mu": 16000000000000,
+   "soi": 300000,
+   "gravReach": 300000,
+   "spin": 900,
+   "light": 16756864,
+   "lum": 60,
+   "cellScale": 1.8,
+   "lumpyLimb": 0.045
+  },
+  "companion": {
+   "name": "Siwarha",
+   "key": "siwarha",
+   "kind": "star",
+   "radius": 2200,
+   "color": 13623551,
+   "color2": 9416944,
+   "mu": 1150000000000,
+   "lum": 0.9,
+   "soi": 20000,
+   "gravReach": 60000,
+   "spin": 120,
+   "cellScale": 12,
+   "orbit": 86000,
+   "periodFactor": 2.4
+  },
+  "planets": [
+   {
+    "name": "Cinza",
+    "key": "cinza",
+    "radius": 1300,
+    "color": 4865848,
+    "color2": 2827295,
+    "kind": "rock",
+    "orbit": 110000,
+    "periodFactor": 3.2,
+    "tilt": 0.05,
+    "spin": 70,
+    "mu": 42000000,
+    "soi": 9600,
+    "moons": []
+   },
+   {
+    "name": "Brasa",
+    "key": "brasa",
+    "radius": 2400,
+    "color": 7024672,
+    "color2": 4200460,
+    "kind": "rock",
+    "orbit": 160000,
+    "periodFactor": 5.6,
+    "tilt": 0.1,
+    "spin": 55,
+    "mu": 120000000,
+    "soi": 16400,
+    "atmosphere": 16740416,
+    "hasAtmo": true,
+    "moons": []
+   },
+   {
+    "name": "Fuligem",
+    "key": "fuligem",
+    "radius": 4800,
+    "color": 3617070,
+    "color2": 1972760,
+    "kind": "ice",
+    "orbit": 235000,
+    "periodFactor": 9.5,
+    "tilt": 0.35,
+    "spin": 40,
+    "mu": 330000000,
+    "soi": 22000,
+    "moons": []
+   }
+  ]
+ },
+ "BINARY_blackHole": {
+  "name": "Buraco Negro",
+  "key": "blackhole",
+  "kind": "blackhole",
+  "rs": 480,
+  "radius": 480,
+  "mu": 5000000000000,
+  "soi": 150000,
+  "gravReach": 150000,
+  "disk": {
+   "inner": 1440,
+   "outer": 16000
+  },
+  "tideKillR": 7800,
+  "photonRing": 1248,
+  "jet": true
+ },
+ "SYSTEMS_solar": {
+  "key": "solar",
+  "name": "Sistema Solar",
+  "center": [
+   0,
+   0,
+   0
+  ],
+  "radius": 4200000,
+  "primary": "sun"
+ }
+}

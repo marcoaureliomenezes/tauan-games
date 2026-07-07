@@ -360,3 +360,41 @@ test('L1: a/2 para massas iguais; desloca-se PARA o corpo mais leve', async () =
   const scale = 2e12 / (x * x);
   assert.ok(Math.abs(f) / scale < 1e-6, 'resíduo de força ~0 no L1');
 });
+
+// ── Audit T-PR-04 (achado 4 da QA): snapshot-diff do colapso do config ───────
+// O fixture guarda os valores EFETIVOS pós-mutação do config ANTIGO (capturados
+// antes do colapso das 3 passadas de escala). Todo valor que SOBREVIVEU ao
+// roster T-PR-08 tem que bater com o literal atual (tolerância 1e-9 relativa).
+test('config: literais colapsados = valores efetivos históricos (snapshot-diff=0)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const fix = JSON.parse(readFileSync(
+    new URL('./fixtures/config-effective-pre-collapse.json', import.meta.url), 'utf8'));
+  const c = await import('../../../space-war/src/config.js');
+  let diffs = 0;
+  const cmp = (a, b, path) => {
+    if (typeof a === 'number' && typeof b === 'number') {
+      if (Math.abs(a - b) / Math.max(1e-12, Math.abs(a)) > 1e-9) { diffs++; console.error(`DIFF ${path}: ${a} → ${b}`); }
+      return;
+    }
+    if (a && typeof a === 'object') {
+      for (const k of Object.keys(a)) {
+        if (b == null || !(k in b)) { diffs++; console.error(`MISSING ${path}.${k}`); continue; }
+        cmp(a[k], b[k], `${path}.${k}`);
+      }
+      return;
+    }
+    if (a !== b) { diffs++; console.error(`DIFF ${path}: ${a} → ${b}`); }
+  };
+  cmp(fix.SUN, c.SUN, 'SUN');
+  cmp(fix.PLANETS, c.PLANETS, 'PLANETS');
+  cmp(fix.RENDER, c.RENDER, 'RENDER');
+  cmp(fix.OVERDRIVE, c.OVERDRIVE, 'OVERDRIVE');
+  cmp(fix.MAX_ESCAPE_SPEED, c.MAX_ESCAPE_SPEED, 'MAX_ESCAPE_SPEED');
+  cmp(fix.CORE, c.CORE, 'CORE');
+  cmp(fix.BETELGEUSE, c.BETELGEUSE, 'BETELGEUSE');
+  cmp(fix.BINARY_blackHole, c.BINARY.blackHole, 'BINARY.blackHole');
+  // solar do registry: campos históricos (lum/arriveDist são ADIÇÕES, fora do diff)
+  const { lum, arriveDist, ...solarHist } = c.SYSTEMS.find((s) => s.key === 'solar');
+  cmp(fix.SYSTEMS_solar, solarHist, 'SYSTEMS.solar');
+  assert.equal(diffs, 0, `${diffs} divergência(s) vs os valores efetivos históricos`);
+});
