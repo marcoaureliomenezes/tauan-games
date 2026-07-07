@@ -109,7 +109,7 @@ test('proporções verdadeiras: geometria do sistema solar é consistente (T-TP-
 });
 
 test('proporções verdadeiras: anos-luz entre sistemas + compactos das referências', async () => {
-  const { SYSTEMS, BINARY, CORE, SUN } = await import('../../../space-war/src/config.js');
+  const { SYSTEMS, BINARY, PULSAR, CORE, SUN } = await import('../../../space-war/src/config.js');
   const solar = SYSTEMS.find((x) => x.key === 'solar');
   // Sistemas vizinhos a ≥ 4× o raio do solar (nenhum disco cruza o vazio).
   for (const s of SYSTEMS) {
@@ -133,8 +133,9 @@ test('proporções verdadeiras: anos-luz entre sistemas + compactos das referên
   assert.ok(Math.abs(CORE.smbh.disk.inner / CORE.smbh.rs - 3.0) < 0.01);
   assert.ok(Math.abs(CORE.smbh.photonRing / CORE.smbh.rs - 2.6) < 0.01);
   assert.ok(CORE.smbh.disk.outer < CORE.aMin * (1 - CORE.eMax), 'disco de Sgr A* invade periélio das S');
-  // NS das referências: 3× visual, TOV intacto, maré fora da superfície.
-  const ns = BINARY.neutronStar;
+  // NS das referências (roster T-PR-08: mora no sistema PULSAR): 3× visual,
+  // TOV intacto, maré fora da superfície.
+  const ns = PULSAR.neutronStar;
   assert.equal(ns.radius, 90);
   assert.ok(ns.mu / 1e12 <= 2.2, 'TOV');
   assert.ok(ns.tideKillR > ns.radius, 'zona de maré fora da superfície');
@@ -177,13 +178,18 @@ test('relatividade: aberração agrupa à FRENTE e Doppler azula o rumo (AC-04)'
 });
 
 test('config: massas respeitam a física (TOV, hierarquia SMBH, companheira)', async () => {
-  const { BINARY, CORE, BETELGEUSE } = await import('../../../space-war/src/config.js');
-  const nsSun = BINARY.neutronStar.mu / MU_SUN_GAME;
+  const { BINARY, PULSAR, CORE, BETELGEUSE } = await import('../../../space-war/src/config.js');
+  const nsSun = PULSAR.neutronStar.mu / MU_SUN_GAME;
   assert.ok(nsSun <= 2.2, `NS ${nsSun} M☉ deve respeitar o limite TOV (~2.2)`);
   assert.ok(CORE.smbh.mu > BINARY.blackHole.mu,
     'SMBH deve ser mais massivo que qualquer BN estelar (hierarquia)');
   const compSun = BETELGEUSE.companion.mu / MU_SUN_GAME;
   assert.ok(compSun >= 0.08, `companheira ${compSun} M☉ ≥ limite de fusão de H (0.08)`);
+  // Devorador (T-PR-08): a gigante ENCHE o lóbulo de Roche — raio ≈ R_L (±5%)
+  const { eggletonLobeRadius } = await import('../../../space-war/src/celestial/physics.js');
+  const rl = eggletonLobeRadius(BINARY.separation, BINARY.giant.mu / BINARY.blackHole.mu);
+  assert.ok(Math.abs(BINARY.giant.radius - rl) / rl < 0.05,
+    `gigante ${BINARY.giant.radius} vs lóbulo ${rl.toFixed(0)} — transbordo exato`);
   // Geometria EHT: anel na borda da sombra (2.6·r_s), disco interno na ISCO (3·r_s)
   assert.ok(Math.abs(BINARY.blackHole.photonRing / BINARY.blackHole.rs - 2.6) < 0.01);
   assert.ok(Math.abs(BINARY.blackHole.disk.inner / BINARY.blackHole.rs - 3.0) < 0.01);
@@ -233,11 +239,11 @@ test('fotometria: LOD ponto↔disco com histerese 2px↑/1px↓', async () => {
 
 test('fotometria: hierarquia de luminosidades declaradas (D-7)', async () => {
   const { lumForStar, STAR_LUM_DEFAULTS } = await import('../../../space-war/src/celestial/physics.js');
-  const { BINARY, BETELGEUSE, CHAOTIC } = await import('../../../space-war/src/config.js');
+  const { PULSAR, BINARY, BETELGEUSE } = await import('../../../space-war/src/config.js');
   // O pulsar é a fonte PONTUAL mais brilhante do jogo (Crab comprimido)
-  assert.ok(lumForStar(BINARY.neutronStar) > lumForStar(BETELGEUSE.star));
+  assert.ok(lumForStar(PULSAR.neutronStar) > lumForStar(BETELGEUSE.star));
   assert.ok(lumForStar(BETELGEUSE.star) > 1, 'supergigante ≫ Sol');
-  assert.ok(lumForStar(CHAOTIC.stars[0]) < 1 && lumForStar(CHAOTIC.stars[0]) > 0);
+  assert.ok(lumForStar(PULSAR.companion) < 1 && lumForStar(PULSAR.companion) > 0);
   // defaults por kind: BN e planetas não emitem (0 → sem ponto fotométrico)
   assert.equal(lumForStar({ kind: 'blackhole' }), 0);
   assert.equal(lumForStar({ kind: 'rock' }), 0);
@@ -270,4 +276,125 @@ test('viagem trapezoidal 30/40/30: cruzeiro plano em v_max = D/(0.7T) (AC-01 exp
   const x1 = journeyProfileTrapezoid(D, T, (0.3 - eps) * T).x;
   const x2 = journeyProfileTrapezoid(D, T, (0.3 + eps) * T).x;
   assert.ok(x2 > x1 && (x2 - x1) < vMax * T * 1e-3, 'x contínua em s=0.3');
+});
+
+// ── Audit 2026-07-07 P0: perfil do poço de Higgs + fronteira de sistema ──────
+
+test('Higgs well (P0-2): pico ≤ cap, queda 1/d² além do soft, zero em reach — SEM platô', async () => {
+  const { higgsWellAccel } = await import('../../../space-war/src/celestial/physics.js');
+  const w = { soft: 1000, cap: 600, reach: 18_000 };
+  // pico do perfil = cap, atingido perto do núcleo (d = soft/√2)
+  const aPeak = higgsWellAccel(w.soft / Math.SQRT2, w);
+  assert.ok(aPeak > 0.98 * w.cap && aPeak <= w.cap, `pico ${aPeak.toFixed(1)} ≈ cap`);
+  // MONOTÔNICO decrescente além do soft (o bug era um platô constante de 29k u)
+  let prev = Infinity;
+  for (const d of [1500, 2500, 4000, 6000, 9000, 12_000, 15_000]) {
+    const a = higgsWellAccel(d, w);
+    assert.ok(a < prev, `a(${d}) = ${a.toFixed(2)} decrescente`);
+    prev = a;
+  }
+  // faixa média ~1/d²: dobrar d divide a força por ~4 (Plummer: d ≫ soft)
+  const a4k = higgsWellAccel(4000, w), a8k = higgsWellAccel(8000, w);
+  assert.ok(Math.abs(a4k / a8k - 4) < 0.6, `1/d²: a(4k)/a(8k) = ${(a4k / a8k).toFixed(2)} ≈ 4`);
+  // SEM platô: a 10k u a força já caiu p/ ≤ 5% do cap (antes: 600 constante)
+  assert.ok(higgsWellAccel(10_000, w) < 0.05 * w.cap);
+  // alcance FINITO: zero em reach e além (sem perturbação cross-system)
+  assert.equal(higgsWellAccel(18_000, w), 0);
+  assert.equal(higgsWellAccel(500_000, w), 0);
+  // taper contínuo: nada de degrau na borda
+  assert.ok(higgsWellAccel(17_900, w) < 1.0);
+});
+
+test('boundaryFade (P0-1): 0 dentro, 1 fora, rampa suave 0.85–1.5·raio', async () => {
+  const { boundaryFade, SYSTEM_FADE_INNER, SYSTEM_FADE_OUTER } =
+    await import('../../../space-war/src/celestial/physics.js');
+  assert.equal(boundaryFade(0.2), 0);
+  assert.equal(boundaryFade(SYSTEM_FADE_INNER), 0);
+  assert.equal(boundaryFade(SYSTEM_FADE_OUTER), 1);
+  assert.equal(boundaryFade(5), 1);
+  const mid = boundaryFade((SYSTEM_FADE_INNER + SYSTEM_FADE_OUTER) / 2);
+  assert.ok(Math.abs(mid - 0.5) < 1e-9, 'smoothstep simétrico no meio');
+  // monotônico
+  let p = -1;
+  for (let d = 0; d <= 2; d += 0.05) {
+    const f = boundaryFade(d);
+    assert.ok(f >= p); p = f;
+  }
+});
+
+test('escapeSpeed (P0-3): v_esc = √(2μ/r) — gate de captura da nuke', async () => {
+  const { escapeSpeed, circularSpeed } = await import('../../../space-war/src/celestial/physics.js');
+  const mu = 6.6e7, r = 4000;
+  assert.ok(Math.abs(escapeSpeed(mu, r) - circularSpeed(mu, r) * Math.SQRT2) < 1e-9);
+  // um tiro de nuke típico (1600 u/s) é HIPERBÓLICO num planeta (v_esc ~180):
+  assert.ok(1600 > 1.5 * escapeSpeed(mu, r));
+});
+
+// ── Audit T-PR-07: lóbulo de Roche (Eggleton 1983) + ponto L1 ────────────────
+
+test('Eggleton: R_L/a = 0.379 para q=1; monotônico em q; assimetria doador/par', async () => {
+  const { eggletonLobeRadius } = await import('../../../space-war/src/celestial/physics.js');
+  // valor canônico q=1: 0.49/(0.6+ln2) ≈ 0.3789
+  assert.ok(Math.abs(eggletonLobeRadius(1, 1) - 0.3789) < 5e-4);
+  // q=0.4 (Devorador: gigante 2 M☉ / BN 5 M☉): ≈ 0.303·a
+  const rl = eggletonLobeRadius(100_000, 0.4);
+  assert.ok(Math.abs(rl - 30_300) < 500, `R_L(q=0.4) = ${rl.toFixed(0)} ≈ 30.3k`);
+  // monotônico: doador mais pesado → lóbulo maior
+  let prev = 0;
+  for (const q of [0.1, 0.3, 1, 3, 10]) {
+    const r = eggletonLobeRadius(1, q);
+    assert.ok(r > prev); prev = r;
+  }
+});
+
+test('L1: a/2 para massas iguais; desloca-se PARA o corpo mais leve', async () => {
+  const { l1Distance } = await import('../../../space-war/src/celestial/physics.js');
+  const a = 100_000;
+  assert.ok(Math.abs(l1Distance(a, 5e12, 5e12) - a / 2) < a * 1e-3, 'massas iguais → L1 no meio');
+  // doador mais leve (2 vs 5): L1 mais perto do doador (x < a/2)
+  const x = l1Distance(a, 2e12, 5e12);
+  assert.ok(x > a * 0.3 && x < a * 0.5, `L1 doador-leve = ${x.toFixed(0)} ∈ (0.3a, 0.5a)`);
+  // equilíbrio de verdade: aceleração co-rotante ≈ 0 no ponto devolvido
+  const W2 = 7e12 / (a ** 3), xBar = a * (5 / 7);
+  const f = 2e12 / (x * x) - 5e12 / ((a - x) * (a - x)) - W2 * (x - xBar);
+  const scale = 2e12 / (x * x);
+  assert.ok(Math.abs(f) / scale < 1e-6, 'resíduo de força ~0 no L1');
+});
+
+// ── Audit T-PR-04 (achado 4 da QA): snapshot-diff do colapso do config ───────
+// O fixture guarda os valores EFETIVOS pós-mutação do config ANTIGO (capturados
+// antes do colapso das 3 passadas de escala). Todo valor que SOBREVIVEU ao
+// roster T-PR-08 tem que bater com o literal atual (tolerância 1e-9 relativa).
+test('config: literais colapsados = valores efetivos históricos (snapshot-diff=0)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const fix = JSON.parse(readFileSync(
+    new URL('./fixtures/config-effective-pre-collapse.json', import.meta.url), 'utf8'));
+  const c = await import('../../../space-war/src/config.js');
+  let diffs = 0;
+  const cmp = (a, b, path) => {
+    if (typeof a === 'number' && typeof b === 'number') {
+      if (Math.abs(a - b) / Math.max(1e-12, Math.abs(a)) > 1e-9) { diffs++; console.error(`DIFF ${path}: ${a} → ${b}`); }
+      return;
+    }
+    if (a && typeof a === 'object') {
+      for (const k of Object.keys(a)) {
+        if (b == null || !(k in b)) { diffs++; console.error(`MISSING ${path}.${k}`); continue; }
+        cmp(a[k], b[k], `${path}.${k}`);
+      }
+      return;
+    }
+    if (a !== b) { diffs++; console.error(`DIFF ${path}: ${a} → ${b}`); }
+  };
+  cmp(fix.SUN, c.SUN, 'SUN');
+  cmp(fix.PLANETS, c.PLANETS, 'PLANETS');
+  cmp(fix.RENDER, c.RENDER, 'RENDER');
+  cmp(fix.OVERDRIVE, c.OVERDRIVE, 'OVERDRIVE');
+  cmp(fix.MAX_ESCAPE_SPEED, c.MAX_ESCAPE_SPEED, 'MAX_ESCAPE_SPEED');
+  cmp(fix.CORE, c.CORE, 'CORE');
+  cmp(fix.BETELGEUSE, c.BETELGEUSE, 'BETELGEUSE');
+  cmp(fix.BINARY_blackHole, c.BINARY.blackHole, 'BINARY.blackHole');
+  // solar do registry: campos históricos (lum/arriveDist são ADIÇÕES, fora do diff)
+  const { lum, arriveDist, ...solarHist } = c.SYSTEMS.find((s) => s.key === 'solar');
+  cmp(fix.SYSTEMS_solar, solarHist, 'SYSTEMS.solar');
+  assert.equal(diffs, 0, `${diffs} divergência(s) vs os valores efetivos históricos`);
 });

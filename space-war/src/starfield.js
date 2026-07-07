@@ -21,6 +21,7 @@ import { scene, camera } from './scene.js';
 import { game } from './state.js';
 import { SYSTEMS } from './config.js';
 import { HEADLESS, makeRadialSprite } from './celestial/atoms.js';
+import { SYSTEM_FADE_INNER, SYSTEM_FADE_OUTER, boundaryFade } from './celestial/physics.js';
 
 // Paleta espectral com pesos ~reais (76% M, raras O/B — mas os pesos visuais
 // levemente enviesados p/ legibilidade).
@@ -56,7 +57,8 @@ const CLOSE_MAX_PX = 48;
 const STREAK_K = 12;
 
 const VERT = `
-uniform vec3 uCam;
+uniform vec3 uCam;        // câmera GALÁCTICA (wrap invariante ao rebase da origem)
+uniform vec3 uCamScene;   // câmera no frame da CENA (posicionamento do quad)
 uniform float uSpan;
 uniform float uBeta;
 uniform vec3 uDir;
@@ -127,7 +129,7 @@ void main() {
   vQuad = position.xy * 2.0;                       // −1..1 no quad
   // quad subtendendo px PIXELS (eixo A alongado pelo risco)
   float world = px * dist * uPxAngle;
-  vec3 pA = uCam + dirA * dist
+  vec3 pA = uCamScene + dirA * dist
     + axisA * position.x * world * (1.0 + streak)
     + axisB * position.y * world;
   gl_Position = projectionMatrix * viewMatrix * vec4(pA, 1.0);
@@ -194,6 +196,7 @@ export function buildStarfield() {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uCam: { value: new THREE.Vector3() },
+        uCamScene: { value: new THREE.Vector3() },
         uSpan: { value: L.span },
         uBeta: { value: 0 },
         uDir: { value: new THREE.Vector3(0, 0, -1) },
@@ -251,36 +254,64 @@ export function buildStarfield() {
 }
 
 // Fade fora dos sistemas: dentro do raio do sistema → 0; no vazio → 1.
-function systemFade(pos) {
-  let f = 1;
-  for (const sys of SYSTEMS) {
-    _c.set(...sys.center);
-    const d = pos.distanceTo(_c) / Math.max(1, sys.radius);
-    f = Math.min(f, THREE.MathUtils.smoothstep(d, 0.85, 1.5));
-  }
-  return f;
+// EXPORTADO (audit P0-1): é a definição canônica de fronteira p/ TODOS os
+// efeitos relativísticos (starfield, tint do postfx) — journey engajada dentro
+// do sistema NÃO acende o corredor; ele nasce ao cruzar a fronteira.
+// FASES (T-PR-06): só o sistema CARREGADO importa — ele vive na origem da
+// cena; os outros estão a anos-luz (fade 1 por construção).
+export function systemFade(pos) {
+  const key = game.world?.systemKey;
+  if (!key) return 1;
+  const sys = SYSTEMS.find((s) => s.key === key);
+  if (!sys) return 1;
+  const d = pos.length() / Math.max(1, sys.radius);
+  return boundaryFade(d, SYSTEM_FADE_INNER, SYSTEM_FADE_OUTER);
 }
 
 export function updateStarfield() {
   if (!layers.length) return;
   const s = game.ship;
   const j = game.journey;
-  const beta = j && j.active ? Math.min(0.995, j.beta) : 0;
+  // FRONTEIRA MANDA (audit P0-1, bug "crossing stars inside the system"): o
+  // floor 0.85 durante a journey anulava o systemFade e acendia o corredor
+  // ainda DENTRO do sistema de origem. Agora o fade posicional governa sozinho,
+  // e o β VISUAL é escalado por ele — a relatividade (aberração/Doppler/
+  // beaming/streaks) só liga depois de cruzar a fronteira e desliga ao entrar
+  // no destino. O β cinemático (journey.beta) segue intacto p/ HUD/perfil.
+  const fade = systemFade(camera.position);
+  // β VISUAL = β cinemático × fade posicional (P0-1): sai do sistema → começa a
+  // cruzar estrelas; acelera → cruza mais e mais; em v_max a aberração PLENA
+  // (0.995) concentra o céu à frente no centro — o look canônico do operador
+  // (rodada 2: SEM teto de aberração, SEM ganho de exposição — estrelas
+  // SÓLIDAS como no original, não "borrões transparentes").
+  const beta = j && j.active ? Math.min(0.995, j.beta) * fade : 0;
   if (s.vel && s.vel.lengthSq() > 1) _dirFlight.copy(s.vel).normalize();
-  const fade = Math.max(systemFade(camera.position), j && j.active ? 0.85 : 0);
   const pxA = pixelAngle();
   const e = camera.matrixWorld.elements;
   _right.set(e[0], e[1], e[2]).normalize();
   _up.set(e[4], e[5], e[6]).normalize();
 
+  // Câmera GALÁCTICA p/ o wrap (fases T-PR-06): o rebase da origem no vazio
+  // não pode teleportar o padrão de estrelas — o mod(span) é ancorado na
+  // posição galáctica (origin + câmera), invariante ao rebase.
+  _c.copy(camera.position);
+  if (game.world?.origin) _c.add(game.world.origin);
+
   for (const L of layers) {
     const u = L.mat.uniforms;
-    u.uCam.value.copy(camera.position);
+    u.uCam.value.copy(_c);
+    u.uCamScene.value.copy(camera.position);
     u.uBeta.value = beta;
     u.uDir.value.copy(_dirFlight);
     u.uFade.value = fade;
     u.uPxAngle.value = pxA;
-    u.uSpeed.value = j && j.active ? j.v : (s.speed || 0);
+    // riscos calibrados p/ ESCALA DE VOO (~9k u/s): o v do cruzeiro (~175k) nas
+    // fórmulas de risco/crescimento virava quads gigantes estroboscópicos —
+    // "coisas que nem parecem estrelas" (operador, img/). O corredor deve ler
+    // como PONTOS em paralaxe, convergindo ao centro pela aberração.
+    u.uSpeed.value = j && j.active ? Math.min(j.v, 9000) : (s.speed || 0);
+    // crescimento rasante idem: pleno em voo local, contido no warp
+    u.uCloseMax.value = CLOSE_MAX_PX * (1 - 0.68 * beta);
     u.uCamRight.value.copy(_right);
     u.uCamUp.value.copy(_up);
   }
@@ -288,12 +319,15 @@ export function updateStarfield() {
   game.starfieldFade = fade;                 // diagnóstico p/ e2e
   game.starfieldBeta = beta;
 
+  // Nebulosas: wrap na câmera GALÁCTICA (_c) — invariante ao rebase — e
+  // reconversão p/ o frame da cena (galáctico − origin = cena).
+  const ox = _c.x - camera.position.x, oy = _c.y - camera.position.y, oz = _c.z - camera.position.z;
   for (const sp of nebulae) {
     const span = sp.userData.span, b = sp.userData.base;
     sp.position.set(
-      ((b.x - camera.position.x) % span + span * 1.5) % span - span * 0.5 + camera.position.x,
-      ((b.y - camera.position.y) % span + span * 1.5) % span - span * 0.5 + camera.position.y,
-      ((b.z - camera.position.z) % span + span * 1.5) % span - span * 0.5 + camera.position.z,
+      ((b.x - _c.x) % span + span * 1.5) % span - span * 0.5 + _c.x - ox,
+      ((b.y - _c.y) % span + span * 1.5) % span - span * 0.5 + _c.y - oy,
+      ((b.z - _c.z) % span + span * 1.5) % span - span * 0.5 + _c.z - oz,
     );
     sp.material.opacity = 0.30 * fade;
   }

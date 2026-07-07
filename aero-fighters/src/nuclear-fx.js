@@ -357,6 +357,26 @@ export function spawnNuclearFx(epicenter) {
   active.push({ group, fire, puffs, ring, wilson, light, t: 0 });
   nuclearFxState.active = true;
   nuclearFxState.stage = 'flash';
+  return group;
+}
+
+// PRÉ-AQUECIMENTO (bug operador "lag when nukes explode"): os DOIS
+// ShaderMaterials do cogumelo (fireball FBM + coluna instanciada) compilavam
+// na PRIMEIRA detonação — congelamento de centenas de ms no clímax. Compila
+// os programas no boot (renderer.compile numa cópia invisível, longe do mapa)
+// — o cache de programas do three reaproveita p/ toda detonação real.
+let _prewarmed = false;
+export function prewarmNuclearFx(renderer, camera) {
+  if (_prewarmed || typeof window === 'undefined') return;
+  _prewarmed = true;
+  const g = spawnNuclearFx(new THREE.Vector3(0, -6000, 0));
+  try { renderer.compile(scene, camera); } catch { /* headless sem GL completo */ }
+  // remove a cópia de aquecimento imediatamente (sem frame visível)
+  const i = active.findIndex((fx) => fx.group === g);
+  if (i >= 0) active.splice(i, 1);
+  scene.remove(g);
+  nuclearFxState.active = false;
+  nuclearFxState.stage = 'idle';
 }
 
 export function updateNuclearFx(dt) {

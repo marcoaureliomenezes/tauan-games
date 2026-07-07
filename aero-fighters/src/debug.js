@@ -250,5 +250,19 @@ export function installDebugApi(options) {
       if (el) el.style.display = enabled ? 'block' : 'none';
       updateOverlay();
     },
+    // Câmera livre p/ QA visual do mapa (T-AR-04): pina a câmera APÓS o rig
+    // (applyFreeCam roda logo antes do render em main.js). setFreeCam(null) desliga.
+    setFreeCam(x, y, z, lx = 0, ly = 0, lz = 0) {
+      _freeCam = x === null ? null : { x, y, z, lx, ly, lz };
+      return !!_freeCam;
+    },
   };
+}
+
+let _freeCam = null;
+/** Chamado por main.js antes do render — só age com freeCam armada (testMode). */
+export function applyFreeCam(camera) {
+  if (!_freeCam) return;
+  camera.position.set(_freeCam.x, _freeCam.y, _freeCam.z);
+  camera.lookAt(_freeCam.lx, _freeCam.ly, _freeCam.lz);
 }

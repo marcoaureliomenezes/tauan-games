@@ -129,35 +129,36 @@ function computeLighting(tod, palette) {
   const isDusk  = tod >= 0.68 && tod < 0.92;
   const isDay   = tod >= 0.32 && tod < 0.68;
 
-  let dirInt  = 0;
-  let ambInt  = 0.18;
+  // NOITE DE LUA CHEIA (operador 2026-07-07): a noite não pode ser breu — o
+  // chão continua legível com luz prateada direcional (a MESMA dirLight que
+  // projeta sombra segue ativa, então há sombras de luar) + ambiente azulado.
+  const MOON_DIR = 0.48, MOON_AMB = 0.34;
+  let dirInt  = MOON_DIR;
+  let ambInt  = MOON_AMB;
   if (isDay)   { dirInt = 1.15; ambInt = 0.55; }
   else if (isDawn) {
     const k = (tod - 0.15) / 0.17;
-    dirInt = k * 0.8;
-    ambInt = 0.18 + k * 0.37;
+    dirInt = MOON_DIR + k * (1.15 - MOON_DIR);   // contínuo: luar → sol pleno
+    ambInt = MOON_AMB + k * (0.55 - MOON_AMB);
   } else if (isDusk) {
     const k = 1.0 - (tod - 0.68) / 0.24;
-    dirInt = k * 0.8;
-    ambInt = 0.18 + k * 0.37;
-  } else {
-    dirInt = 0;
-    ambInt = 0.18;
+    dirInt = MOON_DIR + k * (1.15 - MOON_DIR);
+    ambInt = MOON_AMB + k * (0.55 - MOON_AMB);
   }
 
   _sunIntensity = dirInt;
   _ambIntensity = ambInt;
 
   const sc = palette.sun;
-  if (dirInt > 0) {
-    _sunColorHex = sc.getHex();
+  if (isNight) {
+    _sunColorHex = 0xc3d3ee;                      // prata-azulado do luar
   } else {
-    _sunColorHex = 0x111122;
+    _sunColorHex = sc.getHex();
   }
 
   const ac = palette.horiz.clone().multiplyScalar(0.6);
   if (isNight) {
-    _ambColorHex = 0x0a0e1a;
+    _ambColorHex = 0x2b3652;                      // ambiente noturno legível
   } else {
     _ambColorHex = ac.getHex();
   }

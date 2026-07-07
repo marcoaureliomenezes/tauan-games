@@ -26,6 +26,7 @@ export function updateService(service, dt, player) {
     player.missiles = MISSILES_LIGHT.MAX;
     player.heavyMissiles = MISSILES_HEAVY.MAX;
     player.nuclearMissiles = MISSILES_NUCLEAR.MAX;
+    player.hp = 3;                     // T-AR-02: o serviço REPARA a fuselagem
     service.active = false;
     service.phase = 'complete';
     return true;

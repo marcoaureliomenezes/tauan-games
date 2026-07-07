@@ -90,6 +90,11 @@ export function updateBullets(dt, jetPos, onPlayerHit, wingmen = []) {
         }
       }
     }
+    // COLISÃO DE SUPERFÍCIE (T-AR-01): balas morrem no terreno/montanha/
+    // estrutura em vez de atravessá-los (mesmo campo de altura do avião).
+    if (!consumed && p.mesh.position.y <= surfaceInfoAt(p.mesh.position.x, p.mesh.position.z).height) {
+      consumed = true;
+    }
     if (consumed || p.life <= 0) { recycleBullet(p); game.projectiles.splice(i, 1); }
   }
 }
@@ -207,6 +212,13 @@ export function updateMissiles(dt) {
         damageTarget(m.target, m.damage);
         hit = true;
       }
+    }
+    // COLISÃO DE SUPERFÍCIE (T-AR-01, bug operador "mísseis atravessando
+    // montanhas"): o campo de altura analítico já contém montanhas e
+    // estruturas — o míssil detona ao tocar QUALQUER superfície, como o avião.
+    if (!hit) {
+      const surf = surfaceInfoAt(m.mesh.position.x, m.mesh.position.z);
+      if (m.mesh.position.y <= surf.height + 0.4) hit = true;
     }
     if (hit || m.life <= 0) {
       const scale = m.explosionScale ?? (m.kind === 'heavy' ? 1.5 : 0.9);

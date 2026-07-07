@@ -3,9 +3,8 @@
 //  - Sistemas HIERÁRQUICOS (solar, betelgeuse): patched-conics — o corpo de MENOR
 //    SOI que contém a nave domina sozinho (é o que torna órbitas keplerianas
 //    limpas possíveis em torno de qualquer corpo).
-//  - PAR BINÁRIO (BN+pulsar): os DOIS parceiros somam (campo binário real).
-//  - Sistemas CAÓTICOS ('chaotic', 'core'): SOMA de TODOS os corpos do sistema —
-//    o mesmo campo que move as estrelas move a nave (caos honesto).
+//  - PAR BINÁRIO (Devorador, Pulsar, Betelgeuse): os DOIS parceiros somam.
+//  - Sistemas DINÂMICOS (regime N-corpos, hoje dormente): SOMA de TODOS os corpos.
 //  - VAZIO INTERESTELAR (fora de todos os SOIs): o corpo de maior aceleração
 //    real domina (nunca existe zona morta) e a flag `interstellar` libera o
 //    motor interestelar (overdrive) da nave.
@@ -16,7 +15,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { MAX_ESCAPE_SPEED } from './config.js';
 import { game } from './state.js';
-import { pwAccel, pwCircularSpeed, pwEscapeSpeed } from './celestial/physics.js';
+import { pwAccel, pwCircularSpeed, pwEscapeSpeed, higgsWellAccel } from './celestial/physics.js';
 
 // r_s efetivo de um corpo compacto: BN declara `rs`; NS usa compacidade real
 // R ≈ 2.5·r_s (R/r_s = 2.4–2.9 nas medidas NICER).
@@ -27,11 +26,11 @@ function _isCompact(def) {
   return def.kind === 'blackhole' || def.kind === 'neutron';
 }
 
-// 'core' saiu do regime somado (2026-07-02): as estrelas S agora andam em trilho
-// elíptico com SOI de Hill — patched-conics + aceleração de frame exata é o que
-// permite ENTRAR EM ÓRBITA de uma estrela e segui-la ao redor do buraco negro.
-// Só o sistema 'chaotic' continua com o campo somado de N-corpos.
-const DYNAMIC_SYSTEMS = new Set(['chaotic']);
+// Regime N-corpos somado: DORMENTE desde o roster do audit 2026-07-07 (o
+// 'chaotic' saiu do jogo). O integrador velocity-Verlet (orbits.js) e este
+// regime ficam como capacidade testada — um sistema futuro só precisa usar
+// NBodyDynamic e registrar a chave aqui.
+const DYNAMIC_SYSTEMS = new Set([]);
 
 function _accelOf(b, dist) {
   const r = Math.max(dist, b.def.radius * 0.85);
@@ -129,7 +128,14 @@ export function computeGravity(pos, out, shipVel = null) {
     // (trilho ao redor da sua estrela). A nave cai JUNTO com ele — sem isto a
     // órbita relativa fica excêntrica e deriva. Com isto, Kepler puro no frame
     // do corpo → a órbita fecha REDONDA (não conta no gravMag do HUD).
-    if (!interstellar && dominant.worldAcc) out.add(dominant.worldAcc);
+    // POLISH (audit T-PR-09): BLEND na borda do SOI — a aceleração de frame
+    // desvanece nos 10% externos em vez de ligar num degrau (era o "kink"
+    // visível nas trilhas das traçadoras ao cruzar fronteiras de SOI).
+    if (!interstellar && dominant.worldAcc) {
+      const tEdge = Math.max(0, Math.min(1, (domDist / Math.max(domSoi, 1) - 0.90) / 0.10));
+      const w = 1 - tEdge * tEdge * (3 - 2 * tEdge);
+      out.addScaledVector(dominant.worldAcc, w);
+    }
   }
 
   // POÇOS GRAVITACIONAIS TRANSIENTES (bomba de Higgs, D-2): perturbação ADITIVA
@@ -139,13 +145,17 @@ export function computeGravity(pos, out, shipVel = null) {
     for (const w of game.wells) {
       if (game.time > w.until) continue;                 // limpeza em updateProjectiles
       _tmp.copy(w.pos).sub(pos);
-      const dW = Math.max(_tmp.length(), w.soft || 350); // núcleo suavizado (sem singularidade)
-      // Saturação do poço (cap 600 u/s²): um poço PONTUAL de 0.5 M☉ sem cap seria
-      // um buraco negro (r_s ≈ 1.5 km) — a condensação satura; e a nave que LANÇA
-      // a bomba não pode ser estilingada a 10⁵ u/s² pelo próprio tiro.
-      const aW = Math.min(w.mu / (dW * dW), w.cap ?? 600);
-      out.addScaledVector(_tmp.normalize(), aW);
-      gravMag += aW;
+      const dW = _tmp.length();
+      // Perfil REAL do poço (audit P0-2): Plummer com pico=cap no núcleo, queda
+      // ~1/d² além de `soft` e taper a 0 em `reach` — sem o platô de força
+      // constante de ~29k u do min(μ/d², cap) antigo, e sem alcance infinito
+      // (o poço é uma arma LOCAL; não perturba o outro lado do sistema nem o
+      // solver balístico). physics.higgsWellAccel é puro e unit-testado.
+      const aW = higgsWellAccel(dW, w);
+      if (aW > 0) {
+        out.addScaledVector(_tmp.normalize(), aW);
+        gravMag += aW;
+      }
     }
   }
 

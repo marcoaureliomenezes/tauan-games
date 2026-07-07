@@ -12,9 +12,12 @@ import { isAirborneState } from './sortie-state.js';
 
 export const wingmenList = [];
 
-const _off0 = new THREE.Vector3( 110, 24, -210);
-const _off1 = new THREE.Vector3(-140, 18, -155);
+// Formação PRÓXIMA (T-AR-03, operador): os amigos voam na janela de vista do
+// jogador — antes (±110-210 u atrás) eles viviam fora da tela.
+const _off0 = new THREE.Vector3( 55, 12, -85);
+const _off1 = new THREE.Vector3(-65, 10, -65);
 const OFFSETS = [_off0, _off1];
+const NAMES = ['ASA-1', 'ASA-2'];
 
 const _tmpPos = new THREE.Vector3();
 const _tmpDir = new THREE.Vector3();
@@ -60,6 +63,7 @@ function _makeWingman(scene, offsetIdx) {
   const wm = {
     mesh,
     offsetIdx,
+    name: NAMES[offsetIdx] || `ASA-${offsetIdx + 1}`,
     hp: 3,
     dead: false,
     falling: false,
@@ -79,6 +83,21 @@ export function spawnWingmen(scene, jet) {
   clearWingmen(scene);
   _makeWingman(scene, 0);
   _makeWingman(scene, 1);
+}
+
+/** Reforço (T-AR-02): amigos abatidos voltam ao serviço na próxima surtida. */
+export function respawnDeadWingmen(scene) {
+  let n = 0;
+  for (let i = wingmenList.length - 1; i >= 0; i--) {
+    const wm = wingmenList[i];
+    if (!wm.dead) continue;
+    wingmenList.splice(i, 1);
+    const gi = game.wingmen.indexOf(wm);
+    if (gi >= 0) game.wingmen.splice(gi, 1);
+    _makeWingman(scene, wm.offsetIdx);
+    n++;
+  }
+  return n;
 }
 
 export function clearWingmen(scene) {
@@ -203,7 +222,7 @@ export function updateWingmen(dt, jet) {
       if (foe && wm.mesh.position.distanceToSquared(foe.mesh.position) < 1200 * 1200) {
         _tmpDir.subVectors(foe.mesh.position, wm.mesh.position).normalize();
         _tmpPos.copy(wm.mesh.position).addScaledVector(_tmpDir, 3);
-        spawnAllyMissile(_tmpPos.clone(), foe, wm.mesh.quaternion);
+        spawnAllyMissile(_tmpPos.clone(), foe, wm.mesh.quaternion, wm.name);
       } else {
         wm.fireTimer = 0.8;
       }

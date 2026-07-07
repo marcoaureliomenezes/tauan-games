@@ -7,83 +7,53 @@
 // D-3 — massa retro-calculada onde a API pede massa: μ/1e12 M☉, μ/3e6 M⊕).
 //
 // Para criar um sistema NOVO: adicione uma entrada aqui (e o registro em
-// SYSTEMS) — zero código de montagem. O sistema "Véu" no fim é a prova (AC-08).
+// SYSTEMS) — zero código de montagem (valores finais literais, T-PR-04).
 
 import * as THREE from '../../vendor/three.module.min.js';
-import { SUN, PLANETS, BINARY, BETELGEUSE, CHAOTIC, CORE, SYSTEMS } from './config.js';
+import { SUN, PLANETS, BINARY, BETELGEUSE, PULSAR, CORE, SYSTEMS } from './config.js';
 import { game } from './state.js';
 import {
   MainSequenceStar, RedGiant, RedSupergiant, WhiteDwarf, NeutronStar, BlackHole, Star,
 } from './celestial/stars.js';
 import { Planet, Comet } from './celestial/planets.js';
-import { Pinned, KeplerRail, EllipseRail, BinaryPair, NBodyDynamic } from './celestial/motion.js';
-import { barycentricRadii, keplerPeriod, visVivaSpeed, hillSoi } from './celestial/physics.js';
-import { accretionStream, supernovaRemnant } from './celestial/system.js';
+import { Pinned, KeplerRail, EllipseRail, BinaryPair } from './celestial/motion.js';
+import { barycentricRadii, keplerPeriod, hillSoi, l1Distance } from './celestial/physics.js';
+import { rocheStream, supernovaRemnant } from './celestial/system.js';
 
 const ORIGIN = new THREE.Vector3(0, 0, 0);
-
-// ═══ SISTEMA 6 — VÉU (demo AC-08): gigante vermelha + anã branca + cometa ════
-// Autorado 100% aqui — config.js intocado; o registro em SYSTEMS é aditivo.
-const VEIL_SYSTEM = {
-  key: 'veil', name: 'Véu — Gigante+Anã',
-  // ×5 manual (proporções verdadeiras): este def nasce AQUI, depois do bloco
-  // de escala do config — o loop de centros de lá não o alcança.
-  center: [21_000_000, 525_000, 16_625_000], radius: 200_000, primary: 'veilgiant',
-};
-SYSTEMS.push(VEIL_SYSTEM);
-
-const VEIL = {
-  giant: {
-    name: 'Braseiro', key: 'veilgiant',
-    mass: 5,                    // 5 M☉ → μ 5.0e12 derivado (D-3)
-    radius: 30_000,
-    lum: 8,                     // gigante inchada (default do kind, explícito)
-    soi: 130_000, gravReach: 200_000, spin: 700,
-    light: { color: 0xffb080, intensity: 2.4, range: 600_000 },
-  },
-  dwarf: {
-    name: 'Véspera', key: 'veildwarf',
-    mass: 0.9,                  // 0.9 M☉ num corpo do tamanho da Terra
-    lum: 0.02,                  // anã branca: brilho de superfície alto, L ínfima
-    soi: 40_000, gravReach: 90_000, spin: 60,
-  },
-  separation: 90_000,
-  comet: { name: 'Cometa do Véu', key: 'veilcomet', radius: 40 },
-};
 
 export function universeSystems() {
   return [
     solarSystem(),
     betelgeuseSystem(),
-    binarySystem(),
-    chaoticSystem(),
+    devourerSystem(),
+    pulsarSystem(),
     coreSystem(),
-    veilSystem(),
   ];
 }
 
 // ═══ SISTEMA 1 — SOLAR: Sol + 8 planetas + luas + cometa Halley ══════════════
 function solarSystem() {
-  return { def: SYSTEMS[0], bodies: () => {
+  return { def: SYSTEMS[0], bodies: (center) => {
     const sun = new MainSequenceStar({
       ...SUN,
       cellScale: 26,            // granulação fina (vs células gigantes de supergigante)
       coronaScale: 5.0,
       lum: 1.0,                 // gauge fotométrico do jogo (I=1 a PHOTO_D0)
       light: { color: SUN.light, intensity: 3.2, range: 1_000_000, flare: true },
-    }).withMotion(new Pinned(ORIGIN));
+    }).withMotion(new Pinned(center));
     game.sun = sun;
 
     const planets = PLANETS.map((def) =>
       new Planet({ ...def, parent: sun })
-        .withMotion(new KeplerRail(ORIGIN, { orbit: def.orbit })));
+        .withMotion(new KeplerRail(center, { orbit: def.orbit })));
 
     // Cometa periódico (AC-09): periélio dentro da órbita de Mercúrio, elipse
     // e=0.90 — a cauda anti-solar explode na aproximação e some no afélio.
     const halley = new Comet({
       ...{ name: 'Halley', key: 'halley', radius: 45 },
       parent: sun, primary: sun, rPeri: 90_000, tailMax: 30_000,
-    }).withMotion(new EllipseRail(ORIGIN, {
+    }).withMotion(new EllipseRail(center, {
       mu: SUN.mu, a: 900_000, e: 0.90, incl: 0.28, node: 2.0, theta0: 1.2, dir: 1,
     }));
 
@@ -93,19 +63,23 @@ function solarSystem() {
 
 // ═══ SISTEMA 2 — BETELGEUSE: supergigante + companheira Siwarha + carvões ════
 function betelgeuseSystem() {
-  const center = new THREE.Vector3(...SYSTEMS[1].center);
-  return { def: SYSTEMS[1], bodies: () => {
+  return { def: SYSTEMS[1], bodies: (center) => {
+    // PAR BARICÊNTRICO honesto (audit T-PR-08): antes a supergigante era Pinned
+    // e a Siwarha andava num trilho de gauge — agora os dois dançam em torno do
+    // baricentro com o período FÍSICO de Kepler (razão de massas ~14:1: a
+    // gigante mal se mexe, a companheira voa — como manda a física).
+    const sep = BETELGEUSE.companion.orbit;
+    const [rStar, rComp] = barycentricRadii(sep, BETELGEUSE.star.mu, BETELGEUSE.companion.mu);
+    const period = keplerPeriod(sep, BETELGEUSE.star.mu + BETELGEUSE.companion.mu);
     const star = new RedSupergiant({
       ...BETELGEUSE.star,
       coronaScale: 3.6,
-      // alwaysVisible saiu (proporções verdadeiras): a 26M u a supergigante é
-      // um PONTO fotométrico/glow — nenhuma malha cruza o vazio interestelar.
       light: { color: BETELGEUSE.star.light, intensity: 2.6, range: 700_000 },
-    }).withMotion(new Pinned(center));
+    }).withMotion(new BinaryPair(center, { pairRadius: rStar, period, phase: 0 }));
 
     // Companheira REAL (2025): Siwarha — faísca azul-branca DENTRO do envelope.
     const comp = new Star({ ...BETELGEUSE.companion, parent: star, coronaScale: 6 })
-      .withMotion(new KeplerRail(center, { orbit: BETELGEUSE.companion.orbit }));
+      .withMotion(new BinaryPair(center, { pairRadius: rComp, period, phase: Math.PI }));
 
     const planets = BETELGEUSE.planets.map((p) =>
       new Planet({ ...p, parent: star })
@@ -115,93 +89,61 @@ function betelgeuseSystem() {
   } };
 }
 
-// ═══ SISTEMA 3 — BINÁRIO: buraco negro + pulsar dentro do remanescente ═══════
-function binarySystem() {
-  const center = new THREE.Vector3(...BINARY.center);
-  const bh = BINARY.blackHole, ns = BINARY.neutronStar;
-  // Baricentro real (r ∝ μ do parceiro) + período FÍSICO de Kepler: o trilho é
-  // consistente com a gravidade → órbitas fechadas em volta de cada membro.
-  const [rBH, rNS] = barycentricRadii(BINARY.separation, bh.mu, ns.mu);
-  const period = keplerPeriod(BINARY.separation, bh.mu + ns.mu);
+// ═══ SISTEMA 3 — DEVORADOR: buraco negro devorando uma gigante vermelha ══════
+// A gigante ENCHE o lóbulo de Roche (config: R = R_L(q=0.4, a=100k) ≈ 30.3k):
+// TEARDROP apontando ao BN (uTideDir no STAR_VERT) + CORRENTE DE PLASMA nascendo
+// no L1 e enrolando no plano do disco de acreção — a "mão de plasma" do operador.
+function devourerSystem() {
+  const bh = BINARY.blackHole, gi = BINARY.giant;
+  const [rBH, rGi] = barycentricRadii(BINARY.separation, bh.mu, gi.mu);
+  const period = keplerPeriod(BINARY.separation, bh.mu + gi.mu);
 
-  let bhBody, nsBody;
+  let bhBody, giBody;
   return {
     def: SYSTEMS[2],
-    bodies: () => {
+    bodies: (center) => {
       bhBody = new BlackHole({ ...bh })
         .withMotion(new BinaryPair(center, { pairRadius: rBH, period, phase: 0 }));
-      nsBody = new NeutronStar({ ...ns })   // light vem do config (fonte única — P1-1)
-        .withMotion(new BinaryPair(center, { pairRadius: rNS, period, phase: Math.PI }));
-      return [bhBody, nsBody];
+      giBody = new RedGiant({ ...gi })
+        .withMotion(new BinaryPair(center, { pairRadius: rGi, period, phase: Math.PI }));
+      return [bhBody, giBody];
     },
     decorations: () => [
-      // Gás do REMANESCENTE caindo no disco do BN (P1-4): uma estrela de nêutrons
-      // (v_esc ≈ 0.6c) NUNCA doa massa — quem alimenta o disco é o casulo da
-      // supernova. Fonte = ponto fixo na casca interna do remanescente.
-      accretionStream({
-        def: { radius: 2600 },
-        worldPos: new THREE.Vector3(center.x + BINARY.remnant.radius * 0.62, center.y + 9_000, center.z - 24_000),
-        group: { visible: true },
-      }, bhBody),
-      // A casca da estrela que MORREU para criar o BN — envolve o sistema inteiro.
-      // SEM cullKey: o fade por distância (AC-05) é quem governa a visibilidade —
-      // a "bola de plasma" acende na aproximação em vez de pipocar no cull.
-      supernovaRemnant({ ...BINARY.remnant, center }),
+      // Transbordo de Roche: plasma do L1 da gigante → arco trailing → disco.
+      rocheStream(giBody, bhBody, {
+        l1FromDonor: l1Distance(BINARY.separation, gi.mu, bh.mu),
+        tideAmp: 0.30,
+        cullKey: 'binary',
+      }),
     ],
   };
 }
 
-// ═══ SISTEMA 4 — BINÁRIO CAÓTICO: 2 estrelas integradas + planetas 3-corpos ══
-function chaoticSystem() {
-  const sysDef = SYSTEMS[3];
-  const center = new THREE.Vector3(...sysDef.center);
-  return { def: sysDef, bodies: () => {
-    const [d1, d2] = CHAOTIC.stars;
-    const muT = d1.mu + d2.mu;
-    const a = CHAOTIC.pairSep, e = CHAOTIC.pairEcc;
-    const rApo = a * (1 + e);
-    const vRel = visVivaSpeed(muT, rApo, a);          // vis-viva no apoápside
-    const f1 = d2.mu / muT, f2 = d1.mu / muT;         // frações do baricentro
+// ═══ SISTEMA 4 — PULSAR: estrela de nêutrons + Sentinela no remanescente ═════
+function pulsarSystem() {
+  const ns = PULSAR.neutronStar, comp = PULSAR.companion;
+  const [rNS, rComp] = barycentricRadii(PULSAR.separation, ns.mu, comp.mu);
+  const period = keplerPeriod(PULSAR.separation, ns.mu + comp.mu);
 
-    const s1 = new MainSequenceStar({ ...d1, coronaScale: 5, light: { color: d1.light, intensity: 2.4, range: 500_000 } })
-      .withMotion(new NBodyDynamic({
-        pos: center.clone().add(new THREE.Vector3(rApo * f1, 0, 0)),
-        vel: new THREE.Vector3(0, 0, vRel * f1),
-        softening: CHAOTIC.softening, systemDef: sysDef, centralMu: muT, reinjectR: a,
-      }));
-    const s2 = new MainSequenceStar({ ...d2, coronaScale: 5, light: { color: d2.light, intensity: 2.0, range: 400_000 } })
-      .withMotion(new NBodyDynamic({
-        pos: center.clone().add(new THREE.Vector3(-rApo * f2, 0, 0)),
-        vel: new THREE.Vector3(0, 0, -vRel * f2),
-        softening: CHAOTIC.softening, systemDef: sysDef, centralMu: muT, reinjectR: a,
-      }));
-
-    // Planetas circumbinários com jitter de velocidade → problema de 3 corpos real.
-    const planets = CHAOTIC.planets.map((p) => {
-      const ang = Math.random() * Math.PI * 2;
-      const pos = new THREE.Vector3(
-        center.x + Math.cos(ang) * p.orbitR,
-        center.y + (Math.random() - 0.5) * p.orbitR * 0.12,
-        center.z + Math.sin(ang) * p.orbitR,
-      );
-      const vC = Math.sqrt(muT / p.orbitR) * p.velJitter;
-      const s = Math.random() < 0.5 ? 1 : -1;
-      return new Planet({ ...p, parent: s1 }).withMotion(new NBodyDynamic({
-        pos,
-        vel: new THREE.Vector3(-Math.sin(ang) * vC * s, (Math.random() - 0.5) * vC * 0.2, Math.cos(ang) * vC * s),
-        softening: CHAOTIC.softening, systemDef: sysDef, centralMu: muT, reinjectR: p.orbitR,
-      }));
-    });
-
-    return [s1, s2, ...planets];
-  } };
+  return {
+    def: SYSTEMS[3],
+    bodies: (center) => [
+      new NeutronStar({ ...ns })
+        .withMotion(new BinaryPair(center, { pairRadius: rNS, period, phase: 0 })),
+      new MainSequenceStar({ ...comp })
+        .withMotion(new BinaryPair(center, { pairRadius: rComp, period, phase: Math.PI })),
+    ],
+    decorations: (center) => [
+      // A casca da supernova que criou o pulsar — envolve o par inteiro.
+      supernovaRemnant({ ...PULSAR.remnant, center }),
+    ],
+  };
 }
 
 // ═══ SISTEMA 5 — NÚCLEO DA GALÁXIA: SMBH + 12 estrelas S + errantes ══════════
 function coreSystem() {
   const sysDef = SYSTEMS[4];
-  const center = new THREE.Vector3(...sysDef.center);
-  return { def: sysDef, bodies: () => {
+  return { def: sysDef, bodies: (center) => {
     const smbh = new BlackHole({ ...CORE.smbh })
       .withMotion(new Pinned(center, { isSun: false }));
 
@@ -255,33 +197,4 @@ function coreSystem() {
 
     return [smbh, ...stars, ...wanderers];
   } };
-}
-
-// ═══ SISTEMA 6 — VÉU (AC-08): prova de que sistema novo = SÓ DADOS ═══════════
-// Uma gigante vermelha e uma anã branca dançando em par binário — o par de tipos
-// que a escada NASA prevê (<8 M☉ → anã branca) — com um cometa costurando os dois.
-function veilSystem() {
-  const center = new THREE.Vector3(...VEIL_SYSTEM.center);
-  const giant = new RedGiant({ ...VEIL.giant });
-  const dwarf = new WhiteDwarf({ ...VEIL.dwarf, parent: giant });
-  const [rG, rD] = barycentricRadii(VEIL.separation, giant.mu, dwarf.mu);
-  const period = keplerPeriod(VEIL.separation, giant.mu + dwarf.mu);
-  giant.withMotion(new BinaryPair(center, { pairRadius: rG, period, phase: 0 }));
-  dwarf.withMotion(new BinaryPair(center, { pairRadius: rD, period, phase: Math.PI }));
-
-  const comet = new Comet({
-    ...VEIL.comet,
-    parent: giant, primary: giant, rPeri: 26_400, tailMax: 20_000,
-  }).withMotion(new EllipseRail(center, {
-    mu: giant.mu + dwarf.mu, a: 120_000, e: 0.78, incl: 0.3, node: 1.1, theta0: 0.4, dir: 1,
-  }));
-
-  return {
-    def: VEIL_SYSTEM,
-    bodies: () => [giant, dwarf, comet],
-    decorations: () => [
-      // A anã rouba massa da gigante inchada — mesmo componente do binário BN+pulsar.
-      accretionStream(giant, dwarf, { cullKey: 'veil' }),
-    ],
-  };
 }

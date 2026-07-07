@@ -1,10 +1,10 @@
 // campaign.js — A CAMPANHA em 5 fases do Space War (release space-war-campaign-v1).
 //
-// Fases ordenadas sobre os sistemas: Solar → Betelgeuse → Binário BN+Pulsar →
-// Binário Caótico → Núcleo da Galáxia. Cada fase é DADOS (missões bomb|clear|visit);
-// completar a fase desbloqueia a próxima e faz o spawn dos inimigos dela (D-2:
-// viajar é livre — o que é bloqueado é missão/progresso). O sistema Véu fica fora
-// da campanha (exploração livre). missions.js é o executor da missão ativa.
+// Fases ordenadas sobre os sistemas (roster do audit 2026-07-07): Solar →
+// Betelgeuse → DEVORADOR (BN + gigante devorada) → PULSAR (NS + Sentinela) →
+// Núcleo da Galáxia. Cada fase é DADOS (missões hunt|visit); completar a fase
+// desbloqueia a próxima (D-2: viajar é livre — o que é bloqueado é missão/
+// progresso). missions.js é o executor da missão ativa.
 
 import { game } from './state.js';
 import { showOverlay, showToast } from './hud.js';
@@ -31,18 +31,20 @@ export const PHASES = [
     ],
   },
   {
-    key: 'binary', sys: 'binary', name: 'FASE 3 — BINÁRIO BN+PULSAR', color: '#cfe0ff',
-    brief: 'Sem superfícies aqui: cace as 9 NAVES CAPITAIS orbitando o buraco negro e o pulsar.',
+    key: 'binary', sys: 'binary', name: 'FASE 3 — O DEVORADOR', color: '#ffb36a',
+    brief: 'O buraco negro está DEVORANDO a gigante vermelha — cace as 9 NAVES CAPITAIS que colhem o plasma da corrente.',
     hunt: 9,
     missions: [
-      { label: 'FASE 3·FINAL — Roce o PULSAR — chegue a 30k u e sobreviva', type: 'visit', key: 'neutron', dist: 30000 },
+      { label: 'FASE 3·FINAL — Roce a DEVORADA e veja a corrente de plasma (20k u)', type: 'visit', key: 'devorada', dist: 20000 },
     ],
   },
   {
-    key: 'chaotic', sys: 'chaotic', name: 'FASE 4 — BINÁRIO CAÓTICO', color: '#bcd2ff',
-    brief: 'Cace os 11 alvos escondidos entre os planetas do caos de 3 corpos.',
+    key: 'pulsar', sys: 'pulsar', name: 'FASE 4 — O PULSAR', color: '#cfe0ff',
+    brief: 'Dentro do remanescente da supernova: cace os 11 alvos entre o pulsar e a Sentinela.',
     hunt: 11,
-    missions: [],
+    missions: [
+      { label: 'FASE 4·FINAL — Roce o PULSAR — chegue a 30k u e sobreviva', type: 'visit', key: 'neutron', dist: 30000 },
+    ],
   },
   {
     key: 'core', sys: 'core', name: 'FASE 5 — NÚCLEO DA GALÁXIA', color: '#ffd27a',
@@ -89,7 +91,7 @@ export function phaseStatus(sysKey) {
 }
 
 export function winFinal() {
-  game.phase = 'win';
+  game.screen = 'win';
   showOverlay(`<div style="color:#ffd27a">🌌 GALÁXIA LIBERTADA!</div>
     <div class="sub">As 5 fases da campanha foram vencidas — do Sistema Solar a Sagitário A✦.<br>
     Score final: ${game.score} · Abates: ${game.kills}<br><br>[Enter] para reiniciar</div>`);

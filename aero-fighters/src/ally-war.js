@@ -10,6 +10,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { explosion, spawnShockwave } from './fx.js';
 import { audio } from './audio.js';
+import { killFeed } from './hud.js';
 
 const _tmpA = new THREE.Vector3();
 const _tmpB = new THREE.Vector3();
@@ -51,11 +52,13 @@ function _buildEnemyFighter() {
 
 function _spawnOne(scene, idx) {
   const mesh = _buildEnemyFighter();
-  // Nasce num flanco distante e alto, longe dos alvos terrestres do player.
+  // T-AR-03 (operador): a guerra aliada tem que ser VISÍVEL — os caças nascem
+  // num flanco PRÓXIMO (~350-500 u), na janela de vista do jogador, para o
+  // dogfight dos amigos acontecer na tela e não num horizonte invisível.
   const ang = (idx / WAVE_SIZE) * Math.PI * 2;
-  const cx = game.player.x + Math.cos(ang) * (700 + idx * 60);
-  const cz = (game.player.pz || 0) + Math.sin(ang) * (700 + idx * 60) - 400;
-  mesh.position.set(cx, 120 + idx * 22, cz);
+  const cx = game.player.x + Math.cos(ang) * (350 + idx * 50);
+  const cz = (game.player.pz || 0) + Math.sin(ang) * (350 + idx * 50) - 150;
+  mesh.position.set(cx, 100 + idx * 18, cz);
   scene.add(mesh);
   const e = {
     mesh, hp: 4, maxHp: 4,
@@ -92,14 +95,14 @@ ALLY_MSL_GEOM.rotateX(Math.PI / 2);
 const ALLY_MSL_MAT = new THREE.MeshBasicMaterial({ color: 0x9fe0ff });
 
 /** Lançado pelos amigos (wingmen) contra um inimigo dos aliados. Homing simples. */
-export function spawnAllyMissile(from, target, quat) {
+export function spawnAllyMissile(from, target, quat, shooterName = 'ALA ALIADA') {
   if (!_sceneRef) return;
   const mesh = new THREE.Mesh(ALLY_MSL_GEOM, ALLY_MSL_MAT);
   mesh.position.copy(from);
   if (quat) mesh.quaternion.copy(quat);
   _sceneRef.add(mesh);
   const vel = _tmpA.subVectors(target ? target.mesh.position : from, from).normalize().multiplyScalar(110);
-  _allyMissiles.push({ mesh, target, vel: vel.clone(), life: 6.0, smoke: 0 });
+  _allyMissiles.push({ mesh, target, vel: vel.clone(), life: 6.0, smoke: 0, shooterName });
   game.flags.supportMissilesFired = (game.flags.supportMissilesFired || 0) + 1;
   audio.missile();
 }
@@ -130,7 +133,7 @@ function _updateAllyMissiles(dt) {
     let hit = false;
     if (m.target && !m.target.dead &&
         m.mesh.position.distanceToSquared(m.target.mesh.position) < 64) {
-      _damageEnemy(m.target, 2);
+      _damageEnemy(m.target, 2, m.shooterName);
       hit = true;
     }
     if (hit || m.life <= 0) {
@@ -166,7 +169,10 @@ function _updateAllyTracers(dt) {
       if (wm.dead || wm.falling) continue;
       if (t.mesh.position.distanceToSquared(wm.mesh.position) < 16) {
         wm.hp -= 1;
-        if (wm.hp <= 0) { wm.falling = true; wm.fallTimer = 3.0; }
+        if (wm.hp <= 0) {
+          wm.falling = true; wm.fallTimer = 3.0;
+          killFeed(`✖ ${wm.name || 'ALA ALIADA'} FOI ABATIDA!`, '#ff6a55');
+        }
         audio.hit();
         consumed = true;
         break;
@@ -179,13 +185,15 @@ function _updateAllyTracers(dt) {
   }
 }
 
-function _damageEnemy(e, amt) {
+function _damageEnemy(e, amt, shooterName = 'ALA ALIADA') {
   if (e.dead || e.falling) return;
   e.hp -= amt;
   if (e.hp <= 0) {
     e.falling = true;
     e.fallTimer = 2.2;
     spawnShockwave(e.mesh.position.clone(), 16);
+    killFeed(`✈ ${shooterName} abateu um caça inimigo`, '#8fd0ff');
+    game.flags.allyKills = (game.flags.allyKills || 0) + 1;   // diagnóstico e2e
   }
 }
 
@@ -211,6 +219,7 @@ export function updateAllyWar(dt) {
     if (_respawnTimer <= 0) {
       _respawnTimer = 0;
       for (let i = 0; i < WAVE_SIZE; i++) _spawnOne(_sceneRef, i);
+      killFeed('⚠ esquadrão inimigo entrando no setor', '#ffcf6a');
     }
   } else if (alive) {
     _respawnTimer = RESPAWN_DELAY;

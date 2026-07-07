@@ -117,6 +117,40 @@ export function updateHUD() {
   }
 }
 
+// ─── KILL FEED (T-AR-03): eventos da guerra aliada na tela ───────────────────
+// Feed empilhado no canto (máx. 5 linhas, fade ~4.5s) — canal separado do
+// overlay central (que é single-slot e reservado a banners de missão).
+const FEED_MAX = 5;
+let _feedEl = null;
+function _feedContainer() {
+  if (_feedEl) return _feedEl;
+  _feedEl = document.getElementById('kill-feed');
+  if (!_feedEl) {
+    _feedEl = document.createElement('div');
+    _feedEl.id = 'kill-feed';
+    _feedEl.style.cssText =
+      'position:fixed;right:14px;top:96px;display:flex;flex-direction:column;' +
+      'gap:4px;align-items:flex-end;z-index:40;pointer-events:none;' +
+      "font-family:'Courier New',monospace;font-size:13px;font-weight:bold;";
+    document.body.appendChild(_feedEl);
+  }
+  return _feedEl;
+}
+
+/** Linha no feed de combate (kill feed). @param color cor CSS do texto */
+export function killFeed(text, color = '#cfe8ff') {
+  const box = _feedContainer();
+  const line = document.createElement('div');
+  line.textContent = text;
+  line.style.cssText =
+    `color:${color};background:rgba(6,14,22,0.62);padding:3px 10px;border-radius:3px;` +
+    `text-shadow:0 0 6px rgba(0,0,0,0.9);transition:opacity 1.2s;opacity:1;`;
+  box.appendChild(line);
+  while (box.children.length > FEED_MAX) box.removeChild(box.firstChild);
+  setTimeout(() => { line.style.opacity = '0'; }, 3400);
+  setTimeout(() => { line.parentNode && line.parentNode.removeChild(line); }, 4700);
+}
+
 let overlayTimer = 0;
 
 /** Mostra overlay central. msHide=0 = permanente até hideOverlay. */

@@ -6,8 +6,9 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { game } from './state.js';
+import { SYSTEMS } from './config.js';
 import { showOverlay, hideOverlay, showToast } from './hud.js';
-import { targetMission, targetBody } from './nav.js';
+import { targetMission, targetBody, targetSystem } from './nav.js';
 import { PHASES, initCampaignState, currentPhase, advancePhase, winFinal } from './campaign.js';
 import { spawnPhase, spawnEscort } from './enemies.js';
 
@@ -159,11 +160,19 @@ function startMission(midx, blocking = false) {
   if (!def) { completePhase(); return; }
   game.missionIndex = midx;
 
+  // FASES (T-PR-06): a missão só MATERIALIZA (alvos/escoltas/spawns) com o
+  // sistema da fase CARREGADO. Fora dele, a missão fica PENDENTE — o objetivo
+  // é a viagem: nav mira o sistema; onSystemLoaded materializa na chegada.
   if (def.type === 'hunt') {
     const m = {
       type: 'hunt', total: def.total, killed: 0, targets: [],
       phaseKey: ph.key, phaseName: ph.name, baseKills: game.kills, label: '',
     };
+    game.mission = m;
+    if (game.world.systemKey !== ph.sys) {
+      markPending(m, ph, blocking);
+      return;
+    }
     m.sites = buildHuntSites(ph, def.total);
     spawnHuntTarget(m);
     if (blocking) showOverlay(`<div style="color:${ph.color}">${m.label}</div><div class="sub">${ph.brief}<br>Aponte com <b>T</b>, calcule a SOLUÇÃO com <b>C</b>, lance com <b>F</b><br><br>[Enter] para decolar</div>`);
@@ -173,12 +182,58 @@ function startMission(midx, blocking = false) {
 
   const targets = [];
   game.mission = { ...def, phaseKey: ph.key, targets, baseKills: game.kills };
+  if (game.world.systemKey !== ph.sys) {
+    markPending(game.mission, ph, blocking);
+    return;
+  }
   if (def.type === 'visit') {
     const b = findBody(def.key);
     if (b) targetBody(b);
   }
   if (blocking) showOverlay(`<div style="color:${ph.color}">${def.label}</div><div class="sub">[Enter] para decolar</div>`);
   else showToast(`<div style="color:${ph.color}">${def.label}</div>`, 5000);
+}
+
+function markPending(m, ph, blocking = false) {
+  const sysName = (SYSTEMS.find((s) => s.key === ph.sys) || {}).name || ph.sys;
+  m.pending = true;
+  m.label = `${ph.name}: VIAJE para ${sysName} — [T] mira o sistema · [Z] engata a viagem`;
+  targetSystem(ph.sys);
+  if (blocking) showOverlay(`<div style="color:${ph.color}">${m.label}</div><div class="sub">[Enter] para decolar</div>`);
+  else showToast(`<div style="color:${ph.color}">${m.label}</div>`, 6000);
+}
+
+// ── Hooks de fase (chamados pelo main via celestial/system) ─────────────────
+export function onSystemLoaded(key) {
+  const m = game.mission;
+  if (!m || !game.campaign) return;
+  const ph = currentPhase();
+  if (ph.sys !== key || !m.pending) return;
+  m.pending = false;
+  spawnPhase(ph.key);
+  if (m.type === 'hunt') {
+    m.sites = buildHuntSites(ph, m.total);
+    spawnHuntTarget(m);                             // retoma do alvo m.killed
+    showToast(`<div style="color:${ph.color}">${m.label}</div>`, 6000);
+  } else if (m.type === 'visit') {
+    const b = findBody(m.key);
+    if (b) targetBody(b);
+    showToast(`<div style="color:${ph.color}">${m.label}</div>`, 5000);
+  }
+}
+
+export function onSystemUnloaded() {
+  const m = game.mission;
+  if (!m || m._done) return;
+  // alvos são objetos do sistema descarregado — morrem com ele; missão pendente
+  for (const t of m.targets || []) {
+    if (t.obj && t.obj.parent) t.obj.parent.remove(t.obj);
+  }
+  if (m.targets) m.targets.length = 0;
+  if (!m.pending) {
+    const ph = currentPhase();
+    markPending(m, ph);
+  }
 }
 
 function phaseMissions(ph) {
@@ -202,8 +257,7 @@ export function debugCompleteMission() {
   if (m.type === 'hunt') {
     for (const t of m.targets) { if (!t.destroyed) { t.destroyed = true; if (t.obj.parent) t.obj.parent.remove(t.obj); } }
     m.killed = m.total;
-  } else if (m.type === 'clear') game.kills = m.baseKills + m.kills;
-  else if (m.type === 'visit') m._forceDone = true;
+  } else if (m.type === 'visit') m._forceDone = true;
   return true;
 }
 // QA/debug: destrói SÓ o alvo atual da caçada (testa a cadeia k → k+1).
@@ -218,7 +272,8 @@ export function debugKillTarget() {
 function completePhase() {
   const res = advancePhase();
   if (res.final) { winFinal(); game.mission = null; return; }
-  spawnPhase(res.phase.key);
+  // FASES: o spawn da próxima fase acontece em onSystemLoaded (o sistema dela
+  // ainda não existe — o jogador precisa VIAJAR até lá).
   setTimeout(() => startMission(0, false), 1200);
   game.mission = null;
 }
@@ -257,8 +312,7 @@ export function updateMissions() {
       }
     }
     done = m.killed >= m.total;
-  } else if (m.type === 'clear') done = (game.kills - m.baseKills) >= m.kills;
-  else if (m.type === 'visit') {
+  } else if (m.type === 'visit') {
     const b = findBody(m.key);
     done = m._forceDone || (b && game.ship.pos && !game.ship.landed
       && game.ship.pos.distanceTo(b.worldPos) < m.dist + b.def.radius);

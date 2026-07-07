@@ -1,2 +1,2 @@
-release: space-war-interstellar-experience-v1
+release: space-war-phases-and-roster-v1
 phase: IMPLEMENTATION
