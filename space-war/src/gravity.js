@@ -16,7 +16,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { MAX_ESCAPE_SPEED } from './config.js';
 import { game } from './state.js';
-import { pwAccel, pwCircularSpeed, pwEscapeSpeed } from './celestial/physics.js';
+import { pwAccel, pwCircularSpeed, pwEscapeSpeed, higgsWellAccel } from './celestial/physics.js';
 
 // r_s efetivo de um corpo compacto: BN declara `rs`; NS usa compacidade real
 // R ≈ 2.5·r_s (R/r_s = 2.4–2.9 nas medidas NICER).
@@ -139,13 +139,17 @@ export function computeGravity(pos, out, shipVel = null) {
     for (const w of game.wells) {
       if (game.time > w.until) continue;                 // limpeza em updateProjectiles
       _tmp.copy(w.pos).sub(pos);
-      const dW = Math.max(_tmp.length(), w.soft || 350); // núcleo suavizado (sem singularidade)
-      // Saturação do poço (cap 600 u/s²): um poço PONTUAL de 0.5 M☉ sem cap seria
-      // um buraco negro (r_s ≈ 1.5 km) — a condensação satura; e a nave que LANÇA
-      // a bomba não pode ser estilingada a 10⁵ u/s² pelo próprio tiro.
-      const aW = Math.min(w.mu / (dW * dW), w.cap ?? 600);
-      out.addScaledVector(_tmp.normalize(), aW);
-      gravMag += aW;
+      const dW = _tmp.length();
+      // Perfil REAL do poço (audit P0-2): Plummer com pico=cap no núcleo, queda
+      // ~1/d² além de `soft` e taper a 0 em `reach` — sem o platô de força
+      // constante de ~29k u do min(μ/d², cap) antigo, e sem alcance infinito
+      // (o poço é uma arma LOCAL; não perturba o outro lado do sistema nem o
+      // solver balístico). physics.higgsWellAccel é puro e unit-testado.
+      const aW = higgsWellAccel(dW, w);
+      if (aW > 0) {
+        out.addScaledVector(_tmp.normalize(), aW);
+        gravMag += aW;
+      }
     }
   }
 

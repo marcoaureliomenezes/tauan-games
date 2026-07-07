@@ -19,9 +19,18 @@ import { supernovaFx } from './fx.js';
 import { areaDamage } from './weapons.js';
 import { showToast } from './hud.js';
 
-export const HIGGS_MU = 5.0e11;       // ~0.5 M☉ — maré brutal, local (soft-core 350)
+export const HIGGS_MU = 5.0e11;       // ~0.5 M☉ NOMINAL — usado no critério de Roche
 export const HIGGS_PULL_S = 8;        // duração do poço
 export const HIGGS_COOLDOWN_S = 12;
+// Dinâmica do poço (audit P0-2): o campo que os objetos SENTEM não é μ/d² do
+// valor nominal (que dava um platô de 600 u/s² por 29k u) — é o perfil Plummer
+// de physics.higgsWellAccel com estes parâmetros: pico 600 u/s² no núcleo
+// (soft), ~1/d² além, zero fora de `reach`. O μ nominal segue valendo para o
+// engajamento de estrelas (maré na fotosfera), que é um critério de CONTATO
+// próximo — não é afetado pelo alcance dinâmico.
+export const HIGGS_SOFT = 1000;
+export const HIGGS_CAP = 600;
+export const HIGGS_REACH = 18_000;
 
 const ARMS = 4;                        // braços de plasma por estrela engajada
 const BLOBS = 14;                      // "elos" da corrente de cada braço
@@ -61,7 +70,10 @@ function buildArm(star, seed) {
 
 // Chamado pelo weapons.js quando a bomba ARMA: cria o poço e engaja a estrela.
 export function activateHiggs(p) {
-  const well = { pos: p.mesh.position, mu: HIGGS_MU, until: game.time + HIGGS_PULL_S, soft: 1000 };
+  const well = {
+    pos: p.mesh.position, mu: HIGGS_MU, until: game.time + HIGGS_PULL_S,
+    soft: HIGGS_SOFT, cap: HIGGS_CAP, reach: HIGGS_REACH,
+  };
   game.wells.push(well);
   // Engajamento FÍSICO (critério de Roche): a estrela só é perturbada se a maré
   // do poço na fotosfera vencer ~2% da gravidade de superfície dela —

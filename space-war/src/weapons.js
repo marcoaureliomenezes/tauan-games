@@ -252,10 +252,17 @@ export function updateProjectiles(dt) {
         const isStar = dom.isSun || kind === 'star' || kind === 'redsupergiant';
         const nearStar = isStar && g.dist < dom.def.radius * 6;
         const capture = !compact && !isStar && g.dist < (dom.soi || 0);
-        if (inDisk || capture || nearStar) {
+        // GATE FÍSICO (audit P0-3): flyby HIPERBÓLICO não é capturado — a
+        // guiagem só engaja com |v_rel| < 1.5·v_esc local (v_esc no r da nuke,
+        // do computeGravity). Um tiro rápido cruzando o SOI segue balístico
+        // (estilingue honesto); a espiral fica p/ lançamentos deliberadamente
+        // co-orbitais. Exceção: DENTRO do disco de acreção o arrasto do gás
+        // age em qualquer velocidade (é gás, não gravidade).
+        _nV.copy(p.vel);
+        if (dom.worldVel) _nV.sub(dom.worldVel);            // frame co-móvel do corpo
+        const bound = inDisk || _nV.length() < 1.5 * g.escapeVel;
+        if ((inDisk || capture || nearStar) && bound) {
           _nR.copy(p.mesh.position).sub(dom.worldPos);
-          _nV.copy(p.vel);
-          if (dom.worldVel) _nV.sub(dom.worldVel);          // frame co-móvel do corpo
           _nH.crossVectors(_nR, _nV);
           _nT.crossVectors(_nH, _nR).normalize();           // direção prograde
           // Piso de velocidade orbital de GAMEPLAY: v_circ real num planeta é

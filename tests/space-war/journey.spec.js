@@ -80,6 +80,15 @@ test.describe('Space War — Viagem Interestelar', () => {
     expect(fadeHome).toBeLessThanOrEqual(0.05);          // dentro do sistema: céu limpo
     await page.evaluate(() => window.__swDebug.journeyToggle());
     await page.waitForFunction(() => window.__spaceWar.journey.active, { timeout: 5000 });
+    // AUDIT P0-1 (bug "crossing stars inside the system"): journey ENGAJADA mas
+    // ainda DENTRO do sistema de origem → corredor apagado e β visual ~0. O
+    // floor 0.85 antigo acendia o starfield instantaneamente aqui.
+    await page.waitForTimeout(400);
+    const inside = await page.evaluate(() => ({
+      fade: window.__spaceWar.starfieldFade, beta: window.__spaceWar.starfieldBeta,
+    }));
+    expect(inside.fade).toBeLessThanOrEqual(0.05);
+    expect(inside.beta).toBeLessThanOrEqual(0.05);
     // meio da viagem = CRUZEIRO: β máximo (~0.995) e corredor pleno
     await page.evaluate(() => window.__swDebug.journeyWarp(0.5));
     await page.waitForTimeout(500);

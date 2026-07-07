@@ -172,6 +172,39 @@ export function journeyDuration(D, dMin, dMax) {
   return 180 + 180 * f;
 }
 
+// ── Fronteira de sistema (audit 2026-07-07, P0-1) ───────────────────────────
+// A definição ÚNICA de "saindo do sistema" para efeitos visuais: 0 dentro de
+// INNER·raio, 1 além de OUTER·raio (smoothstep). starfield/postfx/journey
+// consomem o MESMO fator — a relatividade só liga fora da fronteira.
+export const SYSTEM_FADE_INNER = 0.85;
+export const SYSTEM_FADE_OUTER = 1.5;
+export function boundaryFade(dOverR, inner = SYSTEM_FADE_INNER, outer = SYSTEM_FADE_OUTER) {
+  const t = Math.max(0, Math.min(1, (dOverR - inner) / (outer - inner)));
+  return t * t * (3 - 2 * t);
+}
+
+// ── Poço de Higgs: perfil de força REAL (audit 2026-07-07, P0-2) ────────────
+// O bug: a(d) = min(μ/d², cap) com μ=5e11 mantinha o cap ATÉ d≈28.9k u — uma
+// esfera de força CONSTANTE (600 u/s², 2× g da Terra) sem queda 1/r² e sem
+// alcance máximo (nada orbita um campo constante; tudo cai em linha reta).
+// O fix: perfil PLUMMER a(d) = μ_eff·d/(d²+soft²)^1.5 com μ_eff dimensionado
+// para PICO = cap em d = soft/√2 (núcleo suave, sem singularidade), queda
+// ~1/d² além de soft, e taper suave a 0 em `reach` (poço LOCAL — como o
+// gravReach dos corpos; sem perturbação cross-system nem contaminação do
+// solver balístico do outro lado do mapa).
+const PLUMMER_PEAK = (1 / Math.SQRT2) / Math.pow(1.5, 1.5);   // ≈ 0.3849
+export function higgsWellAccel(d, { soft = 1000, cap = 600, reach = 18_000 } = {}) {
+  if (d >= reach) return 0;
+  const muEff = (cap * soft * soft) / PLUMMER_PEAK;
+  let a = (muEff * d) / Math.pow(d * d + soft * soft, 1.5);
+  const t = (d - 0.75 * reach) / (0.25 * reach);              // taper no último 25%
+  if (t > 0) a *= 1 - t * t * (3 - 2 * t);
+  return Math.min(a, cap);
+}
+
+// Velocidade de escape newtoniana (gate de captura da nuke, P0-3).
+export function escapeSpeed(mu, r) { return Math.sqrt(2 * mu / Math.max(r, 1e-6)); }
+
 // Aberração relativística (forma APARENTE: repouso → observador em movimento):
 // cos θ_ap = (cos θ + β)/(1 + β cos θ) — o céu AGRUPA à frente ("headlight");
 // uma estrela a 90° do rumo aparece em arccos β (8.1° a β=0.99).

@@ -156,7 +156,11 @@ function loop() {
   updateGravLens();
   updateStarfield();
   updateFarStars();
-  setJourneyBeta(game.journey && game.journey.active ? game.journey.beta : 0);
+  // Tint relativístico de tela gateado pela MESMA fronteira do starfield
+  // (audit P0-1): dentro do sistema β_vis = 0 — nada de pinch/Doppler de tela
+  // com planetas ainda em volta. updateStarfield acabou de publicar o fade.
+  setJourneyBeta(game.journey && game.journey.active
+    ? game.journey.beta * (game.starfieldFade ?? 1) : 0);
   renderFrame();
 
   // fps

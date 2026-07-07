@@ -21,6 +21,7 @@ import { scene, camera } from './scene.js';
 import { game } from './state.js';
 import { SYSTEMS } from './config.js';
 import { HEADLESS, makeRadialSprite } from './celestial/atoms.js';
+import { SYSTEM_FADE_INNER, SYSTEM_FADE_OUTER, boundaryFade } from './celestial/physics.js';
 
 // Paleta espectral com pesos ~reais (76% M, raras O/B — mas os pesos visuais
 // levemente enviesados p/ legibilidade).
@@ -251,12 +252,15 @@ export function buildStarfield() {
 }
 
 // Fade fora dos sistemas: dentro do raio do sistema → 0; no vazio → 1.
-function systemFade(pos) {
+// EXPORTADO (audit P0-1): é a definição canônica de fronteira p/ TODOS os
+// efeitos relativísticos (starfield, tint do postfx) — journey engajada dentro
+// do sistema NÃO acende o corredor; ele nasce ao cruzar a fronteira.
+export function systemFade(pos) {
   let f = 1;
   for (const sys of SYSTEMS) {
     _c.set(...sys.center);
     const d = pos.distanceTo(_c) / Math.max(1, sys.radius);
-    f = Math.min(f, THREE.MathUtils.smoothstep(d, 0.85, 1.5));
+    f = Math.min(f, boundaryFade(d, SYSTEM_FADE_INNER, SYSTEM_FADE_OUTER));
   }
   return f;
 }
@@ -265,9 +269,15 @@ export function updateStarfield() {
   if (!layers.length) return;
   const s = game.ship;
   const j = game.journey;
-  const beta = j && j.active ? Math.min(0.995, j.beta) : 0;
+  // FRONTEIRA MANDA (audit P0-1, bug "crossing stars inside the system"): o
+  // floor 0.85 durante a journey anulava o systemFade e acendia o corredor
+  // ainda DENTRO do sistema de origem. Agora o fade posicional governa sozinho,
+  // e o β VISUAL é escalado por ele — a relatividade (aberração/Doppler/
+  // beaming/streaks) só liga depois de cruzar a fronteira e desliga ao entrar
+  // no destino. O β cinemático (journey.beta) segue intacto p/ HUD/perfil.
+  const fade = systemFade(camera.position);
+  const beta = j && j.active ? Math.min(0.995, j.beta) * fade : 0;
   if (s.vel && s.vel.lengthSq() > 1) _dirFlight.copy(s.vel).normalize();
-  const fade = Math.max(systemFade(camera.position), j && j.active ? 0.85 : 0);
   const pxA = pixelAngle();
   const e = camera.matrixWorld.elements;
   _right.set(e[0], e[1], e[2]).normalize();

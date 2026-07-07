@@ -271,3 +271,55 @@ test('viagem trapezoidal 30/40/30: cruzeiro plano em v_max = D/(0.7T) (AC-01 exp
   const x2 = journeyProfileTrapezoid(D, T, (0.3 + eps) * T).x;
   assert.ok(x2 > x1 && (x2 - x1) < vMax * T * 1e-3, 'x contínua em s=0.3');
 });
+
+// ── Audit 2026-07-07 P0: perfil do poço de Higgs + fronteira de sistema ──────
+
+test('Higgs well (P0-2): pico ≤ cap, queda 1/d² além do soft, zero em reach — SEM platô', async () => {
+  const { higgsWellAccel } = await import('../../../space-war/src/celestial/physics.js');
+  const w = { soft: 1000, cap: 600, reach: 18_000 };
+  // pico do perfil = cap, atingido perto do núcleo (d = soft/√2)
+  const aPeak = higgsWellAccel(w.soft / Math.SQRT2, w);
+  assert.ok(aPeak > 0.98 * w.cap && aPeak <= w.cap, `pico ${aPeak.toFixed(1)} ≈ cap`);
+  // MONOTÔNICO decrescente além do soft (o bug era um platô constante de 29k u)
+  let prev = Infinity;
+  for (const d of [1500, 2500, 4000, 6000, 9000, 12_000, 15_000]) {
+    const a = higgsWellAccel(d, w);
+    assert.ok(a < prev, `a(${d}) = ${a.toFixed(2)} decrescente`);
+    prev = a;
+  }
+  // faixa média ~1/d²: dobrar d divide a força por ~4 (Plummer: d ≫ soft)
+  const a4k = higgsWellAccel(4000, w), a8k = higgsWellAccel(8000, w);
+  assert.ok(Math.abs(a4k / a8k - 4) < 0.6, `1/d²: a(4k)/a(8k) = ${(a4k / a8k).toFixed(2)} ≈ 4`);
+  // SEM platô: a 10k u a força já caiu p/ ≤ 5% do cap (antes: 600 constante)
+  assert.ok(higgsWellAccel(10_000, w) < 0.05 * w.cap);
+  // alcance FINITO: zero em reach e além (sem perturbação cross-system)
+  assert.equal(higgsWellAccel(18_000, w), 0);
+  assert.equal(higgsWellAccel(500_000, w), 0);
+  // taper contínuo: nada de degrau na borda
+  assert.ok(higgsWellAccel(17_900, w) < 1.0);
+});
+
+test('boundaryFade (P0-1): 0 dentro, 1 fora, rampa suave 0.85–1.5·raio', async () => {
+  const { boundaryFade, SYSTEM_FADE_INNER, SYSTEM_FADE_OUTER } =
+    await import('../../../space-war/src/celestial/physics.js');
+  assert.equal(boundaryFade(0.2), 0);
+  assert.equal(boundaryFade(SYSTEM_FADE_INNER), 0);
+  assert.equal(boundaryFade(SYSTEM_FADE_OUTER), 1);
+  assert.equal(boundaryFade(5), 1);
+  const mid = boundaryFade((SYSTEM_FADE_INNER + SYSTEM_FADE_OUTER) / 2);
+  assert.ok(Math.abs(mid - 0.5) < 1e-9, 'smoothstep simétrico no meio');
+  // monotônico
+  let p = -1;
+  for (let d = 0; d <= 2; d += 0.05) {
+    const f = boundaryFade(d);
+    assert.ok(f >= p); p = f;
+  }
+});
+
+test('escapeSpeed (P0-3): v_esc = √(2μ/r) — gate de captura da nuke', async () => {
+  const { escapeSpeed, circularSpeed } = await import('../../../space-war/src/celestial/physics.js');
+  const mu = 6.6e7, r = 4000;
+  assert.ok(Math.abs(escapeSpeed(mu, r) - circularSpeed(mu, r) * Math.SQRT2) < 1e-9);
+  // um tiro de nuke típico (1600 u/s) é HIPERBÓLICO num planeta (v_esc ~180):
+  assert.ok(1600 > 1.5 * escapeSpeed(mu, r));
+});
