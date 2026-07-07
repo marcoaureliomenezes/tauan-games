@@ -47,7 +47,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('neutron', 800));
     await page.waitForFunction(
-      () => window.__spaceWar.sysGlow.binary && window.__spaceWar.sysGlow.binary.visible === false,
+      () => window.__spaceWar.sysGlow.pulsar && window.__spaceWar.sysGlow.pulsar.visible === false,
       undefined, { timeout: 8000 },
     );
     const far = await page.evaluate(() => {
@@ -149,8 +149,9 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     // longe (sistema solar): invisível
     const farFade = await page.evaluate(() => window.__spaceWar.remnantFade ?? 0);
     expect(farFade).toBeLessThan(0.05);
-    // a ~1.9M do centro do binário: rampa PARCIAL (visível, ainda não plena)
-    await page.evaluate(() => window.__swDebug.goTo('blackhole', 4000));
+    // a ~300k do centro do PULSAR (o remanescente mora lá desde o roster
+    // T-PR-08): rampa PARCIAL (visível, ainda não plena) — dentro da bolha de load
+    await page.evaluate(() => window.__swDebug.goTo('neutron', 3400));
     await page.waitForFunction(
       () => (window.__spaceWar.remnantFade ?? 0) > 0.05,
       undefined, { timeout: 8000 },

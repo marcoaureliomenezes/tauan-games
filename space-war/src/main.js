@@ -76,22 +76,23 @@ camera.lookAt(earthForMenu.worldPos);
 // --- Menu inicial ---
 game.screen = 'menu';
 showOverlay(`<div style="color:#7df;font-size:34px;letter-spacing:6px">SPACE WAR</div>
-  <div class="sub"><b style="color:#ffd27a">5 SISTEMAS ESTELARES</b> — Sistema Solar · BETELGEUSE (supergigante
-  vermelha + companheira Siwarha) · BINÁRIO buraco negro + pulsar (dentro do remanescente da
-  supernova que criou o BN) · BINÁRIO CAÓTICO (2 estrelas, planetas em caos de 3 corpos) ·
+  <div class="sub"><b style="color:#ffd27a">5 SISTEMAS ESTELARES — cada um é uma FASE</b> — Sistema Solar ·
+  BETELGEUSE (supergigante + companheira Siwarha em dança baricêntrica) ·
+  <b style="color:#ffb36a">O DEVORADOR</b> (um buraco negro DEVORANDO uma gigante vermelha:
+  a estrela deformada em gota derrama uma CORRENTE DE PLASMA pelo ponto L1 até o disco de acreção) ·
+  PULSAR (estrela de nêutrons orbitando a Sentinela dentro do remanescente da sua supernova) ·
   NÚCLEO DA GALÁXIA (12 estrelas S em <b>elipses keplerianas</b> ao redor de Sagitário A✦ —
-  mire uma com <b>[N]</b> e <b>SIGA-A em órbita</b> enquanto ela contorna o buraco negro)<br>
+  mire uma com <b>[N]</b> e <b>SIGA-A em órbita</b>)<br>
   <i style="color:#c9a2ff">Física real: nada cai RETO num buraco negro — perto de corpos
   compactos o controle vira newtoniano (a gravidade CURVA sua trajetória) e dentro do
   disco de acreção o gás rouba energia: ESPIRAL DA MORTE, não sucção.</i><br><br>
   <b style="color:#9fe">NAVEGAÇÃO:</b> <b>T</b> destino · <b>C</b> aponta · <b>N</b> auto-aproximação ·
-  <b style="color:#8f8">O = ASSISTENTE DE ÓRBITA</b> (circulariza em torno de QUALQUER corpo — planeta,
-  estrela, pulsar, buraco negro) · <b>V</b> câmera de observação (gira ao redor da nave)<br>
-  <i style="color:#7a9">Fora dos sistemas o MOTOR INTERESTELAR desperta sozinho (velocidade ×4.5)
-  — cada sistema fica a 1-3 min de viagem. Throttle 0 agora COASTA de verdade: entre em
-  órbita, corte o motor e ela FECHA.</i><br><br>
+  <b style="color:#8f8">O = ASSISTENTE DE ÓRBITA</b> · <b>V</b> câmera de observação ·
+  <b style="color:#ffd27a">Z = VIAGEM INTERESTELAR</b> (mire OUTRO sistema com T — só se cruzam
+  estrelas DEPOIS de deixar o sistema; a relatividade acende na fronteira)<br><br>
   <b>W/S</b> empuxo · <b>Shift</b> turbo · <b>X</b> freio · <b>setas</b> guinada/arfagem · <b>A/D</b> rolagem<br>
-  <b>Mouse</b> (clique p/ travar) pilota · <b>Espaço</b> laser · <b>F</b> nuke · <b>M</b> mapa · <b>P</b> pausa<br><br>
+  <b>Mouse</b> (clique p/ travar) pilota · <b>Espaço</b> laser · <b>F</b> nuke · <b>G</b> traçadora ·
+  <b>H</b> bomba de Higgs · <b>M</b> mapa · <b>P</b> pausa<br><br>
   [Enter] para iniciar</div>`);
 
 // --- Ações discretas ---

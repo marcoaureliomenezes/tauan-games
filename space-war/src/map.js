@@ -49,7 +49,7 @@ export function drawMap() {
   ctx.fillStyle = '#7df'; ctx.fillText('MAPA GALÁCTICO — 5 SISTEMAS (escala log)  —  [M] fecha', cx, 28);
 
   // Marcadores dos sistemas: anel + nome + ESTADO DE CAMPANHA (✔ vencido /
-  // ▶ fase atual / 🔒 bloqueado / LIVRE = fora da campanha, ex.: Véu).
+  // ▶ fase atual / 🔒 bloqueado).
   for (const sys of SYSTEMS) {
     if (sys.key === 'solar') continue;
     const [mx, my] = project(sys.center[0], sys.center[2]);

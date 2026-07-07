@@ -2,12 +2,9 @@
 //
 //  1. TRILHOS keplerianos (sistemas hierárquicos estáveis): Sol/Betelgeuse e seus
 //     planetas/luas, e o par BN+pulsar em torno do baricentro — previsível, barato.
-//  2. N-CORPOS INTEGRADO (sistema caótico 'chaotic'): estrelas e planetas se
-//     atraem de VERDADE — velocity-Verlet (simplético, sem drift secular de
-//     energia), softening de Plummer (F ∝ 1/(r²+ε²)) e passos FIXOS
-//     sub-amostrados (dt variável quebraria a simpleticidade).
-//     (O núcleo galáctico saiu do integrador em 2026-07-02: estrelas S em
-//      trilho ELÍPTICO kepleriano — calmas, previsíveis e "seguíveis".)
+//  2. N-CORPOS INTEGRADO (NBodyDynamic): velocity-Verlet simplético com
+//     softening de Plummer e passos fixos. DORMENTE desde o roster do audit
+//     2026-07-07 (o 'chaotic' saiu) — capacidade testada à espera de consumidor.
 //
 // Só a NAVE sofre gravidade em gravity.js; aqui é o universo se movendo.
 

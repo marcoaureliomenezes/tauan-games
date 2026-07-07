@@ -272,6 +272,34 @@ export function lumForStar(def) {
   return STAR_LUM_DEFAULTS[def.kind] ?? 0;
 }
 
+// ── Lóbulo de Roche (audit T-PR-07 — sistema "Devorador") ───────────────────
+// Eggleton (1983): R_L/a = 0.49·q^⅔ / (0.6·q^⅔ + ln(1 + q^⅓)), q = M_doador/M_par.
+// Preciso a <1% para todo q — é O critério de transbordo: gigante com raio ≥ R_L
+// derrama plasma pelo L1 para o companheiro.
+export function eggletonLobeRadius(a, q) {
+  const q13 = Math.cbrt(q);
+  const q23 = q13 * q13;
+  return a * (0.49 * q23) / (0.6 * q23 + Math.log(1 + q13));
+}
+
+// Distância do L1 ao DOADOR (μ1) num par de separação a (frame co-rotante):
+// resolve μ1/x² − μ2/(a−x)² − Ω²(x − x_bar) = 0 por Newton (Ω² = (μ1+μ2)/a³).
+// É de onde o filete de plasma NASCE — a ponta do teardrop aponta para cá.
+export function l1Distance(a, mu1, mu2) {
+  const W2 = (mu1 + mu2) / (a * a * a);
+  const xBar = a * (mu2 / (mu1 + mu2));
+  let x = a * 0.5;
+  for (let i = 0; i < 80; i++) {
+    const dx2 = a - x;
+    const f = mu1 / (x * x) - mu2 / (dx2 * dx2) - W2 * (x - xBar);
+    const df = -2 * mu1 / (x * x * x) - 2 * mu2 / (dx2 * dx2 * dx2) - W2;
+    const nx = x - f / df;
+    x = Math.min(a * 0.98, Math.max(a * 0.02, nx));
+    if (Math.abs(nx - x) < 1e-9 * a && Math.abs(f) < 1e-6) break;
+  }
+  return x;
+}
+
 // Raios da dança binária em torno do baricentro: r_i ∝ μ do PARCEIRO.
 export function barycentricRadii(separation, mu1, mu2) {
   const total = mu1 + mu2;

@@ -33,6 +33,8 @@ export const STAR_VERT = /* glsl */ `
   uniform float uTime;
   uniform float uCell;
   uniform float uLump;
+  uniform vec3 uTideDir;    // direção (espaço do MESH) do companheiro — teardrop
+  uniform float uTideAmp;   // amplitude do bulge tidal (0 = esférica, custo zero)
   varying vec3 vN;
   varying vec3 vDir;
   varying vec3 vView;
@@ -40,7 +42,16 @@ export const STAR_VERT = /* glsl */ `
   void main(){
     vDir = normalize(position);
     float d = uLump > 0.0 ? (fbm3(vDir * max(1.2, uCell * 0.6) + uTime * 0.012) - 0.5) : 0.0;
-    vec3 p = position * (1.0 + d * uLump * 2.0);
+    // DEFORMAÇÃO TIDAL DIRECIONAL (audit T-PR-07): transbordo de lóbulo de
+    // Roche — bulge focado apontando ao companheiro (ponta do teardrop rumo ao
+    // L1) + contra-bulge menor no antípoda (maré real é ~simétrica; o L1 vence).
+    float tide = 0.0;
+    if (uTideAmp > 0.0) {
+      float c = dot(vDir, uTideDir);
+      float cp = max(c, 0.0), cn = max(-c, 0.0);
+      tide = uTideAmp * (pow(cp, 3.0) + 0.35 * pow(cn, 3.0) + 0.10 * c * c - 0.05);
+    }
+    vec3 p = position * (1.0 + d * uLump * 2.0 + tide);
     vN = normalize(normalMatrix * normal);
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     vView = normalize(-mv.xyz);
@@ -87,6 +98,8 @@ export function starMaterial(def) {
       uTime: { value: Math.random() * 100 },
       uCell: { value: def.cellScale ?? 20 },
       uLump: { value: def.lumpyLimb ?? 0 },
+      uTideDir: { value: new THREE.Vector3(1, 0, 0) },
+      uTideAmp: { value: 0 },
       uHot: { value: hot },
       uMid: { value: mid },
       uCool: { value: cool },

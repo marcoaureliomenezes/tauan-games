@@ -94,11 +94,11 @@ const PHASE_SPAWNS = {
   ],
   binary: [
     { key: 'blackhole', n: 4, station: true, bombers: 1 },
-    { key: 'neutron', n: 2, station: true },
+    { key: 'devorada', n: 2, station: true },
   ],
-  chaotic: [
-    { key: 'vag2', n: 4, bombers: 1 },
-    { key: 'vag4', n: 4, station: true },
+  pulsar: [
+    { key: 'neutron', n: 2, station: true },
+    { key: 'sentinela', n: 4, bombers: 1 },
   ],
   core: [
     { key: 's6', n: 5, station: true, bombers: 2 },

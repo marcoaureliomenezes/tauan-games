@@ -22,8 +22,7 @@ import { showToast } from './hud.js';
 // Leis PURAS em celestial/physics.js (node-testável): perfil + duração.
 import { journeyProfileTrapezoid, journeyDuration } from './celestial/physics.js';
 
-// Menor/maior distância entre pares de centros de sistemas (inclui o Véu,
-// registrado em runtime — SYSTEMS é o array vivo).
+// Menor/maior distância entre pares de centros de sistemas (SYSTEMS canônico).
 function systemPairBounds() {
   let dMin = Infinity, dMax = 0;
   const c = new THREE.Vector3(), d = new THREE.Vector3();

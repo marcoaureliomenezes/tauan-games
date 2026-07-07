@@ -135,14 +135,14 @@ test.describe('Space War — Estrelas Fotométricas', () => {
       ns: window.__spaceWar.starLod.neutron ?? null,
       s1: window.__spaceWar.starLod.s1 ?? null,
     }));
-    // farol do binário: NS-dominado, I>1, px≥4, visível de casa (AC-04)
-    expect(fromSolar.glows.binary.visible).toBe(true);
-    expect(fromSolar.glows.binary.I).toBeGreaterThan(1);
-    expect(fromSolar.glows.binary.px).toBeGreaterThanOrEqual(4);
+    // farol do PULSAR (roster T-PR-08): NS-dominado, I>1, px≥4, visível de casa
+    expect(fromSolar.glows.pulsar.visible).toBe(true);
+    expect(fromSolar.glows.pulsar.I).toBeGreaterThan(1);
+    expect(fromSolar.glows.pulsar.px).toBeGreaterThanOrEqual(4);
     // em CASA o glow do próprio solar fica suprimido (sistema resolvido)
     expect(fromSolar.glows.solar.visible).toBe(false);
     // todos os sistemas cullados têm glow fotométrico dentro dos tetos (AC-05)
-    for (const key of ['binary', 'chaotic', 'core', 'veil', 'betelgeuse']) {
+    for (const key of ['binary', 'pulsar', 'core', 'betelgeuse']) {
       const g = fromSolar.glows[key];
       expect(g).toBeTruthy();
       expect(g.px).toBeLessThanOrEqual(30);
@@ -152,14 +152,14 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     // do descritor é a única representação (sem dupla contagem por construção).
     expect(fromSolar.ns).toBe(null);
     expect(fromSolar.s1).toBe(null);
-    // resolvendo o binário: glow some, membro assume
+    // resolvendo o pulsar: glow some, membro assume
     await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
-      () => window.__spaceWar.sysGlow.binary.visible === false,
+      () => window.__spaceWar.sysGlow.pulsar.visible === false,
       undefined, { timeout: 8000 },
     );
     const resolved = await page.evaluate(() => ({
-      glow: window.__spaceWar.sysGlow.binary,
+      glow: window.__spaceWar.sysGlow.pulsar,
       ns: window.__spaceWar.starLod.neutron,
     }));
     expect(resolved.glow.visible).toBe(false);

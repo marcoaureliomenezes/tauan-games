@@ -3,9 +3,8 @@
 //  - Sistemas HIERÁRQUICOS (solar, betelgeuse): patched-conics — o corpo de MENOR
 //    SOI que contém a nave domina sozinho (é o que torna órbitas keplerianas
 //    limpas possíveis em torno de qualquer corpo).
-//  - PAR BINÁRIO (BN+pulsar): os DOIS parceiros somam (campo binário real).
-//  - Sistemas CAÓTICOS ('chaotic', 'core'): SOMA de TODOS os corpos do sistema —
-//    o mesmo campo que move as estrelas move a nave (caos honesto).
+//  - PAR BINÁRIO (Devorador, Pulsar, Betelgeuse): os DOIS parceiros somam.
+//  - Sistemas DINÂMICOS (regime N-corpos, hoje dormente): SOMA de TODOS os corpos.
 //  - VAZIO INTERESTELAR (fora de todos os SOIs): o corpo de maior aceleração
 //    real domina (nunca existe zona morta) e a flag `interstellar` libera o
 //    motor interestelar (overdrive) da nave.
@@ -27,11 +26,11 @@ function _isCompact(def) {
   return def.kind === 'blackhole' || def.kind === 'neutron';
 }
 
-// 'core' saiu do regime somado (2026-07-02): as estrelas S agora andam em trilho
-// elíptico com SOI de Hill — patched-conics + aceleração de frame exata é o que
-// permite ENTRAR EM ÓRBITA de uma estrela e segui-la ao redor do buraco negro.
-// Só o sistema 'chaotic' continua com o campo somado de N-corpos.
-const DYNAMIC_SYSTEMS = new Set(['chaotic']);
+// Regime N-corpos somado: DORMENTE desde o roster do audit 2026-07-07 (o
+// 'chaotic' saiu do jogo). O integrador velocity-Verlet (orbits.js) e este
+// regime ficam como capacidade testada — um sistema futuro só precisa usar
+// NBodyDynamic e registrar a chave aqui.
+const DYNAMIC_SYSTEMS = new Set([]);
 
 function _accelOf(b, dist) {
   const r = Math.max(dist, b.def.radius * 0.85);

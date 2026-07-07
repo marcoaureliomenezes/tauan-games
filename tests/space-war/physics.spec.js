@@ -61,13 +61,14 @@ test.describe('Space War — Fidelidade Física', () => {
   test('AC-02: TOV + hierarquia SMBH + estrelas S vivas', async ({ page }) => {
     test.setTimeout(60000);
     await startFlight(page);
-    // FASES (T-PR-06): um sistema materializado por vez — binário, depois core.
+    // FASES (T-PR-06) + roster (T-PR-08): um sistema por vez — a NS mora no
+    // 'pulsar', o BN estelar no 'binary' (Devorador), o SMBH no 'core'.
     const bin = await page.evaluate(() => {
       window.__swDebug.loadSystem('binary');
-      const sw = window.__spaceWar;
-      const ns = sw.bodies.find((b) => b.def.kind === 'neutron');
-      const bh = sw.bodies.find((b) => b.def.key === 'blackhole');
-      return { ns: ns.mu, bh: bh.mu };
+      const bh = window.__spaceWar.bodies.find((b) => b.def.key === 'blackhole').mu;
+      window.__swDebug.loadSystem('pulsar');
+      const ns = window.__spaceWar.bodies.find((b) => b.def.kind === 'neutron').mu;
+      return { ns, bh };
     });
     const core = await page.evaluate(() => {
       window.__swDebug.loadSystem('core');

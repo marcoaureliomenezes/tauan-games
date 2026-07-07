@@ -180,30 +180,33 @@ export const PLANETS = [
 
 // ===========================================================================
 // OS SISTEMAS ESTELARES — registry canônico (fonte única; universe.js registra
-// o Véu em runtime como 6º). Centros FINAIS (anel a 19–29M u do Sol: "anos-luz"
+// registry canônico). Centros FINAIS (anel a 19–29M u do Sol: "anos-luz"
 // — de outro sistema só cruzam pontos fotométricos).
 // ===========================================================================
 // `lum` = luminosidade SOMADA das estrelas do sistema (estática — os glows
 // fotométricos do starlod precisam dela mesmo com o sistema DESCARREGADO; fases
 // T-PR-06). `arriveDist` = recuo do ponto de chegada da viagem interestelar.
+//
+// ROSTER (operador, audit 2026-07-07): 1. Solar · 2. Betelgeuse + Siwarha ·
+// 3. DEVORADOR (BN devorando uma gigante vermelha — teardrop + corrente de
+// Roche) · 4. PULSAR (estrela de nêutrons orbitando a Sentinela, dentro do
+// remanescente da sua supernova) · 5. Sagitário A✦ (estrelas S).
 export const SYSTEMS = [
   { key: 'solar', name: 'Sistema Solar', center: [0, 0, 0], radius: 4_200_000, primary: 'sun', lum: 1.0, arriveDist: 130_000 },
   { key: 'betelgeuse', name: 'Betelgeuse', center: [16_640_000, 960_000, -16_640_000], radius: 300_000, primary: 'betelgeuse', lum: 60.9, arriveDist: 240_000 },
-  { key: 'binary', name: 'Binário BN+Pulsar', center: [-20_800_000, 0, 7_040_000], radius: 280_000, primary: 'blackhole', lum: 80, arriveDist: 130_000 },
-  { key: 'chaotic', name: 'Binário Caótico', center: [5_760_000, -960_000, 23_360_000], radius: 260_000, primary: 'azurak', lum: 0.68, arriveDist: 130_000 },
+  { key: 'binary', name: 'Devorador — BN + Gigante', center: [-20_800_000, 0, 7_040_000], radius: 280_000, primary: 'blackhole', lum: 8, arriveDist: 130_000 },
+  { key: 'pulsar', name: 'Pulsar — NS + Sentinela', center: [5_760_000, -960_000, 23_360_000], radius: 260_000, primary: 'neutron', lum: 80.6, arriveDist: 130_000 },
   { key: 'core', name: 'Núcleo da Galáxia', center: [-12_160_000, 1_920_000, -23_040_000], radius: 420_000, primary: 'sgr', lum: 6.9, arriveDist: 130_000 },
 ];
 
 // ---------------------------------------------------------------------------
-// SISTEMA 3 — BINÁRIO: buraco negro + estrela de nêutrons.
-// center é CÓPIA (de-alias, T-PR-04): antes era referência viva a
-// SYSTEMS[2].center, multiplicada in-place pelos blocos de escala.
+// SISTEMA 3 — DEVORADOR (roster do audit 2026-07-07): buraco negro devorando
+// uma GIGANTE VERMELHA. A gigante ENCHE o lóbulo de Roche (Eggleton q=0.4 →
+// R_L ≈ 0.303·a = 30.3k ≈ raio dela): teardrop apontando ao BN + corrente de
+// plasma nascendo no L1 e enrolando no plano do disco (celestial/system.rocheStream).
 // ---------------------------------------------------------------------------
 export const BINARY = {
-  center: [-20_800_000, 0, 7_040_000],
-  separation: 140_000,      // região de Hill ~44k em volta de cada um
-  // pairPeriod é DERIVADO da física: T = 2π·√(a³/μ_total).
-  remnant: { radius: 210_000, color1: 0xff6a3a, color2: 0x46d8c8 },
+  separation: 100_000,      // a: dimensionada p/ transbordo exato do lóbulo
 
   blackHole: {
     name: 'Buraco Negro', key: 'blackhole', kind: 'blackhole',
@@ -211,11 +214,30 @@ export const BINARY = {
     radius: 480,
     mu: 5.0e12,
     soi: 150_000, gravReach: 150_000,
-    disk: { inner: 1440, outer: 16_000 },  // ISCO = 3·rs
+    disk: { inner: 1440, outer: 16_000 },  // ISCO = 3·rs — ALIMENTADO pela corrente
     tideKillR: 7800,          // zona de MARÉ ≈ 16·rs
     photonRing: 1248,         // borda da sombra = 2.6·rs (EHT M87*/Sgr A*)
     jet: true,
   },
+  giant: {
+    name: 'Devorada', key: 'devorada', kind: 'redgiant',
+    radius: 30_000,           // = lóbulo de Roche (transbordo contínuo)
+    mu: 2.0e12,               // 2 M☉ de gigante inchada (q = 2/5 vs o BN)
+    lum: 8,
+    color: 0xff9a52, color2: 0x8a2d0c,
+    soi: 60_000, gravReach: 120_000, spin: 700,
+    cellScale: 3.0, coronaScale: 4.2,
+    light: { color: 0xffb080, intensity: 2.2, range: 500_000 },
+  },
+};
+
+// ---------------------------------------------------------------------------
+// SISTEMA 4 — PULSAR: a estrela de nêutrons orbitando a Sentinela (estrela de
+// ~1 M☉), dentro do remanescente da supernova que criou o pulsar.
+// ---------------------------------------------------------------------------
+export const PULSAR = {
+  separation: 120_000,
+  remnant: { radius: 190_000, color1: 0xff6a3a, color2: 0x46d8c8 },
   neutronStar: {
     name: 'Estrela de Nêutrons', key: 'neutron', kind: 'neutron',
     radius: 90,               // compacta; PW usa r_s = R/2.5
@@ -225,9 +247,15 @@ export const BINARY = {
     spin: 1.4,
     jetTilt: 0.5,
     lensRs: 80,
-    soi: 110_000, gravReach: 110_000,
+    soi: 55_000, gravReach: 110_000,
     disk: { inner: 270, outer: 2600 },   // vento de pulsar/toro síncrotron
     tideKillR: 420,
+  },
+  companion: {
+    name: 'Sentinela', key: 'sentinela', kind: 'star',
+    radius: 5200, color: 0xfff2bf, color2: 0xe0c080, mu: 9.0e11, lum: 0.6,
+    soi: 45_000, gravReach: 90_000, spin: 260, cellScale: 22,
+    light: { color: 0xfff4d6, intensity: 2.2, range: 500_000 },
   },
 };
 
@@ -262,36 +290,6 @@ export const BETELGEUSE = {
     { name: 'Fuligem', key: 'fuligem', radius: 4800, color: 0x37312e, color2: 0x1e1a18, kind: 'ice',
       orbit: 235_000, periodFactor: 9.5, tilt: 0.35, spin: 40, mu: 330_000_000, soi: 22_000, moons: [] },
   ],
-};
-
-// ---------------------------------------------------------------------------
-// SISTEMA 4 — BINÁRIO CAÓTICO: N-corpos integrado de verdade.
-// ---------------------------------------------------------------------------
-export const CHAOTIC = {
-  stars: [
-    { name: 'Azurak', key: 'azurak', kind: 'star',
-      radius: 6500, color: 0xbcd2ff, color2: 0x7a9cf0, mu: 6.0e11, lum: 0.5,
-      soi: 90_000, gravReach: 260_000, spin: 300, light: 0xcfe0ff, cellScale: 9.0 },
-    { name: 'Karvon', key: 'karvon', kind: 'star',
-      radius: 3800, color: 0xffa04a, color2: 0xd06018, mu: 2.5e11, lum: 0.18,
-      soi: 60_000, gravReach: 260_000, spin: 380, light: 0xffd0a0, cellScale: 7.0 },
-  ],
-  pairSep: 42_000,
-  pairEcc: 0.45,
-  planets: [
-    { name: 'Vagante-I', key: 'vag1', radius: 1100, color: 0x8a94a8, color2: 0x5a6478, kind: 'rock',
-      orbitR: 85_000, velJitter: 0.72, mu: 27_000_000, soi: 7200, moons: [] },
-    { name: 'Vagante-II', key: 'vag2', radius: 3000, color: 0xc9b088, color2: 0x97815e, kind: 'gas',
-      orbitR: 120_000, velJitter: 1.18, mu: 900_000_000, soi: 18_000,
-      atmosphere: 0xd8c098, hasAtmo: true, moons: [] },
-    { name: 'Vagante-III', key: 'vag3', radius: 950, color: 0x6fc0c8, color2: 0x3f888e, kind: 'ice',
-      orbitR: 65_000, velJitter: 0.55, mu: 18_000_000, soi: 6000, moons: [] },
-    { name: 'Vagante-IV', key: 'vag4', radius: 1700, color: 0xb06a4a, color2: 0x753f28, kind: 'rock',
-      orbitR: 150_000, velJitter: 1.35, mu: 66_000_000, soi: 10_400, moons: [] },
-    { name: 'Vagante-V', key: 'vag5', radius: 700, color: 0xd8d0c0, color2: 0xa09884, kind: 'rock',
-      orbitR: 100_000, velJitter: 0.88, mu: 9_000_000, soi: 4800, moons: [] },
-  ],
-  softening: 2500,            // ε do integrador
 };
 
 // ---------------------------------------------------------------------------

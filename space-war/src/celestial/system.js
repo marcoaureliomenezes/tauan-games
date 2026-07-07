@@ -151,13 +151,130 @@ export function accretionStream(source, sink, { cullKey = null } = {}) {
   return { group, fx, cullKey };
 }
 
+// ── CORRENTE DE ROCHE (audit T-PR-07 — a "mão de plasma" do Devorador) ───────
+// Transbordo de lóbulo real: o plasma NASCE no L1 do doador (physics.l1Distance),
+// cai num ARCO balístico defletido pelo Coriolis (trailing — atrás do movimento
+// orbital) e ENROLA no plano do disco do acretor, terminando num HOT SPOT na
+// borda externa — a anatomia clássica de binária de transferência de massa
+// (substitui o cilindro reto do accretionStream para este uso).
+// A geometria é construída UMA vez no frame local do acretor (+X = direção do
+// doador; par circular ⇒ separação constante) e apenas REORIENTADA por frame.
+// O fx também dirige o TEARDROP do doador (uTideDir/uTideAmp no STAR_VERT).
+export function rocheStream(donor, accretor, {
+  l1FromDonor, tideAmp = 0.30, wind = -1, cullKey = null,
+} = {}) {
+  const group = new THREE.Group();
+  const dOuter = accretor.def.disk ? accretor.def.disk.outer * 0.92 : accretor.def.radius * 3;
+
+  // curva no frame local do acretor: doador em +X a distância `sep` (medida no
+  // primeiro frame); começa no L1 e varre ~130° trailing até a borda do disco.
+  let built = false;
+  let sep = 0;
+  const buildTube = () => {
+    const s0 = sep - l1FromDonor;                 // L1 medido DO ACRETOR
+    const pts = [];
+    const SEGS = HEADLESS ? 28 : 72;
+    for (let i = 0; i <= SEGS; i++) {
+      const t = i / SEGS;
+      const r = s0 + (dOuter - s0) * Math.pow(t, 1.12);
+      const th = wind * 2.3 * Math.pow(t, 1.55);  // reta no L1, enrola no disco
+      pts.push(new THREE.Vector3(
+        Math.cos(th) * r,
+        Math.sin(t * Math.PI) * s0 * 0.03,        // leve arco fora do plano
+        Math.sin(th) * r,
+      ));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const tube = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, SEGS, donor.def.radius * 0.16, 7, false),
+      new THREE.MeshBasicMaterial({
+        color: 0xffb36a, transparent: true, opacity: 0.30,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }),
+    );
+    // afunilamento: grosso no pescoço do L1, fino ao tocar o disco — escala
+    // radial por vértice via morphing barato (escala não-uniforme por posição
+    // não existe em tube; aproximação: 2º tubo interno mais quente e fino)
+    group.add(tube);
+    const hotTube = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, SEGS, donor.def.radius * 0.055, 6, false),
+      new THREE.MeshBasicMaterial({
+        color: 0xfff0d0, transparent: true, opacity: 0.55,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }),
+    );
+    group.add(hotTube);
+    // HOT SPOT: impacto da corrente na borda do disco (ponto quente pulsante)
+    const spotPos = pts[pts.length - 1];
+    const spot = makeHotSpot();
+    spot.position.copy(spotPos);
+    spot.scale.setScalar(donor.def.radius * 0.8);
+    group.add(spot);
+    group.userData.spot = spot;
+    group.userData.tubeMats = [tube.material, hotTube.material];
+    built = true;
+  };
+
+  const _d = new THREE.Vector3();
+  const _q = new THREE.Quaternion();
+  const _x = new THREE.Vector3(1, 0, 0);
+  const _tideLocal = new THREE.Vector3();
+  const _invQ = new THREE.Quaternion();
+  const fx = { t: 0, update(dt) {
+    this.t += dt;
+    _d.copy(donor.worldPos).sub(accretor.worldPos);
+    const dist = _d.length();
+    if (dist < 1) return;
+    if (!built) { sep = dist; buildTube(); }
+    group.position.copy(accretor.worldPos);
+    _d.multiplyScalar(1 / dist);
+    _q.setFromUnitVectors(_x, _d);                // +X local → direção do doador
+    group.quaternion.copy(_q);
+    group.visible = accretor.group.visible;
+    // respiração do plasma
+    const breathe = 0.85 + 0.15 * Math.sin(this.t * 2.1);
+    for (const m of group.userData.tubeMats || []) m.opacity = m === group.userData.tubeMats[0] ? 0.30 * breathe : 0.55 * breathe;
+    if (group.userData.spot) {
+      group.userData.spot.material.opacity = 0.65 + 0.30 * Math.sin(this.t * 5.7);
+    }
+    // TEARDROP do doador: bulge aponta ao acretor, no espaço do MESH (que gira
+    // com o spin — a maré NÃO gira com a superfície).
+    const mat = donor.mesh && donor.mesh.material;
+    if (mat && mat.uniforms && mat.uniforms.uTideDir) {
+      _tideLocal.copy(accretor.worldPos).sub(donor.worldPos).normalize();
+      _invQ.copy(donor.mesh.getWorldQuaternion(_q)).invert();
+      _tideLocal.applyQuaternion(_invQ);
+      mat.uniforms.uTideDir.value.copy(_tideLocal);
+      mat.uniforms.uTideAmp.value = tideAmp;
+    }
+  } };
+  return { group, fx, cullKey };
+}
+
+function makeHotSpot() {
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+  const c = cv.getContext('2d');
+  const g = c.createRadialGradient(32, 32, 1, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,214,150,0.7)');
+  g.addColorStop(1, 'rgba(255,150,60,0)');
+  c.fillStyle = g; c.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(cv);
+  return new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, blending: THREE.NormalBlending, depthWrite: false, transparent: true,
+  }));
+}
+
 // Casca de remanescente de supernova: esfera gigante com filamentos FBM, borda
 // realçada (look de CASCA), 2 cores (Hα + O III), expansão sutil contínua.
 // FADE POR DISTÂNCIA (bug space-war-blackhole-look-not-approved, AC-05): a
 // "bola de plasma" é visível NA APROXIMAÇÃO desde longe (rampa suave) em vez
 // do pop do cull duro de 1.15×raio — e some de vez só além de FAR_OUT.
-const REMNANT_FULL = 1_200_000;    // até aqui: opacidade plena
-const REMNANT_FAR = 3_500_000;     // daqui p/ fora: invisível (e mesh desligada)
+// FASES (T-PR-06): a rampa precisa caber DENTRO da bolha de load do sistema
+// (unload a 1.7·raio ≈ 440k) — senão o fade viveria em distâncias onde o
+// remanescente nem existe mais.
+const REMNANT_FULL = 260_000;      // até aqui: opacidade plena
+const REMNANT_FAR = 430_000;       // daqui p/ fora: invisível (e mesh desligada)
 export function supernovaRemnant({ radius, color1, color2, center, cullKey = null }) {
   const group = new THREE.Group();
   const mat = new THREE.ShaderMaterial({

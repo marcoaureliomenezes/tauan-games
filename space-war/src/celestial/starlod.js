@@ -36,10 +36,9 @@ const CORONA_FAR = 3_000_000;
 // Betelgeuse como faróis vivos e o solar como a estrela fraca que ele É de lá.
 const D0_SYS = 8_000_000;
 const GLOW_TINTS = {
-  binary: ['rgba(220,232,255,0.98)', 'rgba(150,185,255,0.55)', 'rgba(150,90,230,0.18)', 'rgba(0,0,0,0)'],
-  chaotic: ['rgba(200,220,255,0.95)', 'rgba(255,180,110,0.45)', 'rgba(120,80,50,0.12)', 'rgba(0,0,0,0)'],
+  binary: ['rgba(255,214,170,0.98)', 'rgba(255,150,90,0.5)', 'rgba(190,90,40,0.16)', 'rgba(0,0,0,0)'],   // Devorador: plasma quente
+  pulsar: ['rgba(220,232,255,0.98)', 'rgba(150,185,255,0.55)', 'rgba(150,90,230,0.18)', 'rgba(0,0,0,0)'],
   core: ['rgba(255,240,220,0.98)', 'rgba(255,190,120,0.5)', 'rgba(160,80,200,0.20)', 'rgba(0,0,0,0)'],
-  veil: ['rgba(255,214,170,0.98)', 'rgba(255,140,90,0.5)', 'rgba(190,235,255,0.18)', 'rgba(0,0,0,0)'],
   solar: ['rgba(255,244,214,0.98)', 'rgba(255,220,150,0.5)', 'rgba(200,160,80,0.15)', 'rgba(0,0,0,0)'],
 };
 
@@ -174,7 +173,7 @@ export function updateFarStars() {
     if (show) {
       I = pointIntensity(g.lum, d, D0_SYS);
       px = pointPx(I, 2.6, 2.6, 30);
-      alpha = pointAlpha(I) * (g.sys.key === 'binary' ? strobe : 1);
+      alpha = pointAlpha(I) * (g.sys.key === 'pulsar' ? strobe : 1);
       g.sprite.position.copy(g.scenePos);
       g.sprite.scale.setScalar(px * d * pxA);
       g.sprite.material.opacity = alpha;

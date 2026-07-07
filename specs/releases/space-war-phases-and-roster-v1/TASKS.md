@@ -19,12 +19,12 @@
 - [x] **T-PR-06** — P2 fases: build/dispose por sistema na origem; travel
   phase; nav/map/starlod/journey por descritores; debug loadSystem. Write set:
   `space-war/src/**`, `tests/space-war/**`.
-- [-] **T-PR-07** — P3 física nova: eggletonLobe/l1Distance + teardrop shader
+- [x] **T-PR-07** — P3 física nova: eggletonLobe/l1Distance + teardrop shader
   + curved Roche stream. Write set: `space-war/src/celestial/**`,
   `tests/space-war/tools/**`.
-- [ ] **T-PR-08** — P3 roster swap + remaps (campaign/missions/enemies/map/
+- [x] **T-PR-08** — P3 roster swap + remaps (campaign/missions/enemies/map/
   starlod/gravity/menu). Write set: `space-war/src/**`, `tests/space-war/**`.
-- [ ] **T-PR-09** — P4 polish (inimigos×wells; laser worldVel; SOI blend;
+- [-] **T-PR-09** — P4 polish (inimigos×wells; laser worldVel; SOI blend;
   margens detonação; pinch gate; solver dt). Write set: `space-war/src/**`,
   `tests/space-war/**`.
 - [ ] **T-PR-10** — QA + security push-verdict + push + PR + CI verde. Write

@@ -323,3 +323,34 @@ test('escapeSpeed (P0-3): v_esc = √(2μ/r) — gate de captura da nuke', async
   // um tiro de nuke típico (1600 u/s) é HIPERBÓLICO num planeta (v_esc ~180):
   assert.ok(1600 > 1.5 * escapeSpeed(mu, r));
 });
+
+// ── Audit T-PR-07: lóbulo de Roche (Eggleton 1983) + ponto L1 ────────────────
+
+test('Eggleton: R_L/a = 0.379 para q=1; monotônico em q; assimetria doador/par', async () => {
+  const { eggletonLobeRadius } = await import('../../../space-war/src/celestial/physics.js');
+  // valor canônico q=1: 0.49/(0.6+ln2) ≈ 0.3789
+  assert.ok(Math.abs(eggletonLobeRadius(1, 1) - 0.3789) < 5e-4);
+  // q=0.4 (Devorador: gigante 2 M☉ / BN 5 M☉): ≈ 0.303·a
+  const rl = eggletonLobeRadius(100_000, 0.4);
+  assert.ok(Math.abs(rl - 30_300) < 500, `R_L(q=0.4) = ${rl.toFixed(0)} ≈ 30.3k`);
+  // monotônico: doador mais pesado → lóbulo maior
+  let prev = 0;
+  for (const q of [0.1, 0.3, 1, 3, 10]) {
+    const r = eggletonLobeRadius(1, q);
+    assert.ok(r > prev); prev = r;
+  }
+});
+
+test('L1: a/2 para massas iguais; desloca-se PARA o corpo mais leve', async () => {
+  const { l1Distance } = await import('../../../space-war/src/celestial/physics.js');
+  const a = 100_000;
+  assert.ok(Math.abs(l1Distance(a, 5e12, 5e12) - a / 2) < a * 1e-3, 'massas iguais → L1 no meio');
+  // doador mais leve (2 vs 5): L1 mais perto do doador (x < a/2)
+  const x = l1Distance(a, 2e12, 5e12);
+  assert.ok(x > a * 0.3 && x < a * 0.5, `L1 doador-leve = ${x.toFixed(0)} ∈ (0.3a, 0.5a)`);
+  // equilíbrio de verdade: aceleração co-rotante ≈ 0 no ponto devolvido
+  const W2 = 7e12 / (a ** 3), xBar = a * (5 / 7);
+  const f = 2e12 / (x * x) - 5e12 / ((a - x) * (a - x)) - W2 * (x - xBar);
+  const scale = 2e12 / (x * x);
+  assert.ok(Math.abs(f) / scale < 1e-6, 'resíduo de força ~0 no L1');
+});
