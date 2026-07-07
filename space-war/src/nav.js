@@ -12,24 +12,28 @@ const _camDir = new THREE.Vector3();
 const _to = new THREE.Vector3();
 const _c = new THREE.Vector3();
 
-// Sistema onde a nave está (ou null = espaço interestelar).
+// Sistema onde a nave está (fases T-PR-06: é o sistema CARREGADO; null = vazio).
 export function currentSystem() {
-  if (!game.ship?.pos) return SYSTEMS[0];
-  for (const sys of SYSTEMS) {
-    _c.set(...sys.center);
-    if (game.ship.pos.distanceTo(_c) < sys.radius * 1.1) return sys;
-  }
-  return null;
+  const key = game.world?.systemKey;
+  if (!key) return null;
+  return SYSTEMS.find((s) => s.key === key) || null;
 }
 
-// Itens de destino: missão + PRIMÁRIAS dos 5 sistemas + corpos do sistema atual.
+// Itens de destino: missão + primária local (corpo vivo) + DESCRITORES dos
+// outros sistemas (fases: corpos de outros sistemas não existem — o alvo
+// interestelar é o SISTEMA, via registry) + corpos do sistema atual.
 let primaryTargets = [];
 
 export function buildNav() {
   primaryTargets = [];
+  const loadedKey = game.world?.systemKey;
   for (const sys of SYSTEMS) {
-    const b = game.bodies.find((x) => x.def.key === sys.primary);
-    if (b) primaryTargets.push(wrapBody(b));
+    if (sys.key === loadedKey) {
+      const b = game.bodies.find((x) => x.def.key === sys.primary);
+      if (b) primaryTargets.push(wrapBody(b));
+    } else {
+      primaryTargets.push(wrapSystem(sys));
+    }
   }
   const earth = game.bodies.find((b) => b.def.key === 'earth');
   game.nav.target = earth ? wrapBody(earth) : primaryTargets[0];
@@ -40,10 +44,7 @@ function localTargets() {
   if (!sys) return [];
   const list = [];
   for (const b of game.bodies) {
-    // (fix space-war-solar-system-key-drift: a migração celestial registra o
-    // sistema solar como 'solar' — o mapeamento legado p/ 'home' escondia os
-    // corpos locais do ciclo de alvos)
-    if (b.system !== sys.key || b.isMoon) continue;
+    if (b.isMoon) continue;
     if (b.def.key === sys.primary) continue;   // primária já está na lista global
     list.push(wrapBody(b));
   }
@@ -52,6 +53,21 @@ function localTargets() {
 
 function wrapBody(b) {
   return { key: b.def.key, name: b.def.name, radius: b.def.radius, body: b, get pos() { return b.worldPos; } };
+}
+
+// Descritor de sistema NÃO carregado: chave = primária (compat de ciclo/testes),
+// pos = centro galáctico no frame da CENA (center − world.origin).
+function wrapSystem(sys) {
+  const pos = new THREE.Vector3();
+  return {
+    key: sys.primary, name: sys.name, radius: sys.radius, body: null,
+    isSystem: true, system: sys,
+    get pos() {
+      pos.set(...sys.center);
+      if (game.world?.origin) pos.sub(game.world.origin);
+      return pos;
+    },
+  };
 }
 
 // Pseudo-alvo "OBJETIVO": a base alienígena ativa mais próxima.
@@ -98,6 +114,17 @@ export function targetMission() {
 // Aponta o nav para um corpo específico (missões `visit` da campanha).
 export function targetBody(b) { if (b) game.nav.target = wrapBody(b); }
 
+// Aponta o nav para um SISTEMA (fases: destino de viagem interestelar).
+export function targetSystem(sysKey) {
+  const t = primaryTargets.find((x) => x.isSystem && x.system.key === sysKey);
+  if (t) { game.nav.target = t; return true; }
+  // sistema carregado: mira a primária viva
+  const sys = SYSTEMS.find((s) => s.key === sysKey);
+  const b = sys && game.bodies.find((x) => x.def.key === sys.primary);
+  if (b) { game.nav.target = wrapBody(b); return true; }
+  return false;
+}
+
 export function currentTarget() {
   // re-resolve pelo key para acompanhar alvos dinâmicos (missão)
   const list = navList();
@@ -122,7 +149,7 @@ export function initNavHUD() {
 function resize() { if (canvas) { canvas.width = window.innerWidth; canvas.height = window.innerHeight; } }
 
 export function drawNav() {
-  if (!ctx || game.phase !== 'flight' || game.mapOpen) { if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+  if (!ctx || game.screen !== 'flight' || game.mapOpen) { if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
 

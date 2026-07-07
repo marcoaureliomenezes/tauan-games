@@ -60,11 +60,15 @@ export function launchNuke() {
   return true;
 }
 
-export function enemyFire(pos, dir) {
+export function enemyFire(pos, dir, frameVel = null) {
   const m = boltMesh(COLORS.enemyLaser);
   m.position.copy(pos);
   scene.add(m);
-  game.projectiles.push({ mesh: m, vel: dir.clone().multiplyScalar(1500), life: 3, friendly: false, dmg: 6, isNuke: false });
+  // POLISH (T-PR-09): bolt herda a velocidade do frame do atirador (paridade
+  // com o laser do jogador, que soma s.vel, e com as bombas do bomber).
+  const vel = dir.clone().multiplyScalar(1500);
+  if (frameVel) vel.add(frameVel);
+  game.projectiles.push({ mesh: m, vel, life: 3, friendly: false, dmg: 6, isNuke: false });
 }
 
 // BOMBA inimiga (campanha): ordnance pesada BALÍSTICA — o mesmo campo gravitacional
@@ -145,6 +149,37 @@ export function launchHiggs() {
   return true;
 }
 
+// ── FASES (T-PR-06): limpeza no unload + rebase de cena ─────────────────────
+// Projéteis vivem no frame da cena do sistema que os disparou — na troca de
+// fase eles morrem com ela (um tiro não atravessa anos-luz).
+export function clearProjectiles() {
+  const arr = game.projectiles;
+  for (const p of arr) {
+    scene.remove(p.mesh);
+    p.mesh.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+    if (p.trail) { scene.remove(p.trail); p.trail.geometry.dispose(); p.trail.material.dispose(); }
+  }
+  arr.length = 0;
+  game.wells.length = 0;
+}
+
+// Rebase da cena (world.js): desloca projéteis + trilhas em bloco.
+export function shiftProjectiles(shift) {
+  for (const p of game.projectiles) {
+    p.mesh.position.add(shift);
+    if (p.trail && p.trailN) {
+      const a = p.trailArr;
+      for (let i = 0; i < p.trailN; i++) {
+        a[i * 3] += shift.x; a[i * 3 + 1] += shift.y; a[i * 3 + 2] += shift.z;
+      }
+      p.trail.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
 // Dano em área (supernova / usos futuros): inimigos, alvos de missão e nave.
 export function areaDamage(pos, radius, dmg) {
   for (const e of game.enemies) {
@@ -185,7 +220,7 @@ export function updateProjectiles(dt) {
     if (p.isBomb) {
       computeGravity(p.mesh.position, _gPull);
       p.vel.addScaledVector(_gPull, dt);
-      if (surfaceContact(p.mesh.position, 6)) p.surfaceHit = true;
+      if (surfaceContact(p.mesh.position, 9)) p.surfaceHit = true;   // margem = raio do mesh (T-PR-09)
     }
     // TRAÇADORA [G]: gravidade pura + trilha do caminho (sonda de validação).
     if (p.isTracer) {
@@ -205,7 +240,7 @@ export function updateProjectiles(dt) {
         p.trail.geometry.setDrawRange(0, p.trailN);
         p.trail.geometry.attributes.position.needsUpdate = true;
       }
-      if (surfaceContact(p.mesh.position, 6)) {
+      if (surfaceContact(p.mesh.position, 8)) {                     // margem = raio do mesh (T-PR-09)
         p.surfaceHit = true;            // queima na superfície com um flash curto
         explosion(p.mesh.position, 0.6, 0xffd24a);
       }
@@ -219,7 +254,7 @@ export function updateProjectiles(dt) {
         activateHiggs(p);
       }
       if (p.shell) p.shell.scale.setScalar(1 + 0.25 * Math.sin(game.time * 9));
-      const hitStar = surfaceContact(p.mesh.position, 10);
+      const hitStar = surfaceContact(p.mesh.position, 14);          // margem = raio do mesh (T-PR-09)
       if (hitStar) {
         // mergulho com poço ativo → supernova garantida (higgs.js decide)
         if (p.wellOn) higgsPlunge(p);
@@ -252,10 +287,17 @@ export function updateProjectiles(dt) {
         const isStar = dom.isSun || kind === 'star' || kind === 'redsupergiant';
         const nearStar = isStar && g.dist < dom.def.radius * 6;
         const capture = !compact && !isStar && g.dist < (dom.soi || 0);
-        if (inDisk || capture || nearStar) {
+        // GATE FÍSICO (audit P0-3): flyby HIPERBÓLICO não é capturado — a
+        // guiagem só engaja com |v_rel| < 1.5·v_esc local (v_esc no r da nuke,
+        // do computeGravity). Um tiro rápido cruzando o SOI segue balístico
+        // (estilingue honesto); a espiral fica p/ lançamentos deliberadamente
+        // co-orbitais. Exceção: DENTRO do disco de acreção o arrasto do gás
+        // age em qualquer velocidade (é gás, não gravidade).
+        _nV.copy(p.vel);
+        if (dom.worldVel) _nV.sub(dom.worldVel);            // frame co-móvel do corpo
+        const bound = inDisk || _nV.length() < 1.5 * g.escapeVel;
+        if ((inDisk || capture || nearStar) && bound) {
           _nR.copy(p.mesh.position).sub(dom.worldPos);
-          _nV.copy(p.vel);
-          if (dom.worldVel) _nV.sub(dom.worldVel);          // frame co-móvel do corpo
           _nH.crossVectors(_nR, _nV);
           _nT.crossVectors(_nH, _nR).normalize();           // direção prograde
           // Piso de velocidade orbital de GAMEPLAY: v_circ real num planeta é
@@ -276,7 +318,7 @@ export function updateProjectiles(dt) {
         }
       }
       // horizonte/superfície engole a nuke → detona no impacto
-      const hit = surfaceContact(p.mesh.position, 6);
+      const hit = surfaceContact(p.mesh.position, 12);               // margem = raio do mesh (T-PR-09)
       if (hit) p.surfaceHit = true;
     }
     p.mesh.position.addScaledVector(p.vel, dt);

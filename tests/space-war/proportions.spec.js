@@ -12,7 +12,7 @@ async function startFlight(page) {
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 4000 });
+  await page.waitForFunction(() => window.__spaceWar.screen === 'flight', { timeout: 4000 });
 }
 
 test.describe('Space War — Proporções Verdadeiras', () => {
@@ -47,7 +47,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('neutron', 800));
     await page.waitForFunction(
-      () => window.__spaceWar.sysGlow.binary && window.__spaceWar.sysGlow.binary.visible === false,
+      () => window.__spaceWar.sysGlow.pulsar && window.__spaceWar.sysGlow.pulsar.visible === false,
       undefined, { timeout: 8000 },
     );
     const far = await page.evaluate(() => {
@@ -58,7 +58,13 @@ test.describe('Space War — Proporções Verdadeiras', () => {
         solarVisible: solarMeshes.map((b) => b.def.name),
         betelVisible: betelMeshes.map((b) => b.def.name),
         solarGlow: sw.sysGlow.solar,
-        dSolar: Math.hypot(sw.ship.pos.x, sw.ship.pos.y, sw.ship.pos.z),
+        // FASES: posição GALÁCTICA = origin + pos de cena (o sistema ativo
+        // vive na origem — |pos| local é pequeno por construção)
+        dSolar: Math.hypot(
+          sw.world.origin.x + sw.ship.pos.x,
+          sw.world.origin.y + sw.ship.pos.y,
+          sw.world.origin.z + sw.ship.pos.z,
+        ),
       };
     });
     // seria impossível ver Saturno do buraco negro (operador)
@@ -75,6 +81,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     test.setTimeout(60000);
     await startFlight(page);
     const bh = await page.evaluate(() => {
+      window.__swDebug.loadSystem('binary');       // FASES: materializa o binário
       const sw = window.__spaceWar;
       const b = sw.bodies.find((x) => x.def.key === 'blackhole');
       let tubes = 0, cylinders = 0, rings = 0, spiralUniform = 0, rimUniform = 0;
@@ -142,8 +149,9 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     // longe (sistema solar): invisível
     const farFade = await page.evaluate(() => window.__spaceWar.remnantFade ?? 0);
     expect(farFade).toBeLessThan(0.05);
-    // a ~1.9M do centro do binário: rampa PARCIAL (visível, ainda não plena)
-    await page.evaluate(() => window.__swDebug.goTo('blackhole', 4000));
+    // a ~300k do centro do PULSAR (o remanescente mora lá desde o roster
+    // T-PR-08): rampa PARCIAL (visível, ainda não plena) — dentro da bolha de load
+    await page.evaluate(() => window.__swDebug.goTo('neutron', 3400));
     await page.waitForFunction(
       () => (window.__spaceWar.remnantFade ?? 0) > 0.05,
       undefined, { timeout: 8000 },

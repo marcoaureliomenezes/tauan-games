@@ -5,36 +5,65 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene, camera, renderer } from './scene.js';
 import { game } from './state.js';
 import { createSkybox } from './skybox.js';
-import { buildSolarSystem, updateSOIView, updateBodyFX } from './bodies.js';
+import { initUniverse, loadSystem as sysLoad, updateSOIView, updateBodyFX } from './celestial/system.js';
+import { universeSystems } from './universe.js';
+import { SYSTEMS } from './config.js';
+import { updateWorldPhase, onWorldShift } from './world.js';
 import { initOrbits, updateOrbits } from './orbits.js';
-import { buildShip, updateShip, shipMesh, toggleObservationCamera } from './ship.js';
+import { buildShip, updateShip, shipMesh, toggleObservationCamera, shiftShip } from './ship.js';
 import { input, installListeners, onAction } from './input.js';
-import { fireLaser, launchNuke, launchGravBomb, launchHiggs, updateProjectiles, enemyBomb } from './weapons.js';
+import {
+  fireLaser, launchNuke, launchGravBomb, launchHiggs, updateProjectiles, enemyBomb,
+  clearProjectiles, shiftProjectiles,
+} from './weapons.js';
+import { clearHiggs } from './higgs.js';
 import { journeyToggle, journeyEligible, journeyWarp } from './journey.js';
-import { spawnEnemies, updateEnemies } from './enemies.js';
-import { startMissions, beginFlight, updateMissions, debugCompleteMission, debugKillTarget } from './missions.js';
-import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
+import { updateEnemies, clearEnemies } from './enemies.js';
+import {
+  startMissions, beginFlight, updateMissions, debugCompleteMission, debugKillTarget,
+  onSystemLoaded as missionsOnLoaded, onSystemUnloaded as missionsOnUnloaded,
+} from './missions.js';
+import { updateParticles, thruster, nukeBlast, explosion, shiftParticles } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
-import { buildNav, initNavHUD, drawNav, cycleTarget, targetBody } from './nav.js';
+import { buildNav, initNavHUD, drawNav, cycleTarget, targetBody, targetSystem } from './nav.js';
 import { initPostFx, renderFrame, updateAdaptiveRes, setLens, setJourneyBeta } from './postfx.js';
 import { buildStarfield, updateStarfield } from './starfield.js';
-import { buildFarStars, updateFarStars } from './celestial/starlod.js';
+import { buildFarStars, disposeFarStars, updateFarStars } from './celestial/starlod.js';
 
-// --- Construir o mundo ---
+// --- Construir o mundo (FASES, T-PR-06: só o sistema ativo materializa) ---
 const skybox = createSkybox();
 scene.add(skybox);
-buildSolarSystem();
-initOrbits();
-// Avança a simulação 1 passo para posicionar os corpos antes de criar a nave.
-updateOrbits(0.0001);
+initUniverse(universeSystems(), {
+  onLoaded(key) {
+    initOrbits();
+    // Avança a simulação 1 passo para posicionar os corpos.
+    updateOrbits(0.0001);
+    buildFarStars();
+    buildNav();
+    missionsOnLoaded(key);
+  },
+  onUnloaded() {
+    clearEnemies();
+    clearProjectiles();
+    clearHiggs();
+    disposeFarStars();
+    missionsOnUnloaded();
+    buildNav();
+    // diagnósticos do Sol são escritos pelo fx da estrela — sem o solar
+    // carregado ninguém os escreveria de novo (flags ficariam stale).
+    game.sunFlareVisible = false;
+    game.sunFlareFactor = 0;
+  },
+});
+onWorldShift(shiftShip);
+onWorldShift(shiftParticles);
+onWorldShift(shiftProjectiles);
+sysLoad('solar');
 buildShip();
 buildStarfield();
-buildFarStars();
-spawnEnemies();
 installListeners();
 initMap();
-buildNav();
 initNavHUD();
 initPostFx(renderer, scene, camera);
 
@@ -45,47 +74,48 @@ camera.position.set(earthForMenu.worldPos.x + er * 1.5, earthForMenu.worldPos.y 
 camera.lookAt(earthForMenu.worldPos);
 
 // --- Menu inicial ---
-game.phase = 'menu';
+game.screen = 'menu';
 showOverlay(`<div style="color:#7df;font-size:34px;letter-spacing:6px">SPACE WAR</div>
-  <div class="sub"><b style="color:#ffd27a">5 SISTEMAS ESTELARES</b> — Sistema Solar · BETELGEUSE (supergigante
-  vermelha + companheira Siwarha) · BINÁRIO buraco negro + pulsar (dentro do remanescente da
-  supernova que criou o BN) · BINÁRIO CAÓTICO (2 estrelas, planetas em caos de 3 corpos) ·
+  <div class="sub"><b style="color:#ffd27a">5 SISTEMAS ESTELARES — cada um é uma FASE</b> — Sistema Solar ·
+  BETELGEUSE (supergigante + companheira Siwarha em dança baricêntrica) ·
+  <b style="color:#ffb36a">O DEVORADOR</b> (um buraco negro DEVORANDO uma gigante vermelha:
+  a estrela deformada em gota derrama uma CORRENTE DE PLASMA pelo ponto L1 até o disco de acreção) ·
+  PULSAR (estrela de nêutrons orbitando a Sentinela dentro do remanescente da sua supernova) ·
   NÚCLEO DA GALÁXIA (12 estrelas S em <b>elipses keplerianas</b> ao redor de Sagitário A✦ —
-  mire uma com <b>[N]</b> e <b>SIGA-A em órbita</b> enquanto ela contorna o buraco negro)<br>
+  mire uma com <b>[N]</b> e <b>SIGA-A em órbita</b>)<br>
   <i style="color:#c9a2ff">Física real: nada cai RETO num buraco negro — perto de corpos
   compactos o controle vira newtoniano (a gravidade CURVA sua trajetória) e dentro do
   disco de acreção o gás rouba energia: ESPIRAL DA MORTE, não sucção.</i><br><br>
   <b style="color:#9fe">NAVEGAÇÃO:</b> <b>T</b> destino · <b>C</b> aponta · <b>N</b> auto-aproximação ·
-  <b style="color:#8f8">O = ASSISTENTE DE ÓRBITA</b> (circulariza em torno de QUALQUER corpo — planeta,
-  estrela, pulsar, buraco negro) · <b>V</b> câmera de observação (gira ao redor da nave)<br>
-  <i style="color:#7a9">Fora dos sistemas o MOTOR INTERESTELAR desperta sozinho (velocidade ×4.5)
-  — cada sistema fica a 1-3 min de viagem. Throttle 0 agora COASTA de verdade: entre em
-  órbita, corte o motor e ela FECHA.</i><br><br>
+  <b style="color:#8f8">O = ASSISTENTE DE ÓRBITA</b> · <b>V</b> câmera de observação ·
+  <b style="color:#ffd27a">Z = VIAGEM INTERESTELAR</b> (mire OUTRO sistema com T — só se cruzam
+  estrelas DEPOIS de deixar o sistema; a relatividade acende na fronteira)<br><br>
   <b>W/S</b> empuxo · <b>Shift</b> turbo · <b>X</b> freio · <b>setas</b> guinada/arfagem · <b>A/D</b> rolagem<br>
-  <b>Mouse</b> (clique p/ travar) pilota · <b>Espaço</b> laser · <b>F</b> nuke · <b>M</b> mapa · <b>P</b> pausa<br><br>
+  <b>Mouse</b> (clique p/ travar) pilota · <b>Espaço</b> laser · <b>F</b> nuke · <b>G</b> traçadora ·
+  <b>H</b> bomba de Higgs · <b>M</b> mapa · <b>P</b> pausa<br><br>
   [Enter] para iniciar</div>`);
 
 // --- Ações discretas ---
 onAction('start', () => {
-  if (game.phase === 'menu') { game.phase = 'briefing'; startMissions(); }
-  else if (game.phase === 'briefing') { game.phase = 'flight'; beginFlight(); hideOverlay(); }
-  else if (game.phase === 'win' || game.phase === 'gameover') { location.reload(); }
+  if (game.screen === 'menu') { game.screen = 'briefing'; startMissions(); }
+  else if (game.screen === 'briefing') { game.screen = 'flight'; beginFlight(); hideOverlay(); }
+  else if (game.screen === 'win' || game.screen === 'gameover') { location.reload(); }
 });
-onAction('nuke', () => { if (game.phase === 'flight') { if (!launchNuke()) showToast('Sem nukes ou nave pousada', 1500); } });
-onAction('gravbomb', () => { if (game.phase === 'flight') { if (!launchGravBomb()) showToast('Decole para lançar a traçadora', 1500); } });
-onAction('higgs', () => { if (game.phase === 'flight') { if (!launchHiggs()) showToast('Bomba de Higgs recarregando (ou nave pousada)', 1500); } });
-onAction('map', () => { if (game.phase === 'flight' || game.mapOpen) toggleMap(); });
-onAction('target', () => { if (game.phase === 'flight') cycleTarget(1); });
-onAction('targetPrev', () => { if (game.phase === 'flight') cycleTarget(-1); });
-onAction('align', () => { if (game.phase === 'flight') game.ship.aligning = true; });
+onAction('nuke', () => { if (game.screen === 'flight') { if (!launchNuke()) showToast('Sem nukes ou nave pousada', 1500); } });
+onAction('gravbomb', () => { if (game.screen === 'flight') { if (!launchGravBomb()) showToast('Decole para lançar a traçadora', 1500); } });
+onAction('higgs', () => { if (game.screen === 'flight') { if (!launchHiggs()) showToast('Bomba de Higgs recarregando (ou nave pousada)', 1500); } });
+onAction('map', () => { if (game.screen === 'flight' || game.mapOpen) toggleMap(); });
+onAction('target', () => { if (game.screen === 'flight') cycleTarget(1); });
+onAction('targetPrev', () => { if (game.screen === 'flight') cycleTarget(-1); });
+onAction('align', () => { if (game.screen === 'flight') game.ship.aligning = true; });
 onAction('approach', () => {
-  if (game.phase !== 'flight') return;
+  if (game.screen !== 'flight') return;
   game.ship.approach = !game.ship.approach;
   if (game.ship.approach) game.ship.orbitAssist = false;
   showToast(game.ship.approach ? '⏵ AUTO-APROXIMAÇÃO: voando até o alvo (qualquer manche cancela)' : 'auto-aproximação off', 1800);
 });
 onAction('orbit', () => {
-  if (game.phase !== 'flight') return;
+  if (game.screen !== 'flight') return;
   game.ship.orbitAssist = !game.ship.orbitAssist;
   if (game.ship.orbitAssist) game.ship.approach = false;
   showToast(game.ship.orbitAssist
@@ -93,12 +123,12 @@ onAction('orbit', () => {
     : 'assistente de órbita off', 2000);
 });
 onAction('look', () => {
-  if (game.phase !== 'flight') return;
+  if (game.screen !== 'flight') return;
   const on = toggleObservationCamera();
   showToast(on ? '👁 CÂMERA DE OBSERVAÇÃO: arraste o mouse p/ girar, scroll p/ zoom — [V] volta' : 'câmera de perseguição', 2200);
 });
 onAction('assist', () => {
-  if (game.phase !== 'flight') return;
+  if (game.screen !== 'flight') return;
   // [Z] CONTEXTUAL (decisão do operador): alvo de OUTRO sistema → engata/aborta
   // a viagem interestelar; alvo local → toggle de assist (comportamento clássico).
   if ((game.journey && game.journey.active) || journeyEligible()) {
@@ -108,7 +138,7 @@ onAction('assist', () => {
   game.ship.flightAssist = !game.ship.flightAssist;
   showToast(game.ship.flightAssist ? '🛟 PILOTO ASSISTIDO: LIGADO' : '🚀 NEWTONIANO: inércia real (assist desligado)', 2200);
 });
-onAction('pause', () => { if (game.phase === 'flight') { game.paused = !game.paused; showToast(game.paused ? '⏸ PAUSA' : '', game.paused ? 99999 : 1); } });
+onAction('pause', () => { if (game.screen === 'flight') { game.paused = !game.paused; showToast(game.paused ? '⏸ PAUSA' : '', game.paused ? 99999 : 1); } });
 
 // --- Loop ---
 const clock = new THREE.Clock();
@@ -126,7 +156,7 @@ function loop() {
   // skybox sempre centrada na câmera (= infinitamente longe)
   skybox.position.copy(camera.position);
 
-  if ((game.phase === 'flight') && !game.paused) {
+  if ((game.screen === 'flight') && !game.paused) {
     updateOrbits(dt);
     updateBodyFX(dt);
     updateShip(dt);
@@ -138,12 +168,13 @@ function loop() {
     updateEnemies(dt);
     updateProjectiles(dt);
     updateMissions(dt);
+    updateWorldPhase();                  // FASES: load/unload + rebase por posição
     updateSOIView(game.ship.pos);
     if (game.ship.orbitLocked > 2.3) {   // recém-fechada (ship.js decrementa)
       showToast(`◎ ÓRBITA CIRCULAR ESTABELECIDA em torno de ${game.ship.dominant?.def?.name ?? ''} — throttle 0 = coast`, 2600);
     }
-    if (game.ship.hp <= 0 && game.phase === 'flight') gameOver();
-  } else if (game.phase === 'briefing') {
+    if (game.ship.hp <= 0 && game.screen === 'flight') gameOver();
+  } else if (game.screen === 'briefing') {
     // planetas continuam girando no fundo do briefing
     updateOrbits(dt);
     updateBodyFX(dt);
@@ -156,7 +187,11 @@ function loop() {
   updateGravLens();
   updateStarfield();
   updateFarStars();
-  setJourneyBeta(game.journey && game.journey.active ? game.journey.beta : 0);
+  // Tint relativístico de tela gateado pela MESMA fronteira do starfield
+  // (audit P0-1): dentro do sistema β_vis = 0 — nada de pinch/Doppler de tela
+  // com planetas ainda em volta. updateStarfield acabou de publicar o fade.
+  setJourneyBeta(game.journey && game.journey.active
+    ? game.journey.beta * (game.starfieldFade ?? 1) : 0);
   renderFrame();
 
   // fps
@@ -197,7 +232,7 @@ function updateGravLens() {
 }
 
 function gameOver() {
-  game.phase = 'gameover';
+  game.screen = 'gameover';
   const by = game.ship.killedBy;
   const titles = {
     blackhole: '🕳 ESPAGUETIFICADO NO BURACO NEGRO',
@@ -228,9 +263,30 @@ if (typeof window !== 'undefined') {
     journeyToggle: () => journeyToggle(),
     journeyWarp: (s) => journeyWarp(s),
     target(key) {
-      const b = game.bodies.find((x) => (x.def.key || '').toLowerCase() === String(key).toLowerCase());
-      if (b) targetBody(b);
-      return !!b;
+      const k = String(key).toLowerCase();
+      const b = game.bodies.find((x) => (x.def.key || '').toLowerCase() === k);
+      if (b) { targetBody(b); return true; }
+      // FASES: corpos de outros sistemas não existem — mira o DESCRITOR do
+      // sistema (aceita a chave do sistema ou a da primária).
+      const sys = SYSTEMS.find((s) => s.key.toLowerCase() === k || s.primary.toLowerCase() === k);
+      if (sys && sys.key !== game.world.systemKey) return targetSystem(sys.key);
+      return false;
+    },
+    // FASES (QA): troca a fase diretamente — descarrega o sistema atual,
+    // materializa `key` na origem e posiciona a nave na primária.
+    loadSystem(key, distMul = 3.2) {
+      const sys = SYSTEMS.find((s) => s.key === String(key));
+      if (!sys) return false;
+      if (game.world.systemKey !== sys.key && !sysLoad(sys.key)) return false;
+      return this.goTo(sys.primary, distMul);
+    },
+    // QA (AC-05): evidência de dispose — memória viva do renderer entre fases.
+    rendererInfo() {
+      return {
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
+        programs: renderer.info.programs ? renderer.info.programs.length : 0,
+      };
     },
     shipReport() {
       const m = shipMesh();
@@ -245,12 +301,25 @@ if (typeof window !== 'undefined') {
       });
       return { pointLights, redLamps, cones, rimIntensity };
     },
-    // Teleporta a nave para o lado iluminado de um corpo e aponta o nariz para ele.
+    // Teleporta a nave para o lado iluminado de um corpo e aponta o nariz para
+    // ele. FASES: se o corpo pertence a um sistema descarregado, troca a fase
+    // (procura sistema a sistema — QA determinístico, custo só em testes).
     goTo(name, distMul = 3.2, elev = 0.6) {
       const key = String(name).toLowerCase();
-      const b = game.bodies.find((x) => (x.def.key || '').toLowerCase() === key || x.def.name.toLowerCase() === key);
-      if (!b) return false;
-      game.phase = 'flight';
+      const find = () => game.bodies.find(
+        (x) => (x.def.key || '').toLowerCase() === key || x.def.name.toLowerCase() === key);
+      let b = find();
+      if (!b) {
+        const prev = game.world.systemKey;
+        for (const sys of SYSTEMS) {
+          if (sys.key === game.world.systemKey) continue;
+          sysLoad(sys.key);
+          b = find();
+          if (b) break;
+        }
+        if (!b) { if (prev) sysLoad(prev); return false; }
+      }
+      game.screen = 'flight';
       const s = game.ship;
       s.landed = false; s.vel.set(0, 0, 0); s.throttle = 0;
       const r = b.def.radius;
@@ -272,7 +341,7 @@ if (typeof window !== 'undefined') {
       const m = game.mission;
       const t = m && m.targets ? m.targets[m.targets.length - 1] : null;
       if (!t || t.destroyed) return false;
-      game.phase = 'flight';
+      game.screen = 'flight';
       const s = game.ship;
       s.landed = false; s.throttle = 0;
       // CO-MÓVEL com o corpo do alvo: sem isto a nave deriva ~250 u/s em relação

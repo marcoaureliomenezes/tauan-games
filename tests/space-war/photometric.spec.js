@@ -13,7 +13,7 @@ async function startFlight(page) {
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 4000 });
+  await page.waitForFunction(() => window.__spaceWar.screen === 'flight', { timeout: 4000 });
 }
 
 test.describe('Space War — Estrelas Fotométricas', () => {
@@ -102,21 +102,24 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     expect(away.flareF).toBeLessThan(0.1);             // fluxo (0.7/3.8)² ≈ 0.03 — sem piso
     expect(away.sun.mode).toBe('disc');
     expect(away.sun.coronaPx).toBeLessThanOrEqual(away.sun.discPx * 1.3);
-    // no binário (d(Sol) ≈ 22M — "anos-luz"): flare CORTADO e o Sol nem é disco:
-    // vira o glow do sistema (cluster) — proporções verdadeiras.
+    // no binário (d(Sol) ≈ 22M — "anos-luz"): FASES (T-PR-06) — o solar nem
+    // existe mais como corpos: só o GLOW fotométrico do descritor representa o
+    // sistema, e o flare morre com o unload.
     await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
-      () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.mode === 'cluster',
+      () => window.__spaceWar.sysGlow.solar && window.__spaceWar.sysGlow.solar.visible === true,
       undefined, { timeout: 8000 },
     );
     const veryFar = await page.evaluate(() => ({
       flareVis: window.__spaceWar.sunFlareVisible,
       flareF: window.__spaceWar.sunFlareFactor,
       solarGlow: window.__spaceWar.sysGlow.solar,
+      sunLod: window.__spaceWar.starLod.sun ?? null,
     }));
     expect(veryFar.flareVis).toBe(false);
     expect(veryFar.flareF).toBe(0);
     expect(veryFar.solarGlow.visible).toBe(true);
+    expect(veryFar.sunLod).toBe(null);              // corpos do solar descarregados
   });
 
   // AC-04 (metade interestelar) + AC-05: de OUTRO sistema, o farol do binário
@@ -129,33 +132,34 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.waitForTimeout(250);
     const fromSolar = await page.evaluate(() => ({
       glows: window.__spaceWar.sysGlow,
-      ns: window.__spaceWar.starLod.neutron,
-      s1: window.__spaceWar.starLod.s1,
+      ns: window.__spaceWar.starLod.neutron ?? null,
+      s1: window.__spaceWar.starLod.s1 ?? null,
     }));
-    // farol do binário: NS-dominado, I>1, px≥4, visível de casa (AC-04)
-    expect(fromSolar.glows.binary.visible).toBe(true);
-    expect(fromSolar.glows.binary.I).toBeGreaterThan(1);
-    expect(fromSolar.glows.binary.px).toBeGreaterThanOrEqual(4);
+    // farol do PULSAR (roster T-PR-08): NS-dominado, I>1, px≥4, visível de casa
+    expect(fromSolar.glows.pulsar.visible).toBe(true);
+    expect(fromSolar.glows.pulsar.I).toBeGreaterThan(1);
+    expect(fromSolar.glows.pulsar.px).toBeGreaterThanOrEqual(4);
     // em CASA o glow do próprio solar fica suprimido (sistema resolvido)
     expect(fromSolar.glows.solar.visible).toBe(false);
     // todos os sistemas cullados têm glow fotométrico dentro dos tetos (AC-05)
-    for (const key of ['binary', 'chaotic', 'core', 'veil', 'betelgeuse']) {
+    for (const key of ['binary', 'pulsar', 'core', 'betelgeuse']) {
       const g = fromSolar.glows[key];
       expect(g).toBeTruthy();
       expect(g.px).toBeLessThanOrEqual(30);
       expect(g.alpha).toBeLessThanOrEqual(1);
     }
-    // membros de sistema não-resolvido cedem ao glow (modo 'cluster')
-    expect(fromSolar.ns.mode).toBe('cluster');
-    expect(fromSolar.s1.mode).toBe('cluster');
-    // resolvendo o binário: glow some, membro assume
+    // FASES (T-PR-06): membros de sistemas não carregados NEM EXISTEM — o glow
+    // do descritor é a única representação (sem dupla contagem por construção).
+    expect(fromSolar.ns).toBe(null);
+    expect(fromSolar.s1).toBe(null);
+    // resolvendo o pulsar: glow some, membro assume
     await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
-      () => window.__spaceWar.sysGlow.binary.visible === false,
+      () => window.__spaceWar.sysGlow.pulsar.visible === false,
       undefined, { timeout: 8000 },
     );
     const resolved = await page.evaluate(() => ({
-      glow: window.__spaceWar.sysGlow.binary,
+      glow: window.__spaceWar.sysGlow.pulsar,
       ns: window.__spaceWar.starLod.neutron,
     }));
     expect(resolved.glow.visible).toBe(false);

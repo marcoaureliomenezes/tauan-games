@@ -17,7 +17,7 @@ async function startFlight(page) {
   await page.keyboard.press('Enter');      // menu -> briefing (inicia a campanha)
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');      // briefing -> flight
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 4000 });
+  await page.waitForFunction(() => window.__spaceWar.screen === 'flight', { timeout: 4000 });
 }
 
 test.describe('Space War — Campanha', () => {

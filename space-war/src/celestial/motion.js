@@ -100,9 +100,12 @@ export class BinaryPair {
 }
 
 // ── Corpo dinâmico integrado por N-corpos (sistema caótico) ─────────────────
+// (o campo `anchor` — SMBH pinado atraindo o enxame — morreu no audit T-PR-05:
+//  o núcleo galáctico migrou p/ trilhos elípticos em 2026-07-02 e nenhum
+//  chamador passava anchor desde então.)
 export class NBodyDynamic {
   /** @param {{pos:THREE.Vector3, vel:THREE.Vector3, softening:number, systemDef:object,
-   *            centralMu:number, reinjectR:number, anchor?:object}} o */
+   *            centralMu:number, reinjectR:number}} o */
   constructor(o) { this.o = o; }
   attach(body) {
     body.dynamic = true;
@@ -111,7 +114,6 @@ export class NBodyDynamic {
     body.vel = this.o.vel.clone();
     body.acc = new THREE.Vector3();
     body.softening = this.o.softening;
-    body.anchor = this.o.anchor || null;
     body.systemDef = this.o.systemDef;
     body.centralMu = this.o.centralMu;
     body.reinjectR = this.o.reinjectR;
