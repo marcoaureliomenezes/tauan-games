@@ -44,3 +44,32 @@ A engenharia é de alta qualidade e os testes existentes são **honestos** (sem 
 ## Condição de aprovação
 
 Resolver os findings 1-2 (HIGH) e 3-5 (MEDIUM: teste ou evidência registrada). 6-8 podem ir ao backlog. Rerodar `npm run test:space-war` completo + units e me reinvocar contra o novo commit.
+
+---
+
+## RE-VERIFICAÇÃO — commit `5e707b2` (2026-07-07T20:16Z)
+
+### Verdict final: **APPROVE**
+
+Condição: a emenda QA em `tests/space-war/phases.spec.js` (working tree, +14/−5, autoria qa-engineer) DEVE ser incluída no próximo commit da release — sem ela o teste do finding 3 é vácuo (detalhe abaixo). O código de produção em `5e707b2` está intocado e passa a suíte fortalecida.
+
+### Evidência executada
+
+| Suíte | Resultado |
+|---|---|
+| `node --experimental-default-type=module tests/space-war/tools/test-physics-unit.js` | **20/20** (inclui o novo snapshot-diff AC-04) |
+| `TEST_PORT=8395 npx playwright test tests/space-war/phases.spec.js` | **4/4** (45s) — reexecutado 4/4 após a emenda QA |
+
+### Disposição dos findings 1–5
+
+- **Finding 1 (AC-07)** — RESOLVIDO. phases.spec test 1 é honesto: missão pendente real ('VIAJE', nav→betelgeuse, 0 targets), viagem REAL via journeyToggle+journeyWarp, chegada `systemKey==='betelgeuse'`, materialização ('CAÇADA', enemies≥1, killTarget→killed≥1). Sem atalhos vacuosos; cada waitForFunction falha por timeout se o fluxo regride.
+- **Finding 2 (AC-05)** — RESOLVIDO, **mutation-kill EXECUTADO**: neutralizei `disposeObject` em `celestial/system.js` → teste FALHOU com `Received: 71` vs `bin1+8` (baseline ~15-30/ciclo domina a tolerância +8). Dispose real comprovado no caminho executado.
+- **Finding 3 (P0-3)** — RESOLVIDO **após correção QA**. O teste entregue em `5e707b2` era VÁCUO no caminho da regressão: (a) perto da Terra o computador balístico tem solução fresca → a nuke nasce `aimed:true` (probe executado) e `if (dom && !p.aimed)` PULA o bloco inteiro onde vive o gate — mutação `bound=true` passou despercebida (velocidade constante ~1800, guiagem nunca executada); (b) o escape `if (rel)` tornava as asserções puláveis exatamente quando a captura espirala a nuke até detonar <2s. Emenda QA: força `aimed=false` pós-spawn + `expect(rel).not.toBeNull()`. Verificado: honesto 2× PASS; mutante (gate deletado) FALHA em `expect(rel).not.toBeNull()` — kill limpo no caminho real.
+- **Finding 4 (AC-04)** — RESOLVIDO. test-physics-unit test 20: deep-compare recursivo (tolerância 1e-9 relativa) do subconjunto sobrevivente do config vs `fixtures/config-effective-pre-collapse.json`, com diffs enumerados no stderr e `assert.equal(diffs, 0)`. Adições novas (lum/arriveDist) corretamente excluídas do diff. Snapshot honesto — trava regressão de qualquer literal colapsado.
+- **Finding 5 (AC-06)** — RESOLVIDO. phases.spec test 4: `rocheStream.built===true` + `tideAmp≥0.25`, `uTideAmp≥0.25` na devorada, e `uTideDir` (espaço do mesh) reconvertido a mundo via quaternion com `dot(dir→BN) > 0.9` — asserção geométrica real, não presença-de-campo.
+- **Findings 6–8** — DIFERIDOS ao backlog conforme condição de aprovação (LOW/INFO).
+
+### Notas
+
+- Nova superfície de debug `__swDebug.rendererInfo()` (renderer.info.memory) é read-only e adequada.
+- O mutante do finding 3 também revelou flakiness latente do teste original (nuke `aimed` é corrida de timing da solução <1.2s) — a emenda determiniza o cenário.

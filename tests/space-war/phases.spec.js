@@ -116,11 +116,18 @@ test.describe('Space War — Fases e Roster (QA end-of-alpha)', () => {
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('terra', 4));
     await page.waitForTimeout(200);
-    await page.keyboard.press('KeyF');                // nuke livre (não-aimed)
+    await page.keyboard.press('KeyF');
     await page.waitForFunction(
       () => window.__spaceWar.projectiles.some((p) => p.isNuke),
       undefined, { timeout: 5000 },
     );
+    // Perto da Terra o computador balístico costuma ter solução fresca → a nuke
+    // nasce `aimed` e o bloco de guiagem (onde vive o gate P0-3) é PULADO
+    // (`if (dom && !p.aimed)`). Força o tiro LIVRE para EXECUTAR o gate de
+    // verdade (mutation-sanity da QA: com aimed=true o teste não vê o gate).
+    await page.evaluate(() => {
+      window.__spaceWar.projectiles.find((p) => p.isNuke).aimed = false;
+    });
     // ~2 s de queda: sob a guiagem antiga a v_rel despencaria rumo a ~320·0.92;
     // balística pura mantém ~1600 (a gravidade local mal arranha isso).
     await page.waitForTimeout(2000);
@@ -140,10 +147,12 @@ test.describe('Space War — Fases e Roster (QA end-of-alpha)', () => {
         soi: earth.soi,
       };
     });
-    if (rel) {                                        // (se já detonou na superfície, o gate é irrelevante)
-      expect(rel.dist).toBeLessThan(rel.soi);         // ainda dentro do SOI
-      expect(rel.speed).toBeGreaterThan(800);         // NÃO capturada (antiga: ~300)
-    }
+    // Mutation-sanity (QA re-verificação): com o gate DELETADO a captura
+    // espirala a nuke até detonar em <2s — o desaparecimento É o sintoma da
+    // regressão, então a sobrevivência é asserida (sem escape vacuoso).
+    expect(rel).not.toBeNull();                       // balística ⇒ ainda viva a 2s
+    expect(rel.dist).toBeLessThan(rel.soi);           // ainda dentro do SOI
+    expect(rel.speed).toBeGreaterThan(800);           // NÃO capturada (antiga: ~300)
   });
 
   // Finding 5 (MEDIUM, AC-06): o Devorador mostra o TEARDROP (uniforms de maré
