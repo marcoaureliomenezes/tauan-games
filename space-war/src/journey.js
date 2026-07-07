@@ -128,7 +128,13 @@ export function updateJourney(dt) {
 
   if (j.t >= j.T) {
     j.active = false;
-    s.vel.copy(_dir).multiplyScalar(1500);       // residual de chegada
+    // residual de chegada TANGENCIAL: _dir aponta ao centro do sistema (o ponto
+    // de chegada fica na linha de aproximação) — residual radial jogava a nave
+    // em queda livre DENTRO da estrela (Betelgeuse: μ 1.6e13 a 240k → impacto
+    // em ~30 s de AFK). Defletido de lado, um piloto parado deriva em arco.
+    _to.crossVectors(_dir, _up);
+    if (_to.lengthSq() < 1e-6) _to.set(1, 0, 0);
+    s.vel.copy(_to.normalize()).multiplyScalar(1500);
     showToast(`⭒ Chegada: ${j.targetName} — bem-vindo ao sistema`, 3000);
   }
   return true;
