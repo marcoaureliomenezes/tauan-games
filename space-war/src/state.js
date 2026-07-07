@@ -62,6 +62,7 @@ export const game = {
   nav: { target: null, aligning: false, solution: null },
   wells: [],              // poços gravitacionais transientes {pos, mu, until, soft} — bomba de Higgs
   journey: null,          // viagem interestelar brachistochrone {active, s, T, D, beta, ...}
+  cinema: null,           // câmera-cinema temporária {at:Vector3, until} — ex.: fling de supernova
   // UI
   mapOpen: false,
   // diagnostics

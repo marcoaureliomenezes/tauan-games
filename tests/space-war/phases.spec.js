@@ -155,6 +155,33 @@ test.describe('Space War — Fases e Roster (QA end-of-alpha)', () => {
     expect(rel.speed).toBeGreaterThan(800);           // NÃO capturada (antiga: ~300)
   });
 
+  // T-PR-12 (operador 2026-07-07): a supernova da Higgs NÃO mata o jogador —
+  // a onda de choque o ARREMESSA para longe (kick ≥ 20k u/s) com a câmera em
+  // modo cinema olhando a explosão, casco intacto.
+  test('T-PR-12: supernova arremessa a nave ilesa (cinema + kick)', async ({ page }) => {
+    test.setTimeout(90000);
+    await startFlight(page);
+    await page.evaluate(() => window.__swDebug.goTo('sun', 4.5));
+    await page.waitForTimeout(300);
+    const hp0 = await page.evaluate(() => window.__spaceWar.ship.hp);
+    await page.evaluate(() => window.__swDebug.launchHiggs('supernova'));
+    await page.waitForFunction(() => (window.__spaceWar.supernovaCount || 0) >= 1, { timeout: 60000 });
+    const after = await page.evaluate(() => {
+      const sw = window.__spaceWar;
+      return {
+        hp: sw.ship.hp, screen: sw.screen,
+        speed: Math.hypot(sw.ship.vel.x, sw.ship.vel.y, sw.ship.vel.z),
+        cinema: !!sw.cinema,
+      };
+    });
+    expect(after.screen).toBe('flight');                 // vivo
+    expect(after.hp).toBeGreaterThanOrEqual(hp0 - 1);    // ileso (sem dano da onda)
+    // kick de 24k+ no impacto; assist/gravidade comem parte até a amostra —
+    // 12k ainda é ~8× a velocidade de voo normal (prova o arremesso)
+    expect(after.speed).toBeGreaterThan(12000);          // arremessado p/ LONGE
+    expect(after.cinema).toBe(true);                     // vendo a explosão
+  });
+
   // Finding 5 (MEDIUM, AC-06): o Devorador mostra o TEARDROP (uniforms de maré
   // aplicados na gigante, apontando ao BN) e a CORRENTE DE ROCHE construída.
   test('AC-06: teardrop da Devorada + corrente de Roche vivos', async ({ page }) => {

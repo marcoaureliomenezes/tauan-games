@@ -55,14 +55,6 @@ const LAYERS = [
 // ganho dos RISCOS tangenciais (AC-04: comprimento ∝ ω = v·senθ/d).
 const CLOSE_MAX_PX = 48;
 const STREAK_K = 12;
-// Teto do β da FORMA aparente (aberração/Doppler no shader). A β≈0.995 a
-// aberração honesta colapsa a esfera celeste num cone de arccos β ≈ 5.7° —
-// fisicamente certo, visualmente MORTO (o corredor inteiro some atrás da
-// própria nave; bug operator-reported "where are the stars we cross").
-// A 0.82 o céu quase todo comprime DENTRO do viewport (90° reais → ~35°
-// aparentes): milhares de estrelas à frente, riscos radiais, beaming vivo.
-// O β cinemático (journey.beta / starfieldBeta) segue 0.995 p/ HUD e e2e.
-const ABER_BETA_MAX = 0.82;
 
 const VERT = `
 uniform vec3 uCam;        // câmera GALÁCTICA (wrap invariante ao rebase da origem)
@@ -79,7 +71,6 @@ uniform float uPxAngle;
 uniform float uSpeed;
 uniform float uCloseMax;
 uniform float uStreakK;
-uniform float uWarpGain;
 uniform vec3 uCamRight;
 uniform vec3 uCamUp;
 attribute vec3 iPos;
@@ -105,7 +96,7 @@ void main() {
     : dir;
   // FOTOMETRIA (espelho de physics.pointIntensity/pointPx/pointAlpha):
   // I = L·(D0/d)²; núcleo FIXO + glare √(I−1) com teto; α = clamp(I,0,1).
-  float I = iLum * (uD0 * uD0) / (dist * dist) * uWarpGain;
+  float I = iLum * (uD0 * uD0) / (dist * dist);
   float px = min(uCorePx + ((I > 1.0) ? uGlareK * sqrt(I - 1.0) : 0.0), uMaxPx);
   // PASSAGEM RASANTE (AC-02): tamanho ANGULAR honesto 2·R/d — estrela com
   // parâmetro de impacto pequeno (perto do centro da tela) CRESCE antes de
@@ -133,10 +124,8 @@ void main() {
   float al = length(aR);
   vec3 axisA = (al > 1e-4) ? aR / al : uCamRight;
   vec3 axisB = normalize(cross(dirA, axisA));
-  // energia se espalha pelo risco: α cai com o alongamento — penalidade SUAVE
-  // (0.15, era 0.5): a conservação estrita apagava exatamente as estrelas que
-  // vendem o warp (as rasantes riscadas — bug "where are the stars we cross")
-  vAlpha = clamp(I, 0.0, 1.0) * edge * uFade * min(boost, 1.0) / (1.0 + 0.15 * streak);
+  // energia se espalha pelo risco: α cai com o alongamento (conservação)
+  vAlpha = clamp(I, 0.0, 1.0) * edge * uFade * min(boost, 1.0) / (1.0 + 0.5 * streak);
   vQuad = position.xy * 2.0;                       // −1..1 no quad
   // quad subtendendo px PIXELS (eixo A alongado pelo risco)
   float world = px * dist * uPxAngle;
@@ -220,7 +209,6 @@ export function buildStarfield() {
         uSpeed: { value: 0 },
         uCloseMax: { value: CLOSE_MAX_PX },
         uStreakK: { value: STREAK_K },
-        uWarpGain: { value: 1 },
         uCamRight: { value: new THREE.Vector3(1, 0, 0) },
         uCamUp: { value: new THREE.Vector3(0, 1, 0) },
       },
@@ -291,8 +279,12 @@ export function updateStarfield() {
   // beaming/streaks) só liga depois de cruzar a fronteira e desliga ao entrar
   // no destino. O β cinemático (journey.beta) segue intacto p/ HUD/perfil.
   const fade = systemFade(camera.position);
+  // β VISUAL = β cinemático × fade posicional (P0-1): sai do sistema → começa a
+  // cruzar estrelas; acelera → cruza mais e mais; em v_max a aberração PLENA
+  // (0.995) concentra o céu à frente no centro — o look canônico do operador
+  // (rodada 2: SEM teto de aberração, SEM ganho de exposição — estrelas
+  // SÓLIDAS como no original, não "borrões transparentes").
   const beta = j && j.active ? Math.min(0.995, j.beta) * fade : 0;
-  const aberBeta = Math.min(beta, ABER_BETA_MAX);   // forma aparente (shader)
   if (s.vel && s.vel.lengthSq() > 1) _dirFlight.copy(s.vel).normalize();
   const pxA = pixelAngle();
   const e = camera.matrixWorld.elements;
@@ -309,18 +301,21 @@ export function updateStarfield() {
     const u = L.mat.uniforms;
     u.uCam.value.copy(_c);
     u.uCamScene.value.copy(camera.position);
-    u.uBeta.value = aberBeta;
-    // exposição de warp: no cruzeiro (β·fade→1) o campo ganha ~3.5× de fluxo —
-    // o corredor fica POVOADO (milhares de estrelas acima do limiar de α)
-    u.uWarpGain.value = 1 + 2.5 * beta;
+    u.uBeta.value = beta;
     u.uDir.value.copy(_dirFlight);
     u.uFade.value = fade;
     u.uPxAngle.value = pxA;
-    u.uSpeed.value = j && j.active ? j.v : (s.speed || 0);
+    // riscos calibrados p/ ESCALA DE VOO (~9k u/s): o v do cruzeiro (~175k) nas
+    // fórmulas de risco/crescimento virava quads gigantes estroboscópicos —
+    // "coisas que nem parecem estrelas" (operador, img/). O corredor deve ler
+    // como PONTOS em paralaxe, convergindo ao centro pela aberração.
+    u.uSpeed.value = j && j.active ? Math.min(j.v, 9000) : (s.speed || 0);
+    // crescimento rasante idem: pleno em voo local, contido no warp
+    u.uCloseMax.value = CLOSE_MAX_PX * (1 - 0.68 * beta);
     u.uCamRight.value.copy(_right);
     u.uCamUp.value.copy(_up);
   }
-  game.starfieldFx = { closeMaxPx: CLOSE_MAX_PX, streakK: STREAK_K, beta, aberBeta };
+  game.starfieldFx = { closeMaxPx: CLOSE_MAX_PX, streakK: STREAK_K, beta };
   game.starfieldFade = fade;                 // diagnóstico p/ e2e
   game.starfieldBeta = beta;
 

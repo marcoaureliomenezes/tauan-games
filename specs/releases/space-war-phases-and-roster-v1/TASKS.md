@@ -29,3 +29,20 @@
   `tests/space-war/**`.
 - [x] **T-PR-10** — QA + security push-verdict + push + PR + CI verde. Write
   set: `.dadaia/handoff/**`, `specs/**`. (PR #21, CI verde 2026-07-07.)
+
+## Rodada 2 — feedback do operador em jogo (2026-07-07, evidência `img/`)
+
+- [x] **T-PR-11** — Corredor interestelar = look ORIGINAL restaurado (estrelas
+  sólidas, aberração plena 0.995 concentrando no centro em v_max, zero ganho de
+  exposição), com riscos/crescimento normalizados p/ a escala de voo (uSpeed ≤
+  9k no warp; o cruzeiro de 176k virava borrões) e o gate de fronteira do P0-1
+  mantido. Write set: `space-war/src/starfield.js`.
+- [x] **T-PR-12** — Higgs = micro buraco negro sob comando: corrente de plasma
+  estilo Devorador (tubo curvo + hot spot + teardrop na fonte), drena estrelas
+  E discos de acreção, supernova DETERMINÍSTICA por dreno acumulado (∝ raio),
+  onda de choque arremessa o jogador ileso com câmera-cinema na explosão.
+  Write set: `space-war/src/higgs.js`, `space-war/src/state.js`,
+  `space-war/src/ship.js`, `tests/space-war/**`.
+- [x] **T-PR-13** — Câmera de observação em FRAME CO-ROTANTE: o corpo dominante
+  fica parado na vista durante a órbita; mouse livre p/ passear o olhar sem
+  alterar a trajetória. Write set: `space-war/src/ship.js`.
