@@ -12,6 +12,7 @@ import { explosion } from './fx.js';
 import { airportSurface } from './landing-zones.js';
 import { getAirportForMap } from './airport.js';
 import { inhaumaStructureInfoAt } from './maps/inhauma-scene.js';
+import { buildClouds } from './environment/clouds.js';
 
 // ─── Oceano ──────────────────────────────────────────────────────────────────
 const oceanCanvas = document.createElement('canvas');
@@ -255,79 +256,29 @@ export function checkTerrainCollision(jetPosition) {
   return jetPosition.y < s.height + 1.2 ? 'GROUND' : null;
 }
 
-// ─── Nuvens Volumétricas ──────────────────────────────────────────────────────
-// Três camadas de altitude com MeshStandardMaterial para resposta à luz.
-// cloudMats[] guarda referências para atualização dinâmica de cor via ciclo dia/noite.
-export const clouds = [];
-const cloudMats = [];
+// ─── Nuvens (T-AR-04): billboards instanciados da lib de ambiente ────────────
+// Substitui os aglomerados de esferas (look de algodão duro + dezenas de draw
+// calls) por 3 InstancedMesh de billboards fofos — compartilhado por TODOS os
+// mapas via environment/clouds.js. Update por frame vive em main.js (o drift
+// antigo só rodava no mapa islands; nos outros mapas as nuvens ficavam paradas).
+export const cloudSystem = HEADLESS ? null : buildClouds(scene, Math.random);
 
-// Camadas: [altMin, altMax, count, radiusMin, radiusMax, sphereCountMin, sphereCountMax]
-const CLOUD_LAYERS = HEADLESS ? [] : [
-  [80,  130, 20,  8, 18, 15, 25],   // Baixa
-  [220, 380, 25, 12, 25, 15, 28],   // Média
-  [500, 750, 15, 20, 40, 12, 20],   // Alta (cirrus — mais esparsas)
-];
-
-for (const [altMin, altMax, count, rMin, rMax, sMin, sMax] of CLOUD_LAYERS) {
-  for (let i = 0; i < count; i++) {
-    const g = new THREE.Group();
-    // ADR-U5: fog:false mata a tinta bege do fog do mapa; emissive leve dá leitura
-    // de nuvem (não rocha); cachos achatados em Y.
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, roughness: 0.95, metalness: 0.0,
-      emissive: 0x33363c, emissiveIntensity: 0.5, fog: false,
-    });
-    cloudMats.push(mat);
-    const n = sMin + Math.floor(Math.random() * (sMax - sMin + 1));
-    const spread = rMax * 2.5;
-    for (let j = 0; j < n; j++) {
-      const r = rMin + Math.random() * (rMax - rMin);
-      const s = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), mat);
-      s.position.set(
-        (Math.random() - 0.5) * spread,
-        (Math.random() - 0.5) * (rMax * 0.5),
-        (Math.random() - 0.5) * spread,
-      );
-      g.add(s);
-    }
-    g.position.set(
-      (Math.random() - 0.5) * 4000,
-      altMin + Math.random() * (altMax - altMin),
-      (Math.random() - 0.5) * 4000,
-    );
-    g.scale.y = 0.55; // nuvens achatadas (ADR-U5)
-    scene.add(g);
-    clouds.push(g);
-  }
-}
-
-let _cloudColorTimer = 0;
-/** Atualiza cor das nuvens com base no timeOfDay (a cada ~2s para não gastar por frame). */
-export function updateCloudColors(tod) {
+/** Tom das nuvens por hora do dia (usado por main.js no updateClouds). */
+export function cloudTintFor(tod) {
   const isDawn  = tod > 0.15 && tod < 0.28;
   const isDusk  = tod > 0.72 && tod < 0.86;
   const isNight = tod < 0.18 || tod > 0.82;
-  const cloudColor = isNight ? 0x1a2030 : (isDawn || isDusk) ? 0xffb08a : 0xffffff;
-  for (const m of cloudMats) m.color.setHex(cloudColor);
+  return _cloudTint.setHex(isNight ? 0x2a3245 : (isDawn || isDusk) ? 0xffb08a : 0xffffff);
 }
+const _cloudTint = new THREE.Color(0xffffff);
 
-/** Atualiza oceano (offset de textura + vertex waves, recentralizar no player) e drift de nuvens. */
+/** Atualiza oceano (offset de textura + vertex waves, recentralizar no player). */
 export function updateWorld(dt, playerPosition) {
   oceanTex.offset.y += dt * 0.22;
   oceanTex.offset.x += dt * 0.05;
   ocean.position.x = playerPosition.x;
   ocean.position.z = playerPosition.z;
   updateOceanWaves();
-  for (const c of clouds) {
-    c.position.x += dt * 4;
-    if (c.position.x > playerPosition.x + 2000) c.position.x -= 4000;
-  }
-  // Atualiza cor das nuvens a cada ~2s
-  _cloudColorTimer -= dt;
-  if (_cloudColorTimer <= 0) {
-    _cloudColorTimer = 2.0;
-    updateCloudColors(game.timeOfDay || 0.35);
-  }
 }
 
 // ─── Flak ambiente (decorativo, sem dano) ────────────────────────────────────

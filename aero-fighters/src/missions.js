@@ -12,7 +12,7 @@ import { clearMissiles, clearPickups, recycleBullet } from './projectiles.js';
 import { megaExplosion, scheduleDelayed, spawnScorchMark, spawnWaterSplash } from './fx.js';
 import { jet, respawnJet } from './player.js';
 import { audio } from './audio.js';
-import { showOverlay, hideOverlay } from './hud.js';
+import { showOverlay, hideOverlay, killFeed } from './hud.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 
 /** Quantos alvos a missão N tem. Missão 1=8, 2=12, 3+=16. */
@@ -143,8 +143,23 @@ export function crashAndDie(where) {
   }
 }
 
+/** Missão cumprida RECUPERA a esquadrilha (T-AR-02, demanda do operador):
+ *  os ferimentos do jogador saram e os amigos vivos são reparados em voo. */
+function healSquadron() {
+  const healed = game.player.hp < 3;
+  game.player.hp = 3;
+  let allies = 0;
+  for (const wm of game.wingmen) {
+    if (wm.dead || wm.falling) continue;
+    if (wm.hp < 3) allies++;
+    wm.hp = 3;
+  }
+  if (healed || allies) killFeed('✚ missão cumprida — esquadrilha reparada', '#5dffa0');
+}
+
 /** Avança para a próxima missão. */
 export function nextMission() {
+  healSquadron();
   if (game.missionRealism?.enabled) {
     transitionSortie(game.missionRealism.sortie, SortieEvent.ALL_TARGETS_DESTROYED, {}, game.time);
     // Trava o re-disparo: enquanto retornamos à base, o detector de conclusão não

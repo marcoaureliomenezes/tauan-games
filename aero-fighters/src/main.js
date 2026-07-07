@@ -8,7 +8,8 @@ import { CANNON } from './config.js';
 import { audio } from './audio.js';
 import { scene, camera, renderer, attachToBody, dirLight, ambLight } from './scene.js';
 import { initSky, updateSky, getSunData, getAmbientData, getSkyColor } from './sky.js';
-import { ocean, createIslands, updateWorld, updateAmbientFlak, setActiveHeightFn } from './world.js';
+import { ocean, createIslands, updateWorld, updateAmbientFlak, setActiveHeightFn, cloudSystem, cloudTintFor } from './world.js';
+import { updateClouds } from './environment/clouds.js';
 import { getActiveHeightFn } from './world.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
@@ -17,20 +18,20 @@ import { input, installListeners, onAction } from './input.js';
 import { jet, updatePlayer, playerHit, barrelRoll, firePosition, respawnJet, respawnAndRelaunch } from './player.js';
 import { updateTargets } from './targets.js';
 import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups, spawnNuclearMissile, updateNuclears } from './projectiles.js';
-import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } from './hud.js';
+import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon, killFeed } from './hud.js';
 import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver, spawnMission } from './missions.js';
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
 import { initMinimap, updateMinimap } from './ui/minimap.js';
 import { MAPS, getMapHeightFn } from './maps/index.js';
-import { spawnWingmen, updateWingmen, clearWingmen } from './wingmen.js';
+import { spawnWingmen, updateWingmen, clearWingmen, respawnDeadWingmen } from './wingmen.js';
 import { spawnAllyEnemies, updateAllyWar, clearAllyEnemies } from './ally-war.js';
 import { updateAutoTaxi, isAutoTaxiActive } from './auto-taxi.js';
-import { installDebugApi, recordFrame } from './debug.js';
+import { installDebugApi, recordFrame, applyFreeCam } from './debug.js';
 import { createAirportFor } from './airport.js';
 import { startService, updateService } from './service-scene.js';
 import { requestEjection, updateEjection, createPilotVisual } from './ejection.js';
 import { cycleCameraMode, updateCameraRig } from './camera-modes.js';
-import { updateNuclearFx } from './nuclear-fx.js';
+import { updateNuclearFx, prewarmNuclearFx } from './nuclear-fx.js';
 import { updateBoss } from './boss.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 
@@ -90,6 +91,8 @@ window.selectMap = function(mapKey) {
   spawnWingmen(scene, jet);
   // Inimigos DOS ALIADOS — a frente de batalha dos amigos (separada da do player)
   spawnAllyEnemies(scene);
+  // Pré-compila os shaders do cogumelo nuclear (bug: freeze na 1ª detonação)
+  prewarmNuclearFx(renderer, camera);
 
   // Mostra o overlay de instruções (início do jogo)
   showOverlay(
@@ -282,6 +285,8 @@ function handleStartOrFire() {
     game.cycle += 1;
     game.flags.missionCompleteShown = false;
     game.missionRealism.service.phase = 'idle';
+    // T-AR-02: amigos abatidos são repostos a cada nova surtida (reforço).
+    if (respawnDeadWingmen(scene) > 0) killFeed('✈ reforço aliado decolou', '#8fd0ff');
     spawnMission(game.cycle);
     return;
   }
@@ -463,10 +468,14 @@ function tick() {
   }
 
   updateCamera(dt);
+  // Nuvens billboard (T-AR-04): update global — TODOS os mapas, mesmo pausado
+  // (billboard precisa encarar a câmera sempre; o drift antigo só rodava em islands)
+  updateClouds(cloudSystem, dt, camera, cloudTintFor(game.timeOfDay || 0.35));
   updateCrosshair(dt, camera, jet.position, jet.quaternion);
   tickOverlayTimer(dt);
   updateHUD();
   updateMinimap();
+  applyFreeCam(camera);   // QA visual (testMode) — no-op sem freeCam armada
   renderer.render(scene, camera);
 }
 
