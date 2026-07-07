@@ -207,3 +207,13 @@ export function updateHiggs(dt) {
 
 // Diagnóstico p/ e2e/HUD
 export function higgsActiveCount() { return active.length; }
+
+// FASES (T-PR-06): engajamentos referenciam estrelas do sistema descarregado —
+// morrem com ele (braços removidos, poços limpos por weapons.clearProjectiles).
+export function clearHiggs() {
+  for (const e of active) {
+    for (const arm of e.arms) for (const b of arm.blobs) { scene.remove(b); b.material.dispose(); b.geometry.dispose(); }
+  }
+  active.length = 0;
+  recovering.length = 0;
+}

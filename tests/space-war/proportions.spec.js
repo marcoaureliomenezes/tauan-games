@@ -58,7 +58,13 @@ test.describe('Space War — Proporções Verdadeiras', () => {
         solarVisible: solarMeshes.map((b) => b.def.name),
         betelVisible: betelMeshes.map((b) => b.def.name),
         solarGlow: sw.sysGlow.solar,
-        dSolar: Math.hypot(sw.ship.pos.x, sw.ship.pos.y, sw.ship.pos.z),
+        // FASES: posição GALÁCTICA = origin + pos de cena (o sistema ativo
+        // vive na origem — |pos| local é pequeno por construção)
+        dSolar: Math.hypot(
+          sw.world.origin.x + sw.ship.pos.x,
+          sw.world.origin.y + sw.ship.pos.y,
+          sw.world.origin.z + sw.ship.pos.z,
+        ),
       };
     });
     // seria impossível ver Saturno do buraco negro (operador)
@@ -75,6 +81,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     test.setTimeout(60000);
     await startFlight(page);
     const bh = await page.evaluate(() => {
+      window.__swDebug.loadSystem('binary');       // FASES: materializa o binário
       const sw = window.__spaceWar;
       const b = sw.bodies.find((x) => x.def.key === 'blackhole');
       let tubes = 0, cylinders = 0, rings = 0, spiralUniform = 0, rimUniform = 0;

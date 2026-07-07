@@ -6,8 +6,16 @@ export const game = {
   // reservado p/ fases de campanha/sistema): menu | briefing | flight | win | gameover
   screen: 'menu',
   time: 0,                // tempo de jogo (s)
-  // Mundo
-  bodies: [],             // todos os corpos: { def, group, mesh, worldPos:Vector3, mu, soi, isMoon, parent }
+  // Mundo — FASES (audit T-PR-06): só UM sistema existe por vez, construído na
+  // ORIGEM da cena (mata o jitter float32 dos centros a 19–29M u). `origin` é a
+  // posição GALÁCTICA da origem da cena: pos_galáctica = origin + pos_cena.
+  // systemKey = null ⇒ vazio interestelar (fase de viagem): nenhum corpo,
+  // starfield + glows + skybox; a origem REBASEIA acompanhando a nave.
+  world: {
+    systemKey: null,
+    origin: null,         // THREE.Vector3 (preenchido em celestial/system.js)
+  },
+  bodies: [],             // corpos do sistema ATIVO: { def, group, mesh, worldPos:Vector3, mu, soi, … }
   sun: null,
   // Nave
   ship: {

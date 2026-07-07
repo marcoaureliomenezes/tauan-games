@@ -183,12 +183,15 @@ export const PLANETS = [
 // o Véu em runtime como 6º). Centros FINAIS (anel a 19–29M u do Sol: "anos-luz"
 // — de outro sistema só cruzam pontos fotométricos).
 // ===========================================================================
+// `lum` = luminosidade SOMADA das estrelas do sistema (estática — os glows
+// fotométricos do starlod precisam dela mesmo com o sistema DESCARREGADO; fases
+// T-PR-06). `arriveDist` = recuo do ponto de chegada da viagem interestelar.
 export const SYSTEMS = [
-  { key: 'solar', name: 'Sistema Solar', center: [0, 0, 0], radius: 4_200_000, primary: 'sun' },
-  { key: 'betelgeuse', name: 'Betelgeuse', center: [16_640_000, 960_000, -16_640_000], radius: 300_000, primary: 'betelgeuse' },
-  { key: 'binary', name: 'Binário BN+Pulsar', center: [-20_800_000, 0, 7_040_000], radius: 280_000, primary: 'blackhole' },
-  { key: 'chaotic', name: 'Binário Caótico', center: [5_760_000, -960_000, 23_360_000], radius: 260_000, primary: 'azurak' },
-  { key: 'core', name: 'Núcleo da Galáxia', center: [-12_160_000, 1_920_000, -23_040_000], radius: 420_000, primary: 'sgr' },
+  { key: 'solar', name: 'Sistema Solar', center: [0, 0, 0], radius: 4_200_000, primary: 'sun', lum: 1.0, arriveDist: 130_000 },
+  { key: 'betelgeuse', name: 'Betelgeuse', center: [16_640_000, 960_000, -16_640_000], radius: 300_000, primary: 'betelgeuse', lum: 60.9, arriveDist: 240_000 },
+  { key: 'binary', name: 'Binário BN+Pulsar', center: [-20_800_000, 0, 7_040_000], radius: 280_000, primary: 'blackhole', lum: 80, arriveDist: 130_000 },
+  { key: 'chaotic', name: 'Binário Caótico', center: [5_760_000, -960_000, 23_360_000], radius: 260_000, primary: 'azurak', lum: 0.68, arriveDist: 130_000 },
+  { key: 'core', name: 'Núcleo da Galáxia', center: [-12_160_000, 1_920_000, -23_040_000], radius: 420_000, primary: 'sgr', lum: 6.9, arriveDist: 130_000 },
 ];
 
 // ---------------------------------------------------------------------------

@@ -57,7 +57,8 @@ const CLOSE_MAX_PX = 48;
 const STREAK_K = 12;
 
 const VERT = `
-uniform vec3 uCam;
+uniform vec3 uCam;        // câmera GALÁCTICA (wrap invariante ao rebase da origem)
+uniform vec3 uCamScene;   // câmera no frame da CENA (posicionamento do quad)
 uniform float uSpan;
 uniform float uBeta;
 uniform vec3 uDir;
@@ -128,7 +129,7 @@ void main() {
   vQuad = position.xy * 2.0;                       // −1..1 no quad
   // quad subtendendo px PIXELS (eixo A alongado pelo risco)
   float world = px * dist * uPxAngle;
-  vec3 pA = uCam + dirA * dist
+  vec3 pA = uCamScene + dirA * dist
     + axisA * position.x * world * (1.0 + streak)
     + axisB * position.y * world;
   gl_Position = projectionMatrix * viewMatrix * vec4(pA, 1.0);
@@ -195,6 +196,7 @@ export function buildStarfield() {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uCam: { value: new THREE.Vector3() },
+        uCamScene: { value: new THREE.Vector3() },
         uSpan: { value: L.span },
         uBeta: { value: 0 },
         uDir: { value: new THREE.Vector3(0, 0, -1) },
@@ -255,14 +257,15 @@ export function buildStarfield() {
 // EXPORTADO (audit P0-1): é a definição canônica de fronteira p/ TODOS os
 // efeitos relativísticos (starfield, tint do postfx) — journey engajada dentro
 // do sistema NÃO acende o corredor; ele nasce ao cruzar a fronteira.
+// FASES (T-PR-06): só o sistema CARREGADO importa — ele vive na origem da
+// cena; os outros estão a anos-luz (fade 1 por construção).
 export function systemFade(pos) {
-  let f = 1;
-  for (const sys of SYSTEMS) {
-    _c.set(...sys.center);
-    const d = pos.distanceTo(_c) / Math.max(1, sys.radius);
-    f = Math.min(f, boundaryFade(d, SYSTEM_FADE_INNER, SYSTEM_FADE_OUTER));
-  }
-  return f;
+  const key = game.world?.systemKey;
+  if (!key) return 1;
+  const sys = SYSTEMS.find((s) => s.key === key);
+  if (!sys) return 1;
+  const d = pos.length() / Math.max(1, sys.radius);
+  return boundaryFade(d, SYSTEM_FADE_INNER, SYSTEM_FADE_OUTER);
 }
 
 export function updateStarfield() {
@@ -283,9 +286,16 @@ export function updateStarfield() {
   _right.set(e[0], e[1], e[2]).normalize();
   _up.set(e[4], e[5], e[6]).normalize();
 
+  // Câmera GALÁCTICA p/ o wrap (fases T-PR-06): o rebase da origem no vazio
+  // não pode teleportar o padrão de estrelas — o mod(span) é ancorado na
+  // posição galáctica (origin + câmera), invariante ao rebase.
+  _c.copy(camera.position);
+  if (game.world?.origin) _c.add(game.world.origin);
+
   for (const L of layers) {
     const u = L.mat.uniforms;
-    u.uCam.value.copy(camera.position);
+    u.uCam.value.copy(_c);
+    u.uCamScene.value.copy(camera.position);
     u.uBeta.value = beta;
     u.uDir.value.copy(_dirFlight);
     u.uFade.value = fade;
@@ -298,12 +308,15 @@ export function updateStarfield() {
   game.starfieldFade = fade;                 // diagnóstico p/ e2e
   game.starfieldBeta = beta;
 
+  // Nebulosas: wrap na câmera GALÁCTICA (_c) — invariante ao rebase — e
+  // reconversão p/ o frame da cena (galáctico − origin = cena).
+  const ox = _c.x - camera.position.x, oy = _c.y - camera.position.y, oz = _c.z - camera.position.z;
   for (const sp of nebulae) {
     const span = sp.userData.span, b = sp.userData.base;
     sp.position.set(
-      ((b.x - camera.position.x) % span + span * 1.5) % span - span * 0.5 + camera.position.x,
-      ((b.y - camera.position.y) % span + span * 1.5) % span - span * 0.5 + camera.position.y,
-      ((b.z - camera.position.z) % span + span * 1.5) % span - span * 0.5 + camera.position.z,
+      ((b.x - _c.x) % span + span * 1.5) % span - span * 0.5 + _c.x - ox,
+      ((b.y - _c.y) % span + span * 1.5) % span - span * 0.5 + _c.y - oy,
+      ((b.z - _c.z) % span + span * 1.5) % span - span * 0.5 + _c.z - oz,
     );
     sp.material.opacity = 0.30 * fade;
   }

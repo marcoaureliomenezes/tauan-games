@@ -237,6 +237,19 @@ export function updateShipVisualFX(thr) {
   for (const w of wingLights) w.material.color.setRGB(0.55 + 0.45 * pulse, 0.06, 0.06);
 }
 
+// Rebase da cena (world.js, fases T-PR-06): tudo que a nave guarda em
+// coordenadas de CENA desloca em bloco — posição, malha, câmera (perseguição E
+// observação), pivô dos OrbitControls e o cache da posição da Terra.
+export function shiftShip(shift) {
+  const s = game.ship;
+  if (s.pos) s.pos.add(shift);
+  if (mesh) mesh.position.add(shift);
+  camera.position.add(shift);
+  camTarget.add(shift);
+  lastEarthPos.add(shift);
+  if (_obsControls) _obsControls.target.add(shift);
+}
+
 export function updateShip(dt) {
   const s = game.ship;
 
@@ -253,9 +266,20 @@ export function updateShip(dt) {
   }
 
   // --- Velocidade da Terra (diferença finita) p/ acompanhar a órbita ao decolar ---
-  _earthVel.copy(earthBody.worldPos).sub(lastEarthPos).multiplyScalar(dt > 0 ? 1 / dt : 0);
+  // FASES (T-PR-06): a Terra só existe com o sistema solar carregado — re-resolve
+  // após trocas de fase; sem Terra, não há estado "pousada" (o pouso é o boot).
+  if (!earthBody || !game.bodies.includes(earthBody)) {
+    earthBody = game.bodies.find((b) => b.def.key === 'earth') || null;
+    if (earthBody) lastEarthPos.copy(earthBody.worldPos);
+    if (!earthBody && s.landed) s.landed = false;
+  }
+  if (earthBody) {
+    _earthVel.copy(earthBody.worldPos).sub(lastEarthPos).multiplyScalar(dt > 0 ? 1 / dt : 0);
+    lastEarthPos.copy(earthBody.worldPos);
+  } else {
+    _earthVel.set(0, 0, 0);
+  }
   const earthVel = _earthVel;
-  lastEarthPos.copy(earthBody.worldPos);
 
   // --- Throttle ---
   if (input.throttleUp) s.throttle = Math.min(1, s.throttle + dt * 1.2);

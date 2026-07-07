@@ -43,8 +43,9 @@ const GLOW_TINTS = {
   solar: ['rgba(255,244,214,0.98)', 'rgba(255,220,150,0.5)', 'rgba(200,160,80,0.15)', 'rgba(0,0,0,0)'],
 };
 
-const _stars = [];    // { body, sprite, nearViz, mode, lum, coronaBase }
-const _glows = [];    // { sys, sprite, lum, center }
+const _stars = [];    // { body, sprite, nearViz, mode, lum, coronaBase } — sistema ATIVO
+const _glows = [];    // { sys, sprite, lum, center(galáctico) } — TODOS (descritores)
+const _gPos = new THREE.Vector3();
 
 function photoSprite(stops) {
   const sp = makeRadialSprite(stops);
@@ -59,9 +60,21 @@ function starStops(colorHex) {
   return ['rgba(255,255,255,1.0)', `rgba(${rgb},0.85)`, `rgba(${rgb},0.22)`, 'rgba(0,0,0,0)'];
 }
 
-// Pós-build: prepara cada estrela luminosa (subgrupo nearViz + ponto de cena)
-// e um glow fotométrico por sistema cullado.
+// GLOWS DE SISTEMA (fases, T-PR-06): construídos UMA vez no boot, a partir dos
+// DESCRITORES de SYSTEMS (lum estática do registry) — existem mesmo com o
+// sistema descarregado; a posição na cena é center_galáctico − world.origin,
+// recomputada por frame (o vazio rebaseia a origem).
 export function buildFarStars() {
+  if (!_glows.length) {
+    for (const sys of SYSTEMS) {
+      if (!sys.lum) continue;
+      const sprite = photoSprite(GLOW_TINTS[sys.key] || GLOW_TINTS.solar);
+      sprite.visible = false;
+      scene.add(sprite);
+      _glows.push({ sys, sprite, lum: sys.lum, center: new THREE.Vector3(...sys.center) });
+    }
+  }
+  // Membros luminosos do sistema ATIVO (chamado a cada loadSystem).
   for (const b of game.bodies) {
     const lum = lumForStar(b.def);
     if (!lum) continue;
@@ -81,33 +94,35 @@ export function buildFarStars() {
       coronaBase: b.corona ? b.corona.scale.x : 0,
     });
   }
-
-  // Glows de sistema: TODOS (proporções verdadeiras: com o cull universal e os
-  // sistemas a 19–29M, nenhum disco cruza o vazio — o glow é o único marco;
-  // o solar visto do binário é só mais uma estrela fraca, como manda o céu).
-  for (const sys of SYSTEMS) {
-    let lum = 0;
-    for (const e of _stars) if (e.body.system === sys.key) lum += e.lum;
-    if (!lum) continue;
-    const sprite = photoSprite(GLOW_TINTS[sys.key] || GLOW_TINTS.solar);
-    sprite.visible = false;
-    sprite.position.set(...sys.center);
-    scene.add(sprite);
-    _glows.push({ sys, sprite, lum, center: new THREE.Vector3(...sys.center) });
-  }
   game.starLod = {};
   game.sysGlow = {};
 }
 
+// Descarte junto com o sistema (unloadSystem → hook onUnloaded).
+export function disposeFarStars() {
+  for (const e of _stars) {
+    scene.remove(e.sprite);
+    if (e.sprite.material.map) e.sprite.material.map.dispose();
+    e.sprite.material.dispose();
+  }
+  _stars.length = 0;
+  game.starLod = {};
+}
+
 export function updateFarStars() {
-  if (!_stars.length) return;
   const pxA = pixelAngle();
   const strobe = game.pulsarStrobe ?? 1;
+  const origin = game.world.origin;
 
-  // Sistemas "resolvidos" (câmera dentro de 0.9·raio): membros assumem, glow some.
+  // Sistema "resolvido" (câmera dentro de 0.9·raio): membros assumem, glow some.
   const resolved = {};
   for (const g of _glows) {
-    resolved[g.sys.key] = camera.position.distanceTo(g.center) < g.sys.radius * 0.9;
+    _gPos.copy(g.center);
+    if (origin) _gPos.sub(origin);
+    g.scenePos = g.scenePos || new THREE.Vector3();
+    g.scenePos.copy(_gPos);
+    resolved[g.sys.key] = (game.world.systemKey === g.sys.key)
+      && camera.position.distanceTo(_gPos) < g.sys.radius * 0.9;
   }
 
   for (const e of _stars) {
@@ -153,13 +168,14 @@ export function updateFarStars() {
   }
 
   for (const g of _glows) {
-    const d = camera.position.distanceTo(g.center);
-    const show = d > g.sys.radius * 0.9;
+    const d = camera.position.distanceTo(g.scenePos);
+    const show = !resolved[g.sys.key];
     let I = 0, px = 0, alpha = 0;
     if (show) {
       I = pointIntensity(g.lum, d, D0_SYS);
       px = pointPx(I, 2.6, 2.6, 30);
       alpha = pointAlpha(I) * (g.sys.key === 'binary' ? strobe : 1);
+      g.sprite.position.copy(g.scenePos);
       g.sprite.scale.setScalar(px * d * pxA);
       g.sprite.material.opacity = alpha;
     }

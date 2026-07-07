@@ -102,21 +102,24 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     expect(away.flareF).toBeLessThan(0.1);             // fluxo (0.7/3.8)² ≈ 0.03 — sem piso
     expect(away.sun.mode).toBe('disc');
     expect(away.sun.coronaPx).toBeLessThanOrEqual(away.sun.discPx * 1.3);
-    // no binário (d(Sol) ≈ 22M — "anos-luz"): flare CORTADO e o Sol nem é disco:
-    // vira o glow do sistema (cluster) — proporções verdadeiras.
+    // no binário (d(Sol) ≈ 22M — "anos-luz"): FASES (T-PR-06) — o solar nem
+    // existe mais como corpos: só o GLOW fotométrico do descritor representa o
+    // sistema, e o flare morre com o unload.
     await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
-      () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.mode === 'cluster',
+      () => window.__spaceWar.sysGlow.solar && window.__spaceWar.sysGlow.solar.visible === true,
       undefined, { timeout: 8000 },
     );
     const veryFar = await page.evaluate(() => ({
       flareVis: window.__spaceWar.sunFlareVisible,
       flareF: window.__spaceWar.sunFlareFactor,
       solarGlow: window.__spaceWar.sysGlow.solar,
+      sunLod: window.__spaceWar.starLod.sun ?? null,
     }));
     expect(veryFar.flareVis).toBe(false);
     expect(veryFar.flareF).toBe(0);
     expect(veryFar.solarGlow.visible).toBe(true);
+    expect(veryFar.sunLod).toBe(null);              // corpos do solar descarregados
   });
 
   // AC-04 (metade interestelar) + AC-05: de OUTRO sistema, o farol do binário
@@ -129,8 +132,8 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.waitForTimeout(250);
     const fromSolar = await page.evaluate(() => ({
       glows: window.__spaceWar.sysGlow,
-      ns: window.__spaceWar.starLod.neutron,
-      s1: window.__spaceWar.starLod.s1,
+      ns: window.__spaceWar.starLod.neutron ?? null,
+      s1: window.__spaceWar.starLod.s1 ?? null,
     }));
     // farol do binário: NS-dominado, I>1, px≥4, visível de casa (AC-04)
     expect(fromSolar.glows.binary.visible).toBe(true);
@@ -145,9 +148,10 @@ test.describe('Space War — Estrelas Fotométricas', () => {
       expect(g.px).toBeLessThanOrEqual(30);
       expect(g.alpha).toBeLessThanOrEqual(1);
     }
-    // membros de sistema não-resolvido cedem ao glow (modo 'cluster')
-    expect(fromSolar.ns.mode).toBe('cluster');
-    expect(fromSolar.s1.mode).toBe('cluster');
+    // FASES (T-PR-06): membros de sistemas não carregados NEM EXISTEM — o glow
+    // do descritor é a única representação (sem dupla contagem por construção).
+    expect(fromSolar.ns).toBe(null);
+    expect(fromSolar.s1).toBe(null);
     // resolvendo o binário: glow some, membro assume
     await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(

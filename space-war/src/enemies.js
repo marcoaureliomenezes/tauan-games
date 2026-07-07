@@ -116,6 +116,19 @@ export function spawnPhase(phaseKey) {
 // Escolta de alvo da caçada: 3 caças nascem junto com cada base/nave capital.
 export function spawnEscort(body, phaseKey) { spawnNear(body, 3, { phaseKey }); }
 
+// FASES (T-PR-06): inimigos são ancorados em corpos do sistema — morrem com a
+// fase no unload (era o vazamento "inimigos de fases antigas atualizam p/ sempre").
+export function clearEnemies() {
+  for (const e of game.enemies) {
+    scene.remove(e.group);
+    e.group.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+  }
+  game.enemies.length = 0;
+}
+
 // ── Oclusão analítica: o segmento inimigo→nave cruza a esfera do corpo-âncora? ──
 // (o âncora é de longe o oclusor dominante — planetas vizinhos raramente alinham)
 function occluded(e, shipPos) {

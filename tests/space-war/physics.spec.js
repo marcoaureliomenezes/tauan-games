@@ -59,18 +59,30 @@ test.describe('Space War — Fidelidade Física', () => {
   // AC-02: massas respeitam a física ao VIVO (TOV, hierarquia SMBH) e as
   // estrelas S continuam railed em elipses (seguíveis).
   test('AC-02: TOV + hierarquia SMBH + estrelas S vivas', async ({ page }) => {
+    test.setTimeout(60000);
     await startFlight(page);
-    const m = await page.evaluate(() => {
+    // FASES (T-PR-06): um sistema materializado por vez — binário, depois core.
+    const bin = await page.evaluate(() => {
+      window.__swDebug.loadSystem('binary');
       const sw = window.__spaceWar;
       const ns = sw.bodies.find((b) => b.def.kind === 'neutron');
       const bh = sw.bodies.find((b) => b.def.key === 'blackhole');
-      const sgr = sw.bodies.find((b) => b.def.key === 'sgr');
-      const s1 = sw.bodies.find((b) => b.def.key === 's1');
-      return { ns: ns.mu, bh: bh.mu, sgr: sgr.mu, sHasMotion: !!(s1 && s1.worldVel) };
+      return { ns: ns.mu, bh: bh.mu };
     });
-    expect(m.ns).toBeLessThanOrEqual(2.2e12);      // limite TOV
-    expect(m.sgr).toBeGreaterThan(m.bh);           // SMBH ≫ BN estelar
-    expect(m.sHasMotion).toBe(true);
+    const core = await page.evaluate(() => {
+      window.__swDebug.loadSystem('core');
+      const sw = window.__spaceWar;
+      const sgr = sw.bodies.find((b) => b.def.key === 'sgr');
+      return { sgr: sgr.mu };
+    });
+    await page.waitForTimeout(300);                // 2+ frames: worldVel calculado
+    const sMotion = await page.evaluate(() => {
+      const s1 = window.__spaceWar.bodies.find((b) => b.def.key === 's1');
+      return !!(s1 && s1.worldVel);
+    });
+    expect(bin.ns).toBeLessThanOrEqual(2.2e12);    // limite TOV
+    expect(core.sgr).toBeGreaterThan(bin.bh);      // SMBH ≫ BN estelar
+    expect(sMotion).toBe(true);
   });
 
   // AC-05a: traçadora [G] — infinita, balística, com trilha crescendo.

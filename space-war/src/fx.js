@@ -172,6 +172,13 @@ export function vacuumDoubleFlash() {
   }, 380);
 }
 
+// Rebase da cena (world.js, fases T-PR-06): partículas guardam coordenadas de
+// CENA — um shift da origem desloca todas em bloco.
+export function shiftParticles(shift) {
+  for (const p of game.particles) p.sp.position.add(shift);
+  for (const n of novaShells) n.mesh.position.add(shift);
+}
+
 export function updateParticles(dt) {
   // cascas de supernova: expandem e esmaecem (multicoloridas, ~11-16 s)
   for (let i = novaShells.length - 1; i >= 0; i--) {

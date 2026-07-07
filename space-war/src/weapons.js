@@ -145,6 +145,37 @@ export function launchHiggs() {
   return true;
 }
 
+// ── FASES (T-PR-06): limpeza no unload + rebase de cena ─────────────────────
+// Projéteis vivem no frame da cena do sistema que os disparou — na troca de
+// fase eles morrem com ela (um tiro não atravessa anos-luz).
+export function clearProjectiles() {
+  const arr = game.projectiles;
+  for (const p of arr) {
+    scene.remove(p.mesh);
+    p.mesh.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+    if (p.trail) { scene.remove(p.trail); p.trail.geometry.dispose(); p.trail.material.dispose(); }
+  }
+  arr.length = 0;
+  game.wells.length = 0;
+}
+
+// Rebase da cena (world.js): desloca projéteis + trilhas em bloco.
+export function shiftProjectiles(shift) {
+  for (const p of game.projectiles) {
+    p.mesh.position.add(shift);
+    if (p.trail && p.trailN) {
+      const a = p.trailArr;
+      for (let i = 0; i < p.trailN; i++) {
+        a[i * 3] += shift.x; a[i * 3 + 1] += shift.y; a[i * 3 + 2] += shift.z;
+      }
+      p.trail.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
 // Dano em área (supernova / usos futuros): inimigos, alvos de missão e nave.
 export function areaDamage(pos, radius, dmg) {
   for (const e of game.enemies) {

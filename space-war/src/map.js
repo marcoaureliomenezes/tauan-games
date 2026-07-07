@@ -26,7 +26,7 @@ export function toggleMap() {
 // Projeção RADIAL-LOG centrada no Sol: o sistema interno E o sistema binário
 // (a ~820k) cabem no mesmo mapa; órbitas circulares continuam círculos.
 const LOG_R0 = 6000;      // u — raio de referência (até aqui o mapa é ~linear)
-const MAX_R = 940000;     // u — alcance do mapa (binário + margem)
+const MAX_R = 30_000_000; // u — alcance do mapa (anel de sistemas 19–29M + margem)
 function projRadius(r, k) { return k * Math.log10(1 + r / LOG_R0); }
 
 export function drawMap() {
@@ -77,7 +77,7 @@ export function drawMap() {
   }
 
   // Anéis de distância (escala log legível)
-  for (const r of [50000, 200000, 820000]) {
+  for (const r of [200_000, 4_200_000, 22_000_000]) {
     ctx.strokeStyle = 'rgba(90,110,150,0.14)';
     ctx.beginPath(); ctx.arc(cx, cy, projRadius(r, k), 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = 'rgba(120,140,180,0.5)';
@@ -88,9 +88,14 @@ export function drawMap() {
   ctx.fillStyle = '#ffd24d';
   ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill();
 
+  // FASES (T-PR-06): corpos vivem no frame da CENA do sistema carregado — o
+  // mapa é GALÁCTICO (centrado no Sol), então projeta origin + posição local.
+  const org = game.world?.origin;
+  const gx = (x) => x + (org ? org.x : 0);
+  const gz = (z) => z + (org ? org.z : 0);
   for (const b of game.bodies) {
     if (b.isSun || b.isMoon) continue;
-    const [px, py] = project(b.worldPos.x, b.worldPos.z);
+    const [px, py] = project(gx(b.worldPos.x), gz(b.worldPos.z));
     if (b.def.kind === 'blackhole' || b.def.kind === 'neutron') {
       // Buraco negro (binário OU supermassivo) / estrela de nêutrons — ícones dedicados
       if (b.def.kind === 'blackhole') {
@@ -108,8 +113,9 @@ export function drawMap() {
       ctx.fillStyle = '#b18cff'; ctx.fillText(b.def.name, px, py - 12);
       continue;
     }
-    // órbita (círculo em torno do centro do sistema do corpo)
-    if (b.orbit && b.system !== 'binary') {
+    // órbita (círculo em torno do centro do mapa — só faz sentido no solar,
+    // cujo centro galáctico É o centro do mapa)
+    if (b.orbit && b.system === 'solar') {
       ctx.strokeStyle = 'rgba(120,150,200,0.25)';
       ctx.beginPath(); ctx.arc(cx, cy, projRadius(b.orbit, k), 0, Math.PI * 2); ctx.stroke();
     }
@@ -122,13 +128,13 @@ export function drawMap() {
     }
   }
 
-  // Nave + linha até o alvo de navegação
+  // Nave + linha até o alvo de navegação (ambos em coordenadas galácticas)
   const s = game.ship;
   if (s.pos) {
-    const [sx, sy] = project(s.pos.x, s.pos.z);
+    const [sx, sy] = project(gx(s.pos.x), gz(s.pos.z));
     const t = game.nav?.target;
     if (t && t.pos) {
-      const [tx, ty] = project(t.pos.x, t.pos.z);
+      const [tx, ty] = project(gx(t.pos.x), gz(t.pos.z));
       ctx.setLineDash([6, 6]);
       ctx.strokeStyle = 'rgba(102,221,255,0.5)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();

@@ -5,36 +5,65 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene, camera, renderer } from './scene.js';
 import { game } from './state.js';
 import { createSkybox } from './skybox.js';
-import { buildUniverse, updateSOIView, updateBodyFX } from './celestial/system.js';
+import { initUniverse, loadSystem as sysLoad, updateSOIView, updateBodyFX } from './celestial/system.js';
 import { universeSystems } from './universe.js';
+import { SYSTEMS } from './config.js';
+import { updateWorldPhase, onWorldShift } from './world.js';
 import { initOrbits, updateOrbits } from './orbits.js';
-import { buildShip, updateShip, shipMesh, toggleObservationCamera } from './ship.js';
+import { buildShip, updateShip, shipMesh, toggleObservationCamera, shiftShip } from './ship.js';
 import { input, installListeners, onAction } from './input.js';
-import { fireLaser, launchNuke, launchGravBomb, launchHiggs, updateProjectiles, enemyBomb } from './weapons.js';
+import {
+  fireLaser, launchNuke, launchGravBomb, launchHiggs, updateProjectiles, enemyBomb,
+  clearProjectiles, shiftProjectiles,
+} from './weapons.js';
+import { clearHiggs } from './higgs.js';
 import { journeyToggle, journeyEligible, journeyWarp } from './journey.js';
-import { updateEnemies } from './enemies.js';
-import { startMissions, beginFlight, updateMissions, debugCompleteMission, debugKillTarget } from './missions.js';
-import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
+import { updateEnemies, clearEnemies } from './enemies.js';
+import {
+  startMissions, beginFlight, updateMissions, debugCompleteMission, debugKillTarget,
+  onSystemLoaded as missionsOnLoaded, onSystemUnloaded as missionsOnUnloaded,
+} from './missions.js';
+import { updateParticles, thruster, nukeBlast, explosion, shiftParticles } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
-import { buildNav, initNavHUD, drawNav, cycleTarget, targetBody } from './nav.js';
+import { buildNav, initNavHUD, drawNav, cycleTarget, targetBody, targetSystem } from './nav.js';
 import { initPostFx, renderFrame, updateAdaptiveRes, setLens, setJourneyBeta } from './postfx.js';
 import { buildStarfield, updateStarfield } from './starfield.js';
-import { buildFarStars, updateFarStars } from './celestial/starlod.js';
+import { buildFarStars, disposeFarStars, updateFarStars } from './celestial/starlod.js';
 
-// --- Construir o mundo ---
+// --- Construir o mundo (FASES, T-PR-06: só o sistema ativo materializa) ---
 const skybox = createSkybox();
 scene.add(skybox);
-buildUniverse(universeSystems());
-initOrbits();
-// Avança a simulação 1 passo para posicionar os corpos antes de criar a nave.
-updateOrbits(0.0001);
+initUniverse(universeSystems(), {
+  onLoaded(key) {
+    initOrbits();
+    // Avança a simulação 1 passo para posicionar os corpos.
+    updateOrbits(0.0001);
+    buildFarStars();
+    buildNav();
+    missionsOnLoaded(key);
+  },
+  onUnloaded() {
+    clearEnemies();
+    clearProjectiles();
+    clearHiggs();
+    disposeFarStars();
+    missionsOnUnloaded();
+    buildNav();
+    // diagnósticos do Sol são escritos pelo fx da estrela — sem o solar
+    // carregado ninguém os escreveria de novo (flags ficariam stale).
+    game.sunFlareVisible = false;
+    game.sunFlareFactor = 0;
+  },
+});
+onWorldShift(shiftShip);
+onWorldShift(shiftParticles);
+onWorldShift(shiftProjectiles);
+sysLoad('solar');
 buildShip();
 buildStarfield();
-buildFarStars();
 installListeners();
 initMap();
-buildNav();
 initNavHUD();
 initPostFx(renderer, scene, camera);
 
@@ -138,6 +167,7 @@ function loop() {
     updateEnemies(dt);
     updateProjectiles(dt);
     updateMissions(dt);
+    updateWorldPhase();                  // FASES: load/unload + rebase por posição
     updateSOIView(game.ship.pos);
     if (game.ship.orbitLocked > 2.3) {   // recém-fechada (ship.js decrementa)
       showToast(`◎ ÓRBITA CIRCULAR ESTABELECIDA em torno de ${game.ship.dominant?.def?.name ?? ''} — throttle 0 = coast`, 2600);
@@ -232,9 +262,22 @@ if (typeof window !== 'undefined') {
     journeyToggle: () => journeyToggle(),
     journeyWarp: (s) => journeyWarp(s),
     target(key) {
-      const b = game.bodies.find((x) => (x.def.key || '').toLowerCase() === String(key).toLowerCase());
-      if (b) targetBody(b);
-      return !!b;
+      const k = String(key).toLowerCase();
+      const b = game.bodies.find((x) => (x.def.key || '').toLowerCase() === k);
+      if (b) { targetBody(b); return true; }
+      // FASES: corpos de outros sistemas não existem — mira o DESCRITOR do
+      // sistema (aceita a chave do sistema ou a da primária).
+      const sys = SYSTEMS.find((s) => s.key.toLowerCase() === k || s.primary.toLowerCase() === k);
+      if (sys && sys.key !== game.world.systemKey) return targetSystem(sys.key);
+      return false;
+    },
+    // FASES (QA): troca a fase diretamente — descarrega o sistema atual,
+    // materializa `key` na origem e posiciona a nave na primária.
+    loadSystem(key, distMul = 3.2) {
+      const sys = SYSTEMS.find((s) => s.key === String(key));
+      if (!sys) return false;
+      if (game.world.systemKey !== sys.key && !sysLoad(sys.key)) return false;
+      return this.goTo(sys.primary, distMul);
     },
     shipReport() {
       const m = shipMesh();
@@ -249,11 +292,24 @@ if (typeof window !== 'undefined') {
       });
       return { pointLights, redLamps, cones, rimIntensity };
     },
-    // Teleporta a nave para o lado iluminado de um corpo e aponta o nariz para ele.
+    // Teleporta a nave para o lado iluminado de um corpo e aponta o nariz para
+    // ele. FASES: se o corpo pertence a um sistema descarregado, troca a fase
+    // (procura sistema a sistema — QA determinístico, custo só em testes).
     goTo(name, distMul = 3.2, elev = 0.6) {
       const key = String(name).toLowerCase();
-      const b = game.bodies.find((x) => (x.def.key || '').toLowerCase() === key || x.def.name.toLowerCase() === key);
-      if (!b) return false;
+      const find = () => game.bodies.find(
+        (x) => (x.def.key || '').toLowerCase() === key || x.def.name.toLowerCase() === key);
+      let b = find();
+      if (!b) {
+        const prev = game.world.systemKey;
+        for (const sys of SYSTEMS) {
+          if (sys.key === game.world.systemKey) continue;
+          sysLoad(sys.key);
+          b = find();
+          if (b) break;
+        }
+        if (!b) { if (prev) sysLoad(prev); return false; }
+      }
       game.screen = 'flight';
       const s = game.ship;
       s.landed = false; s.vel.set(0, 0, 0); s.throttle = 0;

@@ -1,10 +1,9 @@
-// celestial/system.js — O ÚNICO builder de sistemas estelares (AC-07).
-//
-// Consome o mapa declarativo de universe.js: cada sistema é { def (entrada de
-// config.SYSTEMS), bodies() → instâncias de CelestialBody com motion plugado,
-// decorations() → decorações do sistema }. Aqui só existe mecânica genérica:
-// registrar corpos, coletar fx e cull por proximidade (glows: starlod.js).
-// As 5 funções bespoke de bodies.js morreram nesta release.
+// celestial/system.js — O ÚNICO builder de sistemas estelares (AC-07) — agora
+// FASEADO (audit T-PR-06): só UM sistema é materializado por vez, construído na
+// ORIGEM da cena (fim do jitter float32 a 19–29M u). O resto da galáxia existe
+// como descritores estáticos de config.SYSTEMS (glows/nav/mapa). loadSystem()
+// constrói; unloadSystem() DESCARTA tudo (geometrias, materiais, luzes, fx,
+// inimigos, projéteis, poços) — a fase anterior morre de verdade.
 
 import * as THREE from '../../../vendor/three.module.min.js';
 import { SYSTEMS } from '../config.js';
@@ -16,22 +15,82 @@ import { HEADLESS, diskMaterial, REMNANT_VERT, REMNANT_FRAG } from './atoms.js';
 const bodyFx = [];
 // Decorações culladas junto com o sistema dono ({ group, cullKey }).
 const _culledDecorations = [];
+// Decorações do sistema ativo (para dispose).
+const _decorations = [];
 
-export function buildUniverse(systems) {
+// Fábricas declarativas (universe.universeSystems()), injetadas no boot para
+// evitar import circular universe↔system.
+let _factories = null;
+// Hooks de fase (main.js injeta): notificação pós-load/pós-unload.
+let _hooks = { onLoaded: null, onUnloaded: null };
+
+export function initUniverse(factories, hooks = {}) {
+  _factories = factories;
+  _hooks = { ..._hooks, ...hooks };
   game.dynBodies = game.dynBodies || [];
-  for (const sys of systems) {
-    const key = sys.def.key;
-    for (const body of sys.bodies()) {
-      body.register(key);
-      if (body.fx) bodyFx.push(body.fx);
+  if (!game.world.origin) game.world.origin = new THREE.Vector3();
+}
+
+export function systemEntry(key) { return SYSTEMS.find((s) => s.key === key) || null; }
+
+const _zero = new THREE.Vector3(0, 0, 0);
+
+function disposeObject(root) {
+  root.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) { if (m.map) m.map.dispose(); m.dispose(); }
     }
-    for (const deco of (sys.decorations ? sys.decorations() : [])) {
-      scene.add(deco.group);
-      if (deco.fx) bodyFx.push(deco.fx);
-      if (deco.cullKey) _culledDecorations.push(deco);
-    }
+  });
+}
+
+// Descarrega o sistema ativo: cena limpa, GPU liberada, listas zeradas.
+// O mundo entra em modo VAZIO (world.systemKey = null; origin fica onde está —
+// o rebase por-frame do vazio assume a precisão a partir daqui).
+export function unloadSystem() {
+  if (!game.world.systemKey) return;
+  const key = game.world.systemKey;
+  for (const b of game.bodies) {
+    scene.remove(b.group);
+    disposeObject(b.group);
   }
-  return game.bodies;
+  game.bodies.length = 0;
+  if (game.dynBodies) game.dynBodies.length = 0;
+  for (const deco of _decorations) {
+    scene.remove(deco.group);
+    if (deco.group.traverse) disposeObject(deco.group);
+  }
+  _decorations.length = 0;
+  _culledDecorations.length = 0;
+  bodyFx.length = 0;
+  game.sun = null;
+  game.world.systemKey = null;
+  if (_hooks.onUnloaded) _hooks.onUnloaded(key);
+}
+
+// Materializa UM sistema na origem da cena. `shipGalactic` (opcional) é a
+// posição galáctica atual da nave — convertida p/ o frame local novo.
+export function loadSystem(key) {
+  if (game.world.systemKey === key) return true;
+  unloadSystem();
+  const factory = (_factories || []).find((f) => f.def.key === key);
+  const entry = systemEntry(key);
+  if (!factory || !entry) return false;
+  game.world.origin.set(...entry.center);
+  game.world.systemKey = key;
+  for (const body of factory.bodies(_zero.set(0, 0, 0))) {
+    body.register(key);
+    if (body.fx) bodyFx.push(body.fx);
+  }
+  for (const deco of (factory.decorations ? factory.decorations(_zero.set(0, 0, 0)) : [])) {
+    scene.add(deco.group);
+    if (deco.fx) bodyFx.push(deco.fx);
+    if (deco.cullKey) _culledDecorations.push(deco);
+    _decorations.push(deco);
+  }
+  if (_hooks.onLoaded) _hooks.onLoaded(key);
+  return true;
 }
 
 // Anima os corpos e decorações especiais (disco de acreção, jatos, caudas, pulso).
@@ -39,28 +98,20 @@ export function updateBodyFX(dt) {
   for (const f of bodyFx) f.update(dt);
 }
 
-// (Os beacons fixos de 40k morreram na release photometric-stars: quem marca um
-// sistema distante agora é o GLOW fotométrico de celestial/starlod.js — fluxo
-// somado dos membros, mesma regra de visibilidade 0.9·raio.)
-
-// ── CULLING POR SISTEMA (universal — proporções verdadeiras): sistemas
-// distantes ficam invisíveis (zero draw calls); no lugar brilha o glow
-// fotométrico (starlod). O SOLAR culla como qualquer um: de outro sistema, a
-// anos-luz, seria impossível ver Saturno (bug space-war-cross-system-visibility).
-// def.alwaysVisible continua respeitado para exceções deliberadas.
-const _sysCenter = new THREE.Vector3();
+// ── CULLING DO SISTEMA ATIVO: além de 1.15×raio as malhas desligam (zero draw
+// calls) e os pontos fotométricos/glow (starlod) assumem. Com fases, só o
+// sistema carregado existe — o cull é uma iteração única contra a origem.
 export function updateSOIView(shipPos) {
-  for (const sys of SYSTEMS) {
-    _sysCenter.set(...sys.center);
-    const near = shipPos.distanceTo(_sysCenter) < sys.radius * 1.15;
-    for (const b of game.bodies) {
-      if (b.system !== sys.key) continue;
-      if (b.def.alwaysVisible) { b.group.visible = true; continue; }
-      if (b.group.visible !== near) b.group.visible = near;
-    }
-    for (const deco of _culledDecorations) {
-      if (deco.cullKey === sys.key) deco.group.visible = near;
-    }
+  const key = game.world.systemKey;
+  if (!key) return;
+  const sys = systemEntry(key);
+  const near = shipPos.length() < sys.radius * 1.15;
+  for (const b of game.bodies) {
+    if (b.def.alwaysVisible) { b.group.visible = true; continue; }
+    if (b.group.visible !== near) b.group.visible = near;
+  }
+  for (const deco of _culledDecorations) {
+    deco.group.visible = near;
   }
 }
 
