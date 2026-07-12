@@ -8,7 +8,7 @@
 
 ## Tarefas
 
-- [ ] **T-MB-01 — Scaffold standalone, primeira tela e catalogo**
+- [-] **T-MB-01 — Scaffold standalone, primeira tela e catalogo**
   - **Owner:** game-developer
   - **Write set:** `memoria-bichos/index.html`, `memoria-bichos/styles.css`,
     `memoria-bichos/game.js`, `memoria-bichos/README.md`, `index.html`.
