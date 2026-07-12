@@ -23,7 +23,7 @@
     link para o novo jogo.
   - **Precondicoes:** nenhuma.
 
-- [-] **T-MB-02 — Smoke Playwright offline e navegacao inicial**
+- [x] **T-MB-02 — Smoke Playwright offline e navegacao inicial**
   - **Owner:** qa-engineer
   - **Write set:** `tests/memoria-bichos/memoria-bichos.spec.js`, `package.json`.
   - **Descricao:** adicionar a primeira fatia da suite Playwright do novo jogo cobrindo
