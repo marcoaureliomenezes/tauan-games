@@ -8,7 +8,7 @@
 
 ## Tarefas
 
-- [-] **T-MB-01 — Scaffold standalone, primeira tela e catalogo**
+- [x] **T-MB-01 — Scaffold standalone, primeira tela e catalogo**
   - **Owner:** game-developer
   - **Write set:** `memoria-bichos/index.html`, `memoria-bichos/styles.css`,
     `memoria-bichos/game.js`, `memoria-bichos/README.md`, `index.html`.
@@ -23,7 +23,7 @@
     link para o novo jogo.
   - **Precondicoes:** nenhuma.
 
-- [ ] **T-MB-02 — Smoke Playwright offline e navegacao inicial**
+- [-] **T-MB-02 — Smoke Playwright offline e navegacao inicial**
   - **Owner:** qa-engineer
   - **Write set:** `tests/memoria-bichos/memoria-bichos.spec.js`, `package.json`.
   - **Descricao:** adicionar a primeira fatia da suite Playwright do novo jogo cobrindo

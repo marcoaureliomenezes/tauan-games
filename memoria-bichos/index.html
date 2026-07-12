@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memoria dos Bichos</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E%F0%9F%90%B5%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app" aria-labelledby="game-title">
+    <section class="hero" data-screen="menu">
+      <div class="animal-band" aria-hidden="true">
+        <span>🐵</span>
+        <span>🦁</span>
+        <span>🐼</span>
+        <span>🦊</span>
+      </div>
+
+      <h1 id="game-title">Memoria dos Bichos</h1>
+      <p class="tagline">Encontre os pares de animais.</p>
+
+      <div class="level-grid" aria-label="Escolha o nivel">
+        <button class="level-card" type="button" data-level="6" aria-label="Iniciar nivel de 6 cartas">
+          <span class="level-animals" aria-hidden="true">🐶 🐱 🐰</span>
+          <strong>6 cartas</strong>
+          <small>3 pares</small>
+        </button>
+        <button class="level-card" type="button" data-level="12" aria-label="Iniciar nivel de 12 cartas">
+          <span class="level-animals" aria-hidden="true">🐯 🐸 🐨</span>
+          <strong>12 cartas</strong>
+          <small>6 pares</small>
+        </button>
+        <button class="level-card" type="button" data-level="20" aria-label="Iniciar nivel de 20 cartas">
+          <span class="level-animals" aria-hidden="true">🐮 🐷 🐙</span>
+          <strong>20 cartas</strong>
+          <small>10 pares</small>
+        </button>
+      </div>
+    </section>
+
+    <section class="board-screen" data-screen="board" hidden>
+      <header class="board-header">
+        <button class="icon-button" type="button" data-action="menu" aria-label="Voltar para os niveis">←</button>
+        <div>
+          <p class="eyebrow">Nivel escolhido</p>
+          <h2 data-level-title>6 cartas</h2>
+        </div>
+        <p class="counter"><span data-card-count>6</span> cartas</p>
+      </header>
+
+      <div class="board" data-board aria-label="Cartas da memoria"></div>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
