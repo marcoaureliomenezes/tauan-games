@@ -55,7 +55,7 @@ iniciar e reiniciar.
 
 **Cobre:** R-01, R-02, R-03, R-04, R-08, AC-01, AC-02, AC-05, AC-08, AC-09.
 
-### [-] T-02 - Pista fechada, checkpoints e limites legiveis
+### [x] T-02 - Pista fechada, checkpoints e limites legiveis
 
 **Owner:** game-developer
 
@@ -87,7 +87,7 @@ velocidade, sem reset opaco de posicao.
 
 **Cobre:** R-04, R-06, R-09, AC-02, AC-04, AC-10.
 
-### [ ] T-03 - Controles e fisica arcade do jogador
+### [-] T-03 - Controles e fisica arcade do jogador
 
 **Owner:** game-developer
 

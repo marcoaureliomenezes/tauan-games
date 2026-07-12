@@ -9,13 +9,21 @@
   const HEIGHT = 720;
   const TOTAL_LAPS = 3;
   const PLAYER_START = { x: 486, y: 585, angle: -90 };
+  const OFF_TRACK_MAX_SPEED = 3.8;
+  const OFF_TRACK_ACCEL_MULTIPLIER = 0.55;
+  const OFF_TRACK_DRAG = 0.94;
   const TRACK = {
     centerX: 480,
     centerY: 360,
     radiusX: 330,
     radiusY: 220,
     width: 118,
+    outerRadiusX: 389,
+    outerRadiusY: 279,
+    innerRadiusX: 271,
+    innerRadiusY: 161,
     startLine: { x: 474, y: 500, width: 12, height: 132 },
+    offTrackProbe: { x: 480, y: 360 },
     palette: {
       asphalt: '#4d5562',
       offTrack: '#2f8a45',
@@ -124,11 +132,13 @@
   }
 
   function isPointOnTrack(x, y) {
-    const dx = (x - TRACK.centerX) / TRACK.radiusX;
-    const dy = (y - TRACK.centerY) / TRACK.radiusY;
-    const normalized = Math.sqrt(dx * dx + dy * dy);
-    const halfWidth = TRACK.width / Math.max(TRACK.radiusX, TRACK.radiusY);
-    return normalized >= 1 - halfWidth && normalized <= 1 + halfWidth;
+    const outerDx = (x - TRACK.centerX) / TRACK.outerRadiusX;
+    const outerDy = (y - TRACK.centerY) / TRACK.outerRadiusY;
+    const innerDx = (x - TRACK.centerX) / TRACK.innerRadiusX;
+    const innerDy = (y - TRACK.centerY) / TRACK.innerRadiusY;
+    const insideOuterBoundary = outerDx * outerDx + outerDy * outerDy <= 1;
+    const outsideInnerBoundary = innerDx * innerDx + innerDy * innerDy >= 1;
+    return insideOuterBoundary && outsideInnerBoundary;
   }
 
   function overlapRect(point, rect) {
@@ -198,6 +208,15 @@
     syncSprites();
   }
 
+  function teleportPlayerOffTrackForTest(speed) {
+    state.player.x = TRACK.offTrackProbe.x;
+    state.player.y = TRACK.offTrackProbe.y;
+    state.player.speed = Phaser.Math.Clamp(Number(speed) || 6, -OFF_TRACK_MAX_SPEED, OFF_TRACK_MAX_SPEED);
+    state.player.onTrack = isPointOnTrack(state.player.x, state.player.y);
+    syncSprites();
+    updateHud();
+  }
+
   function forceFinishForTest() {
     if (state.status !== 'running') startRace();
     state.lapCount = TOTAL_LAPS;
@@ -245,6 +264,7 @@
         palette: Object.assign({}, TRACK.palette),
         checkpointCount: checkpoints.length,
         startLine: Object.assign({}, TRACK.startLine),
+        offTrackProbe: Object.assign({}, TRACK.offTrackProbe),
       },
       result: state.result ? {
         ranking: state.result.ranking.map(function (entry) { return Object.assign({}, entry); }),
@@ -267,13 +287,13 @@
     trackGraphics.fillStyle(0x2f8a45, 1);
     trackGraphics.fillRect(0, 0, WIDTH, HEIGHT);
     trackGraphics.fillStyle(0x265e33, 1);
-    trackGraphics.fillEllipse(TRACK.centerX, TRACK.centerY, TRACK.radiusX * 2 + 180, TRACK.radiusY * 2 + 170);
+    trackGraphics.fillEllipse(TRACK.centerX, TRACK.centerY, TRACK.outerRadiusX * 2 + 62, TRACK.outerRadiusY * 2 + 52);
     trackGraphics.lineStyle(34, 0xf5d547, 1);
-    trackGraphics.strokeEllipse(TRACK.centerX, TRACK.centerY, TRACK.radiusX * 2 + TRACK.width, TRACK.radiusY * 2 + TRACK.width);
+    trackGraphics.strokeEllipse(TRACK.centerX, TRACK.centerY, TRACK.outerRadiusX * 2, TRACK.outerRadiusY * 2);
     trackGraphics.lineStyle(TRACK.width, 0x4d5562, 1);
     trackGraphics.strokeEllipse(TRACK.centerX, TRACK.centerY, TRACK.radiusX * 2, TRACK.radiusY * 2);
     trackGraphics.lineStyle(8, 0xe7edf4, 1);
-    trackGraphics.strokeEllipse(TRACK.centerX, TRACK.centerY, TRACK.radiusX * 2 - TRACK.width, TRACK.radiusY * 2 - TRACK.width);
+    trackGraphics.strokeEllipse(TRACK.centerX, TRACK.centerY, TRACK.innerRadiusX * 2, TRACK.innerRadiusY * 2);
 
     trackGraphics.fillStyle(0xffffff, 1);
     trackGraphics.fillRect(TRACK.startLine.x, TRACK.startLine.y - TRACK.startLine.height / 2, TRACK.startLine.width, TRACK.startLine.height);
@@ -355,11 +375,11 @@
     if (state.status !== 'running') return;
 
     const dt = delta / 16.6667;
-    const trackGrip = state.player.onTrack ? 1 : 0.55;
+    const trackGrip = state.player.onTrack ? 1 : OFF_TRACK_ACCEL_MULTIPLIER;
     if (accelPressed) state.player.speed += 0.18 * dt * trackGrip;
     if (brakePressed) state.player.speed -= 0.16 * dt;
-    state.player.speed *= state.player.onTrack ? 0.985 : 0.94;
-    state.player.speed = Phaser.Math.Clamp(state.player.speed, -2.2, state.player.onTrack ? 7.2 : 3.8);
+    state.player.speed *= state.player.onTrack ? 0.985 : OFF_TRACK_DRAG;
+    state.player.speed = Phaser.Math.Clamp(state.player.speed, -2.2, state.player.onTrack ? 7.2 : OFF_TRACK_MAX_SPEED);
 
     const turnPower = Phaser.Math.Clamp(Math.abs(state.player.speed) / 5.5, 0.25, 1);
     if (leftPressed) state.player.angle -= 3.1 * dt * turnPower;
@@ -371,6 +391,9 @@
     state.player.x = Phaser.Math.Clamp(state.player.x, 40, WIDTH - 40);
     state.player.y = Phaser.Math.Clamp(state.player.y, 40, HEIGHT - 40);
     state.player.onTrack = isPointOnTrack(state.player.x, state.player.y);
+    if (!state.player.onTrack) {
+      state.player.speed = Phaser.Math.Clamp(state.player.speed, -OFF_TRACK_MAX_SPEED, OFF_TRACK_MAX_SPEED);
+    }
 
     const nextCheckpoint = checkpoints[state.player.checkpointIndex];
     if (nextCheckpoint && overlapRect(state.player, nextCheckpoint)) {
@@ -468,6 +491,7 @@
         startRace,
         restartRace,
         teleportPlayerToCheckpoint,
+        teleportPlayerOffTrackForTest,
         completePlayerLapForTest,
         forceFinishForTest,
       };
