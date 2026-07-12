@@ -10,6 +10,14 @@
 
 This repository contains browser games built for Tauan (child of the operator) as a learning and play platform. All games run directly in the browser with no build step, no CDN dependencies at runtime, and no external asset files — everything is procedural. The sole authorized agent for game code is `game-developer`; other agents must not modify files inside game folders.
 
+**Layer-2 execution mapping (dadaia-workflows).** `game-developer` is the TASKS.md
+*role name* for game-code ownership. The dadaia Layer-2 persona roster carries no
+`game-developer` atom, so in `dadaia lifecycle` runs (pipeline / implement /
+implement-review) production tasks owned by `game-developer` are executed by the
+`software-engineer` persona **acting as game-developer**, strictly inside the reserved
+task's declared `Write set:`. This mapping does not widen any other agent's authority:
+outside a reserved `game-developer` task, the game-folder exclusivity above stands.
+
 ## Games
 
 | Game | Folder | Engine | Description |
