@@ -1,2 +1,2 @@
-release: space-war-interstellar-experience-v1
+release: memoria-bichos-v1
 phase: IMPLEMENTATION
