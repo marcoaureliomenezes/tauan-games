@@ -87,7 +87,7 @@ velocidade, sem reset opaco de posicao.
 
 **Cobre:** R-04, R-06, R-09, AC-02, AC-04, AC-10.
 
-### [-] T-03 - Controles e fisica arcade do jogador
+### [x] T-03 - Controles e fisica arcade do jogador
 
 **Owner:** game-developer
 
@@ -113,7 +113,7 @@ jogo real deve ser jogavel sem comandos debug.
 
 **Cobre:** R-05, R-09, AC-03, AC-09, AC-10.
 
-### [ ] T-04 - Voltas, checkpoints validos e cronometro
+### [-] T-04 - Voltas, checkpoints validos e cronometro
 
 **Owner:** game-developer
 
