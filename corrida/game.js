@@ -30,6 +30,7 @@
       boundary: '#f5d547',
     },
   };
+  const START_CROSSING_Y = TRACK.startLine.y + TRACK.startLine.height / 2;
   const CONTROLS_TEXT =
     'Acelerar: seta para cima ou W | Frear/re: seta para baixo ou S | Estercar: esquerda/direita ou A/D | Iniciar: espaco | Reiniciar: R';
 
@@ -83,6 +84,7 @@
   let checkpointGraphics = null;
   let lapStartMs = 0;
   let raceStartMs = 0;
+  let previousPlayerY = PLAYER_START.y;
 
   function createOpponent(id, index) {
     const start = waypoints[(index * 2 + 5) % waypoints.length];
@@ -122,6 +124,7 @@
     ];
     raceStartMs = 0;
     lapStartMs = 0;
+    previousPlayerY = PLAYER_START.y;
   }
 
   function formatTime(ms) {
@@ -196,7 +199,13 @@
   function completePlayerLapForTest() {
     if (state.status !== 'running') startRace();
     state.player.checkpointIndex = checkpoints.length;
-    registerStartLineCross(true);
+    previousPlayerY = START_CROSSING_Y + 4;
+    state.player.x = TRACK.startLine.x + TRACK.startLine.width / 2;
+    state.player.y = START_CROSSING_Y - 2;
+    state.player.onTrack = isPointOnTrack(state.player.x, state.player.y);
+    registerStartLineCross();
+    syncSprites();
+    updateHud();
   }
 
   function teleportPlayerToCheckpoint(index) {
@@ -217,6 +226,22 @@
     updateHud();
   }
 
+  function attemptStartLineCrossForTest(direction) {
+    if (state.status !== 'running') startRace();
+    state.player.x = TRACK.startLine.x + TRACK.startLine.width / 2;
+    if (direction === 'wrong') {
+      previousPlayerY = START_CROSSING_Y - 4;
+      state.player.y = START_CROSSING_Y + 2;
+    } else {
+      previousPlayerY = START_CROSSING_Y + 4;
+      state.player.y = START_CROSSING_Y - 2;
+    }
+    state.player.onTrack = isPointOnTrack(state.player.x, state.player.y);
+    registerStartLineCross();
+    syncSprites();
+    updateHud();
+  }
+
   function forceFinishForTest() {
     if (state.status !== 'running') startRace();
     state.lapCount = TOTAL_LAPS;
@@ -225,8 +250,14 @@
     updateHud();
   }
 
-  function registerStartLineCross(validDirection) {
-    if (!validDirection || state.player.checkpointIndex < checkpoints.length) return;
+  function crossedStartLineForward() {
+    return previousPlayerY > START_CROSSING_Y &&
+      state.player.y <= START_CROSSING_Y &&
+      overlapRect(state.player, TRACK.startLine);
+  }
+
+  function registerStartLineCross() {
+    if (!crossedStartLineForward() || state.player.checkpointIndex < checkpoints.length) return;
     state.lapCount += 1;
     state.lastLapTimeMs = state.currentLapTimeMs;
     state.currentLapTimeMs = 0;
@@ -385,6 +416,7 @@
     if (leftPressed) state.player.angle -= 3.1 * dt * turnPower;
     if (rightPressed) state.player.angle += 3.1 * dt * turnPower;
 
+    previousPlayerY = state.player.y;
     const radians = Phaser.Math.DegToRad(state.player.angle);
     state.player.x += Math.cos(radians) * state.player.speed * dt;
     state.player.y += Math.sin(radians) * state.player.speed * dt;
@@ -400,9 +432,7 @@
       state.player.checkpointIndex += 1;
     }
 
-    if (overlapRect(state.player, TRACK.startLine) && state.player.y < TRACK.startLine.y) {
-      registerStartLineCross(true);
-    }
+    registerStartLineCross();
   }
 
   function updateOpponents(delta) {
@@ -492,6 +522,7 @@
         restartRace,
         teleportPlayerToCheckpoint,
         teleportPlayerOffTrackForTest,
+        attemptStartLineCrossForTest,
         completePlayerLapForTest,
         forceFinishForTest,
       };
