@@ -8,7 +8,6 @@ tags:
   - tech-stack
   - engines
   - testing
-agent_tier: self-pull
 token_estimate: 0
 last_updated: "2026-06-12"
 release_origin: aero-fighters-uplift-v1

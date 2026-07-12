@@ -8,7 +8,6 @@ tags:
   - product
   - catalog
   - games
-agent_tier: self-pull
 token_estimate: 0
 last_updated: "2026-07-03"
 release_origin: space-war-ballistic-war-v1

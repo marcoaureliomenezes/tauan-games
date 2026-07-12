@@ -9,7 +9,6 @@ tags:
   - aero-strike
   - flight
   - controls
-agent_tier: self-pull
 token_estimate: 0
 last_updated: "2026-07-01"
 release_origin: aero-fighters-world-realism-v1
