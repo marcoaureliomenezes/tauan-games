@@ -81,7 +81,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
     into the river reads `kind:'water'` (splash/sink). River drawn along its whole
     polyline (WS-3).
 
-### [ ] T-06 — Bridges at road × river crossings
+### [x] T-06 — Bridges at road × river crossings
 - **Owner:** software-engineer
 - **Write-set:** `aero-fighters/src/maps/inhauma-bridges.js` (new),
   `aero-fighters/src/maps/inhauma-scene.js` (register bridge structures)

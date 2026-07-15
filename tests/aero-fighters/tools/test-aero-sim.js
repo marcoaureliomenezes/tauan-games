@@ -22,7 +22,15 @@ import {
   riverCarveAt,
   riverSurfaceInfoAt,
   distanceToRiver,
+  riverWaterLevelAt,
+  RIVER_HALF_WIDTH_M,
+  RIVER_BANK_BLEND_M,
 } from '../../../aero-fighters/src/maps/inhauma-river.js';
+import {
+  computeInhaumaBridgeCrossings,
+  bridgeStructureFootprints,
+} from '../../../aero-fighters/src/maps/inhauma-bridges.js';
+import { INHAUMA_ROAD_CORRIDORS, sampleCorridor } from '../../../aero-fighters/src/maps/inhauma-road-defs.js';
 
 function runSimpleFlight(seconds, inputAt) {
   const dt = 1 / 60;
@@ -176,6 +184,71 @@ test('T-05: the river carve is a small, smooth channel (no WS-1-breaking cliff) 
     assert.ok(!farInfo || farInfo.kind !== 'water' || distanceToRiver(p.x + 200, p.z + 200) < 20,
       `unexpected 'water' kind 200 m off the river centerline near (${p.x},${p.z})`);
   }
+});
+
+// ─── T-06: bridges at road×river crossings ───────────────────────────────────
+test('AC-06: at least one road×river crossing is detected and each carries a resolved bridge deck', () => {
+  const crossings = computeInhaumaBridgeCrossings();
+  assert.ok(crossings.length >= 1, 'expected at least one road×river crossing (MG-238 per T-04/T-05 geometry)');
+  for (const c of crossings) {
+    assert.ok(Number.isFinite(c.midX) && Number.isFinite(c.midZ) && Number.isFinite(c.heading));
+    assert.ok(c.halfLength > 0 && c.halfWidth > 0);
+    assert.ok(Number.isFinite(c.deckHeight) && c.deckHeight > c.waterLevel,
+      `deck at ${c.id} (${c.deckHeight}) must clear the local water level (${c.waterLevel})`);
+  }
+});
+
+test('AC-06: bridge deck footprints are registered as valid structure AABBs (collision via inhaumaStructureInfoAt)', () => {
+  const footprints = bridgeStructureFootprints();
+  assert.equal(footprints.length, computeInhaumaBridgeCrossings().length);
+  for (const f of footprints) {
+    assert.ok(f.id && typeof f.id === 'string');
+    assert.ok(f.halfX > 0 && f.halfZ > 0, `deck AABB at ${f.id} must have positive extents`);
+    assert.ok(Number.isFinite(f.topY));
+  }
+});
+
+test('AC-06: no road corridor dips below the local water line at a river crossing', () => {
+  // Exercises the REAL production height chain (inhaumaContinuousHeight, which now
+  // folds in bridgeDeckHeightAt) along the dense sampled points of every corridor —
+  // the same points the road ribbon/road-bed carve actually consume. Gated by
+  // `distanceToRiver` (the river's OWN carve-influence reach), not by
+  // `riverWaterLevelAt !== null` — that helper answers for any point inside the
+  // river's spatial-index margin (a generous lookup radius, not "there is water
+  // here"), so far-away roads like `anel-inhauma` (~90 m from the river, per T-04)
+  // would otherwise be compared against an irrelevant "if there were water here"
+  // level, well outside where the terrain/river carve could ever submerge them.
+  const RIVER_CARVE_REACH_M = RIVER_HALF_WIDTH_M + RIVER_BANK_BLEND_M;
+  let sampleCount = 0;
+  for (const corridor of INHAUMA_ROAD_CORRIDORS) {
+    const points = sampleCorridor(corridor.control, corridor.closed);
+    for (const p of points) {
+      if (distanceToRiver(p.x, p.z) >= RIVER_CARVE_REACH_M) continue; // outside the river's influence — not a crossing concern
+      const water = riverWaterLevelAt(p.x, p.z);
+      assert.ok(water !== null, `expected a resolvable water level near the river at (${p.x.toFixed(1)},${p.z.toFixed(1)})`);
+      const h = inhaumaContinuousHeight(p.x, p.z);
+      sampleCount++;
+      assert.ok(h > water, `${corridor.id} dips to ${h.toFixed(2)} m (water ${water.toFixed(2)} m) at (${p.x.toFixed(1)},${p.z.toFixed(1)})`);
+    }
+  }
+  assert.ok(sampleCount > 0, 'no road samples fell within the river influence zone — crossing coverage untested');
+});
+
+test('AC-06: the bridge deck height chain stays continuous — no cliff at the influence-zone edge', () => {
+  // Fine-grained sweep across the MG-238 crossing footprint (both along the road and
+  // straddling the river) — no single-meter step introduces an implausible jump.
+  const [crossing] = computeInhaumaBridgeCrossings();
+  assert.ok(crossing, 'expected the MG-238 crossing to exist for this probe');
+  let maxStepDelta = 0;
+  let prev = null;
+  for (let along = -crossing.gateHalfLength - 20; along <= crossing.gateHalfLength + 20; along += 2) {
+    const x = crossing.midX + along * Math.sin(crossing.heading);
+    const z = crossing.midZ + along * Math.cos(crossing.heading);
+    const h = inhaumaContinuousHeight(x, z);
+    if (prev !== null) maxStepDelta = Math.max(maxStepDelta, Math.abs(h - prev));
+    prev = h;
+  }
+  assert.ok(maxStepDelta < 4, `bridge height chain has an implausible per-2m step of ${maxStepDelta.toFixed(2)} m`);
 });
 
 /** Flood-fills the "flyable" (height < ceiling) region of inhaumaContinuousHeight

@@ -22,6 +22,7 @@ import {
   riverSurfaceInfoAt,
   RIVER_HALF_WIDTH_M,
 } from './inhauma-river.js';
+import { bridgeDeckHeightAt, buildInhaumaBridges } from './inhauma-bridges.js';
 
 // sky.js importa scene.js (que toca window no escopo de módulo) — carga LAZY para
 // este módulo continuar importável em Node (validate:aero-map).
@@ -116,10 +117,15 @@ function inhaumaBaseHeight(x, z) {
   return applyAirportClearing(h, x, z, 'inhauma');
 }
 
-/** Altura contínua final. A estrada gerada assenta o terreno para evitar fitas flutuando. */
+/** Altura contínua final. A estrada gerada assenta o terreno para evitar fitas flutuando.
+ *  T-06: perto de um cruzamento rio×estrada, `bridgeDeckHeightAt` segura a altura no
+ *  nível do tabuleiro DEPOIS do leito de estrada — sem isso o leito de estrada
+ *  simplesmente reproduziria o entalhe do rio e a "estrada" mergulharia na água na
+ *  travessia (o próprio bug que a ponte existe para resolver). */
 export function inhaumaContinuousHeight(x, z) {
   const base = inhaumaBaseHeight(x, z);
-  return applyInhaumaRoadBed(x, z, base, inhaumaBaseHeight);
+  const roadBed = applyInhaumaRoadBed(x, z, base, inhaumaBaseHeight);
+  return bridgeDeckHeightAt(x, z, roadBed);
 }
 
 // ─── Materiais utilitários ──────────────────────────────────────────────────
@@ -266,6 +272,11 @@ export function buildInhaumaTerrain(scene) {
   game.islands.push({
     cx: 0, cz: 0, radius: TERRAIN_COLLISION_RADIUS, peakHeight: 120, type: 'inhauma-continuous', mesh: terrain.chunks[4],
   });
+  // T-06: tabuleiro + pilares nos cruzamentos rio×estrada, registrados como
+  // estruturas (colisão via inhaumaStructureInfoAt). `inhaumaBaseHeight` (o leito
+  // natural do rio, ANTES do leito de estrada/tabuleiro) é passado para os pilares
+  // descerem até o relevo real sob a ponte, nunca até a altura segurada do tabuleiro.
+  buildInhaumaBridges(scene, registerStructure, inhaumaBaseHeight);
   return terrain;
 }
 
