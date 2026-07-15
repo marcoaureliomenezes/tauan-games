@@ -38,7 +38,7 @@ files). One `[-]` per lane at a time.
 - **Done when:** 100-seeded-launch stats give 80% ± 2% in ≥3 range buckets (range-independent); rod selection returns exactly 3 for ≥3 clustered in radius, all for <3, none outside radius; wired into `npm run test:aero:sim` and green.
 
 ### T-02 — Wire 80% range-independent hit-rule into guided missiles
-- [-] **Owner:** software-engineer · **Lane:** C · **Write-set:** `projectiles.js`[`buildMissileMesh`/`spawnMissile`/`updateMissiles` only]; `config.js`[`MISSILES_LIGHT`/`MISSILES_HEAVY`]; existing missile sim/unit tests as needed.
+- [x] **Owner:** software-engineer · **Lane:** C · **Write-set:** `projectiles.js`[`buildMissileMesh`/`spawnMissile`/`updateMissiles` only]; `config.js`[`MISSILES_LIGHT`/`MISSILES_HEAVY`]; existing missile sim/unit tests as needed.
 - **Preconditions:** T-01 DONE.
 - **Do:** stamp `willHit = rollMissileHit(game.rng)` per launch; HIT ⇒ guaranteed terminal intercept (clamp life so it cannot expire before reaching target; PN converge); MISS ⇒ near-miss curve past target then expire without damage. Preserve trail FX, lock, ammo UX.
 - **Done when:** sim shows 80% ± 2% hits at every range bucket; every HIT damages, no MISS damages; light + heavy behave per rule; curved pursuit + trail visible (e2e smoke); no per-frame allocations added.

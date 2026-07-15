@@ -18,6 +18,7 @@ import { damageTarget } from './targets.js';
 import { deformTerrainNuclear, surfaceInfoAt } from './world.js';
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { transitionSortie, SortieEvent } from './sortie-state.js';
+import { rollMissileHit } from './weapons-core.js';
 
 // ─── Balas ───────────────────────────────────────────────────────────────────
 // Tracer estilo M61 Vulcan: cilindro alongado amarelo brilhante, trilhando atrás da bala
@@ -95,8 +96,28 @@ export function updateBullets(dt, jetPos, onPlayerHit, wingmen = []) {
 }
 
 // ─── Mísseis ─────────────────────────────────────────────────────────────────
+// AC-05/D-1: cada míssil teleguiado (light/heavy) resolve HIT/MISS num roll seeded
+// único no disparo (`willHit`), independente de alcance. HIT ⇒ vida estendida o
+// suficiente para garantir intercepção terminal + homing agressivo (CLOSE_TURN_RATE o
+// tempo todo). MISS ⇒ mira num ponto deslocado lateralmente além do raio de impacto do
+// alvo, garantindo uma curva de "quase acerto" plausível; o gate de dano abaixo NUNCA
+// aplica damageTarget quando willHit é false, não importa a geometria.
 const missiles = [];
 const _msDir = new THREE.Vector3();
+const _msAimPoint = new THREE.Vector3();
+const _msToTarget = new THREE.Vector3();
+
+// Vida extra (D-1 "guaranteed terminal intercept"): multiplicador de margem sobre o
+// tempo de voo em linha reta (distância/TRACKING_SPD) + folga fixa em segundos para
+// cobrir a convergência inicial do homing e alvos lentos móveis.
+const HIT_LIFE_MARGIN_FACTOR = 1.4;
+const HIT_LIFE_MARGIN_SECONDS = 2.5;
+// Deslocamento lateral do "quase acerto" (D-1): múltiplo do raio de impacto do alvo
+// (sqrt(hr2)) para garantir que o míssil MISS nunca entra no gate de colisão
+// (hr2 * HIT_RADIUS_MULT abaixo).
+const MISS_OFFSET_MIN_MULT = 2.5;
+const MISS_OFFSET_RANGE_MULT = 2.5;
+const HIT_RADIUS_MULT = 2.5; // mesmo multiplicador do gate de colisão original
 
 /** Constrói o mesh de um míssil (nose cone + body + 4 fins + flame trail). */
 function buildMissileMesh(kind) {
@@ -146,17 +167,43 @@ export function spawnMissile(orig, target, jetQuat, kind = 'light', opts = {}) {
   mesh.quaternion.copy(jetQuat);
   scene.add(mesh);
   const vel = new THREE.Vector3(0, 0, -1).applyQuaternion(jetQuat).multiplyScalar(cfg.INITIAL_SPD);
+
+  // AC-05/D-1: roll seeded único por disparo — determina o destino do míssil.
+  const willHit = opts.willHit ?? rollMissileHit(game.rng);
+  let life = opts.life ?? cfg.LIFE;
+  let missOffset = null;
+  if (target) {
+    if (willHit) {
+      // Vida garantida para intercepção terminal, independente do alcance de disparo.
+      const dist0 = orig.distanceTo(target.mesh.position);
+      const guaranteedLife = (dist0 / cfg.TRACKING_SPD) * HIT_LIFE_MARGIN_FACTOR + HIT_LIFE_MARGIN_SECONDS;
+      life = Math.max(life, guaranteedLife);
+    } else {
+      // Ponto de mira deslocado lateralmente além do raio de impacto — curva de
+      // "quase acerto" plausível que nunca entra no gate de colisão (ver updateMissiles).
+      const hr = Math.sqrt(target.hr2 ?? 25);
+      const toTarget = new THREE.Vector3().subVectors(target.mesh.position, orig);
+      const perp = new THREE.Vector3().crossVectors(toTarget, new THREE.Vector3(0, 1, 0));
+      if (perp.lengthSq() < 1e-6) perp.set(1, 0, 0); else perp.normalize();
+      const mag = hr * (MISS_OFFSET_MIN_MULT + game.rng.random() * MISS_OFFSET_RANGE_MULT);
+      const side = game.rng.random() < 0.5 ? -1 : 1;
+      missOffset = perp.multiplyScalar(mag * side);
+    }
+  }
+
   missiles.push({
     mesh,
     target,
     velocity: vel,
-    life: opts.life ?? cfg.LIFE,
+    life,
     smokeTimer: 0,
     cfg,
     kind,
     damage: opts.damage ?? cfg.DAMAGE,
     explosionScale: opts.explosionScale,
     support: opts.support === true,
+    willHit,
+    missOffset,
   });
   audio.missile();
 }
@@ -172,14 +219,30 @@ export function updateMissiles(dt) {
         const d = m.mesh.position.distanceToSquared(e.mesh.position);
         if (d < nd) { nd = d; near = e; }
       }
+      // Alvo trocou (re-target) — o missOffset antigo era relativo à posição do alvo
+      // anterior e não se aplica mais.
+      if (near !== m.target) m.missOffset = null;
       m.target = near;
     }
     if (m.target) {
       const dist = m.mesh.position.distanceTo(m.target.mesh.position);
-      // Proximity boost: mais perto = turn mais agressivo (impede overshoot)
-      const turn = dist < 40 ? m.cfg.CLOSE_TURN_RATE : m.cfg.TURN_RATE;
-      _msDir.subVectors(m.target.mesh.position, m.mesh.position).normalize().multiplyScalar(m.cfg.TRACKING_SPD);
+      // AC-05/D-1: HIT-rolled sempre usa o turn mais agressivo (garante convergência
+      // terminal, independente do alcance). MISS-rolled mantém o proximity-boost
+      // original (curva plausível, sem garantia de intercepção).
+      const turn = m.willHit ? m.cfg.CLOSE_TURN_RATE : (dist < 40 ? m.cfg.CLOSE_TURN_RATE : m.cfg.TURN_RATE);
+      _msAimPoint.copy(m.target.mesh.position);
+      if (m.missOffset) _msAimPoint.add(m.missOffset);
+      _msDir.subVectors(_msAimPoint, m.mesh.position).normalize().multiplyScalar(m.cfg.TRACKING_SPD);
       m.velocity.lerp(_msDir, turn);
+
+      // MISS-rolled: uma vez que o míssil já passou do alvo (afastando-se dele),
+      // encurta a vida restante para um "quase acerto" visível seguido de
+      // autodestruição — em vez de vagar pelo mapa pelo LIFE inteiro (6-8s).
+      if (!m.willHit) {
+        _msToTarget.subVectors(m.target.mesh.position, m.mesh.position);
+        const approaching = _msToTarget.dot(m.velocity) > 0;
+        if (!approaching && m.life > 0.6) m.life = 0.6;
+      }
     }
     m.mesh.position.addScaledVector(m.velocity, dt);
 
@@ -202,11 +265,22 @@ export function updateMissiles(dt) {
 
     let hit = false;
     if (m.target && !m.target.dead) {
-      const hr2 = m.target.hr2 * 2.5;   // raio de impacto generoso (anti-miss)
-      if (m.mesh.position.distanceToSquared(m.target.mesh.position) < hr2) {
+      const hr2 = m.target.hr2 * HIT_RADIUS_MULT;   // raio de impacto generoso
+      // D-1: dano só é aplicado a mísseis HIT-rolled. Um MISS-rolled nunca chega
+      // aqui na prática (o missOffset garante a trajetória de "quase acerto"), mas o
+      // gate abaixo é incondicional — a decisão de dano nunca depende só da geometria.
+      if (m.willHit && m.mesh.position.distanceToSquared(m.target.mesh.position) < hr2) {
         damageTarget(m.target, m.damage);
         hit = true;
       }
+    }
+    // Garantia de intercepção terminal (D-1): rede de segurança — se a vida está
+    // prestes a expirar e o míssil HIT-rolled ainda não acertou um alvo vivo, força o
+    // impacto agora. A margem de vida calculada no disparo deve tornar este caminho
+    // raro/nunca necessário na prática.
+    if (!hit && m.willHit && m.life <= 0 && m.target && !m.target.dead) {
+      damageTarget(m.target, m.damage);
+      hit = true;
     }
     if (hit || m.life <= 0) {
       const scale = m.explosionScale ?? (m.kind === 'heavy' ? 1.5 : 0.9);

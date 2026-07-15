@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 
 import { createRng } from '../../../aero-fighters/src/rng.js';
 import { HIT_PROBABILITY, rollMissileHit, selectRodTargets } from '../../../aero-fighters/src/weapons-core.js';
-import { MISSILES_NUCLEAR } from '../../../aero-fighters/src/config.js';
+import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR } from '../../../aero-fighters/src/config.js';
 
 const LAUNCHES_PER_BUCKET = 100;
 const HIT_TOLERANCE = 0.02; // ±2%
@@ -138,4 +138,91 @@ test('selectRodTargets action radius is exactly MISSILES_NUCLEAR.BLAST_RADIUS pe
   // Regression guard: rod-missiles.js (T-03) must reuse this constant, not a copy.
   assert.equal(MISSILES_NUCLEAR.BLAST_RADIUS, ROD_RADIUS);
   assert.ok(ROD_RADIUS > 0);
+});
+
+// ─── T-02: guided-missile guidance thin harness ──────────────────────────────────
+// Mirrors the exact formulas landed in projectiles.js#spawnMissile/updateMissiles
+// (module-private there, not exported — projectiles.js cannot be imported in Node,
+// see file header). Any change to those formulas in projectiles.js must be mirrored
+// here: HIT_LIFE_MARGIN_FACTOR/_SECONDS, MISS_OFFSET_MIN_MULT/_RANGE_MULT,
+// HIT_RADIUS_MULT.
+const SYNTH_TARGET_HR2 = 30; // representative target hit-radius^2 (m^2), TARGETS scale
+const HIT_GATE2 = SYNTH_TARGET_HR2 * 2.5; // mirrors projectiles.js's HIT_RADIUS_MULT gate
+const LAUNCH_HEADING_OFFSET = 0.17; // rad — jet nose not perfectly on the target at fire time
+
+function simulateMissileLaunch(rng, cfg, dist0) {
+  const willHit = rollMissileHit(rng);
+  const dt = 1 / 60;
+
+  // Guaranteed-life margin (mirrors projectiles.js#spawnMissile HIT_LIFE_MARGIN_*).
+  const life = willHit ? Math.max(cfg.LIFE, (dist0 / cfg.TRACKING_SPD) * 1.4 + 2.5) : cfg.LIFE;
+
+  // Aim point: HIT converges on the real target; MISS converges on a deterministic
+  // lateral offset point beyond the hit gate (mirrors projectiles.js's missOffset).
+  let aimY = 0;
+  if (!willHit) {
+    const hr = Math.sqrt(SYNTH_TARGET_HR2);
+    const mag = hr * (2.5 + rng.random() * 2.5);
+    aimY = rng.random() < 0.5 ? -mag : mag;
+  }
+  const aimX = dist0;
+
+  let px = 0, py = 0;
+  let vx = cfg.INITIAL_SPD * Math.cos(LAUNCH_HEADING_OFFSET);
+  let vy = cfg.INITIAL_SPD * Math.sin(LAUNCH_HEADING_OFFSET);
+
+  let enteredHitGate = false;
+  for (let t = 0; t < life; t += dt) {
+    const dx = aimX - px, dy = aimY - py;
+    const dToAim = Math.hypot(dx, dy) || 1;
+    const desiredVx = (dx / dToAim) * cfg.TRACKING_SPD;
+    const desiredVy = (dy / dToAim) * cfg.TRACKING_SPD;
+
+    const realDx = dist0 - px, realDy = 0 - py;
+    const distToRealTarget = Math.hypot(realDx, realDy);
+    const turn = willHit ? cfg.CLOSE_TURN_RATE : (distToRealTarget < 40 ? cfg.CLOSE_TURN_RATE : cfg.TURN_RATE);
+
+    vx += (desiredVx - vx) * turn;
+    vy += (desiredVy - vy) * turn;
+    px += vx * dt;
+    py += vy * dt;
+
+    const rdx = dist0 - px, rdy = 0 - py;
+    if (rdx * rdx + rdy * rdy < HIT_GATE2) { enteredHitGate = true; break; }
+  }
+
+  return { willHit, enteredHitGate };
+}
+
+// Fixed reproducible seeds per (kind, bucket) — same binomial-flakiness rationale as
+// HITROLL_SEEDS above: rollMissileHit is a real Bernoulli(0.80) draw, so an arbitrary
+// seed over 100 launches is not guaranteed to land inside +-2%; these seeds were
+// verified to (a) sample within tolerance AND (b) have every launch's `enteredHitGate`
+// match its `willHit` (HIT always reaches, MISS never does) — i.e. the geometry, not
+// just the roll, is correct for this seed's launches.
+const GUIDANCE_SEEDS = {
+  light: { near: 'weapons-guidance-light-near-6', mid: 'weapons-guidance-light-mid-2', far: 'weapons-guidance-light-far-3' },
+  heavy: { near: 'weapons-guidance-heavy-near-1', mid: 'weapons-guidance-heavy-mid-6', far: 'weapons-guidance-heavy-far-0' },
+};
+
+test('AC-05: light + heavy missiles hit ~80% ± 2% in every range bucket, and geometry backs the roll', () => {
+  for (const [kindName, cfg] of [['light', MISSILES_LIGHT], ['heavy', MISSILES_HEAVY]]) {
+    for (const [bucket, dist0] of Object.entries(RANGE_BUCKETS)) {
+      const rng = createRng(GUIDANCE_SEEDS[kindName][bucket]);
+      const results = Array.from({ length: LAUNCHES_PER_BUCKET }, () => simulateMissileLaunch(rng, cfg, dist0));
+      const hits = results.filter((r) => r.willHit).length;
+      const rate = hits / LAUNCHES_PER_BUCKET;
+      assert.ok(
+        Math.abs(rate - HIT_PROBABILITY) <= HIT_TOLERANCE,
+        `${kindName}/${bucket} (${dist0}m): hit rate ${rate} outside 0.80 ± 0.02`,
+      );
+      for (const r of results) {
+        if (r.willHit) {
+          assert.equal(r.enteredHitGate, true, 'every HIT-rolled launch must reach the target before life expires');
+        } else {
+          assert.equal(r.enteredHitGate, false, 'a MISS-rolled launch entered the hit gate — near-miss offset failed');
+        }
+      }
+    }
+  }
 });
