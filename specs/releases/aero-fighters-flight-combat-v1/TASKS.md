@@ -98,7 +98,7 @@ files). One `[-]` per lane at a time.
 ## Final gate
 
 ### T-10 — Full QA gate + operator local-play validation setup
-- [ ] **Owner:** qa-engineer · **Write-set:** `tests/aero-fighters/**` (fixtures/specs as needed); no production `src/` writes.
+- [x] **Owner:** qa-engineer · **Write-set:** `tests/aero-fighters/**` (fixtures/specs as needed); no production `src/` writes.
 - **Preconditions:** T-01..T-09 DONE.
 - **Do:** run `npm run test:aero:qa` (validate:aero-map + unit + sim + e2e) green including the new weapons, taxi-containment, takeoff, throttle, and nuke assertions; Playwright visual/audio smoke covering all 6 points; confirm no regression to serra `inhauma` terrain or `desert`/`rio`/`islands`; bring the dev server up and **register it** (`dadaia server register`) so the operator can play locally and validate all 6 improvements.
 - **Done when:** all suites green; 6-point smoke passes; no regressions; dev server up + registered; operator local-play validation ready. This unblocks CLOSURE.
