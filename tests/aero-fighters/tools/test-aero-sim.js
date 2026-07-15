@@ -17,6 +17,9 @@ import {
   inhaumaVisualSurfaceHeight,
   buildForests,
   inhaumaTrees,
+  buildInhaumaTerrain,
+  buildTown,
+  getInhaumaStructures,
 } from '../../../aero-fighters/src/maps/inhauma-scene.js';
 import { demBounds, demSlopeAt } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
 import {
@@ -279,6 +282,51 @@ test('AC-05: tree species span low-valley to high-subalpine bands, mapped to the
   const heights = inhaumaTrees.map((t) => t.y);
   assert.ok(Math.min(...heights) < 20, 'expected at least one valley-floor tree well below 20 m');
   assert.ok(Math.max(...heights) > 300, 'expected at least one high subalpine tree above 300 m — species bands did not remap to the DEM regime');
+});
+
+// ─── T-09: city terracing on the valley shelf + airport shelf (AC-07) ─────────
+// buildInhaumaTerrain resets structures[] (same order as inhauma.js#createInhaumaWorld)
+// then buildTown registers every block — both run headless against a stub scene.
+const AIRPORT_CLEARING_OUTER_M = 140; // landing-zones.js#airportClearingFactor default `outer`
+const AIRPORT_CENTER_FOR_TEST = { x: -560, z: 320 };
+
+test('AC-07: the terraced town sits on the valley shelf — no building intersects a road, the river channel, or the airport clearing', () => {
+  const stubScene = { add() {} };
+  buildInhaumaTerrain(stubScene);
+  buildTown(stubScene);
+  const buildings = getInhaumaStructures().filter((s) => s.id === 'predio-inhauma' || s.id === 'igreja-inhauma' || s.id === 'torre-igreja-inhauma');
+  assert.ok(buildings.length >= 40, `expected a substantial terraced town, got only ${buildings.length} buildings`);
+  for (const b of buildings) {
+    const corners = [
+      [b.x - b.halfX, b.z - b.halfZ], [b.x + b.halfX, b.z - b.halfZ],
+      [b.x - b.halfX, b.z + b.halfZ], [b.x + b.halfX, b.z + b.halfZ],
+      [b.x, b.z],
+    ];
+    for (const [cx, cz] of corners) {
+      assert.ok(!nearAnyRoad(cx, cz, 0), `${b.id} at (${b.x.toFixed(1)},${b.z.toFixed(1)}) overlaps a road corridor`);
+      assert.ok(distanceToRiver(cx, cz) >= RIVER_HALF_WIDTH_M, `${b.id} at (${b.x.toFixed(1)},${b.z.toFixed(1)}) overlaps the river channel`);
+      assert.ok(Math.hypot(cx - AIRPORT_CENTER_FOR_TEST.x, cz - AIRPORT_CENTER_FOR_TEST.z) >= AIRPORT_CLEARING_OUTER_M,
+        `${b.id} at (${b.x.toFixed(1)},${b.z.toFixed(1)}) overlaps the airport clearing`);
+    }
+  }
+  // No two building footprints overlap each other either.
+  let overlaps = 0;
+  for (let i = 0; i < buildings.length; i++) {
+    for (let j = i + 1; j < buildings.length; j++) {
+      const a = buildings[i], c = buildings[j];
+      if (Math.abs(a.x - c.x) < a.halfX + c.halfX && Math.abs(a.z - c.z) < a.halfZ + c.halfZ) overlaps++;
+    }
+  }
+  assert.equal(overlaps, 0, `${overlaps} overlapping building footprint pairs`);
+});
+
+test('AC-07: downtown reads denser/taller than the periphery (terraced rows thin uphill)', () => {
+  const stubScene = { add() {} };
+  buildInhaumaTerrain(stubScene);
+  buildTown(stubScene);
+  const blocks = getInhaumaStructures().filter((s) => s.id === 'predio-inhauma');
+  const heights = blocks.map((b) => b.topY);
+  assert.ok(Math.max(...heights) - Math.min(...heights) > 15, 'expected a real height gradient between downtown and periphery blocks');
 });
 
 /** Flood-fills the "flyable" (height < ceiling) region of inhaumaContinuousHeight

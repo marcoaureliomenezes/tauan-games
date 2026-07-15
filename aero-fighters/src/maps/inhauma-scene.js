@@ -50,11 +50,26 @@ export const WATER_LEVEL = 4.5;     // m — cota "genérica" (represa/praia/bio
 // (v0.2.0) foi APOSENTADO — o traçado agora vem da drenagem do DEM real
 // (maps/inhauma-river.js#getInhaumaRiverPolyline, T-05). Nenhuma coordenada de rio é
 // digitada à mão aqui; ver o cabeçalho daquele módulo para o algoritmo de traçado.
-// DAM/RESERVOIR (represa/reservatório) são posições HERDADAS da era FBM e ainda NÃO
-// foram realinhadas ao novo traçado real do rio (fora do write-set de T-05 — flag
-// para um follow-up dedicado, ex. T-06/T-09 ou uma tarefa própria).
-const DAM = { x: 320, z: 470, ang: 0.6 }; // barragem (atravessa o rio)
-const RESERVOIR = { x: 60, z: 350, rx: 300, rz: 160 }; // lago da represa (a montante, no vale)
+// DAM/RESERVOIR (represa/reservatório) — DEVIATION APROVADA PELO ORQUESTRADOR (T-09).
+// As posições HERDADAS da era FBM (barragem em (320,470), lago em (60,350)) ficaram
+// 400-700 m longe do traçado real do rio (T-05, drenagem do DEM) — o rio novo nem
+// passa perto delas. Duas saídas possíveis: (a) reposicionar a barragem sobre o canal
+// real num ponto estreito, com o reservatório a montante, usando a API do rio
+// (riverBankHeightAt/riverWaterLevelAt/getInhaumaRiverPolyline); ou (b) aposentar
+// limpo. ESCOLHIDA: (b) aposentar. Razão: (a) exigiria reconstruir a hidrologia da
+// represa do zero — achar um trecho estreito e coerente do canal real, redimensionar
+// o reservatório para não colidir com a travessia da MG-238 (T-06, ~(125,-14)) nem
+// com os corredores de estrada, e manter os níveis d'água consistentes com
+// riverWaterLevelAt (que já varia centenas de metros ao longo do traçado) — trabalho
+// de escopo comparável a uma sub-tarefa de hidrologia própria, arriscado de acertar
+// nos detalhes dentro do orçamento de T-09. (b) é MENOS INVASIVA (só remove código
+// desta mesma seção, sem tocar o carve do rio nem os corredores de estrada) e
+// VISUALMENTE COERENTE (um vale alpino real não depende de uma represa artificial
+// para ler como "acidentado" — o rio, as pontes e o relevo já carregam isso; uma
+// represa flutuando longe do canal real seria pior para a fidelidade DEM do que
+// nenhuma represa). A usina nuclear (buildNuclearPlant) e as fábricas
+// (buildFactories) NÃO fazem parte desta decisão — só DAM/RESERVOIR foram sinalizadas
+// pelo orquestrador; ficam como estão (fora do escopo desta tarefa).
 const structures = [];
 
 // Features nomeadas — v0.2.0 FBM: geravam relevo (featureContribution). A partir de
@@ -106,9 +121,9 @@ function inhaumaBaseHeight(x, z) {
   // suaves — substitui o carve autoral acima (mesma posição na cadeia: depois dos
   // portais, antes da bacia do reservatório e da clareira do aeroporto).
   h = riverCarveAt(x, z, h);
-  // Bacia do reservatório a montante da barragem
-  const er = Math.hypot((x - RESERVOIR.x) / RESERVOIR.rx, (z - RESERVOIR.z) / RESERVOIR.rz);
-  if (er < 1) h = Math.min(h, WATER_LEVEL - 5 - (1 - er) * 8);
+  // (T-09 DEVIATION: a bacia artificial do reservatório — herdada da era FBM, longe
+  // do traçado real do rio — foi removida daqui junto com a represa; ver a nota acima
+  // de DAM/RESERVOIR. O relevo natural do DEM aparece sem entalhe extra nesta área.)
 
   // Piso em 0: leito do rio/lago fica em 0 e a lâmina d'água (WATER_LEVEL) cobre.
   // Mantém colisão (max(0,h)) idêntica ao diagnostics (alvos sempre aterrados).
@@ -380,10 +395,11 @@ export function inhaumaHeightAt(isl, dx, dz) {
   return inhaumaVisualSurfaceHeight(isl.cx + dx, isl.cz + dz);
 }
 
-// ─── Água (rio + reservatório), animada ──────────────────────────────────────
-// Reuso de terceiros (2026-07-01): reservatório = examples/jsm Water (reflexivo,
-// waternormals oficial do three r165); rio = shader de fluxo compartilhado
-// (environment/water-surface.js — reutilizável pelos outros mapas).
+// ─── Água (rio), animada ──────────────────────────────────────────────────────
+// T-09 DEVIATION: o lago reflexivo do reservatório (examples/jsm Water) foi removido
+// daqui junto com a represa — ver a nota de DAM/RESERVOIR mais acima. O rio (T-05)
+// continua normalmente: shader de fluxo compartilhado (environment/water-surface.js
+// — reutilizável pelos outros mapas).
 // T-05: decima a polilinha fina do rio (~50-150 pontos, resolução do entalhe/colisão)
 // para segmentos de água maiores (~RIVER_RENDER_SEGMENT_M) — menos meshes/draw calls,
 // mesma cobertura de ponta a ponta (WS-3). Sempre inclui o último ponto.
@@ -403,16 +419,6 @@ function decimatePolyline(points, targetSegmentM) {
 
 export function buildInhaumaWater(scene) {
   const waters = [];
-
-  // Reservatório (lago da represa) — 1 superfície reflexiva por mapa. Posição HERDADA
-  // da era FBM (ver nota T-05 no topo do arquivo) — o novo rio não passa mais perto
-  // dele; WATER_LEVEL genérico segue servindo só para este lago independente.
-  const lake = createReflectiveWater(
-    new THREE.PlaneGeometry(RESERVOIR.rx * 2, RESERVOIR.rz * 2, 1, 1),
-    { color: 0x2a6d94, opacity: 0.96 },
-  );
-  lake.position.set(RESERVOIR.x, WATER_LEVEL, RESERVOIR.z);
-  scene.add(lake); waters.push(lake);
 
   // Rio (T-05): ribbon de segmentos seguindo TODA a polilinha derivada da drenagem do
   // DEM (WS-3 — de ponta a ponta, não só um trecho). Cada segmento usa a cota LOCAL
@@ -437,29 +443,14 @@ export function buildInhaumaWater(scene) {
   return { waters };
 }
 
-// ─── Barragem (represa) ──────────────────────────────────────────────────────
+// ─── Barragem (represa) — APOSENTADA (T-09 DEVIATION) ────────────────────────
+// Ver a nota de DAM/RESERVOIR mais acima no arquivo para a justificativa completa.
+// A função continua exportada e chamável (inhauma.js#createInhaumaWorld chama
+// buildDam(scene) — fora do write-set desta tarefa) mas agora é um no-op limpo: não
+// adiciona geometria à cena, não registra estrutura de colisão, não retorna grupo.
 export function buildDam(scene) {
-  const g = new THREE.Group();
-  const concrete = smat(0xb9b9b3, { roughness: 0.95 });
-  // Paredão curvo (arco) atravessando o vale
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(360, 46, 26), concrete);
-  wall.position.set(DAM.x, 18, DAM.z);
-  wall.rotation.y = DAM.ang;
-  wall.castShadow = false; wall.receiveShadow = true;
-  g.add(wall);
-  registerStructure('represa-inhauma', DAM.x, DAM.z, 190, 28, 46);
-  // Crista / estrada no topo
-  const crest = new THREE.Mesh(new THREE.BoxGeometry(364, 3, 8), smat(0x3a3a3a));
-  crest.position.set(DAM.x, 41, DAM.z); crest.rotation.y = DAM.ang; g.add(crest);
-  // Vertedouros (3 vãos)
-  for (let i = -1; i <= 1; i++) {
-    const sx = DAM.x + Math.cos(DAM.ang) * i * 90;
-    const sz = DAM.z - Math.sin(DAM.ang) * i * 90;
-    const spill = new THREE.Mesh(new THREE.BoxGeometry(26, 30, 28), smat(0x6f6f6a));
-    spill.position.set(sx, 16, sz); spill.rotation.y = DAM.ang; g.add(spill);
-  }
-  scene.add(g);
-  return g;
+  void scene;
+  return null;
 }
 
 // ─── Usina nuclear (torres de resfriamento + cúpula + vapor) ──────────────────
@@ -652,27 +643,85 @@ export function buildForests(scene) {
   return meshes.length ? { meshes } : null;
 }
 
-// ─── Cidade (downtown + igreja + campos + praça) ─────────────────────────────
+// ─── Cidade (downtown terraceado na prateleira do vale + igreja + campos + praça) ──
+// T-09 (AC-07): relocada da grade plana na origem para a PRATELEIRA DE VALE perto do
+// aeroporto (-560,320) — dentro do mesmo TOWN_SHELF que T-08 já reserva para
+// buildForests não plantar árvore ali. Downtown fica na parte mais plana da
+// prateleira (perto da origem, sul do aeroporto); a densidade afina conforme a
+// inclinação sobe em direção ao aeroporto/serra (AC-07: "mais densa perto da
+// prateleira mais plana, afinando morro acima"). Terraceamento: cada quarteirão
+// amostra os 4 cantos do próprio footprint via inhaumaContinuousHeight e assenta
+// numa base NIVELADA (média dos cantos) levemente AFUNDADA — sugere um pequeno corte
+// de terraço sem precisar de uma malha de muro de arrimo separada (a release aceita
+// explicitamente essa abordagem: "small retaining-wall look via slightly sunken
+// bases is fine").
+const DOWNTOWN_CENTER = { x: -370, z: -20 };
+const DOWNTOWN_RADIUS_M = 160;
+const CHURCH = { x: -330, z: -40 };
+const CHURCH_TOWER = { x: -330, z: -70 };
+const FIELDS = [{ x: -410, z: -60 }, { x: -250, z: -40 }];
+const PLAZA = { x: -390, z: 0 };
+// Raio da clareira REAL do aeroporto (~140 m, landing-zones.js#airportClearingFactor)
+// + folga de meio-quarteirão — mais justo que o box de 360 m que buildForests usa
+// (aquele existe para manter árvore/pouso longe da pista com folga generosa; um
+// prédio só precisa ficar fora da clareira nivelada em si).
+const AIRPORT_CENTER = { x: -560, z: 320 };
+const AIRPORT_TOWN_KEEPOUT_M = 220;
+const SHELF_FLAT_SLOPE_MAX_DENSITY = 0.12; // abaixo disso, densidade máxima de quarteirão
+const SHELF_MAX_SLOPE = 0.35;              // acima disso, nenhum quarteirão (afinando morro acima)
+const TERRACE_CUT_M = 0.35; // m — quanto a base do quarteirão afunda abaixo da média dos 4 cantos
+
+function nearAnyLandmark(x, z) {
+  if (Math.hypot(x - CHURCH.x, z - CHURCH.z) < 55) return true;
+  if (Math.hypot(x - CHURCH_TOWER.x, z - CHURCH_TOWER.z) < 30) return true;
+  if (Math.hypot(x - PLAZA.x, z - PLAZA.z) < 48) return true;
+  for (const f of FIELDS) if (Math.hypot(x - f.x, z - f.z) < 75) return true;
+  return false;
+}
+
+/** Amostra os 4 cantos do footprint (w×d, sem rotação — aproximação AABB, mesma
+ *  simplificação que registerStructure já usa em todo o mapa) e devolve a base
+ *  nivelada (média dos cantos, levemente afundada — T-09 terraceamento). */
+function terracedPadHeight(x, z, w, d) {
+  const hx = w / 2, hz = d / 2;
+  const corners = [
+    inhaumaContinuousHeight(x - hx, z - hz), inhaumaContinuousHeight(x + hx, z - hz),
+    inhaumaContinuousHeight(x - hx, z + hz), inhaumaContinuousHeight(x + hx, z + hz),
+  ];
+  const avg = corners.reduce((a, b) => a + b, 0) / corners.length;
+  return avg - TERRACE_CUT_M;
+}
+
 export function buildTown(scene) {
   const g = new THREE.Group();
   const dummy = new THREE.Object3D();
-  // Quarteirões: prédios variados, mais altos no centro
+  // Quarteirões: prédios variados, mais altos perto do centro do downtown, seguindo
+  // o contorno do terreno (linhas ao longo de x dentro da prateleira do vale).
   const blocks = [];
-  for (let x = -240; x <= 240; x += 26) {
-    for (let z = -240; z <= 240; z += 24) {
-      const rr = Math.hypot(x, z);
-      if (rr > 260) continue;
-      if (Math.hypot(x - 20, z + 40) < 55) continue;  // igreja
-      if (Math.abs(x + 170) < 70 && Math.abs(z + 90) < 55) continue; // campo
-      if (nearAnyRoad(x, z, 12)) continue;                 // não construir sobre a rodovia
-      if ((x * 7 + z * 13) % 5 === 0) continue;
-      const downtown = rr < 110;
+  for (let x = TOWN_SHELF.minX; x <= TOWN_SHELF.maxX; x += 30) {
+    for (let z = TOWN_SHELF.minZ; z <= TOWN_SHELF.maxZ; z += 26) {
+      if (Math.hypot(x - AIRPORT_CENTER.x, z - AIRPORT_CENTER.z) < AIRPORT_TOWN_KEEPOUT_M) continue;
+      if (nearAnyLandmark(x, z)) continue;
+      if (nearAnyRoad(x, z, 12)) continue;                  // não construir sobre a rodovia
+      if (distanceToRiver(x, z) < RIVER_HALF_WIDTH_M + 15) continue; // não construir no canal/margem do rio
+      const gh0 = inhaumaContinuousHeight(x, z);
+      if (gh0 < WATER_LEVEL + 1) continue;                  // terreno baixo/alagado demais
+      const slope = demSlopeAt(x, z);
+      if (slope > SHELF_MAX_SLOPE) continue;                // encosta íngreme demais p/ terracear
+      if ((x * 7 + z * 13) % 5 === 0) continue;              // lotes vazios (variedade visual)
+      // Afina a densidade conforme a inclinação sobe acima do patamar "prateleira plana".
+      if (slope > SHELF_FLAT_SLOPE_MAX_DENSITY) {
+        const thinT = (slope - SHELF_FLAT_SLOPE_MAX_DENSITY) / (SHELF_MAX_SLOPE - SHELF_FLAT_SLOPE_MAX_DENSITY);
+        if (game.rng.random() < thinT) continue;
+      }
+      const rrDowntown = Math.hypot(x - DOWNTOWN_CENTER.x, z - DOWNTOWN_CENTER.z);
+      const downtown = rrDowntown < DOWNTOWN_RADIUS_M;
       const hgt = downtown ? 18 + (Math.abs(x * 5 + z * 3) % 26) : 7 + (Math.abs(x * 3 + z) % 8);
-      const gh = inhaumaContinuousHeight(x, z);
       const w = 11 + Math.abs(x % 6);
       const d = 9 + Math.abs(z % 5);
-      blocks.push({ x, z, gh, h: hgt, w, d, downtown });
-      registerStructure('predio-inhauma', x, z, w / 2, d / 2, gh + hgt);
+      const padY = terracedPadHeight(x, z, w, d);
+      blocks.push({ x, z, gh: padY, h: hgt, w, d, downtown });
+      registerStructure('predio-inhauma', x, z, w / 2, d / 2, padY + hgt);
     }
   }
   const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), lmat(0xb9a98f), blocks.length);
@@ -689,19 +738,20 @@ export function buildTown(scene) {
   mesh.castShadow = false; mesh.receiveShadow = true;
   g.add(mesh);
 
-  // Igreja (corpo + torre + pináculo)
-  const ghCh = inhaumaContinuousHeight(20, -40);
+  // Igreja (corpo + torre + pináculo) — reposicionada perto do novo downtown (T-09).
+  const ghCh = inhaumaContinuousHeight(CHURCH.x, CHURCH.z);
   const church = new THREE.Mesh(new THREE.BoxGeometry(32, 14, 46), lmat(0xece3c8));
-  church.position.set(20, ghCh + 7, -40); g.add(church);
-  registerStructure('igreja-inhauma', 20, -40, 16, 23, ghCh + 14);
+  church.position.set(CHURCH.x, ghCh + 7, CHURCH.z); g.add(church);
+  registerStructure('igreja-inhauma', CHURCH.x, CHURCH.z, 16, 23, ghCh + 14);
+  const ghTower = inhaumaContinuousHeight(CHURCH_TOWER.x, CHURCH_TOWER.z);
   const tower = new THREE.Mesh(new THREE.BoxGeometry(12, 22, 12), lmat(0xe2d8b8));
-  tower.position.set(20, ghCh + 11, -70); g.add(tower);
-  registerStructure('torre-igreja-inhauma', 20, -70, 6, 6, ghCh + 29);
+  tower.position.set(CHURCH_TOWER.x, ghTower + 11, CHURCH_TOWER.z); g.add(tower);
+  registerStructure('torre-igreja-inhauma', CHURCH_TOWER.x, CHURCH_TOWER.z, 6, 6, ghTower + 29);
   const spire = new THREE.Mesh(new THREE.ConeGeometry(8, 14, 4), lmat(0xb04a30));
-  spire.position.set(20, ghCh + 29, -70); spire.rotation.y = Math.PI / 4; g.add(spire);
+  spire.position.set(CHURCH_TOWER.x, ghTower + 29, CHURCH_TOWER.z); spire.rotation.y = Math.PI / 4; g.add(spire);
 
-  // Campos de futebol (gramado + linhas + gols)
-  for (const [fx, fz] of [[-170, -90], [200, 140]]) {
+  // Campos de futebol (gramado + linhas + gols) — repositionados na prateleira (T-09).
+  for (const { x: fx, z: fz } of FIELDS) {
     const fy = inhaumaContinuousHeight(fx, fz) + 0.3;
     const field = new THREE.Mesh(new THREE.PlaneGeometry(105, 68), lmat(0x2f8c3a));
     field.rotation.x = -Math.PI / 2; field.position.set(fx, fy, fz); g.add(field);
@@ -710,10 +760,10 @@ export function buildTown(scene) {
       goal.position.set(fx + gx, fy + 2.5, fz); g.add(goal);
     }
   }
-  // Praça central
-  const plazaY = inhaumaContinuousHeight(45, 40) + 0.25;
+  // Praça central — repositionada junto ao novo downtown (T-09).
+  const plazaY = inhaumaContinuousHeight(PLAZA.x, PLAZA.z) + 0.25;
   const plaza = new THREE.Mesh(new THREE.PlaneGeometry(64, 52), lmat(0x6f8d62));
-  plaza.rotation.x = -Math.PI / 2; plaza.position.set(45, plazaY, 40); g.add(plaza);
+  plaza.rotation.x = -Math.PI / 2; plaza.position.set(PLAZA.x, plazaY, PLAZA.z); g.add(plaza);
 
   scene.add(g);
   return g;

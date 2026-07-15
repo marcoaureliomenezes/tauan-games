@@ -111,7 +111,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
     boost; airport/urban/road/river exclusions preserved.
   - 3–5 visually distinct instanced species with per-instance color jitter kept (WS-3).
 
-### [ ] T-09 — City terracing on the valley shelf + airport shelf
+### [x] T-09 — City terracing on the valley shelf + airport shelf
 - **Owner:** software-engineer
 - **Write-set:** `aero-fighters/src/maps/inhauma-scene.js` (`buildTown`)
 - **Preconditions:** T-03 green
