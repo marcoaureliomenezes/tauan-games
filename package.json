@@ -8,7 +8,7 @@
     "test:aero:e2e": "playwright test tests/aero-fighters/ --config=tests/playwright.config.js",
     "validate:aero-map": "node --experimental-default-type=module tests/aero-fighters/tools/validate-aero-map.js",
     "test:aero:unit": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-unit.js",
-    "test:aero:sim": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-sim.js && node --experimental-default-type=module tests/aero-fighters/tools/test-aero-sortie-sim.js",
+    "test:aero:sim": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-sim.js && node --experimental-default-type=module tests/aero-fighters/tools/test-aero-sortie-sim.js && node --experimental-default-type=module tests/aero-fighters/tools/test-aero-weapons-sim.js",
     "test:aero:qa": "npm run validate:aero-map && npm run test:aero:unit && npm run test:aero:sim && npm run test:aero:e2e",
     "test:space-war:unit": "node --experimental-default-type=module tests/space-war/tools/test-celestial-unit.js && node --experimental-default-type=module tests/space-war/tools/test-ballistics-unit.js && node --experimental-default-type=module tests/space-war/tools/test-physics-unit.js",
     "test:space-war": "playwright test tests/space-war/ --config=tests/playwright.config.js"

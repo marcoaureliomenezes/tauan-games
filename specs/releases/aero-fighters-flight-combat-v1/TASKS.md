@@ -32,7 +32,7 @@ files). One `[-]` per lane at a time.
 ## Lane C — Weapons
 
 ### T-01 — Pure `weapons-core.js` (hit-roll + rod selection) + sim tests
-- [-] **Owner:** software-engineer · **Lane:** C · **Write-set:** `aero-fighters/src/weapons-core.js` (new); `tests/aero-fighters/tools/test-aero-weapons-sim.js` (new); `package.json` (add to `test:aero:sim` chain).
+- [x] **Owner:** software-engineer · **Lane:** C · **Write-set:** `aero-fighters/src/weapons-core.js` (new); `tests/aero-fighters/tools/test-aero-weapons-sim.js` (new); `package.json` (add to `test:aero:sim` chain).
 - **Preconditions:** none (foundation).
 - **Do:** pure, Node-safe (no DOM/THREE): `rollMissileHit(rng)` (p=0.80); `selectRodTargets(targets, origin, actionRadius, max=3)` → nearest-first ≤3 valid, in-radius targets.
 - **Done when:** 100-seeded-launch stats give 80% ± 2% in ≥3 range buckets (range-independent); rod selection returns exactly 3 for ≥3 clustered in radius, all for <3, none outside radius; wired into `npm run test:aero:sim` and green.
