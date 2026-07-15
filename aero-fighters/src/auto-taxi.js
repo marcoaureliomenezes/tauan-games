@@ -7,29 +7,34 @@
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
+import { audio } from './audio.js';
 import { jet, setLiftoffCarry } from './player.js';
 import { getAirportForMap } from './airport.js';
+import { PLAYER } from './config.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 import { spawnMission } from './missions.js';
+import { advancePathIndex, buildTaxiPathIn, stepTowardWaypoint, wrapAngle } from './taxi-core.js';
 
-const TAXI_SPEED = 34;      // m/s — velocidade de taxiamento
+// T-05/D-4: TAXI_SPEED now mirrors PLAYER.TAXI_HANDOFF_SPEED (single source of
+// truth) — guided taxi cruises at exactly the speed roll-out hands off at, so there
+// is no speed-snap the instant auto-taxi arms.
+const TAXI_SPEED = PLAYER.TAXI_HANDOFF_SPEED; // m/s — velocidade de taxiamento
 const TAKEOFF_SPEED = 56;   // m/s — velocidade na qual decola
 const TAXI_TURN_RATE = 1.5; // rad/s — giro máximo do nariz no taxi
 const TAXI_ACCEL = 8;       // m/s² — aceleração limitada no taxi
 const TAXI_BRAKE = 12;      // m/s² — frenagem limitada (rolagem pós-pouso 62→34 sem degrau)
 
-function _wrapAngle(a) {
-  return ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
-}
-
 function _state() { return game.missionRealism.autoTaxi; }
 
-/** Arma o loop automático no momento do toque (chamado pela máquina de contato). */
+/** Arma o loop automático — chamado SOMENTE após o roll-out (player.js's ground
+ *  block) confirmar `canHandoffToGuidedTaxi` (T-05/D-4): groundSpeed já decaiu ao
+ *  handoff E o avião está sobre pavimento. Nunca mais no mesmo frame do toque. */
 export function armAutoTaxi() {
   const a = _state();
   a.active = true;
   a.phase = 'taxi_service';
   a.t = 0;
+  a.wpIndex = 0;
 }
 
 export function cancelAutoTaxi() {
@@ -47,37 +52,28 @@ function _airport() { return getAirportForMap(game.activeMap); }
 /** Move o avião em direção a (tx,tz) no nível do pavimento. Devolve a distância restante.
  *  Suavizado: aceleração/frenagem limitadas (sem degrau de velocidade no pós-pouso),
  *  giro do nariz com taxa máxima, e o avião anda AO LONGO DO NARIZ — faz a curva
- *  como um veículo em vez de deslizar de lado até o waypoint. */
+ *  como um veículo em vez de deslizar de lado até o waypoint.
+ *  T-05: a cinemática em si foi extraída para `taxi-core.js#stepTowardWaypoint`
+ *  (pura, testável em Node); esta função só traduz de/para o mesh THREE + game.player. */
 function _driveTo(tx, tz, dt, speed) {
   const ap = _airport();
-  const dx = tx - jet.position.x;
-  const dz = tz - jet.position.z;
-  const dist = Math.hypot(dx, dz);
-  // Desacelera perto do alvo para parar suave; delta de velocidade limitado por frame.
-  const vTarget = dist > 0.5 ? Math.min(speed, Math.max(6, dist * 1.2)) : 0;
-  const cur = game.player.speed || 0;
-  const delta = vTarget - cur;
-  const maxDelta = (delta > 0 ? TAXI_ACCEL : TAXI_BRAKE) * dt;
-  const v = cur + Math.max(-maxDelta, Math.min(maxDelta, delta));
-  if (dist > 0.5) {
-    const ux = dx / dist, uz = dz / dist;
-    // O nariz do jato é o eixo -Z local. Para apontá-lo ao destino:
-    // forward = (-sinθ,0,-cosθ) = (ux,uz) → θ = atan2(-ux, -uz).
-    const targetYaw = Math.atan2(-ux, -uz);
-    const yawErr = _wrapAngle(targetYaw - jet.rotation.y);
-    const maxTurn = TAXI_TURN_RATE * dt;
-    const newYaw = jet.rotation.y + Math.max(-maxTurn, Math.min(maxTurn, yawErr));
+  const step = stepTowardWaypoint(
+    { x: jet.position.x, z: jet.position.z, yaw: jet.rotation.y, speed: game.player.speed || 0 },
+    { x: tx, z: tz },
+    dt,
+    { maxSpeed: speed, accel: TAXI_ACCEL, brake: TAXI_BRAKE, turnRate: TAXI_TURN_RATE, arriveRadius: 0.5 },
+  );
+  if (!step.arrived) {
     // Pitch/roll residuais do pouso decaem suavemente (derrotação no taxi).
     const att = Math.max(0, 1 - 2.6 * dt);
-    jet.rotation.set(jet.rotation.x * att, newYaw, jet.rotation.z * att);
-    const step = Math.min(dist, v * dt);
-    jet.position.x += -Math.sin(newYaw) * step;
-    jet.position.z += -Math.cos(newYaw) * step;
+    jet.rotation.set(jet.rotation.x * att, step.yaw, jet.rotation.z * att);
   }
+  jet.position.x = step.x;
+  jet.position.z = step.z;
   jet.position.y = ap.elevation + 0.9;
-  game.player.speed = dist > 1 ? v : 0;
+  game.player.speed = step.speed;
   game.missionRealism.ground.groundSpeed = game.player.speed;
-  return dist;
+  return step.distance;
 }
 
 function _mirror() {
@@ -85,6 +81,10 @@ function _mirror() {
   game.player.y = jet.position.y;
   game.player.pz = jet.position.z;
   game.player.pitch = jet.rotation.x;
+  // T-08 follow-up: ground/roll-out/taxi/takeoff paths never reached
+  // audio.setEngineRPM before (only the AIRBORNE branch of player.js did) — the
+  // turbine now spools correctly through the whole guided-taxi/takeoff sequence too.
+  audio.setEngineRPM(game.player.speed, game.player.throttle);
 }
 
 /** Avança o loop automático um frame. Só roda quando isAutoTaxiActive() e fora de serviço. */
@@ -96,10 +96,18 @@ export function updateAutoTaxi(dt) {
   a.t += dt;
 
   if (a.phase === 'taxi_service') {
-    const s = ap.serviceZone;
-    const dist = _driveTo(s.center.x, s.center.z, dt, TAXI_SPEED);
-    // Avança a máquina de estado até a cena de serviço ao chegar na área.
-    if (dist < 10) {
+    // T-05/D-4: follows an ORDERED waypoint path along the airport's own pavement
+    // centerlines — runway (handoff point) → taxiway → apron — instead of a single
+    // direct point straight at the service zone. `taxi-core.js#buildTaxiPathIn`
+    // returns the waypoints; `a.wpIndex` (reset by armAutoTaxi) tracks progress so
+    // the path never corner-cuts off pavement (validated by the taxi-containment sim).
+    const path = buildTaxiPathIn(ap);
+    if (a.wpIndex === undefined) a.wpIndex = 0;
+    const target = path[a.wpIndex];
+    const dist = _driveTo(target.x, target.z, dt, TAXI_SPEED);
+    a.wpIndex = advancePathIndex(a.wpIndex, dist, path, 10);
+    // Avança a máquina de estado só ao chegar no waypoint FINAL (apron/service).
+    if (a.wpIndex === path.length - 1 && dist < 10) {
       if (sortie.state === SortieState.LANDING_ROLL) {
         transitionSortie(sortie, SortieEvent.SERVICE_ZONE_REACHED, {}, game.time); // → TAXI_IN
       }
@@ -152,7 +160,7 @@ export function updateAutoTaxi(dt) {
     // Alinhamento suave com o eixo da pista: pivô no ponto até heading 0 e
     // centraliza no eixo — sem teleporte de rotação/posição.
     const r = ap.runway;
-    const yawErr = _wrapAngle(0 - jet.rotation.y);
+    const yawErr = wrapAngle(0 - jet.rotation.y);
     const maxTurn = 1.2 * dt;
     const newYaw = jet.rotation.y + Math.max(-maxTurn, Math.min(maxTurn, yawErr));
     const att = Math.max(0, 1 - 2.6 * dt);
@@ -161,7 +169,7 @@ export function updateAutoTaxi(dt) {
     jet.position.y = ap.elevation + 0.9;
     game.player.speed = 0;
     mr.ground.groundSpeed = 0;
-    if (Math.abs(_wrapAngle(newYaw)) < 0.02 && Math.abs(r.center.x - jet.position.x) < 0.5) {
+    if (Math.abs(wrapAngle(newYaw)) < 0.02 && Math.abs(r.center.x - jet.position.x) < 0.5) {
       jet.rotation.set(0, 0, 0);
       jet.position.x = r.center.x;
       // Limpa estado residual da surtida anterior para a 2ª/3ª decolagem sair limpa.

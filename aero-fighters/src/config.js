@@ -36,6 +36,13 @@ export const PLAYER = {
   SINK_MAX: -16,      // m/s — taxa de descida insegura
   SINK_HARD: -26,     // m/s — só uma queda catastrófica (espatifar de propósito) não é pouso
   LAND_MAX_SPD: 62,   // m/s — acima disso (mergulho a toda) o avião não pousa, passa reto
+  // Roll-out → guided-taxi handoff (T-05, D-4): TOUCHDOWN_SAFE no longer arms
+  // auto-taxi in the same frame. The player keeps yaw/rudder + brake control through
+  // a roll-out decel along the runway axis; guided taxi only engages once ground
+  // speed decays to this threshold AND the aircraft is on pavement — matches the
+  // auto-taxi cruise speed (TAXI_SPEED in auto-taxi.js) so there is no speed-snap at
+  // handoff.
+  TAXI_HANDOFF_SPEED: 34, // m/s
 };
 
 /** Canhão de tiro rápido */

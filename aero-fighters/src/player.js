@@ -17,6 +17,7 @@ import { classifyGroundContact, airportSurface } from './landing-zones.js';
 import { getAirportForMap } from './airport.js';
 import { syncFlightGroundDiagnostics, updateGroundRoll } from './ground-physics.js';
 import { SortieEvent, SortieState, GROUND_STATES, transitionSortie, relaunchSortie } from './sortie-state.js';
+import { canHandoffToGuidedTaxi } from './taxi-core.js';
 
 // ─── Mesh do F-35 ────────────────────────────────────────────────────────────
 function buildJet() {
@@ -403,6 +404,18 @@ export function updatePlayer(dt, input, onCrash) {
     if (sortie.state === SortieState.LANDING_ROLL && game.player.throttle > 0.8 && game.player.speed >= 38) {
       transitionSortie(sortie, SortieEvent.TAKEOFF_SPEED_REACHED, {}, game.time);
     }
+    // T-05/D-4: guided taxi arms ONLY once ground speed has decayed to the handoff
+    // threshold AND the aircraft sits on pavement — never in the same frame as
+    // TOUCHDOWN_SAFE (that was the "cuts across grass at landing speed" bug). Until
+    // this fires the player keeps full yaw/rudder + throttle/brake authority in this
+    // same ground block — that IS the roll-out phase, no separate FSM state needed.
+    if (sortie.state === SortieState.LANDING_ROLL && !mr.autoTaxi.active &&
+        canHandoffToGuidedTaxi(game.player.speed, movedContact.type, PLAYER.TAXI_HANDOFF_SPEED)) {
+      mr.autoTaxi.active = true;
+      mr.autoTaxi.phase = 'taxi_service';
+      mr.autoTaxi.t = 0;
+      mr.autoTaxi.wpIndex = 0;
+    }
     // Smooth liftoff: V_ROTATE speed + rotation input. Applies ROTATE_LIFT force
     // gradually; no teleport. Transitions to AIRBORNE only when height > 4m above
     // ground AND vertical speed > 0.
@@ -479,6 +492,11 @@ export function updatePlayer(dt, input, onCrash) {
     game.player.y = jet.position.y;
     game.player.pz = jet.position.z;
     game.player.pitch = jet.rotation.x;
+    // T-08 follow-up: this ground block (roll-out/taxi-out/takeoff-roll) used to
+    // return before ever reaching the AIRBORNE branch's audio.setEngineRPM call, so
+    // the turbine never spooled on the ground — a silent gap through the whole
+    // roll-out/rotation. Now every ground frame updates it too.
+    audio.setEngineRPM(game.player.speed, game.player.throttle);
     return;
   }
 
@@ -742,10 +760,14 @@ export function updatePlayer(dt, input, onCrash) {
           spawnMissileSmoke(_maydayPos);
         }
         transitionSortie(mr.sortie, SortieEvent.TOUCHDOWN_SAFE, {}, game.time);
-        // Pousou → arma o loop de solo automático (taxi + reabastecimento +
-        // recolocação para decolagem). O jogador não taxia na mão. (auto-taxi.js
-        // assume o controle no próximo frame, em main.js.)
-        if (mr.autoTaxi) { mr.autoTaxi.active = true; mr.autoTaxi.phase = 'taxi_service'; mr.autoTaxi.t = 0; }
+        // T-05/D-4 (root-cause fix — the operator's #1 complaint): touchdown no
+        // longer arms auto-taxi in the SAME frame. The plane is still doing landing
+        // speed here; instantly cutting to auto-taxi's waypoint-seeking drove it off
+        // the runway axis toward the service zone at full speed ("cuts across
+        // grass"). Instead the sortie stays LANDING_ROLL and this ground block's
+        // handoff check (above, guarded by canHandoffToGuidedTaxi) arms auto-taxi
+        // once ground speed has actually decayed to TAXI_HANDOFF_SPEED on pavement —
+        // the player keeps yaw/rudder + brake control for the roll-out in between.
       } else if (altitudeAboveGround < 0) {
         // Nunca atravessar o pavimento (mantém o avião sobre a pista).
         jet.position.y = contact.height + 0.9;
