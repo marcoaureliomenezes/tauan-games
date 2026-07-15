@@ -15,8 +15,10 @@ import { inhaumaAirport } from '../../../aero-fighters/src/airport.js';
 import {
   inhaumaContinuousHeight,
   inhaumaVisualSurfaceHeight,
+  buildForests,
+  inhaumaTrees,
 } from '../../../aero-fighters/src/maps/inhauma-scene.js';
-import { demBounds } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
+import { demBounds, demSlopeAt } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
 import {
   getInhaumaRiverPolyline,
   riverCarveAt,
@@ -31,6 +33,7 @@ import {
   bridgeStructureFootprints,
 } from '../../../aero-fighters/src/maps/inhauma-bridges.js';
 import { INHAUMA_ROAD_CORRIDORS, sampleCorridor } from '../../../aero-fighters/src/maps/inhauma-road-defs.js';
+import { nearAnyRoad } from '../../../aero-fighters/src/maps/inhauma-roads.js';
 
 function runSimpleFlight(seconds, inputAt) {
   const dt = 1 / 60;
@@ -249,6 +252,33 @@ test('AC-06: the bridge deck height chain stays continuous — no cliff at the i
     prev = h;
   }
   assert.ok(maxStepDelta < 4, `bridge height chain has an implausible per-2m step of ${maxStepDelta.toFixed(2)} m`);
+});
+
+// ─── T-08: tree placement rules (tree line / slope / river proximity) ────────
+// buildForests is pure JS + THREE (no DOM) — runs headless in Node against a stub
+// scene that just swallows scene.add() calls, exercising the REAL placement logic
+// (same RNG seed path as the browser) without needing a renderer.
+const TREE_LINE_M = 620;
+const MAX_TREE_SLOPE = 0.6;
+
+test('AC-05: every placed tree respects the tree line, max slope, and every preserved exclusion', () => {
+  const stubScene = { add() {} };
+  buildForests(stubScene);
+  assert.ok(inhaumaTrees.length >= 1500 && inhaumaTrees.length <= 2500,
+    `tree count ${inhaumaTrees.length} outside the ~1500-2500 perf/WS-3 budget`);
+  for (const t of inhaumaTrees) {
+    assert.ok(t.y <= TREE_LINE_M, `tree above the tree line at (${t.x.toFixed(1)},${t.z.toFixed(1)}): ${t.y.toFixed(1)} m`);
+    assert.ok(demSlopeAt(t.x, t.z) <= MAX_TREE_SLOPE, `tree on too steep a slope at (${t.x.toFixed(1)},${t.z.toFixed(1)})`);
+    assert.ok(!(Math.abs(t.x + 560) < 360 && Math.abs(t.z - 320) < 360), `tree inside the airport exclusion at (${t.x.toFixed(1)},${t.z.toFixed(1)})`);
+    assert.ok(distanceToRiver(t.x, t.z) >= RIVER_HALF_WIDTH_M + 10, `tree inside the river channel/margin at (${t.x.toFixed(1)},${t.z.toFixed(1)})`);
+    assert.ok(!nearAnyRoad(t.x, t.z, 14), `tree on a road corridor at (${t.x.toFixed(1)},${t.z.toFixed(1)})`);
+  }
+});
+
+test('AC-05: tree species span low-valley to high-subalpine bands, mapped to the new DEM height regime', () => {
+  const heights = inhaumaTrees.map((t) => t.y);
+  assert.ok(Math.min(...heights) < 20, 'expected at least one valley-floor tree well below 20 m');
+  assert.ok(Math.max(...heights) > 300, 'expected at least one high subalpine tree above 300 m — species bands did not remap to the DEM regime');
 });
 
 /** Flood-fills the "flyable" (height < ceiling) region of inhaumaContinuousHeight

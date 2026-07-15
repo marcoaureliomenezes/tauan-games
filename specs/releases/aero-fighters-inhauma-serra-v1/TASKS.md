@@ -102,7 +102,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
   - `TERR.seg` bumped above 54 **only if** the 1-chunk-per-frame rebuild budget and warmup
     FPS hold (D-6); otherwise left at 54. Documented in the commit.
 
-### [ ] T-08 — Tree placement rules (tree line / slope / river proximity)
+### [x] T-08 — Tree placement rules (tree line / slope / river proximity)
 - **Owner:** software-engineer
 - **Write-set:** `aero-fighters/src/maps/inhauma-scene.js` (`buildForests`)
 - **Preconditions:** T-05 (river) + T-07 (biome) green

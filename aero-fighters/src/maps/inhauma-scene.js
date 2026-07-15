@@ -13,7 +13,7 @@ import { applyInhaumaRoadBed, nearAnyRoad } from './inhauma-roads.js';
 import { getPortalMounds } from './inhauma-road-defs.js';
 import { updateRoadTraffic } from './inhauma-traffic.js';
 import { createReflectiveWater, createFlowingWater, updateWaterSurfaces } from '../environment/water-surface.js';
-import { loadInhaumaDem, sampleDemHeight } from './heightmap-sampler.js';
+import { loadInhaumaDem, sampleDemHeight, demSlopeAt } from './heightmap-sampler.js';
 import {
   getInhaumaRiverPolyline,
   distanceToRiver,
@@ -530,19 +530,44 @@ export function buildFactories(scene) {
   return { group: g, smoke };
 }
 
-// ─── Florestas (árvores instanciadas em encostas de cota média) ───────────────
+// ─── Florestas (árvores instanciadas por cota + inclinação + proximidade do rio) ──
 // Posições de árvore em coords de mundo — exposto para a nuke incendiar cenário (WS-5).
 export const inhaumaTrees = [];
+
+// T-08 (AC-05): linha de árvore ABAIXO da linha de neve (SNOW_LINE_M=800, T-07) — em
+// ~48% do pico do DEM (1281 m), dentro da faixa 45-55% pedida pela release. Acima
+// dela, o biome já lê rocha/alpino (T-07) mesmo sem nenhuma árvore ali.
+const TREE_LINE_M = 620;
+// Inclinação máxima (dh/dm, mesma unidade de demSlopeAt) — ~31°, dentro da faixa
+// 30-35° pedida. Encostas mais íngremes que isso não sustentam mata fechada.
+const MAX_TREE_SLOPE = 0.6;
+// Reforço de densidade perto do rio (AC-05) — dentro deste raio da polilinha
+// derivada da drenagem (T-05), a probabilidade de aceitar o candidato sobe.
+const RIVER_DENSITY_BOOST_RADIUS_M = 220;
+const RIVER_DENSITY_BOOST_MULT = 1.6;
+
+// T-08/T-09: zona reservada da "prateleira" de vale onde a cidade terraceada (T-09)
+// vai ficar — perto do aeroporto e ao longo do piso do vale, entre a origem e o
+// aeródromo (-560,320). Compartilhada com buildTown (T-09) para as duas tarefas
+// concordarem sobre onde NÃO plantar árvore / onde construir. Retângulo generoso de
+// propósito (mais barato manter árvore fora de mais terreno do que arriscar overlap).
+const TOWN_SHELF = { minX: -650, maxX: 150, minZ: -60, maxZ: 560 };
+function insideTownShelf(x, z) {
+  return x >= TOWN_SHELF.minX && x <= TOWN_SHELF.maxX && z >= TOWN_SHELF.minZ && z <= TOWN_SHELF.maxZ;
+}
 
 // Espécies de árvore (WS-3): geometrias/cores distintas por banda de altitude, cada uma
 // um par de InstancedMesh (tronco+copa) com jitter de cor por instância. Copa usa base
 // branca (lmat(0xffffff)) × instanceColor para a cor sair exata (padrão buildTown).
+// T-08: bandas remapeadas para o novo regime de altitude do DEM (pico ~1281 m, no
+// lugar dos ~140 m da era FBM) — espécie de vale (baixa cota) → subalpina perto da
+// linha de árvore (cota alta), como a release pediu.
 const TREE_SPECIES = [
-  // key,       band,     trunk[rTop,rBot,h,seg]|null, trunkCol,  crown['cone'|'ico'|'sphere', ...args], crownCol,   sMin,sMax
-  { key: 'pine',      band: [30, 70], trunk: [0.5, 0.8, 7, 5], trunkCol: 0x4a3520, crown: ['cone', 2.4, 11, 6], crownCol: 0x1f4d1c, sMin: 0.8, sMax: 1.6 },
-  { key: 'broadleaf', band: [13, 42], trunk: [0.9, 1.2, 4, 6], trunkCol: 0x5b3f2a, crown: ['ico', 3.6],         crownCol: 0x3a7a2f, sMin: 0.8, sMax: 1.7 },
-  { key: 'bush',      band: [7, 22],  trunk: null,             trunkCol: 0,        crown: ['sphere', 2.4, 7, 5], crownCol: 0x5a7a30, sMin: 0.7, sMax: 1.3 },
-  { key: 'dry',       band: [16, 60], trunk: [0.5, 0.9, 6, 5], trunkCol: 0x6a5a3a, crown: ['cone', 2.4, 7, 6],  crownCol: 0x8a7a40, sMin: 0.7, sMax: 1.2 },
+  // key,       band,       trunk[rTop,rBot,h,seg]|null, trunkCol,  crown['cone'|'ico'|'sphere', ...args], crownCol,   sMin,sMax
+  { key: 'pine',      band: [70, 420],        trunk: [0.5, 0.8, 7, 5], trunkCol: 0x4a3520, crown: ['cone', 2.4, 11, 6], crownCol: 0x1f4d1c, sMin: 0.8, sMax: 1.6 },
+  { key: 'broadleaf', band: [10, 110],        trunk: [0.9, 1.2, 4, 6], trunkCol: 0x5b3f2a, crown: ['ico', 3.6],         crownCol: 0x3a7a2f, sMin: 0.8, sMax: 1.7 },
+  { key: 'bush',      band: [7, 60],          trunk: null,             trunkCol: 0,        crown: ['sphere', 2.4, 7, 5], crownCol: 0x5a7a30, sMin: 0.7, sMax: 1.3 },
+  { key: 'dry',       band: [300, TREE_LINE_M], trunk: [0.5, 0.9, 6, 5], trunkCol: 0x6a5a3a, crown: ['cone', 2.4, 7, 6],  crownCol: 0x8a7a40, sMin: 0.7, sMax: 1.2 },
 ];
 
 function makeCrownGeo(spec) {
@@ -552,24 +577,32 @@ function makeCrownGeo(spec) {
   return new THREE.SphereGeometry(c[1], c[2], c[3]);
 }
 
+// Candidatos sorteados antes dos filtros — calibrado empiricamente (ver relatório de
+// T-08) para o total PLANTADO ficar na mesma ordem de grandeza de antes (~1500-2500,
+// WS-3/perf) mesmo com a linha de árvore muito mais alta (620 m vs 70 m da era FBM).
+const FOREST_CANDIDATE_COUNT = 2800;
+
 export function buildForests(scene) {
   inhaumaTrees.length = 0;
   const buckets = TREE_SPECIES.map(() => []);
-  for (let i = 0; i < 1700; i++) {
+  for (let i = 0; i < FOREST_CANDIDATE_COUNT; i++) {
     const range = TERR.chunkSize * 1.35;
     const x = game.rng.range(-range, range);
     const z = game.rng.range(-range, range);
     const h = inhaumaContinuousHeight(x, z);
-    if (h < WATER_LEVEL + 3 || h > 70) continue;          // sem árvore na água/topo de rocha
+    if (h < WATER_LEVEL + 3 || h > TREE_LINE_M) continue;      // sem árvore na água ou acima da linha de árvore
+    if (demSlopeAt(x, z) > MAX_TREE_SLOPE) continue;            // sem mata fechada em encosta muito íngreme
     if (Math.abs(x + 560) < 360 && Math.abs(z - 320) < 360) continue; // longe do aeroporto
-    if (Math.hypot(x, z) < 240) continue;                 // longe do centro urbano
-    // T-05: exclusão de árvore junto ao rio agora usa a polilinha derivada do DEM
-    // (T-08 refina a regra completa de proximidade/densidade — aqui só preserva a
-    // exclusão "sem árvore dentro do rio" que já existia antes do T-05).
-    if (distanceToRiver(x, z) < RIVER_HALF_WIDTH_M + 10) continue;
-    if (nearAnyRoad(x, z, 14)) continue;                  // sem árvore sobre a rodovia
-    if (game.rng.random() > (h > 22 ? 0.85 : 0.35)) continue; // mais densa na mata alta
-    // Escolhe espécie pela banda de altitude; ~12% viram árvore seca espalhada.
+    if (insideTownShelf(x, z)) continue;                        // longe da prateleira da cidade (T-09)
+    const riverDist = distanceToRiver(x, z);
+    if (riverDist < RIVER_HALF_WIDTH_M + 10) continue;          // nunca dentro do canal/margem molhada
+    if (nearAnyRoad(x, z, 14)) continue;                        // sem árvore sobre a rodovia
+    // Densidade base por cota (mais fechada na mata alta) + reforço perto do rio
+    // (AC-05) — encostas ribeirinhas retêm mais umidade, mata mais densa.
+    let density = h > 22 ? 0.85 : 0.35;
+    if (riverDist < RIVER_DENSITY_BOOST_RADIUS_M) density = Math.min(0.97, density * RIVER_DENSITY_BOOST_MULT);
+    if (game.rng.random() > density) continue;
+    // Escolhe espécie pela banda de altitude; ~12% viram árvore seca/subalpina espalhada.
     const candidates = [];
     for (let s = 0; s < TREE_SPECIES.length; s++) {
       const [lo, hi] = TREE_SPECIES[s].band;
