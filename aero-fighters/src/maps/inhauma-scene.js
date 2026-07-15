@@ -8,12 +8,20 @@
 import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
 import { applyAirportClearing } from '../landing-zones.js';
-import { fbm2D, distToPolyline } from './noise.js';
+import { fbm2D } from './noise.js';
 import { applyInhaumaRoadBed, nearAnyRoad } from './inhauma-roads.js';
 import { getPortalMounds } from './inhauma-road-defs.js';
 import { updateRoadTraffic } from './inhauma-traffic.js';
 import { createReflectiveWater, createFlowingWater, updateWaterSurfaces } from '../environment/water-surface.js';
 import { loadInhaumaDem, sampleDemHeight } from './heightmap-sampler.js';
+import {
+  getInhaumaRiverPolyline,
+  distanceToRiver,
+  riverCarveAt,
+  riverWaterLevelAt,
+  riverSurfaceInfoAt,
+  RIVER_HALF_WIDTH_M,
+} from './inhauma-river.js';
 
 // sky.js importa scene.js (que toca window no escopo de módulo) — carga LAZY para
 // este módulo continuar importável em Node (validate:aero-map).
@@ -33,20 +41,17 @@ if (typeof window !== 'undefined') {
 await loadInhaumaDem();
 
 // ─── Geografia ────────────────────────────────────────────────────────────────
-export const WATER_LEVEL = 4.5;     // m — cota da lâmina d'água
-// FIX água-no-aeroporto (2026-07-01): o curso antigo passava a ~52 m do centro da
-// pista (x=-560,z=320) — DENTRO do leito (RIVER_W=60). Com o rio desenhado de ponta
-// a ponta (WS-3), a lâmina d'água cobria a pista (pavimento na cota 0 < 4.5).
-// O trecho a montante agora CONTORNA o aeroporto pelo NORTE (≥ ~120 m de qualquer
-// superfície do aeródromo) e desce para o reservatório pelo nordeste. Nenhuma
-// estrada autorada cruza o novo traçado (todas ficam ao sul de z≈105 nesse setor).
-const RIVER = [
-  { x: -1250, z: -780 }, { x: -940, z: 520 }, { x: -660, z: 860 },
-  { x: -260, z: 660 }, { x: -120, z: 240 }, { x: 320, z: 470 },
-  { x: 760, z: 700 }, { x: 1200, z: 900 },
-];
-const RIVER_W = 60;       // meia-largura do leito
-const VALLEY_W = 200;     // meia-largura do vale (rampa até o leito)
+export const WATER_LEVEL = 4.5;     // m — cota "genérica" (represa/praia/biome); o RIO
+                                     // usa sua própria cota local via riverWaterLevelAt
+                                     // (o vale real tem desnível de centenas de metros
+                                     // ao longo do traçado — uma cota global não serve).
+// RIO (aero-fighters-inhauma-serra-v1 T-05): o polyline autoral RIVER da era FBM
+// (v0.2.0) foi APOSENTADO — o traçado agora vem da drenagem do DEM real
+// (maps/inhauma-river.js#getInhaumaRiverPolyline, T-05). Nenhuma coordenada de rio é
+// digitada à mão aqui; ver o cabeçalho daquele módulo para o algoritmo de traçado.
+// DAM/RESERVOIR (represa/reservatório) são posições HERDADAS da era FBM e ainda NÃO
+// foram realinhadas ao novo traçado real do rio (fora do write-set de T-05 — flag
+// para um follow-up dedicado, ex. T-06/T-09 ou uma tarefa própria).
 const DAM = { x: 320, z: 470, ang: 0.6 }; // barragem (atravessa o rio)
 const RESERVOIR = { x: 60, z: 350, rx: 300, rz: 160 }; // lago da represa (a montante, no vale)
 const structures = [];
@@ -96,14 +101,10 @@ function inhaumaBaseHeight(x, z) {
   // Colinas de portal de túnel (WS-2) — encostas onde as estradas entram em túnel.
   h += portalMoundContribution(x, z);
 
-  // Entalhe do rio: rampa para o leito (cria vale + canal abaixo da água)
-  const dr = distToPolyline(x, z, RIVER);
-  if (dr < VALLEY_W) {
-    const k = 1 - dr / VALLEY_W;            // 0 na borda → 1 no eixo
-    const carve = k * k * 46;               // profundidade do vale
-    h -= carve;
-    if (dr < RIVER_W) h = Math.min(h, WATER_LEVEL - 7); // leito submerso
-  }
+  // Entalhe do rio (T-05): canal derivado da drenagem real do DEM, com margens
+  // suaves — substitui o carve autoral acima (mesma posição na cadeia: depois dos
+  // portais, antes da bacia do reservatório e da clareira do aeroporto).
+  h = riverCarveAt(x, z, h);
   // Bacia do reservatório a montante da barragem
   const er = Math.hypot((x - RESERVOIR.x) / RESERVOIR.rx, (z - RESERVOIR.z) / RESERVOIR.rz);
   if (er < 1) h = Math.min(h, WATER_LEVEL - 5 - (1 - er) * 8);
@@ -152,6 +153,12 @@ function registerStructure(id, x, z, halfX, halfZ, topY) {
   structures.push({ id, x, z, halfX, halfZ, topY });
 }
 
+// T-05: `world.js#surfaceInfoAt` já chama esta função (única "verdade de superfície"
+// injetável para o mapa 'inhauma' sem alterar world.js — fora do write-set de T-05) e
+// devolve o resultado direto quando truthy. Reaproveitamos esse mesmo gancho para
+// reportar `kind:'water'` dentro do canal do rio: estruturas (pontes, prédios) SEMPRE
+// vencem sobre água (mesmo padrão de precedência de "feição especial vence terreno
+// genérico" já usado por road-bed/clareira do aeroporto na cadeia de altura).
 export function inhaumaStructureInfoAt(x, z) {
   let hit = null;
   for (const s of structures) {
@@ -159,7 +166,8 @@ export function inhaumaStructureInfoAt(x, z) {
       if (!hit || s.topY > hit.height) hit = { height: s.topY, kind: 'structure', id: s.id };
     }
   }
-  return hit;
+  if (hit) return hit;
+  return riverSurfaceInfoAt(x, z);
 }
 
 // Lista de estruturas (casas/prédios/fábricas) em coords de mundo — exposto para a nuke
@@ -290,10 +298,29 @@ export function inhaumaHeightAt(isl, dx, dz) {
 // Reuso de terceiros (2026-07-01): reservatório = examples/jsm Water (reflexivo,
 // waternormals oficial do three r165); rio = shader de fluxo compartilhado
 // (environment/water-surface.js — reutilizável pelos outros mapas).
+// T-05: decima a polilinha fina do rio (~50-150 pontos, resolução do entalhe/colisão)
+// para segmentos de água maiores (~RIVER_RENDER_SEGMENT_M) — menos meshes/draw calls,
+// mesma cobertura de ponta a ponta (WS-3). Sempre inclui o último ponto.
+const RIVER_RENDER_SEGMENT_M = 280;
+function decimatePolyline(points, targetSegmentM) {
+  const out = [points[0]];
+  let accum = 0;
+  for (let i = 1; i < points.length; i++) {
+    accum += Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z);
+    if (accum >= targetSegmentM || i === points.length - 1) {
+      out.push(points[i]);
+      accum = 0;
+    }
+  }
+  return out;
+}
+
 export function buildInhaumaWater(scene) {
   const waters = [];
 
-  // Reservatório (lago da represa) — 1 superfície reflexiva por mapa
+  // Reservatório (lago da represa) — 1 superfície reflexiva por mapa. Posição HERDADA
+  // da era FBM (ver nota T-05 no topo do arquivo) — o novo rio não passa mais perto
+  // dele; WATER_LEVEL genérico segue servindo só para este lago independente.
   const lake = createReflectiveWater(
     new THREE.PlaneGeometry(RESERVOIR.rx * 2, RESERVOIR.rz * 2, 1, 1),
     { color: 0x2a6d94, opacity: 0.96 },
@@ -301,19 +328,24 @@ export function buildInhaumaWater(scene) {
   lake.position.set(RESERVOIR.x, WATER_LEVEL, RESERVOIR.z);
   scene.add(lake); waters.push(lake);
 
-  // Rio (ribbon de segmentos seguindo TODA a polilinha — WS-3: rio visível de ponta a
-  // ponta, não só a jusante da barragem. O leito já é escavado ao longo de todo o
-  // traçado por inhaumaBaseHeight, então basta desenhar a lâmina d'água inteira.)
-  for (let i = 0; i < RIVER.length - 1; i++) {
-    const a = RIVER[i], b = RIVER[i + 1];
+  // Rio (T-05): ribbon de segmentos seguindo TODA a polilinha derivada da drenagem do
+  // DEM (WS-3 — de ponta a ponta, não só um trecho). Cada segmento usa a cota LOCAL
+  // da lâmina d'água (riverWaterLevelAt) — o vale real tem centenas de metros de
+  // desnível ao longo do traçado, então a água precisa "descer" com o terreno em vez
+  // de ficar numa cota global fixa (diferente da era FBM).
+  const polyline = getInhaumaRiverPolyline();
+  const renderPoints = decimatePolyline(polyline, RIVER_RENDER_SEGMENT_M);
+  for (let i = 0; i < renderPoints.length - 1; i++) {
+    const a = renderPoints[i], b = renderPoints[i + 1];
     const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
     const len = Math.hypot(b.x - a.x, b.z - a.z);
+    const waterY = riverWaterLevelAt(mx, mz);
     const seg = createFlowingWater(
-      new THREE.PlaneGeometry(RIVER_W * 2.8, len + 40),
+      new THREE.PlaneGeometry(RIVER_HALF_WIDTH_M * 2.8, len + 20),
       { color: 0x3d7fa3, deepColor: 0x16405c, flow: [0.012, 0.055], repeat: 5, opacity: 0.9 },
     );
     seg.rotation.z = -Math.atan2(b.x - a.x, b.z - a.z);
-    seg.position.set(mx, WATER_LEVEL - 0.2, mz);
+    seg.position.set(mx, waterY, mz);
     scene.add(seg); waters.push(seg);
   }
   return { waters };
@@ -445,7 +477,10 @@ export function buildForests(scene) {
     if (h < WATER_LEVEL + 3 || h > 70) continue;          // sem árvore na água/topo de rocha
     if (Math.abs(x + 560) < 360 && Math.abs(z - 320) < 360) continue; // longe do aeroporto
     if (Math.hypot(x, z) < 240) continue;                 // longe do centro urbano
-    if (distToPolyline(x, z, RIVER) < RIVER_W + 10) continue;
+    // T-05: exclusão de árvore junto ao rio agora usa a polilinha derivada do DEM
+    // (T-08 refina a regra completa de proximidade/densidade — aqui só preserva a
+    // exclusão "sem árvore dentro do rio" que já existia antes do T-05).
+    if (distanceToRiver(x, z) < RIVER_HALF_WIDTH_M + 10) continue;
     if (nearAnyRoad(x, z, 14)) continue;                  // sem árvore sobre a rodovia
     if (game.rng.random() > (h > 22 ? 0.85 : 0.35)) continue; // mais densa na mata alta
     // Escolhe espécie pela banda de altitude; ~12% viram árvore seca espalhada.

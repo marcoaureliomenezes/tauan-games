@@ -16,6 +16,13 @@ import {
   inhaumaContinuousHeight,
   inhaumaVisualSurfaceHeight,
 } from '../../../aero-fighters/src/maps/inhauma-scene.js';
+import { demBounds } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
+import {
+  getInhaumaRiverPolyline,
+  riverCarveAt,
+  riverSurfaceInfoAt,
+  distanceToRiver,
+} from '../../../aero-fighters/src/maps/inhauma-river.js';
 
 function runSimpleFlight(seconds, inputAt) {
   const dt = 1 / 60;
@@ -103,41 +110,6 @@ const MIN_PASS_WIDTH = 220;
 // below the region's peak elevations (~740-1280 m) and PLAYER.CEILING (9500 m).
 const FLIGHT_CEILING_M = 300;
 
-// KNOWN, SCOPED, TEMPORARY exception (do not widen): T-03 keeps the pre-existing
-// authored RIVER polyline + hard "submerged riverbed" carve unchanged, per the D-2
-// pipeline (river carve is replaced by T-05's DEM-drainage polyline, not T-03's job).
-// That polyline was authored against the OLD ~0-140 m FBM terrain; near its endpoints
-// the surrounding DEM terrain is now real mountainside (up to ~130 m locally), so the
-// carve's unconditional clamp-to-submerged briefly punches a cliff narrower than one
-// TERR mesh cell (~48 m) — a genuine, localized WS-1 divergence that only disappears
-// once T-05 derives the river from the DEM's own drainage instead of this stale
-// polyline. Verified NOT to be a general DEM/mesh problem (see the >250 m assertion
-// below, which holds tightly across the whole DEM-driven terrain). Sequencing T-05
-// promptly closes this gap — do not delete this exclusion without re-deriving the
-// river first.
-const STALE_RIVER_POLYLINE = [
-  { x: -1250, z: -780 }, { x: -940, z: 520 }, { x: -660, z: 860 },
-  { x: -260, z: 660 }, { x: -120, z: 240 }, { x: 320, z: 470 },
-  { x: 760, z: 700 }, { x: 1200, z: 900 },
-];
-const STALE_RIVER_EXCLUSION_M = 250;
-
-function distToSegment(px, pz, ax, az, bx, bz) {
-  const dx = bx - ax, dz = bz - az;
-  const len2 = dx * dx + dz * dz || 1;
-  let t = ((px - ax) * dx + (pz - az) * dz) / len2;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
-}
-function distToStaleRiver(x, z) {
-  let best = Infinity;
-  for (let i = 0; i < STALE_RIVER_POLYLINE.length - 1; i++) {
-    const a = STALE_RIVER_POLYLINE[i], b = STALE_RIVER_POLYLINE[i + 1];
-    best = Math.min(best, distToSegment(x, z, a.x, a.z, b.x, b.z));
-  }
-  return best;
-}
-
 test('WS-1: rendered mesh surface (collision truth) stays close to the raw continuous height', () => {
   // inhaumaVisualSurfaceHeight is what collision/HUD/target-grounding actually read
   // (bilinear over the TERR_STEP mesh grid); inhaumaContinuousHeight is the raw
@@ -146,10 +118,15 @@ test('WS-1: rendered mesh surface (collision truth) stays close to the raw conti
   // peaks vs. the old ~140 m FBM terrain) — a larger gap would mean the player
   // collides with "nothing" or floats over invisible terrain (the historical
   // aero-inhauma-invisible-mountains bug this seam exists to prevent).
+  //
+  // T-03 carried a KNOWN, SCOPED, TEMPORARY exclusion here for a stale pre-T-05
+  // authored RIVER polyline (authored against the old ~0-140 m FBM terrain, whose
+  // unconditional clamp-to-submerged briefly punched a cliff near its endpoints on the
+  // new DEM). T-05 replaced that polyline with a DEM-drainage-derived river whose
+  // carve blends smoothly (smoothstep banks, no hard clamp) — the exclusion is gone
+  // and the tight bound now holds everywhere sampled, no exceptions.
   let maxDelta = 0;
   let worstAt = null;
-  let maxDeltaAwayFromStaleRiver = 0;
-  let worstAwayFromStaleRiver = null;
   for (let x = -8000; x <= 8000; x += 137) {
     for (let z = -8000; z <= 8000; z += 149) {
       const truth = inhaumaContinuousHeight(x, z);
@@ -157,20 +134,48 @@ test('WS-1: rendered mesh surface (collision truth) stays close to the raw conti
       assert.ok(Number.isFinite(truth) && Number.isFinite(rendered), `non-finite height at (${x},${z})`);
       const delta = Math.abs(truth - rendered);
       if (delta > maxDelta) { maxDelta = delta; worstAt = { x, z, truth, rendered }; }
-      if (distToStaleRiver(x, z) > STALE_RIVER_EXCLUSION_M && delta > maxDeltaAwayFromStaleRiver) {
-        maxDeltaAwayFromStaleRiver = delta;
-        worstAwayFromStaleRiver = { x, z, truth, rendered };
-      }
     }
   }
-  // The DEM-driven terrain itself (away from the stale pre-T-05 river carve) must hold
-  // the tight WS-1 bound everywhere sampled.
-  assert.ok(maxDeltaAwayFromStaleRiver < 15,
-    `mesh/collision divergence too large away from the stale river carve: ${maxDeltaAwayFromStaleRiver.toFixed(2)} m at ${JSON.stringify(worstAwayFromStaleRiver)}`);
-  // Even inside the known stale-river zone, the divergence must stay bounded (proof
-  // this is a narrow, understood carve artifact — not an unbounded/growing defect).
-  assert.ok(maxDelta < 200,
-    `mesh/collision divergence unexpectedly large even inside the stale-river zone: ${maxDelta.toFixed(2)} m at ${JSON.stringify(worstAt)}`);
+  assert.ok(maxDelta < 15,
+    `mesh/collision divergence too large: ${maxDelta.toFixed(2)} m at ${JSON.stringify(worstAt)}`);
+});
+
+// ─── T-05: DEM-drainage river carve — polyline follows real drainage ─────────
+test('AC-03: the DEM-drainage river polyline follows real drainage (monotonic descent, stays within demBounds)', () => {
+  const polyline = getInhaumaRiverPolyline();
+  assert.ok(polyline.length >= 50 && polyline.length <= 150,
+    `river polyline point count ${polyline.length} outside the expected 50-150 range`);
+  const bounds = demBounds();
+  for (let i = 0; i < polyline.length; i++) {
+    const p = polyline[i];
+    assert.ok(Number.isFinite(p.x) && Number.isFinite(p.z) && Number.isFinite(p.h),
+      `non-finite river polyline point at index ${i}: ${JSON.stringify(p)}`);
+    assert.ok(p.x >= bounds.minX && p.x <= bounds.maxX && p.z >= bounds.minZ && p.z <= bounds.maxZ,
+      `river polyline point ${i} (${p.x},${p.z}) falls outside demBounds ${JSON.stringify(bounds)}`);
+    if (i > 0) {
+      assert.ok(p.h <= polyline[i - 1].h + 1e-6,
+        `river polyline height increases downstream at index ${i}: ${polyline[i - 1].h} -> ${p.h} — drainage must be monotonically non-increasing`);
+    }
+  }
+});
+
+test('T-05: the river carve is a small, smooth channel (no WS-1-breaking cliff) and the water-kind surface only appears inside the wet channel', () => {
+  const polyline = getInhaumaRiverPolyline();
+  // Sample a handful of stations along the traced river and confirm: the carve pulls
+  // the centerline down by a small, bounded amount (2-4 m spec), and riverSurfaceInfoAt
+  // reports 'water' at the centerline but not a few meters further out past the
+  // channel's half-width (the smooth bank blend is NOT part of the wet channel).
+  for (let i = 0; i < polyline.length; i += Math.max(1, Math.floor(polyline.length / 12))) {
+    const p = polyline[i];
+    const carved = riverCarveAt(p.x, p.z, p.h);
+    const depth = p.h - carved;
+    assert.ok(depth >= 0 && depth <= 4.5, `river carve depth ${depth.toFixed(2)} m at (${p.x},${p.z}) outside the shallow-channel spec`);
+    const info = riverSurfaceInfoAt(p.x, p.z);
+    assert.ok(info && info.kind === 'water', `expected kind:'water' at river centerline (${p.x},${p.z})`);
+    const farInfo = riverSurfaceInfoAt(p.x + 200, p.z + 200);
+    assert.ok(!farInfo || farInfo.kind !== 'water' || distanceToRiver(p.x + 200, p.z + 200) < 20,
+      `unexpected 'water' kind 200 m off the river centerline near (${p.x},${p.z})`);
+  }
 });
 
 /** Flood-fills the "flyable" (height < ceiling) region of inhaumaContinuousHeight

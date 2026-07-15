@@ -69,7 +69,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
     peak, no airport-exclusion intrusion, closed ring stays closed, open ends enter a
     tunnel (real slope or portal mound).
 
-### [ ] T-05 — DEM-drainage river carve + water render
+### [x] T-05 — DEM-drainage river carve + water render
 - **Owner:** software-engineer
 - **Write-set:** `aero-fighters/src/maps/inhauma-river.js` (new),
   `aero-fighters/src/maps/inhauma-scene.js` (wire river carve + water)
