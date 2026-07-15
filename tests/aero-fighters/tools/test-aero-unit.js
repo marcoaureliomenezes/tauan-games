@@ -22,6 +22,13 @@ import {
 } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
 import { biomeColor } from '../../../aero-fighters/src/maps/inhauma-scene.js';
 import { INHAUMA_DEM_ATTRIBUTION } from '../../../aero-fighters/src/ui/credits.js';
+import {
+  afterburnerIntensity,
+  isAfterburnerStage,
+  isMilitaryOrAbove,
+  throttleStage,
+  ThrottleStage,
+} from '../../../aero-fighters/src/throttle-stage.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -225,4 +232,55 @@ test('AC-09: the in-game attribution constant stays byte-identical to the vendor
   assert.equal(INHAUMA_DEM_ATTRIBUTION, meta.attribution.text);
   // Also assert the required substring from AC-09 / TASKS.md T-10 literally appears.
   assert.ok(INHAUMA_DEM_ATTRIBUTION.includes('Terrain data © Tilezen/joerd — AWS Terrain Tiles'));
+});
+
+// ─── T-07: throttleStage(t) — D-6 named detents (AC-02) ───────────────────────
+test('throttleStage boundary values map to the 4 D-6 detents (idle/taxi/military/afterburner)', () => {
+  assert.equal(throttleStage(0), ThrottleStage.IDLE);
+  assert.equal(throttleStage(PLAYER.THROTTLE_IDLE_MAX), ThrottleStage.IDLE); // boundary inclusive low side
+  assert.equal(throttleStage(PLAYER.THROTTLE_IDLE_MAX + 0.001), ThrottleStage.TAXI);
+  assert.equal(throttleStage(PLAYER.THROTTLE_TAXI_MAX), ThrottleStage.TAXI);
+  assert.equal(throttleStage(PLAYER.THROTTLE_TAXI_MAX + 0.001), ThrottleStage.MILITARY);
+  assert.equal(throttleStage(PLAYER.THROTTLE_MILITARY_MAX), ThrottleStage.MILITARY);
+  assert.equal(throttleStage(PLAYER.THROTTLE_MILITARY_MAX + 0.001), ThrottleStage.AFTERBURNER);
+  assert.equal(throttleStage(1), ThrottleStage.AFTERBURNER);
+});
+
+test('throttleStage covers the full [0,1] domain with no gaps', () => {
+  for (let t = 0; t <= 1.0001; t += 0.01) {
+    const stage = throttleStage(Math.min(1, t));
+    assert.ok(Object.values(ThrottleStage).includes(stage), `t=${t} produced invalid stage ${stage}`);
+  }
+});
+
+test('isMilitaryOrAbove / isAfterburnerStage gate correctly at the D-6 boundaries', () => {
+  assert.equal(isMilitaryOrAbove(PLAYER.THROTTLE_TAXI_MAX), false); // still taxi
+  assert.equal(isMilitaryOrAbove(PLAYER.THROTTLE_TAXI_MAX + 0.001), true); // entered military
+  assert.equal(isMilitaryOrAbove(1), true);
+  assert.equal(isAfterburnerStage(PLAYER.THROTTLE_MILITARY_MAX), false); // still military
+  assert.equal(isAfterburnerStage(PLAYER.THROTTLE_MILITARY_MAX + 0.001), true);
+});
+
+test('afterburnerIntensity is 0 below military, grows monotonically, largest (1) at full throttle', () => {
+  assert.equal(afterburnerIntensity(0), 0);
+  assert.equal(afterburnerIntensity(PLAYER.THROTTLE_IDLE_MAX), 0);
+  assert.equal(afterburnerIntensity(PLAYER.THROTTLE_TAXI_MAX), 0); // just below military: still 0
+  const atMilitaryEntry = afterburnerIntensity(PLAYER.THROTTLE_TAXI_MAX + 0.001);
+  const atMilitaryMax = afterburnerIntensity(PLAYER.THROTTLE_MILITARY_MAX);
+  const atAfterburner = afterburnerIntensity(1);
+  assert.ok(atMilitaryEntry > 0, 'plume should already be visible (intensity > 0) right at military entry');
+  assert.ok(atMilitaryMax > atMilitaryEntry, 'intensity should keep growing through the military band');
+  assert.ok(atAfterburner > atMilitaryMax, 'afterburner (full throttle) must be the largest — AC-02');
+  assert.equal(atAfterburner, 1);
+});
+
+test('AC-02: afterburner plume scale factor at afterburner is strictly greater than at idle', () => {
+  // Mirrors the exact scale formula in player.js#updateAfterburnerFX (base 0.35,
+  // range 1.3 * intensity) without re-deriving the constants — this is the pure,
+  // Node-testable half of the "afterburner plume scale at afterburner > idle" AC;
+  // the e2e visual smoke (tests/aero-fighters/) asserts the live mesh scale.
+  const plumeScale = (t) => 0.35 + afterburnerIntensity(t) * 1.3;
+  assert.ok(plumeScale(1) > plumeScale(PLAYER.THROTTLE_IDLE_MAX));
+  assert.equal(isMilitaryOrAbove(PLAYER.THROTTLE_IDLE_MAX), false, 'idle throttle must NOT show the plume at all');
+  assert.equal(isMilitaryOrAbove(1), true, 'afterburner throttle must show the plume');
 });

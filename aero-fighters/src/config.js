@@ -48,6 +48,13 @@ export const PLAYER = {
   // auto-taxi cruise speed (TAXI_SPEED in auto-taxi.js) so there is no speed-snap at
   // handoff.
   TAXI_HANDOFF_SPEED: 34, // m/s
+  // T-07/D-6: named throttle detents on the existing continuous 0..1 throttle input.
+  // Boundary-inclusive on the low side (t <= max) — see throttle-stage.js#throttleStage.
+  // Physics/ground-roll keep reading the continuous value unchanged; these drive
+  // UX/FX only (afterburner plume gating + HUD stage readout).
+  THROTTLE_IDLE_MAX: 0.10,     // t <= this → 'idle'
+  THROTTLE_TAXI_MAX: 0.35,     // t <= this → 'taxi'
+  THROTTLE_MILITARY_MAX: 0.80, // t <= this → 'military'; above → 'afterburner'
 };
 
 /** Canhão de tiro rápido */

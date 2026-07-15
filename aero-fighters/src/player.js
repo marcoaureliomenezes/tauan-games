@@ -18,6 +18,7 @@ import { getAirportForMap } from './airport.js';
 import { syncFlightGroundDiagnostics, updateGroundRoll } from './ground-physics.js';
 import { SortieEvent, SortieState, GROUND_STATES, transitionSortie, relaunchSortie } from './sortie-state.js';
 import { canHandoffToGuidedTaxi } from './taxi-core.js';
+import { afterburnerIntensity, isMilitaryOrAbove } from './throttle-stage.js';
 
 // ─── Mesh do F-35 ────────────────────────────────────────────────────────────
 function buildJet() {
@@ -36,13 +37,15 @@ function buildJet() {
   const wingMat   = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.55, roughness: 0.42, side: THREE.DoubleSide });
   const wingDark  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.55, roughness: 0.42, side: THREE.DoubleSide });
 
-  // Nariz facetado — 8 lados para perfil mais suave
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.4, 8), grey);
+  // T-07: nariz mais fino e comprido (perfil mais afiado — era 0.34 raio / 1.4
+  // comprimento) — 8 lados para perfil facetado suave.
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.27, 1.65, 8), grey);
   nose.rotation.x = -Math.PI / 2;
-  nose.position.set(0, 0, -1.55); g.add(nose);
+  nose.position.set(0, 0, -1.68); g.add(nose);
 
-  // Fuselagem dianteira
-  const fwd = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 1.2), panel);
+  // T-07: fuselagem dianteira mais estreita (era 0.7×0.45 — silhueta mais afilada
+  // entrando no nariz em vez de um degrau largo).
+  const fwd = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.40, 1.2), panel);
   fwd.position.set(0, 0, -0.55); g.add(fwd);
 
   // Canopy
@@ -61,15 +64,16 @@ function buildJet() {
   const aft = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.45, 0.85), darkGrey);
   aft.position.set(0, 0, 1.5); g.add(aft);
 
-  // Asas trapezoidais (custom BufferGeometry)
+  // T-07: asas trapezoidais com maior enflechamento (leading edge mais recuado —
+  // era 1.8x/(0.45,0.95); agora 1.95x/(0.70,1.05)) — silhueta mais afilada/delta.
   const wingShape = (sign) => {
     const wg = new THREE.BufferGeometry();
     const x = sign;
     const v = new Float32Array([
-      0,        0, -0.4,
-      1.8 * x,  0,  0.45,
-      1.8 * x,  0,  0.95,
-      0,        0,  0.9,
+      0,         0, -0.42,
+      1.95 * x,  0,  0.70,
+      1.95 * x,  0,  1.05,
+      0,         0,  0.92,
     ]);
     wg.setAttribute('position', new THREE.BufferAttribute(v, 3));
     wg.setIndex([0, 1, 2, 0, 2, 3]);
@@ -85,11 +89,12 @@ function buildJet() {
   const wingRb = new THREE.Mesh(wingShape(1), wingDark);
   wingRb.position.set(0, -0.12, 0.35); g.add(wingRb);
 
-  // V-tails canted
-  const tailL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.65), grey);
-  tailL.position.set(-0.30, 0.32, 1.45); tailL.rotation.z = 0.35; g.add(tailL);
-  const tailR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.65), grey);
-  tailR.position.set(0.30, 0.32, 1.45); tailR.rotation.z = -0.35; g.add(tailR);
+  // T-07: V-tails mais recostadas (cant era 0.35 rad — agora 0.42) e mais altas/
+  // finas para um perfil mais agressivo.
+  const tailL = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.78, 0.62), grey);
+  tailL.position.set(-0.30, 0.34, 1.45); tailL.rotation.z = 0.42; g.add(tailL);
+  const tailR = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.78, 0.62), grey);
+  tailR.position.set(0.30, 0.34, 1.45); tailR.rotation.z = -0.42; g.add(tailR);
 
   // Stabilators horizontais
   const stabShape = (sign) => {
@@ -120,6 +125,21 @@ function buildJet() {
   exhFlame.rotation.x = Math.PI / 2; exhFlame.position.set(0, 0, 2.15); g.add(exhFlame);
   g.userData.exhGlow = exhGlow;
   g.userData.exhFlame = exhFlame;
+
+  // T-07/D-6/AC-02: dedicated afterburner plume — a single POOLED mesh (created
+  // once here, never re-allocated per frame; `updateAfterburnerFX` below only
+  // touches its .visible/.scale), gated visible at military+ throttle and scaling
+  // up to its largest at afterburner (throttle-stage.js#afterburnerIntensity). Plain
+  // NormalBlending (THREE default) — this game has no bloom pass, but additive +
+  // sprite + log-depth is a known NaN-mip trap elsewhere in this codebase
+  // (nuclear-fx.js) so the house default stays NormalBlending here too.
+  const plumeMat = new THREE.MeshBasicMaterial({ color: COLORS.flameYellow, transparent: true, opacity: 0.85 });
+  const afterburnerPlume = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.85, 10), plumeMat);
+  afterburnerPlume.rotation.x = Math.PI / 2;
+  afterburnerPlume.position.set(0, 0, 2.45);
+  afterburnerPlume.visible = false;
+  g.add(afterburnerPlume);
+  g.userData.afterburnerPlume = afterburnerPlume;
   // Todos os meshes do jato projetam sombra
   g.traverse((obj) => { if (obj.isMesh) obj.castShadow = true; });
 
@@ -127,8 +147,9 @@ function buildJet() {
   const intake = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.18, 0.55), darkGrey);
   intake.position.set(0, -0.32, -0.25); g.add(intake);
 
-  // Wingtip pylons
-  for (const sx of [-1.65, 1.65]) {
+  // T-07: pylons de ponta de asa reposicionados para o novo semi-envergadura (1.95x,
+  // era 1.8x).
+  for (const sx of [-1.79, 1.79]) {
     const pyl = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.6), darkGrey);
     pyl.position.set(sx, -0.08, 0.7); g.add(pyl);
   }
@@ -138,12 +159,13 @@ function buildJet() {
   const navRedMat   = new THREE.MeshBasicMaterial({ color: 0xff2200 });
   const strobeMatW  = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
+  // T-07: luzes de navegação reposicionadas para a nova ponta de asa (era ±2.0).
   const navGreen = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), navGreenMat);
-  navGreen.position.set(-2.0, 0, 0.4); // wingtip estibordo
+  navGreen.position.set(-2.17, 0, 0.4); // wingtip estibordo
   g.add(navGreen);
 
   const navRed = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), navRedMat);
-  navRed.position.set(2.0, 0, 0.4); // wingtip bombordo
+  navRed.position.set(2.17, 0, 0.4); // wingtip bombordo
   g.add(navRed);
 
   const strobe = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), strobeMatW);
@@ -191,6 +213,25 @@ function updateGearVisual(wantDeployed, dt) {
   gear.scale.y = Math.max(0.04, k);
   gear.position.y = (1 - k) * 0.34; // pernas recolhem para dentro da fuselagem
   gear.visible = k > 0.07;
+}
+
+/** T-07/D-6: escala o glow/flame do exaustor (contínuo, como antes) + liga/escala o
+ *  plume de pós-combustor dedicado (gated a partir de military, maior no afterburner).
+ *  Chamado tanto do bloco de solo quanto do bloco de voo — nenhuma alocação por
+ *  frame, só .scale/.visible de meshes já pooled (criados uma vez em buildJet). */
+function updateAfterburnerFX(throttle) {
+  const burn = 0.55 + throttle * 1.05;
+  if (jet.userData.exhGlow)  jet.userData.exhGlow.scale.set(burn, burn, burn);
+  if (jet.userData.exhFlame) jet.userData.exhFlame.scale.set(burn, burn, burn * (0.9 + Math.random() * 0.2));
+  const plume = jet.userData.afterburnerPlume;
+  if (plume) {
+    const intensity = afterburnerIntensity(throttle);
+    plume.visible = isMilitaryOrAbove(throttle);
+    if (plume.visible) {
+      const s = 0.35 + intensity * 1.3; // largest at afterburner (intensity → 1)
+      plume.scale.set(s, s * (0.9 + Math.random() * 0.15), s);
+    }
+  }
 }
 
 /** Cria meshes visuais de mísseis nas asas e sob fuselagem. */
@@ -503,6 +544,9 @@ export function updatePlayer(dt, input, onCrash) {
     // the turbine never spooled on the ground — a silent gap through the whole
     // roll-out/rotation. Now every ground frame updates it too.
     audio.setEngineRPM(game.player.speed, game.player.throttle);
+    // T-07: afterburner plume also visible on the ground (military+ power during
+    // takeoff roll reads as afterburner on the runway, matching real jets).
+    updateAfterburnerFX(game.player.throttle);
     return;
   }
 
@@ -678,10 +722,9 @@ export function updatePlayer(dt, input, onCrash) {
   const _gearSurf = surfaceInfoAt(jet.position.x, jet.position.z);
   updateGearVisual(jet.position.y - _gearSurf.height < 16, dt);
 
-  // Afterburner: glow + flame escalam com throttle (0.6x parado, 1.6x full)
-  const burn = 0.55 + game.player.throttle * 1.05;
-  if (jet.userData.exhGlow)  jet.userData.exhGlow.scale.set(burn, burn, burn);
-  if (jet.userData.exhFlame) jet.userData.exhFlame.scale.set(burn, burn, burn * (0.9 + Math.random() * 0.2));
+  // T-07: glow/flame do exaustor + plume de pós-combustor dedicado (gated a partir
+  // de military, maior no afterburner) — ver updateAfterburnerFX.
+  updateAfterburnerFX(game.player.throttle);
 
   // Luzes de navegação: nav sempre ligadas, strobe pisca a 1.2 Hz
   game.time = (game.time || 0) + dt;
