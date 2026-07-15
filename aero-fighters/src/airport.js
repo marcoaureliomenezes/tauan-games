@@ -129,20 +129,200 @@ function addGroundLabel(group, airport, labelText = AIRPORT_TEXT) {
   return { mesh, lights };
 }
 
-/** Luzes de pista + marcações de centerline + PAPI para qualquer aeroporto. */
-function addRunwayFurniture(group, airport, lightCount = 5, markCount = 4) {
-  addPapi(group, airport);
+/**
+ * T-04: batches N identical boxes into ONE InstancedMesh (one draw call) instead of
+ * N separate Mesh/Geometry/Material triples — cheap, procedural, vertex/Lambert-friendly.
+ * Positions are the box CENTER on the ground plane; the box is lifted by sy/2 so it
+ * sits on `y` like `addBox` does.
+ */
+function addInstancedBoxes(group, size, color, positions, opts = {}) {
+  if (!positions.length) return null;
+  const geom = new THREE.BoxGeometry(size.sx, size.sy, size.sz);
+  const mat = new THREE.MeshLambertMaterial({ color, ...opts });
+  const mesh = new THREE.InstancedMesh(geom, mat, positions.length);
+  const m = new THREE.Matrix4();
+  positions.forEach((p, i) => {
+    m.makeTranslation(p.x, p.y + size.sy / 2, p.z);
+    mesh.setMatrixAt(i, m);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  return mesh;
+}
+
+/** T-04: runway edge lights, instanced (audit: was N individual Mesh boxes). */
+function addRunwayEdgeLights(group, airport, lightCount = 5) {
   const e = airport.elevation;
   const r = airport.runway;
   const lightStep = Math.floor(r.length / (lightCount * 2 + 1) / 2) * 2;
+  const positions = [];
   for (let i = -lightCount; i <= lightCount; i++) {
-    addBox(group, r.center.x - r.width * 0.42, e, r.center.z + i * lightStep, 2, 1.2, 2, 0x88ffcc);
-    addBox(group, r.center.x + r.width * 0.42, e, r.center.z + i * lightStep, 2, 1.2, 2, 0x88ffcc);
+    positions.push({ x: r.center.x - r.width * 0.42, y: e, z: r.center.z + i * lightStep });
+    positions.push({ x: r.center.x + r.width * 0.42, y: e, z: r.center.z + i * lightStep });
   }
+  return addInstancedBoxes(group, { sx: 2, sy: 1.2, sz: 2 }, 0x88ffcc, positions);
+}
+
+/** T-04: dashed runway centerline, instanced. */
+function addRunwayCenterline(group, airport, markCount = 4) {
+  const e = airport.elevation;
+  const r = airport.runway;
   const markStep = Math.floor(r.length / (markCount * 2 + 1) / 2) * 2;
+  const positions = [];
   for (let i = -markCount; i <= markCount; i++) {
-    addBox(group, r.center.x, e, r.center.z + i * markStep, 3, 0.2, 30, 0xe8e8d0);
+    positions.push({ x: r.center.x, y: e, z: r.center.z + i * markStep });
   }
+  return addInstancedBoxes(group, { sx: 3, sy: 0.2, sz: 30 }, 0xe8e8d0, positions);
+}
+
+/**
+ * T-04: threshold "piano key" stripes — a row of longitudinal white stripes across
+ * the runway width, painted just inside BOTH ends so the runway reads as a runway
+ * from either approach direction.
+ */
+function addThresholdStripes(group, airport, stripeCount = 8) {
+  const r = airport.runway;
+  const e = airport.elevation;
+  const stripeLen = Math.min(40, r.length * 0.12);
+  const stripeW = (r.width * 0.74) / (stripeCount * 1.6);
+  const gap = stripeW * 0.65;
+  const span = stripeCount * stripeW + (stripeCount - 1) * gap;
+  const startX = r.center.x - span / 2 + stripeW / 2;
+  const insetZ = stripeLen / 2 + 5;
+  const ends = [r.center.z - r.length / 2 + insetZ, r.center.z + r.length / 2 - insetZ];
+  const positions = [];
+  for (const z of ends) {
+    for (let i = 0; i < stripeCount; i++) {
+      positions.push({ x: startX + i * (stripeW + gap), y: e, z });
+    }
+  }
+  return addInstancedBoxes(group, { sx: stripeW, sy: 0.16, sz: stripeLen }, 0xf4f0e6, positions);
+}
+
+/** T-04: continuous high-contrast white edge stripes along both sides of the runway. */
+function addRunwayEdgeStripes(group, airport) {
+  const r = airport.runway;
+  const e = airport.elevation;
+  const stripeW = Math.max(1.4, r.width * 0.035);
+  const inset = stripeW / 2 + 0.6;
+  addBox(group, r.center.x - (r.width / 2 - inset), e, r.center.z, stripeW, 0.14, r.length - 6, 0xf4f0e6);
+  addBox(group, r.center.x + (r.width / 2 - inset), e, r.center.z, stripeW, 0.14, r.length - 6, 0xf4f0e6);
+}
+
+/**
+ * T-04: aiming-point marking (a large pair of white blocks) + touchdown-zone marking
+ * (a few pairs of shorter stripes spread along `airport.touchdownZone`), the standard
+ * "you are cleared to put wheels down here" cues.
+ */
+function addTouchdownZoneMarkings(group, airport) {
+  const tz = airport.touchdownZone;
+  const r = airport.runway;
+  const e = airport.elevation;
+  const aimW = Math.min(6, r.width * 0.12);
+  const aimL = Math.min(26, tz.length * 0.3);
+  addBox(group, tz.center.x - r.width * 0.22, e, tz.center.z, aimW, 0.22, aimL, 0xffffff);
+  addBox(group, tz.center.x + r.width * 0.22, e, tz.center.z, aimW, 0.22, aimL, 0xffffff);
+
+  const pairCount = 3;
+  const span = tz.length * 0.68;
+  const markW = Math.min(3.2, r.width * 0.07);
+  const markL = 12;
+  const positions = [];
+  for (let i = 0; i < pairCount; i++) {
+    const t = pairCount === 1 ? 0 : i / (pairCount - 1) - 0.5;
+    const z = tz.center.z + t * span;
+    positions.push({ x: tz.center.x - r.width * 0.34, y: e, z });
+    positions.push({ x: tz.center.x + r.width * 0.34, y: e, z });
+  }
+  addInstancedBoxes(group, { sx: markW, sy: 0.18, sz: markL }, 0xefeee2, positions);
+}
+
+/**
+ * T-04: canvas-drawn runway designation numbers near both thresholds — cheap (2
+ * textures, built once at airport creation, mirrors the existing ground-label
+ * technique in `addGroundLabel`). No external assets.
+ */
+function addRunwayDesignation(group, airport, labelA = '18', labelB = '36') {
+  const r = airport.runway;
+  const e = airport.elevation;
+  const size = Math.min(r.width * 0.55, 26);
+  const meshes = [];
+  const makeDigits = (text, z) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = 'bold 190px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f4f4f0';
+    ctx.fillText(text, 128, 140);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(r.center.x, e + 0.2, z);
+    group.add(mesh);
+    meshes.push(mesh);
+  };
+  const inset = r.length / 2 - size * 1.1;
+  makeDigits(labelA, r.center.z - inset);
+  makeDigits(labelB, r.center.z + inset);
+  return meshes;
+}
+
+/** T-04: taxiway centerline (single continuous yellow line) + double yellow edge markings. */
+function addTaxiwayMarkings(group, airport) {
+  const t = airport.taxiway;
+  const e = airport.elevation;
+  addBox(group, t.center.x, e, t.center.z, 0.9, 0.14, t.length - 6, 0xffd23f);
+  const edgeInset = Math.max(1.4, t.width * 0.08);
+  const outer = t.width / 2 - edgeInset;
+  addBox(group, t.center.x - outer, e, t.center.z, 0.6, 0.12, t.length - 6, 0xffd23f);
+  addBox(group, t.center.x + outer, e, t.center.z, 0.6, 0.12, t.length - 6, 0xffd23f);
+}
+
+/** T-04: apron/service-zone readability — a painted yellow border + a couple of parking stalls. */
+function addApronMarkings(group, airport) {
+  const s = airport.serviceZone;
+  const e = airport.elevation;
+  const borderColor = 0xffd23f;
+  const halfW = s.width / 2 - 1;
+  const halfL = s.length / 2 - 1;
+  addBox(group, s.center.x, e, s.center.z - halfL, s.width - 2, 0.12, 0.6, borderColor);
+  addBox(group, s.center.x, e, s.center.z + halfL, s.width - 2, 0.12, 0.6, borderColor);
+  addBox(group, s.center.x - halfW, e, s.center.z, 0.6, 0.12, s.length - 2, borderColor);
+  addBox(group, s.center.x + halfW, e, s.center.z, 0.6, 0.12, s.length - 2, borderColor);
+
+  const stallCount = 2;
+  const stallSpan = s.length * 0.5;
+  for (let i = 0; i < stallCount; i++) {
+    const t = stallCount === 1 ? 0 : i / (stallCount - 1) - 0.5;
+    const z = s.center.z + t * stallSpan;
+    addBox(group, s.center.x, e, z, s.width * 0.55, 0.1, 1, 0xd8d6c4);
+  }
+}
+
+/**
+ * Runway + taxiway + apron furniture for any airport — the ONE shared clarity pass
+ * (T-04): PAPI, edge lights, centerline dashes, threshold "piano key" stripes,
+ * continuous edge stripes, aiming-point/touchdown-zone markings, canvas-drawn runway
+ * designation numbers, a taxiway centerline + edge markings, and apron border/stalls.
+ * Every map that calls this inherits the full clarity pass for free.
+ */
+function addRunwayFurniture(group, airport, lightCount = 5, markCount = 4) {
+  addPapi(group, airport);
+  addRunwayEdgeLights(group, airport, lightCount);
+  addRunwayCenterline(group, airport, markCount);
+  addThresholdStripes(group, airport);
+  addRunwayEdgeStripes(group, airport);
+  addTouchdownZoneMarkings(group, airport);
+  addRunwayDesignation(group, airport);
+  addTaxiwayMarkings(group, airport);
+  addApronMarkings(group, airport);
 }
 
 /** PAPI (WS-4): fileira 2 brancas + 2 vermelhas ao lado da zona de toque. */
@@ -166,14 +346,7 @@ export function createDesertAirport(scene) {
   addPavement(group, airport.taxiway.center, airport.taxiway.width, airport.taxiway.length, 0x2b2c2c);
   addPavement(group, airport.serviceZone.center, airport.serviceZone.width, airport.serviceZone.length, 0x343434);
 
-  addPapi(group, airport);
-  for (let i = -5; i <= 5; i++) {
-    addBox(group, airport.runway.center.x - airport.runway.width * 0.42, 0, airport.runway.center.z + i * 62, 2, 1.2, 2, 0x88ffcc);
-    addBox(group, airport.runway.center.x + airport.runway.width * 0.42, 0, airport.runway.center.z + i * 62, 2, 1.2, 2, 0x88ffcc);
-  }
-  for (let i = -4; i <= 4; i++) {
-    addBox(group, airport.runway.center.x, 0, airport.runway.center.z + i * 76, 3, 0.2, 30, 0xe8e8d0);
-  }
+  addRunwayFurniture(group, airport);
 
   addBox(group, -410, 0, 298, 58, 22, 46, 0x6e7477);
   addBox(group, -410, 22, 298, 62, 8, 50, 0x384046);
@@ -204,14 +377,7 @@ export function createInhaumaAirport(scene) {
   addPavement(group, airport.taxiway.center, airport.taxiway.width, airport.taxiway.length, 0x303332);
   addPavement(group, airport.serviceZone.center, airport.serviceZone.width, airport.serviceZone.length, 0x3b3a33);
 
-  addPapi(group, airport);
-  for (let i = -4; i <= 4; i++) {
-    addBox(group, airport.runway.center.x - airport.runway.width * 0.42, 0, airport.runway.center.z + i * 58, 1.8, 1.0, 1.8, 0x88ffcc);
-    addBox(group, airport.runway.center.x + airport.runway.width * 0.42, 0, airport.runway.center.z + i * 58, 1.8, 1.0, 1.8, 0x88ffcc);
-  }
-  for (let i = -3; i <= 3; i++) {
-    addBox(group, airport.runway.center.x, 0, airport.runway.center.z + i * 70, 2.8, 0.2, 28, 0xe8e8d0);
-  }
+  addRunwayFurniture(group, airport);
 
   addBox(group, -660, 0, 500, 48, 16, 34, 0x806f55);
   addBox(group, -660, 16, 500, 54, 6, 40, 0x5b3f2f);
