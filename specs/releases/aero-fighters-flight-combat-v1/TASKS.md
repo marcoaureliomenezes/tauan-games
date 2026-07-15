@@ -44,7 +44,7 @@ files). One `[-]` per lane at a time.
 - **Done when:** sim shows 80% ± 2% hits at every range bucket; every HIT damages, no MISS damages; light + heavy behave per rule; curved pursuit + trail visible (e2e smoke); no per-frame allocations added.
 
 ### T-03 — Rod kinetic weapon (new slot, pierce ≤3 in nuke radius)
-- [ ] **Owner:** software-engineer · **Lane:** C · **Write-set:** `aero-fighters/src/rod-missiles.js` (new); `config.js`[new `MISSILES_ROD`]; `input.js`[`KeyR → 'rodMissile'`]; `main.js`[fire fns + listeners region only — add `fireRodMissile` + `onAction('rodMissile', …)`]; `hud.js`[`ROD` count]; `state.js`[`player.rodMissiles` init 4 + service refill].
+- [-] **Owner:** software-engineer · **Lane:** C · **Write-set:** `aero-fighters/src/rod-missiles.js` (new); `config.js`[new `MISSILES_ROD`]; `input.js`[`KeyR → 'rodMissile'`]; `main.js`[fire fns + listeners region only — add `fireRodMissile` + `onAction('rodMissile', …)`]; `hud.js`[`ROD` count]; `state.js`[`player.rodMissiles` init 4 + service refill].
 - **Preconditions:** T-01 DONE (uses `selectRodTargets`). May run parallel to T-02 only if `projectiles.js` is untouched here (it is — rod lives in `rod-missiles.js`); otherwise sequence after T-02.
 - **Do:** key `R`; ammo 4 (refilled at service like HVY/NUK); speed 2× light (`INITIAL 160`/`TRACKING 260`); kinetic — impact flash only, no `explosion()`/warhead FX; pierce to next selected target; action radius = `MISSILES_NUCLEAR.BLAST_RADIUS`; guarantees ≤3 kills, expends after. Seeds on current lock if present, else nearest valid.
 - **Done when:** sim — 3 clustered targets in radius → exactly 3 kills one launch; 2 → 2 then expend; 4th outside radius never chained; HUD shows `ROD`; e2e fire smoke passes.
