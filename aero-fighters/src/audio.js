@@ -5,8 +5,10 @@
 /** Motor de áudio. Lazy-init no primeiro gesto do usuário (autoplay policy). */
 export const audio = {
   ctx: null, master: null, muted: false, initialized: false,
-  engineOsc: null, engineOsc2: null, engineGain: null,
-  engineNoise: null, engineNoiseGain: null,
+  // Turbina do motor (T-08): núcleo de ruído filtrado (spool/rumble) + whine agudo
+  // de osciladores destonados. Ver startEngine/setEngineRPM.
+  engineCoreNoise: null, engineCoreFilter: null, engineCoreLowpass: null, engineCoreGain: null,
+  engineWhineOscs: null, engineWhineDetunes: null, engineWhineFilter: null, engineWhineGain: null,
 
   /** Inicializa AudioContext. Chamar após interação do usuário. */
   init() {
@@ -59,47 +61,94 @@ export const audio = {
     return buf;
   },
 
-  /** Liga o som contínuo do motor do jato. */
+  /** Liga o som contínuo do motor do jato — síntese de turbina (T-08, D-7).
+   * Grafo fixo criado uma única vez (sem alocação por frame):
+   *  - Núcleo (spool/rumble): ruído filtrado por um bandpass cuja frequência
+   *    central varre com o RPM, seguido de um lowpass que dá brilho crescente.
+   *    Substitui os osciladores serrote+quadrada anteriores (que soavam a
+   *    hélice) — o núcleo é 100% ruído, sem tom periódico de baixa frequência.
+   *  - Whine agudo: 2-3 osciladores levemente destonados (shepard-ish) somados
+   *    através de um bandpass ressonante; sobem de tom e ganho com o RPM,
+   *    dando o assobio agudo característico de uma turbina em alta potência.
+   * Nunca aplica modulação de amplitude em baixa frequência (isso soaria a
+   * hélice) — só ramps contínuos de frequência/ganho em setEngineRPM. */
   startEngine() {
-    if (!this.initialized || this.engineOsc) return;
+    if (!this.initialized || this.engineCoreNoise) return;
     const ctx = this.ctx;
-    const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 80;
-    const o2 = ctx.createOscillator(); o2.type = 'square';   o2.frequency.value = 38;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass'; filter.frequency.value = 700; filter.Q.value = 0.8;
-    const eg = ctx.createGain(); eg.gain.value = 0.0;
-    o1.connect(filter); o2.connect(filter); filter.connect(eg); eg.connect(this.master);
 
-    const noise = ctx.createBufferSource(); noise.buffer = this._noiseBuf(2); noise.loop = true;
-    const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 450; nf.Q.value = 1.3;
-    const ng = ctx.createGain(); ng.gain.value = 0.0;
-    noise.connect(nf); nf.connect(ng); ng.connect(this.master);
+    // ── Núcleo: ruído filtrado (spool/rumble da turbina) ──
+    const noise = ctx.createBufferSource(); noise.buffer = this._noiseBuf(3); noise.loop = true;
+    const coreFilter = ctx.createBiquadFilter();
+    coreFilter.type = 'bandpass'; coreFilter.frequency.value = 70; coreFilter.Q.value = 1.1;
+    const coreLowpass = ctx.createBiquadFilter();
+    coreLowpass.type = 'lowpass'; coreLowpass.frequency.value = 500; coreLowpass.Q.value = 0.5;
+    const coreGain = ctx.createGain(); coreGain.gain.value = 0.0;
+    noise.connect(coreFilter); coreFilter.connect(coreLowpass); coreLowpass.connect(coreGain);
+    coreGain.connect(this.master);
 
-    o1.start(); o2.start(); noise.start();
-    this.engineOsc = o1; this.engineOsc2 = o2; this.engineGain = eg;
-    this.engineNoise = noise; this.engineNoiseGain = ng;
+    // ── Whine agudo: osciladores destonados que sobem com o RPM ──
+    const whineFilter = ctx.createBiquadFilter();
+    whineFilter.type = 'bandpass'; whineFilter.frequency.value = 900; whineFilter.Q.value = 3.5;
+    const whineGain = ctx.createGain(); whineGain.gain.value = 0.0;
+    whineFilter.connect(whineGain); whineGain.connect(this.master);
+
+    const detunes = [1.0, 1.012, 0.985];
+    const whineOscs = detunes.map(ratio => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = 900 * ratio;
+      o.connect(whineFilter);
+      o.start();
+      return o;
+    });
+
+    noise.start();
+
+    this.engineCoreNoise = noise;
+    this.engineCoreFilter = coreFilter;
+    this.engineCoreLowpass = coreLowpass;
+    this.engineCoreGain = coreGain;
+    this.engineWhineOscs = whineOscs;
+    this.engineWhineDetunes = detunes;
+    this.engineWhineFilter = whineFilter;
+    this.engineWhineGain = whineGain;
   },
 
-  /** Silencia o motor (sem destruir os osciladores). */
+  /** Silencia o motor (sem destruir osciladores/ruído — apenas os ganhos vão a 0). */
   stopEngine() {
-    if (!this.engineGain) return;
+    if (!this.engineCoreGain) return;
     try {
-      this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
-      this.engineNoiseGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      const t = this.ctx.currentTime;
+      this.engineCoreGain.gain.setTargetAtTime(0, t, 0.1);
+      this.engineWhineGain.gain.setTargetAtTime(0, t, 0.1);
     } catch (e) { /* ignore */ }
   },
 
-  /** Atualiza pitch/volume do motor conforme velocidade e throttle.
+  /** Atualiza pitch/volume da turbina conforme velocidade e throttle.
    * @param {number} speed velocidade atual
    * @param {number} throttle 0..1 */
   setEngineRPM(speed, throttle) {
-    if (!this.engineOsc || this.muted) return;
-    const norm = Math.max(0, Math.min(1, speed / 80));
+    if (!this.engineCoreNoise || this.muted) return;
     const t = this.ctx.currentTime;
-    this.engineOsc.frequency.setTargetAtTime(60 + norm * 140, t, 0.1);
-    this.engineOsc2.frequency.setTargetAtTime(32 + norm * 70, t, 0.1);
-    this.engineGain.gain.setTargetAtTime(0.05 + throttle * 0.11, t, 0.2);
-    this.engineNoiseGain.gain.setTargetAtTime(0.015 + norm * 0.085, t, 0.2);
+    const normSpeed = Math.max(0, Math.min(1, speed / 80));
+    const th = Math.max(0, Math.min(1, throttle));
+    // RPM sintético: dominado pelo throttle (comando do piloto), com uma
+    // contribuição menor da velocidade para a sensação de "spool" acompanhando
+    // o ar — nunca um chop de amplitude em baixa frequência (isso é hélice).
+    const rpm = Math.max(0, Math.min(1, th * 0.65 + normSpeed * 0.35));
+
+    // Núcleo: a banda do ruído varre com o RPM (spool/rumble da turbina).
+    this.engineCoreFilter.frequency.setTargetAtTime(70 + rpm * 340, t, 0.12);
+    this.engineCoreLowpass.frequency.setTargetAtTime(500 + rpm * 1700, t, 0.12);
+    this.engineCoreGain.gain.setTargetAtTime(0.05 + th * 0.15 + normSpeed * 0.02, t, 0.18);
+
+    // Whine agudo: sobe de forma não-linear — mais estridente perto do máximo.
+    const whineBase = 900 + Math.pow(rpm, 1.4) * 2600;
+    for (let i = 0; i < this.engineWhineOscs.length; i++) {
+      this.engineWhineOscs[i].frequency.setTargetAtTime(whineBase * this.engineWhineDetunes[i], t, 0.15);
+    }
+    this.engineWhineFilter.frequency.setTargetAtTime(whineBase, t, 0.15);
+    this.engineWhineGain.gain.setTargetAtTime(0.01 + Math.pow(th, 2) * 0.06, t, 0.2);
   },
 
   cannon() {
