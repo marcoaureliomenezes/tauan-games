@@ -26,13 +26,30 @@ export const INHAUMA_CITIES = [
   { id: 'sete-lagoas', x: 1250, z: -420, radius: 360, role: 'regional-city' },
 ];
 
+// Coordinates below MUST track the real geometry in inhauma-scene.js — this list is
+// diagnostics-only metadata (read by inhauma-fidelity.spec.js / uplift.spec.js and
+// game.missionRealism.inhaumaMap), decoupled from rendering, so nothing re-derives it
+// automatically when a task relocates a structure.
+//
+// T-09 (aero-fighters-inhauma-serra-v1) relocated buildTown's church/plaza/football
+// fields from the flat origin grid onto the terraced valley shelf, and retired the
+// DAM/RESERVOIR (see the DAM/RESERVOIR deviation note in inhauma-scene.js) — this
+// array still held the PRE-T-09 positions plus the now-nonexistent dam. Fixed
+// (2026-07-15, fix-forward on the T-10 QA blocker) against the live CHURCH/
+// CHURCH_TOWER/FIELDS/PLAZA constants in inhauma-scene.js#buildTown, verified with a
+// Node probe of inhaumaStructureInfoAt at each coordinate (church now correctly hits
+// its registered 'igreja-inhauma' structure; the decorative field/plaza points land
+// on dry, non-flooded terrain, matching how buildTown places them). 'represa-inhauma'
+// is removed outright (not just repositioned): T-09 retired buildDam to a clean
+// no-op with no geometry and no registered collision AABB, so a landmark describing a
+// 46 m dam that no longer exists would be actively wrong metadata, not just stale
+// coordinates.
 export const INHAUMA_LANDMARKS = [
-  { id: 'igreja-inhauma', kind: 'church', x: 20, z: -40, radius: 34, height: 30 },
-  { id: 'campo-inhauma', kind: 'football-field', x: -170, z: -90, radius: 58, height: 1 },
-  { id: 'area-lazer-manga', kind: 'park', x: 200, z: 140, radius: 64, height: 1 },
-  { id: 'praca-central-inhauma', kind: 'square', x: 45, z: 40, radius: 42, height: 1 },
+  { id: 'igreja-inhauma', kind: 'church', x: -330, z: -40, radius: 34, height: 30 },
+  { id: 'campo-inhauma', kind: 'football-field', x: -410, z: -60, radius: 58, height: 1 },
+  { id: 'area-lazer-manga', kind: 'park', x: -250, z: -40, radius: 64, height: 1 },
+  { id: 'praca-central-inhauma', kind: 'square', x: -390, z: 0, radius: 42, height: 1 },
   { id: 'usina-nuclear-inhauma', kind: 'nuclear-plant', x: 620, z: 640, radius: 140, height: 70 },
-  { id: 'represa-inhauma', kind: 'dam', x: 320, z: 470, radius: 200, height: 46 },
   { id: 'aerodromo-inhauma', kind: 'airfield', x: inhaumaAirport.runway.center.x, z: inhaumaAirport.runway.center.z, radius: 340, height: 0 },
   { id: 'cachoeira-da-prata', kind: 'town', x: -940, z: 520, radius: 170, height: 0 },
   { id: 'sete-lagoas', kind: 'city', x: 1250, z: -420, radius: 360, height: 0 },
