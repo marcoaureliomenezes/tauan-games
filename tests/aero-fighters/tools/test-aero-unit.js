@@ -21,6 +21,9 @@ import {
   sampleDemHeight,
 } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
 import { biomeColor } from '../../../aero-fighters/src/maps/inhauma-scene.js';
+import { INHAUMA_DEM_ATTRIBUTION } from '../../../aero-fighters/src/ui/credits.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 test('clampDt caps large and invalid values', () => {
   assert.equal(clampDt(0.2), 0.1);
@@ -209,4 +212,17 @@ test('AC-04: the snow line boundary is jittered by (x,z), not a hard flat plane'
   const allSnow = results.every((c) => c.r > 0.75 && c.g > 0.75 && c.b > 0.75);
   const allRock = results.every((c) => !(c.r > 0.75 && c.g > 0.75 && c.b > 0.75));
   assert.ok(!allSnow || !allRock, 'expected the jittered snow line to vary across sampled locations near the nominal boundary');
+});
+
+// ─── T-10: in-game DEM attribution credit (AC-09) ─────────────────────────────
+test('AC-09: the in-game attribution constant stays byte-identical to the vendored heightmap.json metadata', () => {
+  // ui/credits.js keeps a constant instead of loading heightmap.json live (see the
+  // comment there for why) — this test is the mechanical drift guard for that
+  // decision: if anyone rebakes the asset with different attribution wording, this
+  // fails until ui/credits.js is updated to match.
+  const metaUrl = new URL('../../../aero-fighters/assets/inhauma-dem/heightmap.json', import.meta.url);
+  const meta = JSON.parse(readFileSync(fileURLToPath(metaUrl), 'utf8'));
+  assert.equal(INHAUMA_DEM_ATTRIBUTION, meta.attribution.text);
+  // Also assert the required substring from AC-09 / TASKS.md T-10 literally appears.
+  assert.ok(INHAUMA_DEM_ATTRIBUTION.includes('Terrain data © Tilezen/joerd — AWS Terrain Tiles'));
 });
