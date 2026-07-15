@@ -8,11 +8,12 @@
 import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
 import { applyAirportClearing } from '../landing-zones.js';
-import { fbm2D, ridgedFbm2D, distToPolyline } from './noise.js';
+import { fbm2D, distToPolyline } from './noise.js';
 import { applyInhaumaRoadBed, nearAnyRoad } from './inhauma-roads.js';
 import { getPortalMounds } from './inhauma-road-defs.js';
 import { updateRoadTraffic } from './inhauma-traffic.js';
 import { createReflectiveWater, createFlowingWater, updateWaterSurfaces } from '../environment/water-surface.js';
+import { loadInhaumaDem, sampleDemHeight } from './heightmap-sampler.js';
 
 // sky.js importa scene.js (que toca window no escopo de módulo) — carga LAZY para
 // este módulo continuar importável em Node (validate:aero-map).
@@ -20,6 +21,16 @@ let _getSunData = null;
 if (typeof window !== 'undefined') {
   import('../sky.js').then((m) => { _getSunData = m.getSunData; }).catch(() => {});
 }
+
+// DEM vendorizado (T-01/T-02) — verdade de superfície de base do vale
+// (aero-fighters-inhauma-serra-v1). Top-level await: qualquer módulo que importe
+// (direta ou transitivamente) este arquivo só termina de avaliar depois que o asset
+// estiver carregado — inhaumaBaseHeight/inhaumaContinuousHeight nunca são chamadas
+// antes disso (create() dos mapas é síncrono hoje; ver maps/index.js). Sem
+// `window`/`document`/`<canvas>` aqui — loadInhaumaDem() é Node-safe (fs) e
+// browser-safe (fetch) pela mesma função, então o top-level await funciona nos dois
+// runtimes (validate:aero-map/test:aero:sim em Node, index.html no browser).
+await loadInhaumaDem();
 
 // ─── Geografia ────────────────────────────────────────────────────────────────
 export const WATER_LEVEL = 4.5;     // m — cota da lâmina d'água
@@ -40,7 +51,13 @@ const DAM = { x: 320, z: 470, ang: 0.6 }; // barragem (atravessa o rio)
 const RESERVOIR = { x: 60, z: 350, rx: 300, rz: 160 }; // lago da represa (a montante, no vale)
 const structures = [];
 
-// Features nomeadas — também expostas como diagnostics (fidelidade do mapa).
+// Features nomeadas — v0.2.0 FBM: geravam relevo (featureContribution). A partir de
+// aero-fighters-inhauma-serra-v1 o relevo vem do DEM (sampleDemHeight) — a lista NÃO
+// contribui mais para a altura (D-2: "INHAUMA_FEATURES contribution removed"). Mantida
+// (neutralizada) só como metadado de posição/rótulo para os diagnostics existentes
+// (game.missionRealism.inhaumaMap.terrainRegions, consumidos por inhauma.js/testes de
+// fidelidade) — esses nomes/posições apontavam para morros autorais que já não existem;
+// T-04..T-10 (roads/city/QA) devem revisá-los contra o relevo real do DEM.
 export const INHAUMA_FEATURES = [
   { id: 'urban-rise-inhauma', cx: 0, cz: 0, radius: 360, peakHeight: 14, type: 'urbanRise' },
   { id: 'morros-oeste-inhauma', cx: -380, cz: 40, radius: 300, peakHeight: 58, type: 'roundedHill' },
@@ -63,28 +80,19 @@ function portalMoundContribution(x, z) {
   return h;
 }
 
-function featureContribution(f, dx, dz) {
-  const d = Math.hypot(dx, dz);
-  const t = d / f.radius;
-  if (t >= 1) return 0;
-  if (f.type === 'urbanRise') return f.peakHeight * (1 - t * t * 1.4);
-  if (f.type === 'ridge') {
-    const band = Math.max(0, 1 - Math.abs(dz) / (f.radius * 0.6));
-    const fall = Math.max(0, 1 - Math.abs(dx) / f.radius);
-    return f.peakHeight * band * fall;
-  }
-  if (f.type === 'valley') return -f.peakHeight * (1 - t); // afunda
-  return f.peakHeight * Math.max(0, 1 - t * t * 1.3);      // roundedHill
+// Ruído de detalhe de alta frequência sobre o DEM (13 m/px) — evita o look "liso de
+// vinil" de perto sem alterar o relevo macro (vale/cristas). Amplitude pequena
+// (±3 m) e frequência alta (~1/22 m) — bem abaixo da escala das feições do DEM.
+// Coordenadas deslocadas para não correlacionar com outros usos de fbm2D no jogo.
+function inhaumaDetailNoise(x, z) {
+  return (fbm2D(x + 8000, z - 5000, { freq: 0.045, oct: 3 }) - 0.5) * 6;
 }
 
 /** Altura base do terreno em coords de mundo, antes de cortes de estrada. */
 function inhaumaBaseHeight(x, z) {
-  // Base ondulada (colinas suaves) + um tom de serra ao fundo
-  let h = fbm2D(x, z, { freq: 0.0011, oct: 5 }) * 30 - 4;
-  h += ridgedFbm2D(x + 5000, z - 3000, { freq: 0.0008, oct: 4 }) * 18;
+  // DEM real (Chamonix U-valley, T-01/T-02) + micro-relevo de alta frequência.
+  let h = sampleDemHeight(x, z) + inhaumaDetailNoise(x, z);
 
-  // Features nomeadas (morros, serras, vale)
-  for (const f of INHAUMA_FEATURES) h += featureContribution(f, x - f.cx, z - f.cz);
   // Colinas de portal de túnel (WS-2) — encostas onde as estradas entram em túnel.
   h += portalMoundContribution(x, z);
 

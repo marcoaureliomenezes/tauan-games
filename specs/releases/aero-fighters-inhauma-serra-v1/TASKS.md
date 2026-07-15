@@ -42,7 +42,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
   - Unit tests assert byte-identical sample values at fixed coordinates in Node and
     boundary/clamp behavior at the asset edges.
 
-### [-] T-03 — Base-height integration behind the surface-truth seam + sim validation
+### [x] T-03 — Base-height integration behind the surface-truth seam + sim validation
 - **Owner:** software-engineer
 - **Write-set:** `aero-fighters/src/maps/inhauma-scene.js` (base swap only),
   `tests/aero-fighters/tools/test-aero-sim.js` (extend)
