@@ -66,7 +66,7 @@ files). One `[-]` per lane at a time.
 - **Done when:** taxi-containment sim — every sampled position touchdown→apron is on pavement (`airportSurface !== 'none'`); no capture while `speed > TAXI_HANDOFF_SPEED`; existing `landing`/`sortie`/`auto-sortie`/`service` specs stay green; no "stuck plane" regression.
 
 ### T-06 — Smooth takeoff
-- [ ] **Owner:** software-engineer · **Lane:** A · **Write-set:** `player.js`[ground block]; `auto-taxi.js`[`takeoff` phase]; `config.js`[`PLAYER`]; `tests/aero-fighters/tools/test-aero-sortie-sim.js` (extend).
+- [-] **Owner:** software-engineer · **Lane:** A · **Write-set:** `player.js`[ground block]; `auto-taxi.js`[`takeoff` phase]; `config.js`[`PLAYER`]; `tests/aero-fighters/tools/test-aero-sortie-sim.js` (extend).
 - **Preconditions:** T-05 DONE.
 - **Do:** smooth roll accel curve; rotation at `Vr`; ease pitch on climb-out; remove step transitions across TAKEOFF_ROLL → AIRBORNE (`liftoffVsp`/`rotateSpool`/`_liftoffCarry` continuity); tie thresholds to throttle stages.
 - **Done when:** takeoff sim — per-frame altitude/position delta bounded (no jump), rotation begins at `Vr`, pitch monotonic without a single-frame step; manual + auto takeoff both smooth; e2e green.
