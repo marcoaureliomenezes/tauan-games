@@ -72,7 +72,7 @@ files). One `[-]` per lane at a time.
 - **Done when:** takeoff sim — per-frame altitude/position delta bounded (no jump), rotation begins at `Vr`, pitch monotonic without a single-frame step; manual + auto takeoff both smooth; e2e green.
 
 ### T-07 — Sharper jet silhouette + throttle stages + afterburner FX
-- [ ] **Owner:** software-engineer · **Lane:** A · **Write-set:** `player.js`[`buildJet` + afterburner visual + optional rod wing-mesh]; `config.js`[`PLAYER` throttle detents]; `aero-fighters/src/throttle-stage.js` (new pure) OR pure fn in `physics-core.js`; `tests/aero-fighters/tools/test-aero-unit.js` (extend).
+- [-] **Owner:** software-engineer · **Lane:** A · **Write-set:** `player.js`[`buildJet` + afterburner visual + optional rod wing-mesh]; `config.js`[`PLAYER` throttle detents]; `aero-fighters/src/throttle-stage.js` (new pure) OR pure fn in `physics-core.js`; `tests/aero-fighters/tools/test-aero-unit.js` (extend).
 - **Preconditions:** T-06 DONE.
 - **Do:** improve procedural silhouette (no external assets); pure `throttleStage(t)` → idle/taxi/military/afterburner; visible afterburner plume cone gated ≥ military, largest at afterburner; (optional) rod wing-mesh on the loadout.
 - **Done when:** `throttleStage` boundary unit test passes; afterburner plume scale at afterburner > idle (e2e visual smoke); silhouette renders without shadow/NaN issues; no physics regression (physics reads continuous throttle).
