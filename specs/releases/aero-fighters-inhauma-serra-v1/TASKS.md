@@ -14,7 +14,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
 
 ---
 
-### [-] T-01 — Offline DEM bake tool + vendored asset + attribution metadata
+### [x] T-01 — Offline DEM bake tool + vendored asset + attribution metadata
 - **Owner:** software-engineer
 - **Write-set:** `aero-fighters/tools/bake-inhauma-dem.mjs` (new),
   `aero-fighters/assets/inhauma-dem/heightmap.u16` (new, vendored),
