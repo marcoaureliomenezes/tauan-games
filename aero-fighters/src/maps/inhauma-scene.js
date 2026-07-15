@@ -140,20 +140,67 @@ function smat(color) {
   return lmat(color);
 }
 
-function biomeColor(h, out, i) {
-  // paleta por cota: várzea verde → mata → rocha → topo claro
+// ─── Biomas (T-07: altitude + inclinação) ─────────────────────────────────────
+// O pico do DEM vendorizado (heightRange.max no bake, T-01/assets/inhauma-dem/
+// heightmap.json) é ≈1281 m. Linha de neve alvo em ~62% do pico (faixa 55-70%
+// pedida pela release, D-3 — neve estilizada aceita conscientemente num mapa de
+// nome brasileiro). Linha de rocha bem abaixo dela: encostas expostas já aparecem
+// antes da neve, e encostas íngremes expõem rocha em QUALQUER cota (inclusive nos
+// morros baixos, onde um flanco muito íngreme não sustenta mata fechada).
+const SNOW_LINE_M = 800;           // ≈62% de 1281 m
+const SNOW_LINE_JITTER_M = 55;     // amplitude do ruído que quebra a borda reta da neve
+const ROCK_LINE_M = 480;           // acima disso, rocha nua mesmo em terreno raso
+const STEEP_SLOPE = 0.45;          // ~24° (dh/dm) — encosta íngrime o bastante p/ expor rocha
+const VERY_STEEP_SLOPE = 0.8;      // ~39° — rocha nua mesmo ACIMA da linha de neve (D-4/AC-04)
+
+// Ruído de baixa frequência (feições de centenas de metros, não um granulado de
+// pixel) que quebra a borda reta da linha de neve — coordenadas deslocadas para não
+// correlacionar com `inhaumaDetailNoise` nem com nenhum outro uso de fbm2D no jogo.
+// Determinístico (mesma (x,z) sempre a mesma jitter — sem RNG).
+function snowLineJitterAt(x, z) {
+  return (fbm2D(x - 20000, z + 15000, { freq: 0.0009, oct: 3 }) - 0.5) * 2 * SNOW_LINE_JITTER_M;
+}
+
+/** Cor de bioma por vértice: altitude + inclinação local (T-07, AC-04). Ordem de
+ *  avaliação: neve (cota alta E não muito íngreme) → rocha (íngreme OU cota alta) →
+ *  bandas de vegetação por cota. Lambert vertex-colored (sem PBR) preservado.
+ *  Exportado (sem THREE) para teste direto em Node — ver AC-04 em test-aero-unit.js. */
+export function biomeColor(h, slope, x, z, out, i) {
   let r, g, b;
-  if (h < WATER_LEVEL + 1.5) { r = 0.74; g = 0.68; b = 0.46; }       // areia/margem
-  else if (h < 18) { r = 0.33; g = 0.50; b = 0.24; }                  // campo verde
-  else if (h < 48) { r = 0.20; g = 0.42; b = 0.18; }                  // mata densa
-  else if (h < 80) { r = 0.42; g = 0.40; b = 0.30; }                  // rocha
-  else { r = 0.62; g = 0.62; b = 0.58; }                              // topo
+  const snowLine = SNOW_LINE_M + snowLineJitterAt(x, z);
+  if (h >= snowLine && slope < VERY_STEEP_SLOPE) {
+    // Neve — branca no plano, um pouco mais fria/acinzentada nas encostas moderadas
+    // (a neve "escorrega" e fica mais fina perto do limite de inclinação sustentável).
+    const t = Math.min(1, slope / STEEP_SLOPE);
+    r = 0.93 - t * 0.11; g = 0.95 - t * 0.09; b = 0.99 - t * 0.05;
+  } else if (slope >= STEEP_SLOPE || h > ROCK_LINE_M) {
+    // Rocha exposta — cinza/marrom; mais escura em paredões muito íngremes.
+    const dark = slope >= VERY_STEEP_SLOPE ? 0.82 : 1;
+    r = 0.44 * dark; g = 0.41 * dark; b = 0.36 * dark;
+  } else if (h < WATER_LEVEL + 1.5) { r = 0.74; g = 0.68; b = 0.46; }       // areia/margem
+  else if (h < 18) { r = 0.33; g = 0.50; b = 0.24; }                        // campo verde (vale)
+  else if (h < 48) { r = 0.20; g = 0.42; b = 0.18; }                        // mata densa (piso da floresta)
+  else if (h < 180) { r = 0.27; g = 0.40; b = 0.20; }                       // mata rala / subalpina
+  else { r = 0.42; g = 0.44; b = 0.30; }                                   // campo alpino/rocha esparsa
   out[i] = r; out[i + 1] = g; out[i + 2] = b;
 }
 
 // ─── Terreno infinito visual (chunks reciclados) ─────────────────────────────
+// T-07 (D-6): `seg` bump acima de 54 avaliado e REJEITADO — benchmark de Node do
+// custo real de rebuild (amostragem da cadeia inhaumaContinuousHeight + o gradiente
+// local de inclinação do bioma, T-07, sobre 5 posições de chunk incluindo terreno
+// plano e flancos íngremes): seg=54 já custa ~11-22 ms por rebuild (a fila amortizada
+// de updateInfiniteTerrain assume ~16 ms/chunk); seg=72 sobe para ~18-30 ms, seg=80
+// para ~23-37 ms, seg=96 para ~31-47 ms — 2-3× mais caro, estourando claramente o
+// orçamento de "no máximo 1 rebuild por frame" mesmo no caso médio. `seg` permanece
+// 54, como a release permite quando o orçamento não se sustenta.
 const TERR = { chunkSize: 2600, radius: 1, seg: 54 };
 const TERRAIN_COLLISION_RADIUS = 1e9;
+// Passo (m) da grade do mesh — usado pelo bloco de gradiente local (biomeColor, T-07)
+// e por inhaumaVisualSurfaceHeight (WS-1) abaixo. Movido para cima de
+// updateTerrainChunkGeometry para os dois consumidores compartilharem a mesma
+// constante sem duplicar a fórmula.
+const TERR_STEP = TERR.chunkSize / TERR.seg;
 
 function registerStructure(id, x, z, halfX, halfZ, topY) {
   structures.push({ id, x, z, halfX, halfZ, topY });
@@ -183,18 +230,46 @@ export function getInhaumaStructures() {
 }
 
 function updateTerrainChunkGeometry(chunk, gridX, gridZ) {
-  const half = TERR.chunkSize / 2;
   const centerX = gridX * TERR.chunkSize;
   const centerZ = gridZ * TERR.chunkSize;
   const pos = chunk.geometry.attributes.position;
   const col = chunk.geometry.attributes.color;
+  const cols = TERR.seg + 1;
+
+  // Passo 1: altura por vértice — EXATAMENTE a mesma amostra de sempre. O bioma por
+  // inclinação (T-07) não adiciona nenhuma chamada extra de altura/DEM aqui.
+  const heights = new Float32Array(pos.count);
   for (let i = 0; i < pos.count; i++) {
     const wx = centerX + pos.getX(i);
     const wz = centerZ + pos.getZ(i);
     const h = inhaumaContinuousHeight(wx, wz);
+    heights[i] = h;
     pos.setY(i, h);
-    biomeColor(h, col.array, i * 3);
   }
+
+  // Passo 2: inclinação local por GRADIENTE DA MALHA (diferença central sobre as
+  // alturas já amostradas no passo 1 — "o que o loop de vértices computa barato",
+  // T-07: zero amostras extra de altura, só leituras de array). Índice → (linha,
+  // coluna) segue a ordem de THREE.PlaneGeometry (TERR.seg+1 colunas por linha).
+  for (let i = 0; i < pos.count; i++) {
+    const row = Math.floor(i / cols);
+    const colIdx = i % cols;
+    const hasXPrev = colIdx > 0, hasXNext = colIdx < cols - 1;
+    const dhdx = hasXPrev && hasXNext
+      ? (heights[i + 1] - heights[i - 1]) / (2 * TERR_STEP)
+      : hasXNext ? (heights[i + 1] - heights[i]) / TERR_STEP
+      : hasXPrev ? (heights[i] - heights[i - 1]) / TERR_STEP : 0;
+    const hasZPrev = row > 0, hasZNext = row < cols - 1;
+    const dhdz = hasZPrev && hasZNext
+      ? (heights[i + cols] - heights[i - cols]) / (2 * TERR_STEP)
+      : hasZNext ? (heights[i + cols] - heights[i]) / TERR_STEP
+      : hasZPrev ? (heights[i] - heights[i - cols]) / TERR_STEP : 0;
+    const slope = Math.hypot(dhdx, dhdz);
+    const wx = centerX + pos.getX(i);
+    const wz = centerZ + pos.getZ(i);
+    biomeColor(heights[i], slope, wx, wz, col.array, i * 3);
+  }
+
   pos.needsUpdate = true;
   col.needsUpdate = true;
   chunk.geometry.computeVertexNormals();
@@ -281,10 +356,10 @@ export function buildInhaumaTerrain(scene) {
 }
 
 // Altura da SUPERFÍCIE RENDERIZADA do terreno: amostra a MESMA grade dos chunks
-// (espaçamento chunkSize/seg) e interpola bilinearmente. Objetos e colisão assentam
-// no que é DESENHADO, não no pico contínuo sub-amostrado — elimina o "float" de
-// ~7-9 m nos cumes agudos das serras (WS-1 / bug aero-inhauma-invisible-mountains).
-const TERR_STEP = TERR.chunkSize / TERR.seg; // 2600/54 ≈ 48.148 m — passo da grade do mesh
+// (espaçamento chunkSize/seg, TERR_STEP declarado acima de updateTerrainChunkGeometry)
+// e interpola bilinearmente. Objetos e colisão assentam no que é DESENHADO, não no
+// pico contínuo sub-amostrado — elimina o "float" de ~7-9 m nos cumes agudos das
+// serras (WS-1 / bug aero-inhauma-invisible-mountains).
 export function inhaumaVisualSurfaceHeight(x, z) {
   const x0 = Math.floor(x / TERR_STEP) * TERR_STEP;
   const z0 = Math.floor(z / TERR_STEP) * TERR_STEP;

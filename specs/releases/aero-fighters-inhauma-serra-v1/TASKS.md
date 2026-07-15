@@ -91,7 +91,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
     registered as `structure` AABBs (collision via `inhaumaStructureInfoAt`).
   - No road corridor dips below the water line at a crossing; the deck spans the channel.
 
-### [ ] T-07 — Biome colors (rock/snow) + conditional `TERR.seg` bump
+### [x] T-07 — Biome colors (rock/snow) + conditional `TERR.seg` bump
 - **Owner:** software-engineer
 - **Write-set:** `aero-fighters/src/maps/inhauma-scene.js` (`biomeColor`, `TERR`)
 - **Preconditions:** T-03 green

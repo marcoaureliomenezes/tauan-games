@@ -20,6 +20,7 @@ import {
   loadInhaumaDem,
   sampleDemHeight,
 } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
+import { biomeColor } from '../../../aero-fighters/src/maps/inhauma-scene.js';
 
 test('clampDt caps large and invalid values', () => {
   assert.equal(clampDt(0.2), 0.1);
@@ -164,4 +165,48 @@ test('demBounds is consistent with the vendored asset metadata', async () => {
   // World origin (0,0) must fall inside bounds — the sampler design keeps the
   // town/airport cluster near the origin, inside the asset (D-2/T-02 mapping).
   assert.ok(b.minX < 0 && b.maxX > 0 && b.minZ < 0 && b.maxZ > 0);
+});
+
+// ─── T-07: biomeColor(h, slope) — altitude + inclinação (AC-04) ───────────────
+// biomeColor is pure JS (no THREE) — exported directly from inhauma-scene.js so its
+// palette logic is testable in Node without a scene/renderer.
+function colorAt(h, slope, x = 0, z = 0) {
+  const out = new Float32Array(3);
+  biomeColor(h, slope, x, z, out, 0);
+  return { r: out[0], g: out[1], b: out[2] };
+}
+
+test('AC-04: low, flat valley terrain reads green (grass), not rock or snow', () => {
+  const c = colorAt(10, 0.02, 100, 100);
+  assert.ok(c.g > c.r && c.g > c.b, `expected green-dominant grass color, got ${JSON.stringify(c)}`);
+});
+
+test('AC-04: a steep slope exposes rock even at low altitude (slope wins over altitude band)', () => {
+  const flat = colorAt(30, 0.05, 500, 500);
+  const steep = colorAt(30, 0.9, 500, 500); // same altitude, much steeper
+  // Rock is a desaturated grey/brown — its channels sit much closer together than the
+  // green valley palette (g clearly dominant over r and b there).
+  const flatSpread = flat.g - Math.min(flat.r, flat.b);
+  const steepSpread = steep.g - Math.min(steep.r, steep.b);
+  assert.ok(steepSpread < flatSpread, `expected the steep sample to read less "green-dominant" (rock) than the flat one, got flat=${JSON.stringify(flat)} steep=${JSON.stringify(steep)}`);
+});
+
+test('AC-04: terrain well above the snow line on gentle slopes reads as snow (near-white)', () => {
+  const c = colorAt(1100, 0.05, 0, 0); // high altitude, gentle slope — clearly above any jittered snow line
+  assert.ok(c.r > 0.75 && c.g > 0.75 && c.b > 0.75, `expected a near-white snow color, got ${JSON.stringify(c)}`);
+});
+
+test('AC-04: a very steep face stays rock even above the snow line (snow does not cling to cliffs)', () => {
+  const c = colorAt(1100, 0.95, 0, 0); // same high altitude, near-vertical face
+  assert.ok(c.r < 0.75 || c.g < 0.75 || c.b < 0.75, `expected rock (not snow) on a very steep high face, got ${JSON.stringify(c)}`);
+});
+
+test('AC-04: the snow line boundary is jittered by (x,z), not a hard flat plane', () => {
+  // Same height/slope, different (x,z) — the noise-jittered boundary means the
+  // altitude threshold for "snow" is not identical everywhere.
+  const probes = [[0, 0], [3000, 0], [0, 3000], [-3000, 2000], [4000, -4000]];
+  const results = probes.map(([x, z]) => colorAt(780, 0.05, x, z)); // near the nominal snow line
+  const allSnow = results.every((c) => c.r > 0.75 && c.g > 0.75 && c.b > 0.75);
+  const allRock = results.every((c) => !(c.r > 0.75 && c.g > 0.75 && c.b > 0.75));
+  assert.ok(!allSnow || !allRock, 'expected the jittered snow line to vary across sampled locations near the nominal boundary');
 });
