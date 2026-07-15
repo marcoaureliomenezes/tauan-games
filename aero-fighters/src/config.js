@@ -270,7 +270,7 @@ export const TARGET_LAYOUT_RIO = [
 // (uma única região), então alvos de morro são posicionados por coordenada de mundo.
 export const TARGET_LAYOUT_INHAUMA = [
   [-1,  760, -300, 'aaGun'],   // topo da serra de Sete Lagoas
-  [-1, -380,   40, 'aaGun'],   // morros oeste de Inhauma
+  [-1, -560, -120, 'aaGun'],   // encosta dos morros oeste (fora do calçamento da praça pós-T-09)
   [-1, -760,  430, 'armedConvoy'],  // MG-238 perto de Cachoeira da Prata
   [-1, -220,  210, 'helicopter'],   // patrulha baixa sobre a MG-238
   [-1,  840, -250, 'armedConvoy'],  // MG-238 rumo Sete Lagoas
