@@ -120,7 +120,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
     airport, with terraced rows following the lower slopes. Structures stay collision-
     registered. Airport remains operational.
 
-### [-] T-10 — Tests green + in-game DEM attribution credit
+### [x] T-10 — Tests green + in-game DEM attribution credit
 - **Owner:** qa-engineer (implementation fixes routed to software-engineer)
 - **Write-set:** in-game credits surface (HUD/menu overlay module),
   `tests/aero-fighters/*.spec.js` (Inhaúma smoke + attribution assertion),
