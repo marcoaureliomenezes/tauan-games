@@ -170,9 +170,13 @@ test('U-AC-7: Inhauma tem chão amplo e estruturas sólidas', async ({ page }) =
         window.__aeroDebug.getTerrainHeightAt(-6400, 5100),
         window.__aeroDebug.getTerrainHeightAt(0, -8200),
       ],
-      church: w.surfaceInfoAt(20, -40),
+      // Church query point tracks INHAUMA_LANDMARKS['igreja-inhauma'] / CHURCH
+      // (inhauma-scene.js#buildTown) — T-09 relocated the church to (-330,-40); this
+      // was still probing the pre-T-09 (20,-40) spot, which is now bare mountainside
+      // (fix-forward on the T-10 QA blocker, 2026-07-15).
+      church: w.surfaceInfoAt(-330, -40),
       plantTower: w.surfaceInfoAt(565, 640),
-      churchCrash: w.checkTerrainCollision({ x: 20, y: 4, z: -40 }),
+      churchCrash: w.checkTerrainCollision({ x: -330, y: 4, z: -40 }),
       mountainCrash: w.checkTerrainCollision({ x: 760, y: 5, z: -300 }),
     };
   });

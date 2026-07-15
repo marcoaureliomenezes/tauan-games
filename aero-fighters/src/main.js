@@ -21,6 +21,7 @@ import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } f
 import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver, spawnMission } from './missions.js';
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
 import { initMinimap, updateMinimap } from './ui/minimap.js';
+import { INHAUMA_DEM_ATTRIBUTION } from './ui/credits.js';
 import { MAPS, getMapHeightFn } from './maps/index.js';
 import { spawnWingmen, updateWingmen, clearWingmen } from './wingmen.js';
 import { spawnAllyEnemies, updateAllyWar, clearAllyEnemies } from './ally-war.js';
@@ -100,6 +101,9 @@ window.selectMap = function(mapKey) {
     '← → rolar/virar     W acelerar    S frear\n' +
     'Q/E leme    Espaço/Z canhão    X míssil leve    B míssil pesado    T NUCLEAR    C câmera    J ejetar    P pausa\n\n' +
     'Decole da pista, cumpra a missão, retorne ao aeroporto e faça serviço completo.\n\n' +
+    // AC-09: DEM attribution credit — only Inhaúma's terrain is DEM-derived (the
+    // other 3 maps are hand-authored, no attribution owed).
+    (mapKey === 'inhauma' ? `${INHAUMA_DEM_ATTRIBUTION}\n\n` : '') +
     'pressione Espaço para iniciar',
     0,
   );

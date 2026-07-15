@@ -1,2 +1,2 @@
-release: memoria-bichos-v1
+release: aero-fighters-inhauma-serra-v1
 phase: IMPLEMENTATION

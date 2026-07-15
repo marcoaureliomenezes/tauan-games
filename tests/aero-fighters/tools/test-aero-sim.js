@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PLAYER } from '../../../aero-fighters/src/config.js';
+import { PLAYER, TARGET_LAYOUT_INHAUMA } from '../../../aero-fighters/src/config.js';
 import { materializeLayout, validateMap } from '../../../aero-fighters/src/map-validation.js';
 import {
   clampDt,
@@ -11,6 +11,32 @@ import {
   updateSpeed,
   validateFiniteState,
 } from '../../../aero-fighters/src/physics-core.js';
+import { inhaumaAirport } from '../../../aero-fighters/src/airport.js';
+import {
+  inhaumaContinuousHeight,
+  inhaumaVisualSurfaceHeight,
+  buildForests,
+  inhaumaTrees,
+  buildInhaumaTerrain,
+  buildTown,
+  getInhaumaStructures,
+} from '../../../aero-fighters/src/maps/inhauma-scene.js';
+import { demBounds, demSlopeAt } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
+import {
+  getInhaumaRiverPolyline,
+  riverCarveAt,
+  riverSurfaceInfoAt,
+  distanceToRiver,
+  riverWaterLevelAt,
+  RIVER_HALF_WIDTH_M,
+  RIVER_BANK_BLEND_M,
+} from '../../../aero-fighters/src/maps/inhauma-river.js';
+import {
+  computeInhaumaBridgeCrossings,
+  bridgeStructureFootprints,
+} from '../../../aero-fighters/src/maps/inhauma-bridges.js';
+import { INHAUMA_ROAD_CORRIDORS, sampleCorridor } from '../../../aero-fighters/src/maps/inhauma-road-defs.js';
+import { nearAnyRoad } from '../../../aero-fighters/src/maps/inhauma-roads.js';
 
 function runSimpleFlight(seconds, inputAt) {
   const dt = 1 / 60;
@@ -78,4 +104,321 @@ test('mission spawn validation across deterministic seeds remains stable', () =>
     assert.ok(seed);
     assert.equal(JSON.stringify(materializeLayout('rio').map((t) => [t.type, t.x, t.y, t.z])), baseline);
   }
+});
+
+// ─── T-03: DEM-based Inhaúma base height — surface-truth + flyability sim ─────
+// aero-fighters-inhauma-serra-v1: inhaumaBaseHeight now sources the vendored DEM
+// (T-01/T-02) instead of FBM + INHAUMA_FEATURES. These tests exercise the REAL
+// production height chain (inhaumaContinuousHeight / inhaumaVisualSurfaceHeight),
+// not the synthetic per-map approximation in map-validation.js used above.
+
+// Design minimum for a flyable mountain pass/corridor width (m of jogo). NOT YET
+// recorded in PLAN.md — SPEC/TASKS defer the exact number to PLAN, but PLAN.md does
+// not currently pin one. 220 m is a deliberately conservative working value picked
+// from the real baked terrain (see FLIGHT_CEILING_M below): the DEM's actual
+// narrowest flyable-corridor cross-section measures ~800-1000 m at this ceiling, so
+// 220 m leaves a comfortable multiple of margin over the player's ~100 m turn radius
+// at MAX_SPD. Flag for product-engineer: fold this into PLAN.md's MIN_PASS_WIDTH.
+const MIN_PASS_WIDTH = 220;
+// Local terrain ceiling (m of jogo) used ONLY for the pass/corridor probe below — well
+// below the region's peak elevations (~740-1280 m) and PLAYER.CEILING (9500 m).
+const FLIGHT_CEILING_M = 300;
+
+test('WS-1: rendered mesh surface (collision truth) stays close to the raw continuous height', () => {
+  // inhaumaVisualSurfaceHeight is what collision/HUD/target-grounding actually read
+  // (bilinear over the TERR_STEP mesh grid); inhaumaContinuousHeight is the raw
+  // per-point truth the mesh vertices are built from. They must never diverge by more
+  // than a small bound, even on the new DEM's much steeper slopes (up to ~1280 m
+  // peaks vs. the old ~140 m FBM terrain) — a larger gap would mean the player
+  // collides with "nothing" or floats over invisible terrain (the historical
+  // aero-inhauma-invisible-mountains bug this seam exists to prevent).
+  //
+  // T-03 carried a KNOWN, SCOPED, TEMPORARY exclusion here for a stale pre-T-05
+  // authored RIVER polyline (authored against the old ~0-140 m FBM terrain, whose
+  // unconditional clamp-to-submerged briefly punched a cliff near its endpoints on the
+  // new DEM). T-05 replaced that polyline with a DEM-drainage-derived river whose
+  // carve blends smoothly (smoothstep banks, no hard clamp) — the exclusion is gone
+  // and the tight bound now holds everywhere sampled, no exceptions.
+  let maxDelta = 0;
+  let worstAt = null;
+  for (let x = -8000; x <= 8000; x += 137) {
+    for (let z = -8000; z <= 8000; z += 149) {
+      const truth = inhaumaContinuousHeight(x, z);
+      const rendered = inhaumaVisualSurfaceHeight(x, z);
+      assert.ok(Number.isFinite(truth) && Number.isFinite(rendered), `non-finite height at (${x},${z})`);
+      const delta = Math.abs(truth - rendered);
+      if (delta > maxDelta) { maxDelta = delta; worstAt = { x, z, truth, rendered }; }
+    }
+  }
+  assert.ok(maxDelta < 15,
+    `mesh/collision divergence too large: ${maxDelta.toFixed(2)} m at ${JSON.stringify(worstAt)}`);
+});
+
+// ─── T-05: DEM-drainage river carve — polyline follows real drainage ─────────
+test('AC-03: the DEM-drainage river polyline follows real drainage (monotonic descent, stays within demBounds)', () => {
+  const polyline = getInhaumaRiverPolyline();
+  assert.ok(polyline.length >= 50 && polyline.length <= 150,
+    `river polyline point count ${polyline.length} outside the expected 50-150 range`);
+  const bounds = demBounds();
+  for (let i = 0; i < polyline.length; i++) {
+    const p = polyline[i];
+    assert.ok(Number.isFinite(p.x) && Number.isFinite(p.z) && Number.isFinite(p.h),
+      `non-finite river polyline point at index ${i}: ${JSON.stringify(p)}`);
+    assert.ok(p.x >= bounds.minX && p.x <= bounds.maxX && p.z >= bounds.minZ && p.z <= bounds.maxZ,
+      `river polyline point ${i} (${p.x},${p.z}) falls outside demBounds ${JSON.stringify(bounds)}`);
+    if (i > 0) {
+      assert.ok(p.h <= polyline[i - 1].h + 1e-6,
+        `river polyline height increases downstream at index ${i}: ${polyline[i - 1].h} -> ${p.h} — drainage must be monotonically non-increasing`);
+    }
+  }
+});
+
+test('T-05: the river carve is a small, smooth channel (no WS-1-breaking cliff) and the water-kind surface only appears inside the wet channel', () => {
+  const polyline = getInhaumaRiverPolyline();
+  // Sample a handful of stations along the traced river and confirm: the carve pulls
+  // the centerline down by a small, bounded amount (2-4 m spec), and riverSurfaceInfoAt
+  // reports 'water' at the centerline but not a few meters further out past the
+  // channel's half-width (the smooth bank blend is NOT part of the wet channel).
+  for (let i = 0; i < polyline.length; i += Math.max(1, Math.floor(polyline.length / 12))) {
+    const p = polyline[i];
+    const carved = riverCarveAt(p.x, p.z, p.h);
+    const depth = p.h - carved;
+    assert.ok(depth >= 0 && depth <= 4.5, `river carve depth ${depth.toFixed(2)} m at (${p.x},${p.z}) outside the shallow-channel spec`);
+    const info = riverSurfaceInfoAt(p.x, p.z);
+    assert.ok(info && info.kind === 'water', `expected kind:'water' at river centerline (${p.x},${p.z})`);
+    const farInfo = riverSurfaceInfoAt(p.x + 200, p.z + 200);
+    assert.ok(!farInfo || farInfo.kind !== 'water' || distanceToRiver(p.x + 200, p.z + 200) < 20,
+      `unexpected 'water' kind 200 m off the river centerline near (${p.x},${p.z})`);
+  }
+});
+
+// ─── T-06: bridges at road×river crossings ───────────────────────────────────
+test('AC-06: at least one road×river crossing is detected and each carries a resolved bridge deck', () => {
+  const crossings = computeInhaumaBridgeCrossings();
+  assert.ok(crossings.length >= 1, 'expected at least one road×river crossing (MG-238 per T-04/T-05 geometry)');
+  for (const c of crossings) {
+    assert.ok(Number.isFinite(c.midX) && Number.isFinite(c.midZ) && Number.isFinite(c.heading));
+    assert.ok(c.halfLength > 0 && c.halfWidth > 0);
+    assert.ok(Number.isFinite(c.deckHeight) && c.deckHeight > c.waterLevel,
+      `deck at ${c.id} (${c.deckHeight}) must clear the local water level (${c.waterLevel})`);
+  }
+});
+
+test('AC-06: bridge deck footprints are registered as valid structure AABBs (collision via inhaumaStructureInfoAt)', () => {
+  const footprints = bridgeStructureFootprints();
+  assert.equal(footprints.length, computeInhaumaBridgeCrossings().length);
+  for (const f of footprints) {
+    assert.ok(f.id && typeof f.id === 'string');
+    assert.ok(f.halfX > 0 && f.halfZ > 0, `deck AABB at ${f.id} must have positive extents`);
+    assert.ok(Number.isFinite(f.topY));
+  }
+});
+
+test('AC-06: no road corridor dips below the local water line at a river crossing', () => {
+  // Exercises the REAL production height chain (inhaumaContinuousHeight, which now
+  // folds in bridgeDeckHeightAt) along the dense sampled points of every corridor —
+  // the same points the road ribbon/road-bed carve actually consume. Gated by
+  // `distanceToRiver` (the river's OWN carve-influence reach), not by
+  // `riverWaterLevelAt !== null` — that helper answers for any point inside the
+  // river's spatial-index margin (a generous lookup radius, not "there is water
+  // here"), so far-away roads like `anel-inhauma` (~90 m from the river, per T-04)
+  // would otherwise be compared against an irrelevant "if there were water here"
+  // level, well outside where the terrain/river carve could ever submerge them.
+  const RIVER_CARVE_REACH_M = RIVER_HALF_WIDTH_M + RIVER_BANK_BLEND_M;
+  let sampleCount = 0;
+  for (const corridor of INHAUMA_ROAD_CORRIDORS) {
+    const points = sampleCorridor(corridor.control, corridor.closed);
+    for (const p of points) {
+      if (distanceToRiver(p.x, p.z) >= RIVER_CARVE_REACH_M) continue; // outside the river's influence — not a crossing concern
+      const water = riverWaterLevelAt(p.x, p.z);
+      assert.ok(water !== null, `expected a resolvable water level near the river at (${p.x.toFixed(1)},${p.z.toFixed(1)})`);
+      const h = inhaumaContinuousHeight(p.x, p.z);
+      sampleCount++;
+      assert.ok(h > water, `${corridor.id} dips to ${h.toFixed(2)} m (water ${water.toFixed(2)} m) at (${p.x.toFixed(1)},${p.z.toFixed(1)})`);
+    }
+  }
+  assert.ok(sampleCount > 0, 'no road samples fell within the river influence zone — crossing coverage untested');
+});
+
+test('AC-06: the bridge deck height chain stays continuous — no cliff at the influence-zone edge', () => {
+  // Fine-grained sweep across the MG-238 crossing footprint (both along the road and
+  // straddling the river) — no single-meter step introduces an implausible jump.
+  const [crossing] = computeInhaumaBridgeCrossings();
+  assert.ok(crossing, 'expected the MG-238 crossing to exist for this probe');
+  let maxStepDelta = 0;
+  let prev = null;
+  for (let along = -crossing.gateHalfLength - 20; along <= crossing.gateHalfLength + 20; along += 2) {
+    const x = crossing.midX + along * Math.sin(crossing.heading);
+    const z = crossing.midZ + along * Math.cos(crossing.heading);
+    const h = inhaumaContinuousHeight(x, z);
+    if (prev !== null) maxStepDelta = Math.max(maxStepDelta, Math.abs(h - prev));
+    prev = h;
+  }
+  assert.ok(maxStepDelta < 4, `bridge height chain has an implausible per-2m step of ${maxStepDelta.toFixed(2)} m`);
+});
+
+// ─── T-08: tree placement rules (tree line / slope / river proximity) ────────
+// buildForests is pure JS + THREE (no DOM) — runs headless in Node against a stub
+// scene that just swallows scene.add() calls, exercising the REAL placement logic
+// (same RNG seed path as the browser) without needing a renderer.
+const TREE_LINE_M = 620;
+const MAX_TREE_SLOPE = 0.6;
+
+test('AC-05: every placed tree respects the tree line, max slope, and every preserved exclusion', () => {
+  const stubScene = { add() {} };
+  buildForests(stubScene);
+  assert.ok(inhaumaTrees.length >= 1500 && inhaumaTrees.length <= 2500,
+    `tree count ${inhaumaTrees.length} outside the ~1500-2500 perf/WS-3 budget`);
+  for (const t of inhaumaTrees) {
+    assert.ok(t.y <= TREE_LINE_M, `tree above the tree line at (${t.x.toFixed(1)},${t.z.toFixed(1)}): ${t.y.toFixed(1)} m`);
+    assert.ok(demSlopeAt(t.x, t.z) <= MAX_TREE_SLOPE, `tree on too steep a slope at (${t.x.toFixed(1)},${t.z.toFixed(1)})`);
+    assert.ok(!(Math.abs(t.x + 560) < 360 && Math.abs(t.z - 320) < 360), `tree inside the airport exclusion at (${t.x.toFixed(1)},${t.z.toFixed(1)})`);
+    assert.ok(distanceToRiver(t.x, t.z) >= RIVER_HALF_WIDTH_M + 10, `tree inside the river channel/margin at (${t.x.toFixed(1)},${t.z.toFixed(1)})`);
+    assert.ok(!nearAnyRoad(t.x, t.z, 14), `tree on a road corridor at (${t.x.toFixed(1)},${t.z.toFixed(1)})`);
+  }
+});
+
+test('AC-05: tree species span low-valley to high-subalpine bands, mapped to the new DEM height regime', () => {
+  const heights = inhaumaTrees.map((t) => t.y);
+  assert.ok(Math.min(...heights) < 20, 'expected at least one valley-floor tree well below 20 m');
+  assert.ok(Math.max(...heights) > 300, 'expected at least one high subalpine tree above 300 m — species bands did not remap to the DEM regime');
+});
+
+// ─── T-09: city terracing on the valley shelf + airport shelf (AC-07) ─────────
+// buildInhaumaTerrain resets structures[] (same order as inhauma.js#createInhaumaWorld)
+// then buildTown registers every block — both run headless against a stub scene.
+const AIRPORT_CLEARING_OUTER_M = 140; // landing-zones.js#airportClearingFactor default `outer`
+const AIRPORT_CENTER_FOR_TEST = { x: -560, z: 320 };
+
+test('AC-07: the terraced town sits on the valley shelf — no building intersects a road, the river channel, or the airport clearing', () => {
+  const stubScene = { add() {} };
+  buildInhaumaTerrain(stubScene);
+  buildTown(stubScene);
+  const buildings = getInhaumaStructures().filter((s) => s.id === 'predio-inhauma' || s.id === 'igreja-inhauma' || s.id === 'torre-igreja-inhauma');
+  assert.ok(buildings.length >= 40, `expected a substantial terraced town, got only ${buildings.length} buildings`);
+  for (const b of buildings) {
+    const corners = [
+      [b.x - b.halfX, b.z - b.halfZ], [b.x + b.halfX, b.z - b.halfZ],
+      [b.x - b.halfX, b.z + b.halfZ], [b.x + b.halfX, b.z + b.halfZ],
+      [b.x, b.z],
+    ];
+    for (const [cx, cz] of corners) {
+      assert.ok(!nearAnyRoad(cx, cz, 0), `${b.id} at (${b.x.toFixed(1)},${b.z.toFixed(1)}) overlaps a road corridor`);
+      assert.ok(distanceToRiver(cx, cz) >= RIVER_HALF_WIDTH_M, `${b.id} at (${b.x.toFixed(1)},${b.z.toFixed(1)}) overlaps the river channel`);
+      assert.ok(Math.hypot(cx - AIRPORT_CENTER_FOR_TEST.x, cz - AIRPORT_CENTER_FOR_TEST.z) >= AIRPORT_CLEARING_OUTER_M,
+        `${b.id} at (${b.x.toFixed(1)},${b.z.toFixed(1)}) overlaps the airport clearing`);
+    }
+  }
+  // No two building footprints overlap each other either.
+  let overlaps = 0;
+  for (let i = 0; i < buildings.length; i++) {
+    for (let j = i + 1; j < buildings.length; j++) {
+      const a = buildings[i], c = buildings[j];
+      if (Math.abs(a.x - c.x) < a.halfX + c.halfX && Math.abs(a.z - c.z) < a.halfZ + c.halfZ) overlaps++;
+    }
+  }
+  assert.equal(overlaps, 0, `${overlaps} overlapping building footprint pairs`);
+});
+
+test('AC-07: downtown reads denser/taller than the periphery (terraced rows thin uphill)', () => {
+  const stubScene = { add() {} };
+  buildInhaumaTerrain(stubScene);
+  buildTown(stubScene);
+  const blocks = getInhaumaStructures().filter((s) => s.id === 'predio-inhauma');
+  const heights = blocks.map((b) => b.topY);
+  assert.ok(Math.max(...heights) - Math.min(...heights) > 15, 'expected a real height gradient between downtown and periphery blocks');
+});
+
+/** Flood-fills the "flyable" (height < ceiling) region of inhaumaContinuousHeight
+ *  starting from the world origin (guaranteed low, near the airport/town). Returns
+ *  the set of visited grid cells plus, per z-row, the widest contiguous flyable run —
+ *  the minimum of those row-widths is the narrowest point ("pass") the corridor
+ *  squeezes through while staying connected end to end. */
+function floodFillFlyable(ceiling, step, range) {
+  const n = Math.floor(range / step);
+  const size = 2 * n + 1;
+  const key = (ix, iz) => (ix + n) + (iz + n) * size;
+  const visited = new Uint8Array(size * size);
+  const stack = [[0, 0]];
+  visited[key(0, 0)] = 1;
+  while (stack.length) {
+    const [ix, iz] = stack.pop();
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = ix + dx, nz = iz + dz;
+      if (Math.abs(nx) > n || Math.abs(nz) > n) continue;
+      const k = key(nx, nz);
+      if (visited[k]) continue;
+      visited[k] = 2; // checked, not (yet) flyable
+      const h = inhaumaContinuousHeight(nx * step, nz * step);
+      if (h < ceiling) { visited[k] = 1; stack.push([nx, nz]); }
+    }
+  }
+  let touchesNorth = false, touchesSouth = false;
+  for (let ix = -n; ix <= n; ix++) {
+    if (visited[key(ix, -n)] === 1) touchesNorth = true;
+    if (visited[key(ix, n)] === 1) touchesSouth = true;
+  }
+  let minRowWidth = Infinity;
+  for (let iz = -n; iz <= n; iz++) {
+    let run = 0, maxRun = 0;
+    for (let ix = -n; ix <= n; ix++) {
+      if (visited[key(ix, iz)] === 1) { run++; maxRun = Math.max(maxRun, run); } else run = 0;
+    }
+    if (maxRun > 0) minRowWidth = Math.min(minRowWidth, maxRun * step);
+  }
+  return { touchesNorth, touchesSouth, minRowWidth };
+}
+
+test('AC-01/AC-02: a continuous flyable valley corridor spans the map with a real (not degenerate) pass width', () => {
+  const { touchesNorth, touchesSouth, minRowWidth } = floodFillFlyable(FLIGHT_CEILING_M, 100, 8500);
+  // The corridor containing the origin reaches both the north and south edges of the
+  // sampled window without ever requiring altitude above FLIGHT_CEILING_M — a jet can
+  // fly the length of the valley (AC-02).
+  assert.ok(touchesNorth && touchesSouth, 'flyable corridor from the origin does not span north-to-south');
+  // The corridor's narrowest cross-section still clears the design minimum pass width
+  // (AC-01) — and is a genuine constriction, not the whole sampled window (proving a
+  // real chain bounds it, not open sky).
+  assert.ok(Number.isFinite(minRowWidth), 'no flyable row found');
+  assert.ok(minRowWidth >= MIN_PASS_WIDTH, `narrowest flyable pass ${minRowWidth} m < MIN_PASS_WIDTH ${MIN_PASS_WIDTH} m`);
+  assert.ok(minRowWidth < 17000, `corridor never narrows (min width ${minRowWidth} m) — suspiciously wide open, no chain constriction found`);
+});
+
+test('AC-01: mountain chains reach well above the valley floor (not isolated hills)', () => {
+  // Sample a handful of points toward the mapped region's edges — real DEM chains,
+  // not the old 7 isolated INHAUMA_FEATURES bumps (removed this release).
+  const valleyFloor = inhaumaContinuousHeight(0, 0);
+  const east = inhaumaContinuousHeight(9000, 0);
+  const southMassif = inhaumaContinuousHeight(0, 8000);
+  assert.ok(valleyFloor < 20, `expected a low valley floor near the origin, got ${valleyFloor}`);
+  assert.ok(east > valleyFloor + 400, 'expected a continuous chain well above the valley floor to the east');
+  assert.ok(southMassif > valleyFloor + 400, 'expected a continuous massif well above the valley floor to the south');
+});
+
+test('mission targets remain grounded on the DEM terrain (finite, non-negative, bounded height)', () => {
+  assert.ok(TARGET_LAYOUT_INHAUMA.length > 0);
+  for (const [islandIdx, x, z, type] of TARGET_LAYOUT_INHAUMA) {
+    assert.equal(islandIdx, -1, `${type} at (${x},${z}) expected absolute placement (islandIdx=-1)`);
+    const h = inhaumaVisualSurfaceHeight(x, z);
+    assert.ok(Number.isFinite(h), `${type} at (${x},${z}) has non-finite ground height`);
+    assert.ok(h >= 0, `${type} at (${x},${z}) is grounded below zero: ${h}`);
+    assert.ok(h < 1500, `${type} at (${x},${z}) grounded implausibly high: ${h}`);
+  }
+});
+
+test('airport clearing stays operational: the real runway/taxiway/service pavement is exactly flat', () => {
+  const { elevation, runway, taxiway, serviceZone } = inhaumaAirport;
+  const zones = [runway, taxiway, serviceZone];
+  let sampleCount = 0;
+  for (const zone of zones) {
+    const halfW = zone.width / 2, halfL = zone.length / 2;
+    for (let dx = -halfW; dx <= halfW; dx += 8) {
+      for (let dz = -halfL; dz <= halfL; dz += 40) {
+        const x = zone.center.x + dx, z = zone.center.z + dz;
+        const h = inhaumaVisualSurfaceHeight(x, z);
+        assert.ok(Math.abs(h - elevation) < 0.001, `airport pavement not flat at (${x},${z}): ${h} != ${elevation}`);
+        sampleCount++;
+      }
+    }
+  }
+  assert.ok(sampleCount > 50, 'airport sweep sampled too few points to be meaningful');
 });
