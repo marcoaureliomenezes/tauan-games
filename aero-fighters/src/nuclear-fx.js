@@ -1,5 +1,6 @@
 // nuclear-fx.js — Pluma nuclear PERSISTENTE (autoridade única do cogumelo — WS-5).
-// Exporta: spawnNuclearFx, updateNuclearFx, nuclearFxState.
+// Exporta: spawnNuclearFx, updateNuclearFx, nuclearFxState, + as curvas puras de
+// timing/crescimento/cor (ver T-09 abaixo).
 //
 // Rework de realismo (2026-07-01, aceite do operador sobre T-WR-05):
 //  - Fireball = 1 esfera com ShaderMaterial FBM (ferve, esfria por rampa blackbody,
@@ -13,9 +14,17 @@
 //  - Anel de choque de solo mantido; luz transitória mantida.
 // O burst violento inicial (flash + fireballs + pops) continua em fx.js#nuclearExplosion.
 // Ticado por main.js: updateNuclearFx(dt) a cada frame.
+//
+// T-09 (2026-07-15, D-9): fireball rise/growth were corrected. `spawnNuclearFx` now
+// takes the target `THREE.Scene` as an explicit parameter (`sceneRef`) instead of a
+// module-level `import { scene } from './scene.js'` — scene.js touches `window` at
+// import time (camera/renderer sizing), which makes any module that statically
+// imports it un-importable under plain Node. This module's timing/growth/color math
+// is pure (no THREE, no DOM) and is exported below so `tests/aero-fighters/tools/
+// test-aero-sim.js` can import and assert it directly (monotonic rise, radius/target
+// bounds, color keyframes) without a browser — see that file's "T-09" section.
 
 import * as THREE from '../../vendor/three.module.min.js';
-import { scene } from './scene.js';
 
 const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
 
@@ -33,26 +42,98 @@ export const nuclearFxState = {
 const LIFETIME = 60;    // s — cogumelo persiste ~1 minuto (pedido do operador)
 const CEILING = 950;    // m — teto da pluma: alto, mas LEGÍVEL da distância de jogo
 const RISE_T = 45;      // s — tempo para a pluma atingir o teto, depois segura
-const CAP_HALF_W = 330; // m — meia-largura final da copa (diâmetro ~660 m)
-const CAP_H = 140;      // m — meia-altura vertical da copa
-const STEM_R = 95;      // m — raio do talo no topo (afunila para ~60 na base)
-const SKIRT_R = 420;    // m — raio final da saia de poeira na base
+const CAP_HALF_W = 330; // m — meia-largura final da copa (diâmetro ~660 m) — retido (D-9)
+const CAP_H = 140;      // m — meia-altura vertical da copa — retido (D-9)
+const STEM_R = 95;      // m — raio do talo no topo (afunila para ~60 na base) — retido (D-9)
+const SKIRT_R = 420;    // m — raio final da saia de poeira na base — retido (D-9)
 
 // Contagem de billboards (1 draw call). Headless: mínimo para os probes.
 const N_CAP = HEADLESS ? 10 : 64;
 const N_STEM = HEADLESS ? 8 : 46;
 const N_SKIRT = HEADLESS ? 6 : 24;
 
+// ── T-09 (D-9): fireball growth/rise curves — PURE, no THREE/DOM ─────────────
+// Replaces the old `fireRise = 30 + t²·6` (unbounded quadratic that raced ahead of
+// the ease-out plume curve, then hard-clamped at `plumeH + 20` — a discontinuous
+// derivative that read as a snap/kink) and the old hard-stop linear radius ramp
+// (`Math.min(130, 8 + t*34)`, constant velocity until it hits the cap and freezes).
+// Both are now eased curves with continuous derivatives.
+const FIREBALL_R_BASE = 8;     // m — core radius at ignition (t=0)
+const FIREBALL_R_MAX = 130;    // m — max core radius (unchanged from the old cap)
+const FIREBALL_GROW_T = 3.6;   // s — eased bloom reaches ~full radius (was linear to ~3.6s)
+const FIREBALL_FADE_T = 9;     // s — core visibly fades out (merges into the rising cap)
+const FIREBALL_RISE_BASE = 30; // m — core altitude at ignition (t=0), matches the old constant
+const FIREBALL_RISE_T = 5.5;   // s — eased rise catches the plume top (replaces the t² overshoot)
+const SHOCKWAVE_MAX_R = 750;   // m — ground shockwave sweep target (D-8: ≈ new BLAST_RADIUS×0.99)
+const SHOCKWAVE_RATE = 220;    // m/s — ground shockwave sweep speed
+
+/** Plume-top rise fraction 0→1 (ease-out: fast early, settles at the ceiling). Pure. */
+export function plumeRiseFractionAt(t) {
+  const riseLin = Math.min(1, t / RISE_T);
+  return 1 - (1 - riseLin) * (1 - riseLin);
+}
+
+/** Plume-top altitude (m) — ease-out to CEILING over RISE_T s, then holds. Pure. */
+export function plumeHeightAt(t) {
+  return plumeRiseFractionAt(t) * CEILING;
+}
+
+/** Fireball core radius (m) — eased bloom 0→FIREBALL_GROW_T s, then holds at
+ *  FIREBALL_R_MAX (no hard-stop snap). Monotonic non-decreasing. Pure. */
+export function fireballGrowthAt(t) {
+  const u = Math.max(0, Math.min(1, t / FIREBALL_GROW_T));
+  const eased = 1 - (1 - u) * (1 - u); // ease-out: fast bloom, smooth settle
+  return FIREBALL_R_BASE + eased * (FIREBALL_R_MAX - FIREBALL_R_BASE);
+}
+
+/** Fireball core opacity fade 1→0 over FIREBALL_FADE_T s. Pure. */
+export function fireballFadeAt(t) {
+  return Math.max(0, 1 - t / FIREBALL_FADE_T);
+}
+
+/** D-9: fireball core altitude (m) — eased so it tracks (never overshoots) the
+ *  CURRENT plume top `plumeH`, replacing the old unbounded `30 + t²·6`. Monotonic
+ *  non-decreasing and always <= max(plumeH, FIREBALL_RISE_BASE) by construction — the
+ *  eased fraction interpolates between FIREBALL_RISE_BASE and that ceiling, it never
+ *  extrapolates past it. By ~FIREBALL_RISE_T s the core sits exactly at the plume top
+ *  (visually merges into the forming cap), matching "vira o cogumelo" (nuclear-fx.js
+ *  header) instead of floating as a separate sphere. Pure. */
+export function fireballRiseAt(t, plumeH) {
+  const u = Math.max(0, Math.min(1, t / FIREBALL_RISE_T));
+  const eased = 1 - (1 - u) * (1 - u);
+  const target = Math.max(plumeH, FIREBALL_RISE_BASE);
+  return FIREBALL_RISE_BASE + eased * (target - FIREBALL_RISE_BASE);
+}
+
+/** Ground shockwave ring radius (m) — sweeps to SHOCKWAVE_MAX_R at SHOCKWAVE_RATE m/s. Pure. */
+export function shockwaveRadiusAt(t) {
+  return Math.min(SHOCKWAVE_MAX_R, t * SHOCKWAVE_RATE);
+}
+
 // Rampa de cores de fogo: branco-quente → amarelo → laranja → vermelho.
 const FIRE_STOPS = [0xffffff, 0xffee88, 0xffaa30, 0xff5020];
-const _rampA = new THREE.Color();
-const _rampB = new THREE.Color();
-function fireColorAt(u, out) {
+
+function lerpHexChannel(a, b, t) {
+  return Math.round(a + (b - a) * t);
+}
+
+/** Blackbody-ish fire ramp keyframe (hex 0xRRGGBB) at u∈[0,1] — pure integer/hex math,
+ *  no THREE.Color, no DOM. White-hot -> yellow -> orange -> red as u climbs (the
+ *  "cools as it rises/ages" phenomenology). Exported for Node sim assertions. */
+export function fireColorHexAt(u) {
   const n = FIRE_STOPS.length - 1;
-  const seg = Math.max(0, Math.min(n - 1, Math.floor(u * n)));
-  const localT = Math.max(0, Math.min(1, u * n - seg));
-  out.copy(_rampA.setHex(FIRE_STOPS[seg])).lerp(_rampB.setHex(FIRE_STOPS[seg + 1]), localT);
-  return out;
+  const clamped = Math.max(0, Math.min(1, u));
+  const seg = Math.max(0, Math.min(n - 1, Math.floor(clamped * n)));
+  const localT = Math.max(0, Math.min(1, clamped * n - seg));
+  const a = FIRE_STOPS[seg], b = FIRE_STOPS[seg + 1];
+  const r = lerpHexChannel((a >> 16) & 255, (b >> 16) & 255, localT);
+  const g = lerpHexChannel((a >> 8) & 255, (b >> 8) & 255, localT);
+  const bl = lerpHexChannel(a & 255, b & 255, localT);
+  return (r << 16) | (g << 8) | bl;
+}
+
+function fireColorAt(u, out) {
+  return out.setHex(fireColorHexAt(u));
 }
 const _col = new THREE.Color();
 
@@ -303,7 +384,13 @@ function buildPuffMesh() {
   return mesh;
 }
 
-export function spawnNuclearFx(epicenter) {
+/** @param {{x:number,y:number,z:number}} epicenter
+ *  @param {{add:Function}} sceneRef — the THREE.Scene (or scene-like stub in tests)
+ *  to add the mushroom group to; stored per-instance so `updateNuclearFx` can remove
+ *  it on cleanup without this module statically importing scene.js (T-09: scene.js
+ *  touches `window` at import time, which would make this whole module un-importable
+ *  under plain Node — see the file header). */
+export function spawnNuclearFx(epicenter, sceneRef) {
   const group = new THREE.Group();
 
   // Fireball FBM (núcleo que vira a copa)
@@ -353,8 +440,8 @@ export function spawnNuclearFx(epicenter) {
 
   group.add(fire, puffs, ring, light);
   group.position.copy(epicenter);
-  scene.add(group);
-  active.push({ group, fire, puffs, ring, wilson, light, t: 0 });
+  sceneRef.add(group);
+  active.push({ group, fire, puffs, ring, wilson, light, t: 0, sceneRef });
   nuclearFxState.active = true;
   nuclearFxState.stage = 'flash';
 }
@@ -366,18 +453,18 @@ export function updateNuclearFx(dt) {
     const t = fx.t;
 
     // Subida da pluma: ease-out até o teto em RISE_T s, depois segura.
-    const riseLin = Math.min(1, t / RISE_T);
-    const rise = 1 - (1 - riseLin) * (1 - riseLin); // ease-out: rápido cedo, lento no topo
+    const rise = plumeRiseFractionAt(t); // ease-out: rápido cedo, lento no topo
     const plumeH = rise * CEILING;
     // Turbulência barata (wobble senoidal), cresce um pouco com a altura.
     const wobX = (Math.sin(t * 0.9) * 8 + Math.cos(t * 0.47) * 6) * (0.4 + rise);
     const wobZ = (Math.cos(t * 0.73) * 7 + Math.sin(t * 0.39) * 5) * (0.4 + rise);
     const tailFade = t > LIFETIME - 15 ? Math.max(0, 1 - (t - (LIFETIME - 15)) / 15) : 1;
 
-    // ── Fireball: cresce ~4 s, sobe colado ao topo da pluma, esfria e some ~9 s ──
-    const fireR = Math.min(130, 8 + t * 34);
-    const fireRise = Math.min(plumeH + 20, 30 + t * t * 6);
-    const fireFade = Math.max(0, 1 - t / 9);
+    // ── Fireball: cresce eased ~3.6 s, sobe eased até colar no topo da pluma em ~5.5 s
+    // (nunca ultrapassa plumeH — T-09/D-9, ver fireballRiseAt), esfria e some ~9 s ──
+    const fireR = fireballGrowthAt(t);
+    const fireRise = fireballRiseAt(t, plumeH);
+    const fireFade = fireballFadeAt(t);
     fx.fire.position.set(wobX * 0.6, fireRise, wobZ * 0.6);
     fx.fire.scale.setScalar(fireR);
     fx.fire.material.uniforms.uTime.value = t;
@@ -409,7 +496,7 @@ export function updateNuclearFx(dt) {
     }
 
     // ── Shockwave de solo: varre até ~750 m em ~3.4 s e some ──
-    const shockR = Math.min(750, t * 220);
+    const shockR = shockwaveRadiusAt(t);
     fx.ring.scale.setScalar(shockR);
     fx.ring.material.opacity = Math.max(0, 0.85 - t * 0.24);
 
@@ -425,7 +512,7 @@ export function updateNuclearFx(dt) {
     nuclearFxState.lightPulse = Math.max(0, 1 - t / 3.2);
 
     if (t > LIFETIME) {
-      scene.remove(fx.group);
+      fx.sceneRef.remove(fx.group);
       fx.fire.geometry.dispose();
       fx.fire.material.dispose();
       fx.puffs.geometry.dispose();

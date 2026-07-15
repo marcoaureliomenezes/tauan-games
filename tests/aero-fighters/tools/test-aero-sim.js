@@ -1,7 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PLAYER, TARGET_LAYOUT_INHAUMA } from '../../../aero-fighters/src/config.js';
+import { PLAYER, TARGET_LAYOUT_INHAUMA, MISSILES_NUCLEAR } from '../../../aero-fighters/src/config.js';
+import {
+  fireballFadeAt,
+  fireballGrowthAt,
+  fireballRiseAt,
+  fireColorHexAt,
+  plumeHeightAt,
+  shockwaveRadiusAt,
+  spawnNuclearFx,
+  updateNuclearFx,
+  nuclearFxState,
+} from '../../../aero-fighters/src/nuclear-fx.js';
 import { materializeLayout, validateMap } from '../../../aero-fighters/src/map-validation.js';
 import {
   clampDt,
@@ -421,4 +432,148 @@ test('airport clearing stays operational: the real runway/taxiway/service paveme
     }
   }
   assert.ok(sampleCount > 50, 'airport sweep sampled too few points to be meaningful');
+});
+
+// ─── T-09 / AC-06 / D-8 / D-9: nuke fireball/rise/growth curves + larger destruction ──
+// nuclear-fx.js's timing/growth/color math is pure (no THREE/DOM at import time — see
+// its file header) so the REAL production functions are imported and driven directly
+// here, not mirrored. `spawnNuclearFx`/`updateNuclearFx` themselves are also Node-safe
+// now (T-09 decoupled the module from a static `import { scene } from './scene.js'`,
+// which touches `window` at import time); a stub scene object stands in for THREE.Scene.
+
+test('D-9: fireballGrowthAt is monotonic non-decreasing, starts at the base radius, and saturates at the max (no hard-stop snap)', () => {
+  let prev = -Infinity;
+  for (let t = 0; t <= 20; t += 0.1) {
+    const r = fireballGrowthAt(t);
+    assert.ok(Number.isFinite(r), `non-finite radius at t=${t}`);
+    assert.ok(r >= prev - 1e-9, `fireballGrowthAt regressed at t=${t}: ${r} < ${prev}`);
+    prev = r;
+  }
+  assert.ok(fireballGrowthAt(0) < 10, 'expected a small core radius at ignition');
+  assert.ok(Math.abs(fireballGrowthAt(20) - fireballGrowthAt(10)) < 0.01, 'radius should have saturated well before t=10');
+});
+
+test('D-9: fireballFadeAt is a monotonic 1->0 fade and reaches 0 by the documented fade window', () => {
+  assert.equal(fireballFadeAt(0), 1);
+  assert.equal(fireballFadeAt(9), 0);
+  assert.equal(fireballFadeAt(20), 0);
+  let prev = Infinity;
+  for (let t = 0; t <= 9; t += 0.25) {
+    const f = fireballFadeAt(t);
+    assert.ok(f <= prev + 1e-9, `fireballFadeAt increased at t=${t}`);
+    prev = f;
+  }
+});
+
+test('D-9: fireballRiseAt never overshoots the current plume top and is monotonic non-decreasing over the 60s timeline (replaces the old unbounded 30 + t²·6)', () => {
+  let prev = -Infinity;
+  for (let t = 0; t <= 60; t += 0.2) {
+    const plumeH = plumeHeightAt(t);
+    const rise = fireballRiseAt(t, plumeH);
+    assert.ok(Number.isFinite(rise), `non-finite rise at t=${t}`);
+    // Core "no overshoot" contract (D-9): the fireball core never climbs past the
+    // current plume top (with a tiny float-slop margin), no matter how large plumeH
+    // has grown by this point in the timeline — this is exactly the bug the old
+    // `30 + t²·6` quadratic could violate once its growth outran the ease-out plume.
+    assert.ok(rise <= Math.max(plumeH, 30) + 1e-6,
+      `fireball rise ${rise} overshot the plume top ${plumeH} at t=${t}`);
+    assert.ok(rise >= prev - 1e-6, `fireball rise regressed at t=${t}: ${rise} < ${prev}`);
+    prev = rise;
+  }
+});
+
+test('D-9: fireballRiseAt merges into the plume top by ~FIREBALL_RISE_T seconds (core visually becomes the rising cap, not a separate sphere)', () => {
+  const plumeH = plumeHeightAt(6);
+  const rise = fireballRiseAt(6, plumeH);
+  assert.ok(Math.abs(rise - plumeH) < 0.5, `expected the fireball core to be pinned to the plume top by t=6, got rise=${rise} vs plumeH=${plumeH}`);
+});
+
+test('D-9: plumeHeightAt eases to the ceiling and never regresses across the 60s timeline', () => {
+  let prev = -Infinity;
+  for (let t = 0; t <= 60; t += 0.5) {
+    const h = plumeHeightAt(t);
+    assert.ok(Number.isFinite(h) && h >= 0, `non-finite/negative plume height at t=${t}`);
+    assert.ok(h >= prev - 1e-9, `plume height regressed at t=${t}`);
+    prev = h;
+  }
+  assert.ok(plumeHeightAt(60) > plumeHeightAt(1), 'plume should have risen substantially over the timeline');
+});
+
+test('D-9: shockwaveRadiusAt sweeps to ~750m and caps there (matches the visual ground shockwave the D-8 destruction radius is proportioned against)', () => {
+  assert.equal(shockwaveRadiusAt(0), 0);
+  assert.ok(shockwaveRadiusAt(3.5) >= 749, `shockwave should have reached ~750m by t=3.5, got ${shockwaveRadiusAt(3.5)}`);
+  assert.equal(shockwaveRadiusAt(10), 750, 'shockwave must cap at 750m and never keep growing');
+});
+
+test('D-9: fireColorHexAt runs white-hot -> yellow -> orange -> red as u climbs 0->1 (cooling ramp), matching the fire-stop keyframes exactly at segment boundaries', () => {
+  assert.equal(fireColorHexAt(0), 0xffffff);
+  assert.equal(fireColorHexAt(1 / 3), 0xffee88);
+  assert.equal(fireColorHexAt(2 / 3), 0xffaa30);
+  assert.equal(fireColorHexAt(1), 0xff5020);
+  // Cooling: red channel stays saturated (fire palette) while green+blue fall off —
+  // sample a few interior points and confirm the ramp isn't flat/plain (WS-5 rule).
+  const u0 = fireColorHexAt(0), uMid = fireColorHexAt(0.5), u1 = fireColorHexAt(1);
+  assert.notEqual(u0, uMid);
+  assert.notEqual(uMid, u1);
+  assert.notEqual(u0, u1);
+});
+
+test('D-8: MISSILES_NUCLEAR destruction/player-damage radii are re-tuned per the SPEC (760/300/680)', () => {
+  assert.equal(MISSILES_NUCLEAR.BLAST_RADIUS, 760);
+  assert.equal(MISSILES_NUCLEAR.PLAYER_KILL_RADIUS, 300);
+  assert.equal(MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS, 680);
+  assert.ok(MISSILES_NUCLEAR.PLAYER_KILL_RADIUS < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS);
+  assert.ok(MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS < MISSILES_NUCLEAR.BLAST_RADIUS);
+});
+
+// AC-06/D-8: mirrors the exact target-damage formula in projectiles.js's
+// applyNuclearShockwave (module-private there; projectiles.js imports scene.js/audio.js
+// and cannot be imported in plain Node — same established precedent as
+// test-aero-weapons-sim.js's guidance harness, see that file's header comment). Any
+// change to applyNuclearShockwave's damage formula must be mirrored here.
+function nuclearDamageAt(distance) {
+  if (distance >= MISSILES_NUCLEAR.BLAST_RADIUS) return 0;
+  return MISSILES_NUCLEAR.DAMAGE * Math.max(0, 1 - distance / MISSILES_NUCLEAR.BLAST_RADIUS);
+}
+
+test('AC-06/D-8: applyNuclearShockwave formula (mirrored) destroys every target well within the new BLAST_RADIUS and spares one just outside', () => {
+  const HIGHEST_TARGET_HP = 35; // config.js TARGETS.warship — the toughest target in the game
+  // Damage falls off linearly to 0 exactly at BLAST_RADIUS (pre-existing formula shape,
+  // unchanged by D-8) — sample representative "inside" distances up to 95% of the new
+  // radius, comfortably clear of the near-zero tail right at the boundary.
+  for (const d of [0, 100, 400, 600, MISSILES_NUCLEAR.BLAST_RADIUS * 0.95]) {
+    const dmg = nuclearDamageAt(d);
+    assert.ok(dmg > HIGHEST_TARGET_HP, `target at ${d}m (inside BLAST_RADIUS=${MISSILES_NUCLEAR.BLAST_RADIUS}) took only ${dmg} damage — would survive`);
+  }
+  const outside = MISSILES_NUCLEAR.BLAST_RADIUS + 5;
+  assert.equal(nuclearDamageAt(outside), 0, `target at ${outside}m (just outside BLAST_RADIUS) should take no damage`);
+});
+
+test('T-09: spawnNuclearFx/updateNuclearFx drive nuclearFxState through the full flash->fireball->mushroom->dissipating->idle 60s timeline, staying finite throughout (headless-safe stub scene, no THREE renderer needed)', () => {
+  const stubScene = { add() {}, remove() {} };
+  spawnNuclearFx({ x: 0, y: 0, z: 0 }, stubScene);
+  assert.equal(nuclearFxState.active, true);
+  assert.equal(nuclearFxState.stage, 'flash');
+
+  const dt = 1 / 30;
+  let sawFireball = false, sawMushroom = false, sawDissipating = false;
+  let prevPlumeHeight = -Infinity;
+  let t = 0;
+  while (t < 61) {
+    updateNuclearFx(dt);
+    t += dt;
+    assert.ok(Number.isFinite(nuclearFxState.fireballRadius), `non-finite fireballRadius at t=${t}`);
+    assert.ok(Number.isFinite(nuclearFxState.plumeHeight), `non-finite plumeHeight at t=${t}`);
+    assert.ok(Number.isFinite(nuclearFxState.shockwaveRadius), `non-finite shockwaveRadius at t=${t}`);
+    assert.ok(nuclearFxState.plumeHeight >= prevPlumeHeight - 1e-6, `plumeHeight regressed at t=${t}`);
+    prevPlumeHeight = nuclearFxState.plumeHeight;
+    if (nuclearFxState.stage === 'fireball') sawFireball = true;
+    if (nuclearFxState.stage === 'mushroom') sawMushroom = true;
+    if (nuclearFxState.stage === 'dissipating') sawDissipating = true;
+  }
+  assert.ok(sawFireball, 'timeline never entered the fireball stage');
+  assert.ok(sawMushroom, 'timeline never entered the mushroom stage');
+  assert.ok(sawDissipating, 'timeline never entered the dissipating stage');
+  assert.equal(nuclearFxState.active, false, 'nuclearFxState should return to idle once the 60s lifetime elapses');
+  assert.equal(nuclearFxState.stage, 'idle');
 });

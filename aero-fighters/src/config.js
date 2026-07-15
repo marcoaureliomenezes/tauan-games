@@ -99,9 +99,14 @@ export const MISSILES_NUCLEAR = {
   CLOSE_TURN_RATE: 0.38,
   LIFE: 12.0,
   DAMAGE: 4000,
-  BLAST_RADIUS:         400,   // raio de destruição de alvos e terreno
-  PLAYER_KILL_RADIUS:   200,   // morte instantânea dentro deste raio
-  PLAYER_DAMAGE_RADIUS: 450,   // perde 1 vida + shake forte até aqui
+  // D-8 (2026-07-15): 400 -> 760 (~1.9x) to match the ~750 m visual ground shockwave
+  // (nuclear-fx.js's shockwaveRadiusAt) — the ground kill radius was far smaller than
+  // the spectacle. Player kill/damage radii are re-tuned proportionally so the bigger
+  // radius stays fair (was 200/450, now 300/680 — the kill/damage band ratio is
+  // preserved: 680/300 = 2.27 vs the old 450/200 = 2.25).
+  BLAST_RADIUS:         760,   // raio de destruição de alvos e terreno
+  PLAYER_KILL_RADIUS:   300,   // morte instantânea dentro deste raio
+  PLAYER_DAMAGE_RADIUS: 680,   // perde 1 vida + shake forte até aqui
 };
 
 /** Alias mantido para compatibilidade — aponta para light */

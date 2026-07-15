@@ -481,7 +481,7 @@ export function updateNuclears(dt) {
     if (hitTarget || groundHit || expired) {
       const ep = n.mesh.position.clone();
       nuclearExplosion(ep.clone());
-      spawnNuclearFx(ep.clone());
+      spawnNuclearFx(ep.clone(), scene);
       // Decisão do operador (2026-07-01): SEM câmera cinematográfica na detonação —
       // o jogador assiste ao cogumelo da câmera normal (shake + flash mantidos).
       applyNuclearShockwave(ep.clone());
@@ -504,8 +504,10 @@ export function updateNuclears(dt) {
       // WS-6: cratera/cicatriz em QUALQUER piso (não só deformação de ilhas)
       const _surf = surfaceInfoAt(ep.x, ep.z);
       const _gPos = ep.clone(); _gPos.y = Math.max(_surf.height, 0);
-      spawnScorchMark(_gPos, 120, 0.62);
-      spawnScorchMark(_gPos, 210, 0.24);
+      // D-8: scorch radii scale with BLAST_RADIUS (pre-D-8 ratios preserved: 120/400
+      // = 0.30, 210/400 = 0.525 -> now 228/399 at BLAST_RADIUS=760).
+      spawnScorchMark(_gPos, MISSILES_NUCLEAR.BLAST_RADIUS * 0.30, 0.62);
+      spawnScorchMark(_gPos, MISSILES_NUCLEAR.BLAST_RADIUS * 0.525, 0.24);
 
       // WS-6: coluna de fumaça residual por 60 s no epicentro
       const _smokeOwner = { isNukeResidual: true };

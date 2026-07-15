@@ -60,19 +60,19 @@ files). One `[-]` per lane at a time.
 - **Done when:** Inhaúma runway shows threshold + centerline + touchdown-zone markings + edge lights + taxiway centerline; `getAirportDiagnostics` still valid; `validate:aero-map` + e2e green; no regression to other maps' airports.
 
 ### T-05 — Roll-out phase + guided-taxi-on-pavement
-- [-] **Owner:** software-engineer · **Lane:** A · **Write-set:** `sortie-state.js`; `landing-zones.js`; `auto-taxi.js`; `ground-physics.js`; `player.js`[ground-state block + touchdown site]; `config.js`[`PLAYER` — add `TAXI_HANDOFF_SPEED 34`]; `main.js`[landing/taxi loop region ~L378-402]; `aero-fighters/src/taxi-core.js` (new, pure); `tests/aero-fighters/tools/test-aero-taxi-sim.js` (new) + wire into `test:aero:sim`.
+- [x] **Owner:** software-engineer · **Lane:** A · **Write-set:** `sortie-state.js`; `landing-zones.js`; `auto-taxi.js`; `ground-physics.js`; `player.js`[ground-state block + touchdown site]; `config.js`[`PLAYER` — add `TAXI_HANDOFF_SPEED 34`]; `main.js`[landing/taxi loop region ~L378-402]; `aero-fighters/src/taxi-core.js` (new, pure); `tests/aero-fighters/tools/test-aero-taxi-sim.js` (new) + wire into `test:aero:sim`.
 - **Preconditions:** T-04 DONE.
 - **Do:** on `TOUCHDOWN_SAFE` do NOT arm auto-taxi same-frame; keep player yaw/rudder + brake control in a roll-out decel along the runway axis; engage guided taxi only when `groundSpeed ≤ TAXI_HANDOFF_SPEED` AND on pavement; move waypoint-follow kinematics (accel/brake clamp, turn-rate limit, drive-along-nose) into pure `taxi-core.js`; constrain the path to runway→taxiway→service. Preserve `respawnAndRelaunch`/`relaunchSortie` recovery + auto-decolagem.
 - **Done when:** taxi-containment sim — every sampled position touchdown→apron is on pavement (`airportSurface !== 'none'`); no capture while `speed > TAXI_HANDOFF_SPEED`; existing `landing`/`sortie`/`auto-sortie`/`service` specs stay green; no "stuck plane" regression.
 
 ### T-06 — Smooth takeoff
-- [-] **Owner:** software-engineer · **Lane:** A · **Write-set:** `player.js`[ground block]; `auto-taxi.js`[`takeoff` phase]; `config.js`[`PLAYER`]; `tests/aero-fighters/tools/test-aero-sortie-sim.js` (extend).
+- [x] **Owner:** software-engineer · **Lane:** A · **Write-set:** `player.js`[ground block]; `auto-taxi.js`[`takeoff` phase]; `config.js`[`PLAYER`]; `tests/aero-fighters/tools/test-aero-sortie-sim.js` (extend).
 - **Preconditions:** T-05 DONE.
 - **Do:** smooth roll accel curve; rotation at `Vr`; ease pitch on climb-out; remove step transitions across TAKEOFF_ROLL → AIRBORNE (`liftoffVsp`/`rotateSpool`/`_liftoffCarry` continuity); tie thresholds to throttle stages.
 - **Done when:** takeoff sim — per-frame altitude/position delta bounded (no jump), rotation begins at `Vr`, pitch monotonic without a single-frame step; manual + auto takeoff both smooth; e2e green.
 
 ### T-07 — Sharper jet silhouette + throttle stages + afterburner FX
-- [-] **Owner:** software-engineer · **Lane:** A · **Write-set:** `player.js`[`buildJet` + afterburner visual + optional rod wing-mesh]; `config.js`[`PLAYER` throttle detents]; `aero-fighters/src/throttle-stage.js` (new pure) OR pure fn in `physics-core.js`; `tests/aero-fighters/tools/test-aero-unit.js` (extend).
+- [x] **Owner:** software-engineer · **Lane:** A · **Write-set:** `player.js`[`buildJet` + afterburner visual + optional rod wing-mesh]; `config.js`[`PLAYER` throttle detents]; `aero-fighters/src/throttle-stage.js` (new pure) OR pure fn in `physics-core.js`; `tests/aero-fighters/tools/test-aero-unit.js` (extend).
 - **Preconditions:** T-06 DONE.
 - **Do:** improve procedural silhouette (no external assets); pure `throttleStage(t)` → idle/taxi/military/afterburner; visible afterburner plume cone gated ≥ military, largest at afterburner; (optional) rod wing-mesh on the loadout.
 - **Done when:** `throttleStage` boundary unit test passes; afterburner plume scale at afterburner > idle (e2e visual smoke); silhouette renders without shadow/NaN issues; no physics regression (physics reads continuous throttle).
@@ -82,13 +82,13 @@ files). One `[-]` per lane at a time.
 ## Lane B — Audio & Nuke
 
 ### T-08 — Turbine engine synth (100% synthesized)
-- [-] **Owner:** software-engineer · **Lane:** B · **Write-set:** `audio.js`[`startEngine`/`stopEngine`/`setEngineRPM` internals + node fields].
+- [x] **Owner:** software-engineer · **Lane:** B · **Write-set:** `audio.js`[`startEngine`/`stopEngine`/`setEngineRPM` internals + node fields].
 - **Preconditions:** none (fully disjoint).
 - **Do:** replace propeller-like oscillators with a turbine model — swept-bandpass noise spool (center freq follows normalized RPM) + stacked high-freq whine (2–3 detuned oscillators, shepard-ish) + lowpass shaping; gains follow `speed`/`throttle`. Preserve public signatures + lazy-init + mute.
 - **Done when:** e2e — after first input the engine graph exists with turbine composition (whine oscillator layer + swept bandpass noise); no file/network fetch; mute works; `player.js` callers unchanged; audio-touching e2e green.
 
 ### T-09 — Nuke: fireball/rise fix + double flash + larger destruction
-- [-] **Owner:** software-engineer · **Lane:** B · **Write-set:** `nuclear-fx.js`; `fx.js`[`nuclearExplosion` — add double flash]; `config.js`[`MISSILES_NUCLEAR` block]; `projectiles.js`[`applyNuclearShockwave`/`updateNuclears`/`buildNuclearMesh` only — scorch/deform to new radius]; `tests/aero-fighters/tools/test-aero-sim.js` + `nuclear-fx.spec.js` (extend).
+- [x] **Owner:** software-engineer · **Lane:** B · **Write-set:** `nuclear-fx.js`; `fx.js`[`nuclearExplosion` — add double flash]; `config.js`[`MISSILES_NUCLEAR` block]; `projectiles.js`[`applyNuclearShockwave`/`updateNuclears`/`buildNuclearMesh` only — scorch/deform to new radius]; `tests/aero-fighters/tools/test-aero-sim.js` + `nuclear-fx.spec.js` (extend).
 - **Preconditions:** none within lane (disjoint from A & C; `projectiles.js`/`config.js` regions are B-only).
 - **Do:** ease `fireRise` to track `plumeH` (drop `t²` overshoot), retain cap/stem/skirt + 60 s timeline; add double flash (~0.12–0.18 s apart) in `nuclearExplosion`; set `BLAST_RADIUS 760`, `PLAYER_KILL_RADIUS 300`, `PLAYER_DAMAGE_RADIUS 680`; scorch decal + `deformTerrainNuclear` use new radius. Keep `depthWrite:false`; no sprite+logdepth+bloom stack (NaN-mip trap); respect headless guards.
 - **Done when:** sim — targets within `BLAST_RADIUS` destroyed by one nuke, just-outside survives; `nuclearFxState` exposes full timeline; fireball rise ≤ plume top across timeline (no overshoot); headless finite-state assert passes; e2e nuke smoke green.

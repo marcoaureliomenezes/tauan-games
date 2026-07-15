@@ -158,7 +158,7 @@ export function nuclearExplosion(pos) {
     return;
   }
 
-  // t=0: flash branco de tela + fireball enorme + dois anéis de shockwave
+  // t=0: PRIMEIRO flash branco de tela + core branco-quente na origem + fireball enorme
   triggerNukeFlash();
   spawnFlash(pos, 50);
   explosion(pos, 28, COLORS.fireYellow);  // era scale 20
@@ -166,7 +166,15 @@ export function nuclearExplosion(pos) {
   const groundPos = pos.clone(); groundPos.y = 0.5;
   spawnShockwave(groundPos, 320, 0xffdd88); // anel ras do chão
 
-  // t=80ms: segundo flash (bola de fogo laranja)
+  // D-9: SEGUNDO flash ~0.12-0.18s depois — a assinatura de dupla detonação térmica
+  // de uma nuke real (um pulso brevíssimo, um breve vale, e um segundo pulso mais
+  // largo). Retrigger de #nuke-flash (triggerNukeFlash) + um segundo core branco.
+  scheduleDelayed(0.15, () => {
+    triggerNukeFlash();
+    spawnFlash(pos, 38);
+  });
+
+  // t=80ms: bola de fogo laranja
   scheduleDelayed(0.08, () => {
     explosion(pos, 18, COLORS.fireOrange);
   });
