@@ -430,7 +430,12 @@ export function updatePlayer(dt, input, onCrash) {
         game.player.speed >= PLAYER.V_ROTATE &&
         (input.pitchDown || input.pitchUp)) {
       if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
-      _pitchQ.setFromAxisAngle(_lPitch, PLAYER.PITCH_RATE * 0.35 * dt);
+      // T-06: the pitch RATE itself now spools in over ROTATE_EASE_TIME instead of
+      // snapping to full rate the instant this branch first becomes true — this was
+      // the "residual step-like transition" the operator read as teleport-y (position
+      // was already smooth via ROTATE_LIFT/liftoffVsp; the angular RATE was not).
+      sortie.pitchSpool = Math.min(1, (sortie.pitchSpool || 0) + dt / PLAYER.ROTATE_EASE_TIME);
+      _pitchQ.setFromAxisAngle(_lPitch, PLAYER.PITCH_RATE * 0.35 * sortie.pitchSpool * dt);
       jet.quaternion.multiply(_pitchQ);
       clampPitchAttitude();
       sortie.liftoffVsp += PLAYER.ROTATE_LIFT * dt;
@@ -447,6 +452,7 @@ export function updatePlayer(dt, input, onCrash) {
         // liftoffVsp residual pular o snap-ao-chão do próximo taxiamento).
         sortie.liftoffVsp = 0;
         sortie.rotateSpool = 0;
+        sortie.pitchSpool = 0;
         sortie._autoSpeedFlagged = false;
       }
     }
@@ -849,9 +855,15 @@ export function respawnJet() {
     const airport = getAirportForMap(game.activeMap);
     jet.position.set(airport.serviceZone.center.x, airport.elevation + 0.9, airport.serviceZone.center.z);
     // Zera o estado de decolagem/surtida ao renascer (restart ou pós-mayday) —
-    // senão liftoffVsp/_autoSpeedFlagged residuais bagunçam a próxima decolagem.
+    // senão liftoffVsp/rotateSpool/pitchSpool/_autoSpeedFlagged residuais bagunçam a
+    // próxima decolagem (T-06: pitchSpool joins the same reset set as rotateSpool).
     const sortie = game.missionRealism.sortie;
-    if (sortie) { sortie.liftoffVsp = 0; sortie._autoSpeedFlagged = false; }
+    if (sortie) {
+      sortie.liftoffVsp = 0;
+      sortie.rotateSpool = 0;
+      sortie.pitchSpool = 0;
+      sortie._autoSpeedFlagged = false;
+    }
   } else {
     jet.position.set(0, PLAYER.START_HEIGHT, 0);
   }

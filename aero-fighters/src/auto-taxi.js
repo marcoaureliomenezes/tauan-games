@@ -14,6 +14,7 @@ import { PLAYER } from './config.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 import { spawnMission } from './missions.js';
 import { advancePathIndex, buildTaxiPathIn, stepTowardWaypoint, wrapAngle } from './taxi-core.js';
+import { updateGroundRoll } from './ground-physics.js';
 
 // T-05/D-4: TAXI_SPEED now mirrors PLAYER.TAXI_HANDOFF_SPEED (single source of
 // truth) — guided taxi cruises at exactly the speed roll-out hands off at, so there
@@ -176,23 +177,28 @@ export function updateAutoTaxi(dt) {
       sortie._autoSpeedFlagged = false;
       sortie.liftoffVsp = 0;
       sortie.rotateSpool = 0;
+      sortie.pitchSpool = 0;
       if (sortie.state === SortieState.TAXI_OUT) {
         transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, game.time); // → TAKEOFF_ROLL
       }
       a.phase = 'takeoff';
       a.t = 0;
       a.vsp = 0;
+      a.pitchSpool = 0;
     }
     _mirror();
     return;
   }
 
   if (a.phase === 'takeoff') {
-    // Acelera na pista e levanta voo automaticamente (throttle spool, sem snap).
+    // T-06: shares the SAME smooth accel curve as manual ground roll
+    // (ground-physics.js#updateGroundRoll — throttle*accel minus friction/brake minus
+    // quadratic drag, ~62 m/s terminal) instead of a separate ad-hoc constant-accel
+    // model. Manual and auto takeoff now run identical kinematics end to end.
     game.player.throttle = Math.min(1, (game.player.throttle || 0.05) + dt * 1.4);
-    const accel = 26;
-    game.player.speed = Math.min(TAKEOFF_SPEED + 6, game.player.speed + accel * dt);
-    mr.ground.groundSpeed = game.player.speed;
+    updateGroundRoll(mr.ground, { throttleDown: false }, dt, 'runway', game.player.throttle);
+    mr.ground.groundSpeed = Math.min(TAKEOFF_SPEED + 6, mr.ground.groundSpeed);
+    game.player.speed = mr.ground.groundSpeed;
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(jet.quaternion);
     jet.position.addScaledVector(fwd, game.player.speed * dt);
 
@@ -202,12 +208,17 @@ export function updateAutoTaxi(dt) {
     }
 
     if (game.player.speed >= TAKEOFF_SPEED) {
-      // Rotaciona o nariz e sobe — vsp cresce gradualmente (sem degrau 0→22)
-      if (jet.rotation.x > -0.18) jet.rotateX(-0.5 * dt);
+      // T-06: pitch RATE eases in over ROTATE_EASE_TIME (mirrors player.js's manual
+      // rotation spool) instead of snapping to full rate the instant this threshold
+      // is crossed — vsp already ramped smoothly (sem degrau 0→22), the angular rate
+      // did not.
+      a.pitchSpool = Math.min(1, (a.pitchSpool || 0) + dt / PLAYER.ROTATE_EASE_TIME);
+      if (jet.rotation.x > -0.18) jet.rotateX(-0.5 * a.pitchSpool * dt);
       a.vsp = Math.min(22, (a.vsp || 0) + 16 * dt);
       jet.position.y += a.vsp * dt;
     } else {
       a.vsp = 0;
+      a.pitchSpool = 0;
       jet.position.y = ap.elevation + 0.9;
     }
 
@@ -218,6 +229,8 @@ export function updateAutoTaxi(dt) {
       sortie._autoSpeedFlagged = false;
       sortie.liftoffVsp = 0;
       sortie.rotateSpool = 0;
+      sortie.pitchSpool = 0;
+      a.pitchSpool = 0;
       cancelAutoTaxi();
     }
     _mirror();

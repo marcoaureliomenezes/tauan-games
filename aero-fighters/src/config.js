@@ -29,6 +29,11 @@ export const PLAYER = {
   // Takeoff rotation parameters
   V_ROTATE: 32,       // m/s — velocidade mínima para iniciar rotação de decolagem (mais próximo do canLiftoff=42)
   ROTATE_LIFT: 15,    // m/s² — sustentação extra durante rotação (era 7.5; atinge 4m em ~0.5s)
+  // T-06: tempo (s) para a TAXA de arfagem (pitch rate) da rotação alcançar 100% —
+  // antes a taxa saltava de 0 para PITCH_RATE*0.35 no MESMO frame em que a rotação
+  // começava (posição já era suave via ROTATE_LIFT/liftoffVsp; a taxa angular não
+  // era — essa era a transição "step-like" que lia como teleporte).
+  ROTATE_EASE_TIME: 0.4, // s
   // Landing flare / touchdown parameters (tolerantes — jogo para criança)
   FLARE_HI: 4.5,      // m — altitude de entrada na fase de flare
   FLARE_LO: 2.2,      // m — altitude de toque (touchdown ocorre abaixo disso)

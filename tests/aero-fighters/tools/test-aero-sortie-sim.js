@@ -313,3 +313,142 @@ test('full landing cycle: one TOUCHDOWN_SAFE, stays LANDING_ROLL, y decays monot
   assert.ok(bounce <= 0.3,
     `Post-touchdown bounce of ${bounce.toFixed(3)} m exceeds 0.3 m limit`);
 });
+
+// ─── T-06: smooth takeoff — eased pitch RATE spool, no step transitions ─────────
+// Root cause (SPEC point 3): the rotation PITCH RATE snapped from 0 to full rate
+// (PLAYER.PITCH_RATE * 0.35) the instant `speed >= V_ROTATE` first became true — the
+// *position*/vsp was already eased (ROTATE_LIFT accumulates gradually), but the
+// *angular rate* was not, reading as a teleport-y "residual step transition". T-06
+// fixes it with `sortie.pitchSpool`, ramping the rate itself in over
+// PLAYER.ROTATE_EASE_TIME (mirrored identically here and in player.js/auto-taxi.js).
+
+test('T-06: rotation pitch RATE spools in over ROTATE_EASE_TIME — first frame is near zero, never full rate', () => {
+  const dt = 1 / 60;
+  const fullRate = PLAYER.PITCH_RATE * 0.35;
+  let pitchSpool = 0;
+  const rateHistory = [];
+  const frames = Math.ceil((PLAYER.ROTATE_EASE_TIME + 1) / dt);
+  for (let i = 0; i < frames; i++) {
+    pitchSpool = Math.min(1, pitchSpool + dt / PLAYER.ROTATE_EASE_TIME);
+    rateHistory.push(fullRate * pitchSpool);
+  }
+  assert.ok(rateHistory[0] < fullRate * 0.1,
+    `first-frame pitch rate ${rateHistory[0]} should be near zero, not the full ${fullRate} (the old snap bug)`);
+  assert.ok(rateHistory[rateHistory.length - 1] > fullRate * 0.99, 'rate should reach ~full rate by ease-window end');
+  // Monotonic ramp — never steps backward.
+  for (let i = 1; i < rateHistory.length; i++) {
+    assert.ok(rateHistory[i] >= rateHistory[i - 1] - 1e-9, 'pitch rate must ramp monotonically');
+  }
+  // Bounded per-frame RATE increase itself (this is what makes it "eased" rather
+  // than an instant jump to full authority).
+  const maxRateStep = fullRate * (dt / PLAYER.ROTATE_EASE_TIME) + 1e-9;
+  for (let i = 1; i < rateHistory.length; i++) {
+    assert.ok(rateHistory[i] - rateHistory[i - 1] <= maxRateStep,
+      `frame ${i}: rate step ${rateHistory[i] - rateHistory[i - 1]} exceeds eased max ${maxRateStep}`);
+  }
+});
+
+/** Full smooth-takeoff sim mirroring player.js's REAL constants and the T-06
+ *  pitchSpool mechanic (ground roll via the real updateGroundRoll, rotation via the
+ *  same formulas as the production ground block). No THREE/jet — pure numeric state,
+ *  Node-safe, following the file's existing headless-physics convention. */
+function simulateSmoothTakeoff() {
+  const dt = 1 / 60;
+  const sortie = createSortieMachine();
+  const ground = createGroundPhysicsState();
+  transitionSortie(sortie, SortieEvent.START, {}, 0);
+  transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, 0.01); // → TAKEOFF_ROLL
+
+  let y = 0.9; // airport elevation (0) + gear compression
+  let throttle = 0.6;
+  let pitch = 0; // radians, negative = nose up (matches player.js convention)
+  let t = 0;
+  const deltaYs = [];
+  const pitchDeltas = [];
+  let rotationStartSpeed = null;
+  let liftoffFrame = null;
+  const MAX_FRAMES = 60 * 30;
+
+  for (let i = 0; i < MAX_FRAMES && liftoffFrame === null; i++) {
+    t += dt;
+    updateGroundRoll(ground, { throttleDown: false }, dt, 'runway', throttle);
+    const speed = ground.groundSpeed;
+    const prevY = y;
+    const prevPitch = pitch;
+
+    if (sortie.state === SortieState.TAKEOFF_ROLL && speed >= PLAYER.V_ROTATE) {
+      if (rotationStartSpeed === null) rotationStartSpeed = speed;
+      if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
+      sortie.pitchSpool = Math.min(1, (sortie.pitchSpool || 0) + dt / PLAYER.ROTATE_EASE_TIME);
+      pitch -= PLAYER.PITCH_RATE * 0.35 * sortie.pitchSpool * dt; // nose-up = negative
+      sortie.liftoffVsp += PLAYER.ROTATE_LIFT * dt;
+      y += sortie.liftoffVsp * dt;
+      sortie.rotateSpool = Math.min(13, (sortie.rotateSpool || 0) + 26 * dt);
+      const altAbove = y - 0;
+      if (altAbove > 4 && sortie.liftoffVsp > 0) {
+        transitionSortie(sortie, SortieEvent.LIFTOFF, {}, t);
+        liftoffFrame = i;
+      }
+    }
+
+    deltaYs.push(Math.abs(y - prevY));
+    pitchDeltas.push(Math.abs(pitch - prevPitch));
+  }
+
+  return { deltaYs, pitchDeltas, rotationStartSpeed, liftoffFrame, finalPitch: pitch };
+}
+
+test('T-06: smooth takeoff — altitude delta bounded, rotation begins at Vr, pitch monotonic with no step', () => {
+  const { deltaYs, pitchDeltas, rotationStartSpeed, liftoffFrame, finalPitch } = simulateSmoothTakeoff();
+
+  assert.ok(liftoffFrame !== null, 'takeoff sim never reached LIFTOFF');
+
+  // (a) per-frame altitude delta stays bounded — no jump/teleport across the whole
+  // roll + rotation + liftoff sequence.
+  const maxDeltaY = Math.max(...deltaYs);
+  assert.ok(maxDeltaY <= 1, `per-frame altitude delta ${maxDeltaY} exceeds the 1 m jump threshold`);
+
+  // (b) rotation begins at Vr — the first frame liftoffVsp accrues is the first
+  // frame speed crosses V_ROTATE, never later/earlier.
+  assert.ok(rotationStartSpeed !== null, 'rotation never started');
+  assert.ok(rotationStartSpeed >= PLAYER.V_ROTATE,
+    `rotation started at ${rotationStartSpeed} m/s, below V_ROTATE (${PLAYER.V_ROTATE})`);
+  assert.ok(rotationStartSpeed < PLAYER.V_ROTATE + 2,
+    `rotation started well above V_ROTATE (${rotationStartSpeed} vs ${PLAYER.V_ROTATE}) — should begin right at Vr`);
+
+  // (c) pitch increases monotonically (magnitude) with no single-frame step: every
+  // per-frame pitch delta must be <= the fully-spooled max rate * dt — i.e. bounded
+  // by the eased rate, never a bigger jump.
+  const dt = 1 / 60;
+  const maxPitchStep = (PLAYER.PITCH_RATE * 0.35) * dt + 1e-9;
+  const worstPitchStep = Math.max(...pitchDeltas);
+  assert.ok(worstPitchStep <= maxPitchStep,
+    `pitch step ${worstPitchStep} exceeds the fully-spooled max rate*dt of ${maxPitchStep} — single-frame step detected`);
+  assert.ok(finalPitch < 0, 'pitch should have rotated nose-up (negative) by liftoff');
+});
+
+test('T-06: auto takeoff (auto-taxi.js takeoff phase model) shares the same smooth accel curve as manual', () => {
+  // Mirrors auto-taxi.js's post-T-06 'takeoff' phase: updateGroundRoll-driven accel
+  // (same model as manual ground roll) instead of the old ad-hoc constant-accel.
+  const dt = 1 / 60;
+  const ground = createGroundPhysicsState();
+  let throttle = 0.05;
+  const speeds = [];
+  // 15s: the quadratic-drag ODE (dv/dt = throttle*18 - friction - 0.0035v^2) has a
+  // time constant of several seconds approaching its ~63 m/s terminal velocity — the
+  // same real timing manual ground roll uses (see "ground roll accelerates..." above).
+  for (let i = 0; i < 60 * 15; i++) {
+    throttle = Math.min(1, throttle + dt * 1.4);
+    updateGroundRoll(ground, { throttleDown: false }, dt, 'runway', throttle);
+    speeds.push(ground.groundSpeed);
+  }
+  // Reaches TAKEOFF_SPEED-class velocity (56 m/s) using the SAME terminal-velocity
+  // physics as manual roll (~62-63 m/s terminal) — not a separate unbounded model.
+  assert.ok(speeds.some((s) => s >= 56), 'auto takeoff never reached rotation speed with the shared ground-roll model');
+  assert.ok(Math.max(...speeds) < 70, 'auto takeoff ground speed exceeded the physical terminal velocity — model diverged');
+  // Monotonically non-decreasing while accelerating (throttle ramping, no braking) —
+  // no snap/regression frame to frame.
+  for (let i = 1; i < speeds.length; i++) {
+    assert.ok(speeds[i] >= speeds[i - 1] - 1e-9, `speed decreased frame ${i}: ${speeds[i - 1]} -> ${speeds[i]}`);
+  }
+});
