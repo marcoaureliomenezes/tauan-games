@@ -1,4 +1,4 @@
-import { MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR } from './config.js';
+import { MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, MISSILES_ROD } from './config.js';
 
 export function createServiceState(testMode = false) {
   return {
@@ -26,6 +26,7 @@ export function updateService(service, dt, player) {
     player.missiles = MISSILES_LIGHT.MAX;
     player.heavyMissiles = MISSILES_HEAVY.MAX;
     player.nuclearMissiles = MISSILES_NUCLEAR.MAX;
+    player.rodMissiles = MISSILES_ROD.MAX; // T-03/D-3: rod refill at service like HVY/NUK
     service.active = false;
     service.phase = 'complete';
     return true;

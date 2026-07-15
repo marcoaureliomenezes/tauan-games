@@ -17,6 +17,7 @@ import { input, installListeners, onAction } from './input.js';
 import { jet, updatePlayer, playerHit, barrelRoll, firePosition, respawnJet, respawnAndRelaunch } from './player.js';
 import { updateTargets } from './targets.js';
 import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups, spawnNuclearMissile, updateNuclears } from './projectiles.js';
+import { spawnRodMissile, updateRodMissiles } from './rod-missiles.js';
 import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } from './hud.js';
 import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver, spawnMission } from './missions.js';
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
@@ -273,6 +274,16 @@ function fireNuclearMissile() {
   spawnNuclearMissile(_fOrig.clone(), locked, jet.quaternion);
 }
 
+// ─── Disparo de rod cinético (R) — supply 4, perfura até 3 alvos em cadeia ───
+function fireRodMissile() {
+  if (!game.running || game.flags.paused || game.player.rodMissiles <= 0) return;
+  const locked = missileLockedTarget();
+  firePosition(_fOrig, 1.5);
+  // Rod dispara sem exigir lock: seeda no alvo travado se houver, senão no mais
+  // próximo válido dentro do raio de ação (D-3) — spawnRodMissile resolve isso.
+  spawnRodMissile(_fOrig.clone(), locked, jet.quaternion);
+}
+
 // ─── Listeners de ação ───────────────────────────────────────────────────────
 installListeners();
 
@@ -312,6 +323,7 @@ onAction('fire', handleStartOrFire);    // Space/Z (inicia se parado, dispara se
 onAction('missile', () => { audio.init(); fireMissile(); });
 onAction('heavyMissile', () => { audio.init(); fireHeavyMissile(); });
 onAction('nuclearMissile', () => { audio.init(); fireNuclearMissile(); });
+onAction('rodMissile', () => { audio.init(); fireRodMissile(); });
 onAction('cameraMode', () => { audio.init(); cycleCameraMode(game.missionRealism.camera); });
 onAction('eject', () => {
   audio.init();
@@ -420,6 +432,7 @@ function tick() {
     updateBullets(dt, jet.position, playerHit);
     updateMissiles(dt);
     updateNuclears(dt);
+    updateRodMissiles(dt);
     updateNuclearFx(dt);
     updateTargets(dt, jet.position);
     updateBoss(dt, jet.position, playerHit);

@@ -15,7 +15,8 @@ import assert from 'node:assert/strict';
 
 import { createRng } from '../../../aero-fighters/src/rng.js';
 import { HIT_PROBABILITY, rollMissileHit, selectRodTargets } from '../../../aero-fighters/src/weapons-core.js';
-import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR } from '../../../aero-fighters/src/config.js';
+import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR, MISSILES_ROD } from '../../../aero-fighters/src/config.js';
+import { createServiceState, startService, updateService } from '../../../aero-fighters/src/service-scene.js';
 
 const LAUNCHES_PER_BUCKET = 100;
 const HIT_TOLERANCE = 0.02; // ±2%
@@ -225,4 +226,49 @@ test('AC-05: light + heavy missiles hit ~80% ± 2% in every range bucket, and ge
       }
     }
   }
+});
+
+// ─── T-03 / AC-07 / D-3: rod chain end-to-end (exercises the exact selectRodTargets
+// call rod-missiles.js#spawnRodMissile makes) — 3 in radius -> 3 kills; 2 -> 2 kills
+// then expend; a 4th target outside the action radius is never chained. ───────────
+test('AC-07: MISSILES_ROD config exists with D-3 parameters (2x light speed, ammo 4)', () => {
+  assert.equal(MISSILES_ROD.MAX, 4);
+  assert.equal(MISSILES_ROD.INITIAL_SPD, MISSILES_LIGHT.INITIAL_SPD * 2);
+  assert.equal(MISSILES_ROD.TRACKING_SPD, MISSILES_LIGHT.TRACKING_SPD * 2);
+  assert.ok(MISSILES_ROD.DAMAGE > 0);
+});
+
+test('AC-07: rod chain kills exactly 3 for 3 clustered in-radius targets in one launch', () => {
+  const origin = { x: 0, y: 0, z: 0 };
+  const targets = [
+    makeTarget('k1', 40, 0, 0),
+    makeTarget('k2', 0, 0, 50),
+    makeTarget('k3', -30, 0, 30),
+    makeTarget('outside', ROD_RADIUS + 300, 0, 0),
+  ];
+  const chain = selectRodTargets(targets, origin, ROD_RADIUS, 3);
+  assert.equal(chain.length, 3);
+  for (const t of chain) t.dead = true; // one rod launch pierces the whole chain
+  assert.equal(targets.filter((t) => t.dead).length, 3);
+  assert.equal(targets.find((t) => t.id === 'outside').dead, false, 'target outside the action radius was chained');
+});
+
+test('AC-07: rod chain kills exactly 2 then expends when fewer than 3 valid targets are in radius', () => {
+  const origin = { x: 0, y: 0, z: 0 };
+  const targets = [makeTarget('k1', 40, 0, 0), makeTarget('k2', 0, 0, 50)];
+  const chain = selectRodTargets(targets, origin, ROD_RADIUS, 3);
+  assert.equal(chain.length, 2);
+  for (const t of chain) t.dead = true;
+  assert.equal(targets.filter((t) => t.dead).length, 2);
+});
+
+test('AC-07: rod ammo refills to MISSILES_ROD.MAX at service completion, like HVY/NUK', () => {
+  // service-scene.js is pure (no DOM) — exercises the REAL refill code path (T-03).
+  const player = { missiles: 0, heavyMissiles: 0, nuclearMissiles: 0, rodMissiles: 0 };
+  const service = createServiceState(true);
+  startService(service);
+  updateService(service, 2, player);
+  assert.equal(player.rodMissiles, 0, 'refill must not happen before service completes');
+  updateService(service, 3, player);
+  assert.equal(player.rodMissiles, MISSILES_ROD.MAX);
 });

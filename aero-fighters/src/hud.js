@@ -11,6 +11,7 @@ const scoreEl     = document.getElementById('score');
 const missilesEl = document.getElementById('missiles');
 const heavyEl    = document.getElementById('heavy-missiles');
 const nuclearEl  = document.getElementById('nuclear-missiles');
+const rodEl      = document.getElementById('rod-missiles');
 const altEl      = document.getElementById('altitude');
 const targetsEl  = document.getElementById('targets');
 const missionEl  = document.getElementById('mission');
@@ -22,7 +23,7 @@ const approachEl = document.getElementById('approach');
 const bossHudEl  = document.getElementById('boss-hud');
 const bossFillEl = document.getElementById('boss-bar-fill');
 
-const _h = { lives:-1, hp:-1, score:-1, msls:-1, hvy:-1, nuk:-1, alt:-1, tgt:'', mis:-1, spd:-1, thr:-1, stall:null, guide:'', boss:-1 };
+const _h = { lives:-1, hp:-1, score:-1, msls:-1, hvy:-1, nuk:-1, rod:-1, alt:-1, tgt:'', mis:-1, spd:-1, thr:-1, stall:null, guide:'', boss:-1 };
 
 /** Atualiza HUD lendo de `game.player` e flags. Mudanças só renderizam o que mudou. */
 export function updateHUD() {
@@ -42,6 +43,11 @@ export function updateHUD() {
     _h.nuk = game.player.nuclearMissiles;
     nuclearEl.textContent = 'T NUK: ' + _h.nuk;
     nuclearEl.style.color = _h.nuk > 0 ? '#00ff44' : '#444444';
+  }
+  if (rodEl && game.player.rodMissiles !== _h.rod) {
+    _h.rod = game.player.rodMissiles;
+    rodEl.textContent = 'R ROD: ' + _h.rod;
+    rodEl.style.color = _h.rod > 0 ? '#dddddd' : '#444444';
   }
   // Altímetro honesto (WS-3): metros reais, sem fator x10
   const alt = Math.max(0, Math.floor(game.player.y));

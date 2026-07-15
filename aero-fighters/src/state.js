@@ -65,6 +65,7 @@ function createInitialState() {
       missiles: 100,         // mísseis leves (X)
       heavyMissiles: 10,     // mísseis pesados (B) — dano 5x, supply limitado
       nuclearMissiles: 3,    // mísseis nucleares (N) — devastadores, supply 3
+      rodMissiles: 4,        // mísseis "rod" (R) — cinéticos, perfuram até 3 alvos (D-3)
       speed: 0, throttle: 0.05, stalled: false,
     },
     flags: {

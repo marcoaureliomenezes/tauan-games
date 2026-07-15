@@ -40,6 +40,7 @@ const KEY_ACTIONS = {
   KeyX:         'missile',
   KeyB:         'heavyMissile',
   KeyT:         'nuclearMissile',
+  KeyR:         'rodMissile',
   KeyC:         'cameraMode',
   KeyJ:         'eject',
   ShiftLeft:    'roll',

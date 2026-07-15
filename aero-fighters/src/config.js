@@ -88,6 +88,18 @@ export const MISSILES_NUCLEAR = {
 /** Alias mantido para compatibilidade — aponta para light */
 export const MISSILES = MISSILES_LIGHT;
 
+/** Míssil "rod" (R) — cinético, 2x mais rápido que o leve (D-3), perfura até 3 alvos
+ * em cadeia dentro do raio de ação da nuke (MISSILES_NUCLEAR.BLAST_RADIUS, reusado —
+ * ver rod-missiles.js). Sem warhead: DAMAGE é um overkill garantido de 1 hit por alvo
+ * válido, não uma explosão de área. Supply limitado como HVY/NUK. */
+export const MISSILES_ROD = {
+  MAX: 4,
+  INITIAL_SPD: 160,   // D-3: 2x MISSILES_LIGHT.INITIAL_SPD (80)
+  TRACKING_SPD: 260,  // D-3: 2x MISSILES_LIGHT.TRACKING_SPD (130)
+  TURN_RATE: 0.65,    // homing sempre agressivo — perfurador, não há distinção MISS
+  DAMAGE: 9999,       // cinético: garante kill em 1 impacto em qualquer alvo válido
+};
+
 /** Barrel roll */
 export const ROLL = {
   DUR: 0.5,
