@@ -109,29 +109,45 @@ function inhaumaDetailNoise(x, z) {
   return (fbm2D(x + 8000, z - 5000, { freq: 0.045, oct: 3 }) - 0.5) * 6;
 }
 
-// Cristas ríspidas (T-07 polish, visual QA fix-forward 2026-07-15): termo de detalhe
-// ridged sobre o DEM, escalado por ALTITUDE — sem isso o silhueta dos cumes lê como
-// "domo liso" mesmo com o DEM real por baixo (a malha de 48 m/vértice do chunk, T-07
-// D-6, resolve a macro-forma do vale mas não crateras/lascas de rocha). Amplitude
-// RAMPEIA de 0 em CREST_RAMP_START_M até CREST_MAX_AMP_M em CREST_RAMP_PEAK_M — o
-// piso do vale, estradas, rio, cidade terraceada (T-09) e a clareira do aeroporto
-// ficam TODOS bem abaixo da rampa (< 20 m), então nenhum é tocado. O termo só SOMA
-// (ridgedFbm2D ∈ [0,1), nunca negativo) — nunca abaixa um ponto, então não pode
-// fechar a passagem voável (AC-01/AC-02, MIN_PASS_WIDTH) nem submergir nada; a
-// rampa usa a altura CRUA do DEM (antes de qualquer entalhe local) como driver, para
-// não haver realimentação com o próprio termo. Comprimento de onda ~280 m ("poucas
-// centenas de metros") — ~5-6 amostras por onda na grade de 48 m do chunk (TERR_STEP,
-// D-6), então a malha resolve sem serrilhar (checado por WS-1 abaixo). Passa PELA
-// verdade de superfície única (D-2/WS-1) — colisão acompanha de graça.
+// Cristas ríspidas (T-07 polish, visual QA fix-forward 2026-07-15; ROUND 2
+// 2026-07-15: a rodada anterior — 30 m de amplitude, 280 m de comprimento de onda,
+// grade de 48 m/vértice — ainda lia como "domo liso" na revisão de screenshot do
+// orquestrador. A malha de 48 m amostra um comprimento de onda de 280 m a ~5-6
+// amostras/onda — resolve a ondulação macro mas não gera uma silhueta serrilhada
+// reconhecível; e uma única oitava de baixa frequência produz uma curva suave demais
+// mesmo bem amostrada.) Dois termos de detalhe ridged sobre o DEM, escalados pela
+// MESMA rampa de altitude — sem isso o silhueta dos cumes lê como "domo liso" mesmo
+// com o DEM real por baixo. Amplitude RAMPEIA de 0 em CREST_RAMP_START_M até o pico em
+// CREST_RAMP_PEAK_M — o piso do vale, estradas, rio, cidade terraceada (T-09) e a
+// clareira do aeroporto ficam TODOS bem abaixo da rampa (< 20 m), então nenhum é
+// tocado. Os dois termos só SOMAM (ridgedFbm2D ∈ [0,1), nunca negativo) — nunca abaixam
+// um ponto, então não podem fechar a passagem voável (AC-01/AC-02, MIN_PASS_WIDTH) nem
+// submergir nada; a rampa usa a altura CRUA do DEM (antes de qualquer entalhe local)
+// como driver, para não haver realimentação com o próprio termo. Passa PELA verdade de
+// superfície única (D-2/WS-1) — colisão acompanha de graça.
+//   - Termo primário: ~200 m de comprimento de onda, amplitude até CREST_MAX_AMP_M
+//     (55-75 m pedido) — na grade de 48 m já dá ~4 amostras/onda (melhor que antes);
+//     na grade mais fina do lever 1 (TERR.chunkSize, abaixo) sobe para ~6.
+//   - Termo secundário (serrilhado fino): ~90 m de comprimento de onda, amplitude
+//     CREST_DETAIL2_AMP_M — deliberadamente perto do limite de Nyquist na grade antiga
+//     de 48 m (quase invisível lá, por isso o lever 1 encolhe TERR.chunkSize), mas
+//     resolve como dentes/lascas visíveis na grade mais fina. Frequência 2.2× a
+//     primária (não 2× exato) e coordenadas deslocadas de forma independente — evita
+//     alinhamento periódico entre as duas oitavas (que criaria um padrão repetitivo
+//     em vez de uma silhueta irregular).
+// WS-1 (mesh==collision, bound <15 m) e o benchmark de custo de rebuild (D-6) foram
+// re-checados com estes valores — ver o handoff desta rodada.
 const CREST_RAMP_START_M = 480;  // = ROCK_LINE_M (T-07) — cristas só onde a rocha já aparece
 const CREST_RAMP_PEAK_M = 1100;  // perto do pico do DEM (~1281 m) — rampa total antes do topo
-const CREST_MAX_AMP_M = 30;      // dentro da faixa 25-40 m pedida
+const CREST_MAX_AMP_M = 65;         // dentro da faixa 55-75 m pedida (ROUND 2)
+const CREST_DETAIL2_AMP_M = 15;     // 2º oitava de serrilhado fino — faixa ~15 m pedida
 function ridgedCrestDetailAt(x, z, demH) {
   const t = Math.max(0, Math.min(1, (demH - CREST_RAMP_START_M) / (CREST_RAMP_PEAK_M - CREST_RAMP_START_M)));
   if (t <= 0) return 0;
   const ramp = t * t * (3 - 2 * t); // smoothstep — rampa sem dobra em CREST_RAMP_START_M
-  const ridge = ridgedFbm2D(x + 44000, z - 38000, { freq: 1 / 280, oct: 4 });
-  return ridge * ramp * CREST_MAX_AMP_M;
+  const ridge = ridgedFbm2D(x + 44000, z - 38000, { freq: 1 / 200, oct: 4 });
+  const ridge2 = ridgedFbm2D(x - 91000, z + 27000, { freq: 1 / 90, oct: 3 });
+  return ramp * (ridge * CREST_MAX_AMP_M + ridge2 * CREST_DETAIL2_AMP_M);
 }
 
 /** Altura base do terreno em coords de mundo, antes de cortes de estrada. */
@@ -196,15 +212,18 @@ const SNOW_LINE_JITTER_M = 55;     // amplitude do ruído que quebra a borda ret
 const ROCK_LINE_M = 480;           // acima disso, rocha nua mesmo em terreno raso
 const STEEP_SLOPE = 0.45;          // ~24° (dh/dm) — encosta íngrime o bastante p/ expor rocha
 const VERY_STEEP_SLOPE = 0.8;      // ~39° — rocha nua mesmo ACIMA da linha de neve (D-4/AC-04)
-// T-07 polish (visual QA fix-forward, 2026-07-15): abaixo do limiar de inclinação
-// STEEP_SLOPE, um ruído de "patch" ainda pode furar rocha nas encostas já MODERADAMENTE
-// íngremes — sem isso o corte era uma linha lisa e as cristas liam como "domo pintado
-// de um tom só" (o problema reportado pelo orquestrador: "rock barely shows"). Só
-// EMPURRA para rocha (nunca suprime uma encosta genuinamente íngreme) e nunca age
-// abaixo de ROCK_PATCH_MIN_SLOPE — o piso do vale (quase plano) nunca ganha afloramento
-// por acidente.
-const ROCK_PATCH_MIN_SLOPE = 0.20;
-const ROCK_PATCH_JITTER = 0.22;
+// T-07 polish (visual QA fix-forward, 2026-07-15; ROUND 2 2026-07-15: patch coverage
+// widened and jitter strengthened — the first round's rock patches still read too
+// faint/sparse to break up the crest silhouette in color once the geometry got
+// craggier, per the orchestrator's follow-up screenshot review). Abaixo do limiar de
+// inclinação STEEP_SLOPE, um ruído de "patch" ainda pode furar rocha nas encostas já
+// MODERADAMENTE íngremes — sem isso o corte era uma linha lisa e as cristas liam como
+// "domo pintado de um tom só". Só EMPURRA para rocha (nunca suprime uma encosta
+// genuinamente íngreme) e nunca age abaixo de ROCK_PATCH_MIN_SLOPE — o piso do vale
+// (quase plano) nunca ganha afloramento por acidente.
+const ROCK_PATCH_MIN_SLOPE = 0.16;  // ROUND 2: down from 0.20 — more of the newly-serrated
+                                     // slope range (lever 2 above) is eligible for a rock patch
+const ROCK_PATCH_JITTER = 0.30;     // ROUND 2: up from 0.22 — patches trigger more readily
 
 // Ruído de baixa frequência (feições de centenas de metros, não um granulado de
 // pixel) que quebra a borda reta da linha de neve — coordenadas deslocadas para não
@@ -232,11 +251,12 @@ function isExposedRock(h, slope, x, z) {
   return slope + patch * ROCK_PATCH_JITTER >= STEEP_SLOPE;
 }
 
-// Ruído de alta frequência (T-07 polish) só para DITHER de cor — quebra o banding de
-// grandes faces planas de rocha de uma cor só (mesma escala aproximada de
-// `inhaumaDetailNoise`, coordenadas deslocadas para não correlacionar).
+// Ruído de alta frequência (T-07 polish; ROUND 2: amplitude ampliada de ±0.04 para
+// ±0.06 — a rocha ainda lia "plana" nos closeups pós-lever-2) só para DITHER de cor —
+// quebra o banding de grandes faces planas de rocha de uma cor só (mesma escala
+// aproximada de `inhaumaDetailNoise`, coordenadas deslocadas para não correlacionar).
 function rockDitherAt(x, z) {
-  return (fbm2D(x + 61000, z + 52000, { freq: 0.05, oct: 2 }) - 0.5) * 0.08; // ±0.04
+  return (fbm2D(x + 61000, z + 52000, { freq: 0.05, oct: 2 }) - 0.5) * 0.12; // ±0.06
 }
 
 /** Cor de bioma por vértice: altitude + inclinação local (T-07, AC-04; polish T-07
@@ -280,7 +300,39 @@ export function biomeColor(h, slope, x, z, out, i) {
 // para ~23-37 ms, seg=96 para ~31-47 ms — 2-3× mais caro, estourando claramente o
 // orçamento de "no máximo 1 rebuild por frame" mesmo no caso médio. `seg` permanece
 // 54, como a release permite quando o orçamento não se sustenta.
-const TERR = { chunkSize: 2600, radius: 1, seg: 54 };
+//
+// T-07 polish ROUND 2 (2026-07-15): `chunkSize` 2600 -> 2100 (grid step 48.1 m ->
+// 38.9 m, same seg=54 so IDENTICAL per-chunk rebuild cost — the D-6 budget above is
+// untouched). Two alternatives were evaluated and rejected instead of the literal
+// 2600->1800 suggestion:
+//   - `radius: 2` (5x5=25 chunks) to compensate for a smaller chunkSize's shrunken
+//     streaming window: REJECTED — deterministic triangle-budget blowout, not a
+//     borderline call. Terrain alone would cost 25*(54*54*2)=145800 triangles
+//     (vs 9*5832=52488 today), a +93312 delta that alone exceeds the entire ~52-54k
+//     headroom under the e2e "renderer budget" test's 200000 cap (measured baseline
+//     146276-147860, tests/aero-fighters/inhauma-fidelity.spec.js) — no empirical run
+//     needed, the arithmetic is exact and chunk count/seg are fixed. Reverted per the
+//     task's own fallback ("if it exceeds, revert to 3x3").
+//   - `chunkSize: 1800` at `radius: 1` (the literal ask): the streamed window's
+//     worst-case forward coverage right before a chunk-boundary recycle is
+//     `radius*chunkSize` (proven geometrically: the window is re-centered on the
+//     NEAREST chunk to the player, so coverage decays from (radius+1)*chunkSize just
+//     after a recycle down to radius*chunkSize just before the next one — this is
+//     NOT the "window width / 2" naive estimate, which is the BEST case, not the
+//     worst case). At chunkSize=1800: worst case = 1800 m < sceneFog.far (2600 m,
+//     aero-fighters/src/maps/inhauma.js) for a full 800 m / 1800 m (44%) of every
+//     chunk traversal — a real, non-transient pop-in risk, not a one-frame hitch
+//     (confirmed empirically: hiding every non-terrain-chunk scene object and
+//     re-rendering shows the streamed chunks alone are what silhouettes the crest in
+//     every far vantage; the coverage math applies to real flight, not just statics).
+// 2100 m keeps the SAME safety property the current 2600 has today at a meaningfully
+// finer grid: worst case coverage = 2100 m, only 500 m short of fogFar — at that
+// distance THREE.Fog's linear blend is already ~71% toward the fog color (900 near /
+// 2600 far), and the sky dome's horizon band is baked to the EXACT same fog color
+// (0xb6d0c4 — confirmed via direct pixel sampling), so the residual gap reads as a
+// soft continuation of the existing fog falloff rather than a hard edge. `radius`
+// stays 1 (9 chunks, unchanged triangle/draw-call cost).
+const TERR = { chunkSize: 2100, radius: 1, seg: 54 };
 const TERRAIN_COLLISION_RADIUS = 1e9;
 // Passo (m) da grade do mesh — usado pelo bloco de gradiente local (biomeColor, T-07)
 // e por inhaumaVisualSurfaceHeight (WS-1) abaixo. Movido para cima de
