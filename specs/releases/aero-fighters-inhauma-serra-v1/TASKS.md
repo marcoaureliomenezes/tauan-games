@@ -57,7 +57,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
     clearing operational.
   - `npm run validate:aero-map` green.
 
-### [-] T-04 — Re-author the 4 road corridors along the new valley
+### [x] T-04 — Re-author the 4 road corridors along the new valley
 - **Owner:** software-engineer
 - **Write-set:** `aero-fighters/src/maps/inhauma-road-defs.js`
 - **Preconditions:** T-03 green
