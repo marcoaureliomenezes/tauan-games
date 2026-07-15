@@ -8,7 +8,7 @@
 import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
 import { applyAirportClearing } from '../landing-zones.js';
-import { fbm2D } from './noise.js';
+import { fbm2D, ridgedFbm2D } from './noise.js';
 import { applyInhaumaRoadBed, nearAnyRoad } from './inhauma-roads.js';
 import { getPortalMounds } from './inhauma-road-defs.js';
 import { updateRoadTraffic } from './inhauma-traffic.js';
@@ -109,10 +109,39 @@ function inhaumaDetailNoise(x, z) {
   return (fbm2D(x + 8000, z - 5000, { freq: 0.045, oct: 3 }) - 0.5) * 6;
 }
 
+// Cristas ríspidas (T-07 polish, visual QA fix-forward 2026-07-15): termo de detalhe
+// ridged sobre o DEM, escalado por ALTITUDE — sem isso o silhueta dos cumes lê como
+// "domo liso" mesmo com o DEM real por baixo (a malha de 48 m/vértice do chunk, T-07
+// D-6, resolve a macro-forma do vale mas não crateras/lascas de rocha). Amplitude
+// RAMPEIA de 0 em CREST_RAMP_START_M até CREST_MAX_AMP_M em CREST_RAMP_PEAK_M — o
+// piso do vale, estradas, rio, cidade terraceada (T-09) e a clareira do aeroporto
+// ficam TODOS bem abaixo da rampa (< 20 m), então nenhum é tocado. O termo só SOMA
+// (ridgedFbm2D ∈ [0,1), nunca negativo) — nunca abaixa um ponto, então não pode
+// fechar a passagem voável (AC-01/AC-02, MIN_PASS_WIDTH) nem submergir nada; a
+// rampa usa a altura CRUA do DEM (antes de qualquer entalhe local) como driver, para
+// não haver realimentação com o próprio termo. Comprimento de onda ~280 m ("poucas
+// centenas de metros") — ~5-6 amostras por onda na grade de 48 m do chunk (TERR_STEP,
+// D-6), então a malha resolve sem serrilhar (checado por WS-1 abaixo). Passa PELA
+// verdade de superfície única (D-2/WS-1) — colisão acompanha de graça.
+const CREST_RAMP_START_M = 480;  // = ROCK_LINE_M (T-07) — cristas só onde a rocha já aparece
+const CREST_RAMP_PEAK_M = 1100;  // perto do pico do DEM (~1281 m) — rampa total antes do topo
+const CREST_MAX_AMP_M = 30;      // dentro da faixa 25-40 m pedida
+function ridgedCrestDetailAt(x, z, demH) {
+  const t = Math.max(0, Math.min(1, (demH - CREST_RAMP_START_M) / (CREST_RAMP_PEAK_M - CREST_RAMP_START_M)));
+  if (t <= 0) return 0;
+  const ramp = t * t * (3 - 2 * t); // smoothstep — rampa sem dobra em CREST_RAMP_START_M
+  const ridge = ridgedFbm2D(x + 44000, z - 38000, { freq: 1 / 280, oct: 4 });
+  return ridge * ramp * CREST_MAX_AMP_M;
+}
+
 /** Altura base do terreno em coords de mundo, antes de cortes de estrada. */
 function inhaumaBaseHeight(x, z) {
   // DEM real (Chamonix U-valley, T-01/T-02) + micro-relevo de alta frequência.
-  let h = sampleDemHeight(x, z) + inhaumaDetailNoise(x, z);
+  const demH = sampleDemHeight(x, z);
+  let h = demH + inhaumaDetailNoise(x, z);
+
+  // Cristas ríspidas acima da linha de rocha (T-07 polish) — ver nota acima.
+  h += ridgedCrestDetailAt(x, z, demH);
 
   // Colinas de portal de túnel (WS-2) — encostas onde as estradas entram em túnel.
   h += portalMoundContribution(x, z);
@@ -167,6 +196,15 @@ const SNOW_LINE_JITTER_M = 55;     // amplitude do ruído que quebra a borda ret
 const ROCK_LINE_M = 480;           // acima disso, rocha nua mesmo em terreno raso
 const STEEP_SLOPE = 0.45;          // ~24° (dh/dm) — encosta íngrime o bastante p/ expor rocha
 const VERY_STEEP_SLOPE = 0.8;      // ~39° — rocha nua mesmo ACIMA da linha de neve (D-4/AC-04)
+// T-07 polish (visual QA fix-forward, 2026-07-15): abaixo do limiar de inclinação
+// STEEP_SLOPE, um ruído de "patch" ainda pode furar rocha nas encostas já MODERADAMENTE
+// íngremes — sem isso o corte era uma linha lisa e as cristas liam como "domo pintado
+// de um tom só" (o problema reportado pelo orquestrador: "rock barely shows"). Só
+// EMPURRA para rocha (nunca suprime uma encosta genuinamente íngreme) e nunca age
+// abaixo de ROCK_PATCH_MIN_SLOPE — o piso do vale (quase plano) nunca ganha afloramento
+// por acidente.
+const ROCK_PATCH_MIN_SLOPE = 0.20;
+const ROCK_PATCH_JITTER = 0.22;
 
 // Ruído de baixa frequência (feições de centenas de metros, não um granulado de
 // pixel) que quebra a borda reta da linha de neve — coordenadas deslocadas para não
@@ -176,28 +214,61 @@ function snowLineJitterAt(x, z) {
   return (fbm2D(x - 20000, z + 15000, { freq: 0.0009, oct: 3 }) - 0.5) * 2 * SNOW_LINE_JITTER_M;
 }
 
-/** Cor de bioma por vértice: altitude + inclinação local (T-07, AC-04). Ordem de
- *  avaliação: neve (cota alta E não muito íngreme) → rocha (íngreme OU cota alta) →
- *  bandas de vegetação por cota. Lambert vertex-colored (sem PBR) preservado.
+// Ruído de "patch" de rocha (T-07 polish) — escala de dezenas/poucas centenas de
+// metros (freq maior que snowLineJitter, que é uma feição de centenas de metros;
+// menor que inhaumaDetailNoise, que é granulado de perto). Coordenadas deslocadas
+// (não correlaciona com nenhum outro canal de ruído do arquivo).
+function rockPatchNoiseAt(x, z) {
+  return fbm2D(x + 71000, z - 63000, { freq: 0.006, oct: 3 }); // [0,1)
+}
+
+/** Verdadeiro se o ponto deve ler como rocha exposta: já rocha por inclinação/cota
+ *  (regra original, sem ruído — nunca suprimida), OU uma encosta já moderadamente
+ *  íngreme que o ruído de patch empurra sobre o limiar (T-07 polish). */
+function isExposedRock(h, slope, x, z) {
+  if (slope >= STEEP_SLOPE || h > ROCK_LINE_M) return true;
+  if (slope < ROCK_PATCH_MIN_SLOPE) return false;
+  const patch = rockPatchNoiseAt(x, z);
+  return slope + patch * ROCK_PATCH_JITTER >= STEEP_SLOPE;
+}
+
+// Ruído de alta frequência (T-07 polish) só para DITHER de cor — quebra o banding de
+// grandes faces planas de rocha de uma cor só (mesma escala aproximada de
+// `inhaumaDetailNoise`, coordenadas deslocadas para não correlacionar).
+function rockDitherAt(x, z) {
+  return (fbm2D(x + 61000, z + 52000, { freq: 0.05, oct: 2 }) - 0.5) * 0.08; // ±0.04
+}
+
+/** Cor de bioma por vértice: altitude + inclinação local (T-07, AC-04; polish T-07
+ *  fix-forward). Ordem de avaliação: neve (cota alta E não muito íngreme, quase
+ *  branca — paridade com o mapa de ilhas) → rocha exposta (íngreme/cota alta OU
+ *  patch de rocha em encosta moderada) → bandas de vegetação por cota (vale mais
+ *  verde, piso de floresta distinto). Lambert vertex-colored (sem PBR) preservado.
  *  Exportado (sem THREE) para teste direto em Node — ver AC-04 em test-aero-unit.js. */
 export function biomeColor(h, slope, x, z, out, i) {
   let r, g, b;
   const snowLine = SNOW_LINE_M + snowLineJitterAt(x, z);
   if (h >= snowLine && slope < VERY_STEEP_SLOPE) {
-    // Neve — branca no plano, um pouco mais fria/acinzentada nas encostas moderadas
-    // (a neve "escorrega" e fica mais fina perto do limite de inclinação sustentável).
+    // Neve — quase branca no plano (≈0.93,0.95,0.97, paridade com a neve do mapa de
+    // ilhas — world.js#createIslands), um pouco mais fria/acinzentada nas encostas
+    // moderadas (a neve "escorrega" e fica mais fina perto do limite sustentável).
     const t = Math.min(1, slope / STEEP_SLOPE);
-    r = 0.93 - t * 0.11; g = 0.95 - t * 0.09; b = 0.99 - t * 0.05;
-  } else if (slope >= STEEP_SLOPE || h > ROCK_LINE_M) {
-    // Rocha exposta — cinza/marrom; mais escura em paredões muito íngremes.
-    const dark = slope >= VERY_STEEP_SLOPE ? 0.82 : 1;
-    r = 0.44 * dark; g = 0.41 * dark; b = 0.36 * dark;
+    r = 0.93 - t * 0.09; g = 0.95 - t * 0.08; b = 0.97 - t * 0.04;
+  } else if (isExposedRock(h, slope, x, z)) {
+    // Rocha exposta — cinza-marrom escuro (mais escuro/saturado que antes, para
+    // contrastar com a neve quase branca e o verde do vale); mais escura em
+    // paredões muito íngremes; dither por vértice quebra o banding de faces grandes.
+    const dark = slope >= VERY_STEEP_SLOPE ? 0.78 : 1;
+    const dither = rockDitherAt(x, z);
+    r = (0.40 + dither) * dark; g = (0.35 + dither) * dark; b = (0.30 + dither) * dark;
   } else if (h < WATER_LEVEL + 1.5) { r = 0.74; g = 0.68; b = 0.46; }       // areia/margem
-  else if (h < 18) { r = 0.33; g = 0.50; b = 0.24; }                        // campo verde (vale)
-  else if (h < 48) { r = 0.20; g = 0.42; b = 0.18; }                        // mata densa (piso da floresta)
-  else if (h < 180) { r = 0.27; g = 0.40; b = 0.20; }                       // mata rala / subalpina
-  else { r = 0.42; g = 0.44; b = 0.30; }                                   // campo alpino/rocha esparsa
-  out[i] = r; out[i + 1] = g; out[i + 2] = b;
+  else if (h < 18) { r = 0.16; g = 0.55; b = 0.16; }                        // campo verde (vale) — verde vivo, não oliva
+  else if (h < 48) { r = 0.12; g = 0.40; b = 0.14; }                        // mata densa (piso da floresta) — mais escura/distinta do campo
+  else if (h < 180) { r = 0.24; g = 0.37; b = 0.19; }                       // mata rala / subalpina
+  else { r = 0.34; g = 0.38; b = 0.25; }                                   // campo alpino/rocha esparsa
+  out[i] = Math.min(1, Math.max(0, r));
+  out[i + 1] = Math.min(1, Math.max(0, g));
+  out[i + 2] = Math.min(1, Math.max(0, b));
 }
 
 // ─── Terreno infinito visual (chunks reciclados) ─────────────────────────────
