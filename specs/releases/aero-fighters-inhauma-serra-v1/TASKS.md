@@ -29,7 +29,7 @@ Ordering: T-01 → T-02 → T-03 gate the rest. T-04..T-09 may proceed once T-03
     (Tilezen/joerd). Raw asset ≤ ~8 MB (measured; downscale/crop if over).
   - The tool is never imported by any runtime module. Re-running reproduces the asset.
 
-### [-] T-02 — Node-safe bilinear heightmap sampler + unit tests
+### [x] T-02 — Node-safe bilinear heightmap sampler + unit tests
 - **Owner:** software-engineer (unit tests co-owned by qa-engineer)
 - **Write-set:** `aero-fighters/src/maps/heightmap-sampler.js` (new),
   `tests/aero-fighters/tools/test-aero-unit.js` (extend)
