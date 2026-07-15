@@ -54,7 +54,7 @@ files). One `[-]` per lane at a time.
 ## Lane A — Ground & Airframe
 
 ### T-04 — Runway/taxiway visual clarity pass
-- [ ] **Owner:** software-engineer · **Lane:** A · **Write-set:** `airport.js`.
+- [-] **Owner:** software-engineer · **Lane:** A · **Write-set:** `airport.js`.
 - **Preconditions:** serra release shipped (airport at `(-560, 320)`); none within this release.
 - **Do:** extend the shared `addRunwayFurniture` family with threshold stripes, aiming-point / touchdown-zone markings, taxiway centerline; make `createInhaumaAirport` use the shared furniture. Procedural geometry only; other maps inherit via the shared helper.
 - **Done when:** Inhaúma runway shows threshold + centerline + touchdown-zone markings + edge lights + taxiway centerline; `getAirportDiagnostics` still valid; `validate:aero-map` + e2e green; no regression to other maps' airports.
