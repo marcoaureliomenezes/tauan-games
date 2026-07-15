@@ -82,7 +82,7 @@ files). One `[-]` per lane at a time.
 ## Lane B — Audio & Nuke
 
 ### T-08 — Turbine engine synth (100% synthesized)
-- [ ] **Owner:** software-engineer · **Lane:** B · **Write-set:** `audio.js`[`startEngine`/`stopEngine`/`setEngineRPM` internals + node fields].
+- [-] **Owner:** software-engineer · **Lane:** B · **Write-set:** `audio.js`[`startEngine`/`stopEngine`/`setEngineRPM` internals + node fields].
 - **Preconditions:** none (fully disjoint).
 - **Do:** replace propeller-like oscillators with a turbine model — swept-bandpass noise spool (center freq follows normalized RPM) + stacked high-freq whine (2–3 detuned oscillators, shepard-ish) + lowpass shaping; gains follow `speed`/`throttle`. Preserve public signatures + lazy-init + mute.
 - **Done when:** e2e — after first input the engine graph exists with turbine composition (whine oscillator layer + swept bandpass noise); no file/network fetch; mute works; `player.js` callers unchanged; audio-touching e2e green.
