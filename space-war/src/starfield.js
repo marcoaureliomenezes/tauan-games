@@ -296,7 +296,23 @@ export function updateStarfield() {
   const j = game.journey;
   const beta = j && j.active ? Math.min(0.995, j.beta) : 0;
   if (s.vel && s.vel.lengthSq() > 1) _dirFlight.copy(s.vel).normalize();
-  const fade = Math.max(systemFade(camera.position), j && j.active ? 0.85 : 0);
+  // GRADUAL e ancorado na REALIDADE (operador 2026-07-18): o corredor NÃO liga
+  // na fronteira do sistema. fade = posição × velocidade:
+  //   · posição (systemFade): dentro de um sistema o campo é INVISÍVEL — perto
+  //     de Sgr A✦ você vê o buraco negro e as estrelas S, não o corredor; ao
+  //     SAIR do sistema ele acende gradualmente, ao CHEGAR ele se apaga.
+  //   · velocidade: parado no vazio as estrelas são pontos ESTÁTICOS fracos;
+  //     acelerando, mais e mais acendem até o fluxo pleno no cruzeiro — e a
+  //     frenagem os desliga na mesma rampa.
+  const sysF = systemFade(camera.position);
+  const vNorm = j && j.active
+    ? Math.min(1, j.v / Math.max(1, j.vMax))
+    : Math.min(1, (s.speed || 0) / 60_000);
+  const fade = sysF * (0.18 + 0.82 * vNorm);
+  // curva QUADRÁTICA no uniform: no início da queima só uns poucos pontos
+  // acendem ("um ponto, depois mais pontos"), e a rampa engrossa até o fluxo
+  // pleno — o diagnóstico starfieldFade continua linear (contrato dos specs).
+  const fadeShaped = fade * fade;
   const pxA = pixelAngle();
   const e = camera.matrixWorld.elements;
   _right.set(e[0], e[1], e[2]).normalize();
@@ -307,7 +323,7 @@ export function updateStarfield() {
     u.uCam.value.copy(camera.position);
     u.uBeta.value = beta;
     u.uDir.value.copy(_dirFlight);
-    u.uFade.value = fade;
+    u.uFade.value = fadeShaped;
     u.uPxAngle.value = pxA;
     u.uSpeed.value = j && j.active ? j.v : (s.speed || 0);
     u.uCamRight.value.copy(_right);

@@ -531,6 +531,16 @@ function updateFlight(s, dt) {
 
   // --- Gravidade entra SEMPRE por cima do motor (nunca é lavada) ---
   s.vel.addScaledVector(accelG, dt);
+  // TETO FÍSICO de velocidade em voo livre (bug operador 2026-07-18): o rasante
+  // no buraco negro com passo de Euler INJETAVA energia (dv = a·dt com a→∞
+  // perto da singularidade) e cuspia a nave a velocidades "acima da luz",
+  // descontrolada, cruzando o campo inteiro de estrelas. Só a VIAGEM
+  // INTERESTELAR (cinemática própria, fora deste integrador) passa disso.
+  {
+    const spNow = s.vel.length();
+    const FREE_FLIGHT_MAX = 45_000;                    // > overdrive (31k), << cruzeiro warp
+    if (spNow > FREE_FLIGHT_MAX) s.vel.multiplyScalar(FREE_FLIGHT_MAX / spNow);
+  }
   s.dominant = g.dominant; s.gravMag = g.gravMag; s.noReturn = g.noReturn;
   s.altitude = g.altitude; s.escapeVel = g.escapeVel; s.canEscape = g.canEscape;
   s.circVel = g.circVel;
