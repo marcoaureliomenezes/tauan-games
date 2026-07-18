@@ -100,15 +100,44 @@ function normalize(root, len) {
   root.position.x = -c.x; root.position.z = -c.z;
 }
 
+// RIG das rodas: nos GLB Quaternius os nós de roda ficam na ORIGEM do modelo
+// com a geometria deslocada até o cubo — girar rotation.x direto faz a roda
+// ORBITAR a origem (a anomalia visível). Rig padrão de veículo (mesma técnica
+// dos exemplos de vehicle do three.js): centra a geometria no cubo, cria um
+// pivô no ponto do cubo e gira o pivô no eixo do eixo (X local).
+function rigWheels(root, g) {
+  const nodes = [];
+  root.traverse((o) => {
+    if (/wheel/i.test(o.name) && !(o.parent && /wheel/i.test(o.parent.name))) nodes.push(o);
+  });
+  for (const node of nodes) {
+    const box = new THREE.Box3().setFromObject(node);       // transforms locais = identidade
+    const c = box.getCenter(new THREE.Vector3());
+    const radius = box.getSize(new THREE.Vector3()).y / 2;  // unid. do modelo; escala depois
+    node.traverse((m) => {
+      if (!m.isMesh) return;
+      m.geometry = m.geometry.clone();                      // geometria é compartilhada entre clones
+      m.geometry.translate(-c.x, -c.y, -c.z);
+    });
+    const pivot = new THREE.Group();
+    pivot.rotation.order = 'YXZ';                           // Y = esterço, X = giro do eixo
+    pivot.position.copy(c);
+    node.parent.add(pivot);
+    pivot.add(node);
+    node.position.set(0, 0, 0);
+    g.userData.wheels.push({ pivot, radius: Math.max(radius, 0.05), front: c.z > 0.3 });
+  }
+}
+
 export function buildCarMesh(def) {
   const g = new THREE.Group();
   g.userData.wheels = [];
   loadModel(def.model).then((scene) => {
     const root = scene.clone(true);
     recolor(root, def.color);
+    rigWheels(root, g);                                     // em espaço do modelo, ANTES da escala
     normalize(root, def.key === 'civTruck' ? 6.5 : 4.3);
-    // rodas: nós cujo nome contém "wheel" giram com a velocidade
-    root.traverse((o) => { if (/wheel/i.test(o.name)) g.userData.wheels.push(o); });
+    for (const w of g.userData.wheels) w.radius *= root.scale.x;
     g.add(root);
   }).catch(() => {
     // fallback (offline/teste): caixa simples na cor do carro

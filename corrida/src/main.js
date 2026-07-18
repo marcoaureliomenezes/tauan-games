@@ -35,6 +35,7 @@ const G = {
   keys: {},
 };
 window.__corrida = G;             // diagnóstico p/ testes e2e
+G.camera = camera;                // p/ inspeção visual em debug (camOverride)
 
 // ── input ───────────────────────────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
@@ -166,6 +167,7 @@ function fmtT(t) {
 const _camPos = new THREE.Vector3();
 const _look = new THREE.Vector3();
 function updateCamera(dt) {
+  if (G.camOverride) { G.camOverride(camera); return; }   // debug/inspeção
   const st = G.player.st;
   const back = 9 + st.v * 0.06;
   const fx = -Math.sin(st.heading), fz = -Math.cos(st.heading);
@@ -227,7 +229,11 @@ function loop() {
       c.mesh.rotation.z = -input.steer * Math.min(0.5, Math.abs(c.st.v) / 60) * 0.12
         + c.st.roll;                                     // capotamento
       if (Math.abs(c.st.roll) > 1.2) c.mesh.position.y = c.st.pos.y + 0.7;
-      for (const w of c.mesh.userData.wheels) w.rotation.x += c.st.v * dt * 1.8;
+      // rodas: rolagem real (ω = v/r) no pivô do cubo; dianteiras esterçam
+      for (const w of c.mesh.userData.wheels) {
+        w.pivot.rotation.x += (c.st.v * dt) / w.radius;
+        if (w.front) w.pivot.rotation.y = input.steer * 0.42; // mesmo sentido do heading
+      }
       if (racing && !c.st.finished && c.st.lap > LAPS) {
         c.st.finished = true;
         if (c.isPlayer) finishRace();
