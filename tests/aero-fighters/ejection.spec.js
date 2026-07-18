@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test('MR ejection action enters parachute state from mayday', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=mr-ejection');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-ejection');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.keyboard.press('Space');
   await page.evaluate(() => {

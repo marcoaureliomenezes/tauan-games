@@ -4,12 +4,12 @@ const path = require('path');
 // NOTE: GROUND_STATES is kept as a local Set here intentionally.
 // Playwright specs run in a browser context via page.evaluate(); they cannot import
 // Node/ES-module source files directly. The canonical definition lives in
-// aero-fighters/src/sortie-state.js — keep both in sync if states ever change.
+// src/web-games/aero-fighters/src/sortie-state.js — keep both in sync if states ever change.
 const GROUND_STATES = new Set(['TAXI_OUT', 'TAKEOFF_ROLL', 'LANDING_ROLL', 'TAXI_IN']);
 const AIRPORT_ELEVATION = 0; // desertAirport.elevation
 
 async function openAero(page) {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=mr-sortie');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-sortie');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
 }
 
@@ -36,7 +36,7 @@ test('MR start enters taxi sortie state', async ({ page }) => {
 // Invariant A: player.y >= airportElevation (0) every frame in ground states.
 // Invariant B: no single-frame Δy > 1 m during LIFTOFF transition.
 test('E2E takeoff: y stays above airport elevation and liftoff delta <= 1m', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=mr-takeoff');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-takeoff');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
 
   // Start the sortie
@@ -116,7 +116,7 @@ test('E2E takeoff: y stays above airport elevation and liftoff delta <= 1m', asy
 //   Taxiway:     center (-160, 260), length 180, width 34   → x ∈ [-177,−143], z ∈ [ 170, 350]
 //   ServiceZone: center (-160, 350), length  86, width 70   → x ∈ [-195,−125], z ∈ [ 307, 393]
 test('Visual smoke: desert runway terrain height is 0 everywhere in airport footprint', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?map=desert&testMode=1');
+  await page.goto('/src/web-games/aero-fighters/index.html?map=desert&testMode=1');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
 
   // Sample the combined footprint at 10 m resolution.

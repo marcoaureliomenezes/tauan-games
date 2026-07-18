@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 
 // Helper: navigate, wait for canvas, start game
 async function startGame(page) {
-  await page.goto('/aero-fighters/index.html');
+  await page.goto('/src/web-games/aero-fighters/index.html');
   // Timeout tolerante: shader compilation de PBR + shadow map demora no primeiro frame
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForTimeout(800);
@@ -15,7 +15,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
 
   // AC-1: canvas renders
   test('AC-1: 3D canvas renders with visible pixels', async ({ page }) => {
-    await page.goto('/aero-fighters/index.html');
+    await page.goto('/src/web-games/aero-fighters/index.html');
     await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
     await page.waitForTimeout(800);
     const shot = await page.screenshot();
@@ -28,7 +28,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     const errors = [];
     page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     page.on('pageerror', e => errors.push(e.message));
-    await page.goto('/aero-fighters/index.html');
+    await page.goto('/src/web-games/aero-fighters/index.html');
     // Wait until all ES modules have initialized:
     //   - window.game defined (state.js)
     //   - game.flags.rollTimer defined (player.js, last game module to import)
@@ -46,7 +46,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
 
   // AC-3: starts with 100 missiles
   test('AC-3: starts with 100 missiles', async ({ page }) => {
-    await page.goto('/aero-fighters/index.html');
+    await page.goto('/src/web-games/aero-fighters/index.html');
     await page.waitForTimeout(600);
     const missiles = await page.evaluate(() => window.game?.player?.missiles);
     expect(missiles).toBe(100);
@@ -237,7 +237,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
 
   // AC-16: scene background is not black (ocean/sky rendering)
   test('AC-16: scene renders coloured background (sky + ocean)', async ({ page }) => {
-    await page.goto('/aero-fighters/index.html');
+    await page.goto('/src/web-games/aero-fighters/index.html');
     await page.waitForTimeout(1000);
     const shot = await page.screenshot();
     let nonBlack = 0;

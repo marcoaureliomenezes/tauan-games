@@ -13,10 +13,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRng } from '../../../aero-fighters/src/rng.js';
-import { HIT_PROBABILITY, rollMissileHit, selectRodTargets } from '../../../aero-fighters/src/weapons-core.js';
-import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR, MISSILES_ROD } from '../../../aero-fighters/src/config.js';
-import { createServiceState, startService, updateService } from '../../../aero-fighters/src/service-scene.js';
+import { createRng } from '../../../src/web-games/aero-fighters/src/rng.js';
+import { HIT_PROBABILITY, rollMissileHit, selectRodTargets } from '../../../src/web-games/aero-fighters/src/weapons-core.js';
+import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR, MISSILES_ROD } from '../../../src/web-games/aero-fighters/src/config.js';
+import { createServiceState, startService, updateService } from '../../../src/web-games/aero-fighters/src/service-scene.js';
 
 const LAUNCHES_PER_BUCKET = 100;
 const HIT_TOLERANCE = 0.02; // ±2%

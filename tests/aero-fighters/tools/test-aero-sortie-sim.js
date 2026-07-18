@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR, PLAYER } from '../../../aero-fighters/src/config.js';
-import { evaluateLandingEnvelope, evaluateTakeoffEnvelope, airportHeightAt } from '../../../aero-fighters/src/landing-zones.js';
-import { createGroundPhysicsState, updateGroundRoll } from '../../../aero-fighters/src/ground-physics.js';
-import { createServiceState, startService, updateService } from '../../../aero-fighters/src/service-scene.js';
-import { createSortieMachine, SortieEvent, SortieState, GROUND_STATES, transitionSortie, relaunchSortie } from '../../../aero-fighters/src/sortie-state.js';
-import { createEjectionState, requestEjection, updateEjection } from '../../../aero-fighters/src/ejection.js';
+import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR, PLAYER } from '../../../src/web-games/aero-fighters/src/config.js';
+import { evaluateLandingEnvelope, evaluateTakeoffEnvelope, airportHeightAt } from '../../../src/web-games/aero-fighters/src/landing-zones.js';
+import { createGroundPhysicsState, updateGroundRoll } from '../../../src/web-games/aero-fighters/src/ground-physics.js';
+import { createServiceState, startService, updateService } from '../../../src/web-games/aero-fighters/src/service-scene.js';
+import { createSortieMachine, SortieEvent, SortieState, GROUND_STATES, transitionSortie, relaunchSortie } from '../../../src/web-games/aero-fighters/src/sortie-state.js';
+import { createEjectionState, requestEjection, updateEjection } from '../../../src/web-games/aero-fighters/src/ejection.js';
 
 test('sortie state machine covers takeoff to return-to-base to service', () => {
   const m = createSortieMachine();

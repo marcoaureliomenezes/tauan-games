@@ -4,8 +4,8 @@
 // Mirrors the existing smoke.spec.js/uplift.spec.js/nuclear-fx.spec.js convention:
 // dynamic `import()` of the real ES modules served by the static dev server to reach
 // module-scope singletons (`jet`, `scene`, `audio`) that are not exposed on `window`,
-// same technique already used by nuclear-fx.spec.js (`import('/aero-fighters/src/nuclear-fx.js')`)
-// and uplift.spec.js (`import('/aero-fighters/src/world.js')`).
+// same technique already used by nuclear-fx.spec.js (`import('/src/web-games/aero-fighters/src/nuclear-fx.js')`)
+// and uplift.spec.js (`import('/src/web-games/aero-fighters/src/world.js')`).
 //
 // Node-level mechanics (80% hit-rule stats, rod-chain selection, nuke radii/timeline,
 // taxi-containment, takeoff-jump bounds, throttle-stage boundaries) are already proven
@@ -16,7 +16,7 @@
 const { test, expect } = require('@playwright/test');
 
 async function startGame(page) {
-  await page.goto('/aero-fighters/index.html');
+  await page.goto('/src/web-games/aero-fighters/index.html');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForTimeout(800);
   await page.keyboard.press('Space');
@@ -27,7 +27,7 @@ async function startGame(page) {
 // ─── AC-01 (D-4): roll-out keeps the player in control and on pavement; guided
 // taxi arms only at/under TAXI_HANDOFF_SPEED on paved surface ──────────────────
 test('T-10/AC-01: roll-out stays on pavement; guided taxi arms only at handoff speed on paved surface', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=inhauma&seed=qa-rollout');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=qa-rollout');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.keyboard.press('Space');
@@ -38,7 +38,7 @@ test('T-10/AC-01: roll-out stays on pavement; guided taxi arms only at handoff s
   // on the Inhaúma touchdown zone (runway center x=-560, touchdown z-range [60,220],
   // landing direction north->south / increasing z — per T-04 handoff geometry facts).
   await page.evaluate(async () => {
-    const { jet } = await import('/aero-fighters/src/player.js');
+    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
     const mr = window.game.missionRealism;
     mr.sortie.state = 'LANDING_ROLL';
     mr.autoTaxi.active = false;
@@ -51,7 +51,7 @@ test('T-10/AC-01: roll-out stays on pavement; guided taxi arms only at handoff s
   });
 
   const result = await page.evaluate(async () => {
-    const { airportSurface } = await import('/aero-fighters/src/landing-zones.js');
+    const { airportSurface } = await import('/src/web-games/aero-fighters/src/landing-zones.js');
     const samples = [];
     let handoffSpeed = null;
     const t0 = performance.now();
@@ -85,7 +85,7 @@ test('T-10/AC-02: afterburner plume is hidden at idle, visible+scaled-up at full
   await startGame(page);
 
   const idle = await page.evaluate(async () => {
-    const { jet } = await import('/aero-fighters/src/player.js');
+    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
     return {
       throttle: window.game.player.throttle,
       visible: jet.userData.afterburnerPlume.visible,
@@ -101,7 +101,7 @@ test('T-10/AC-02: afterburner plume is hidden at idle, visible+scaled-up at full
   await page.keyboard.up('KeyW');
 
   const full = await page.evaluate(async () => {
-    const { jet } = await import('/aero-fighters/src/player.js');
+    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
     return {
       throttle: window.game.player.throttle,
       visible: jet.userData.afterburnerPlume.visible,
@@ -124,7 +124,7 @@ test('T-10/AC-03: turbine engine audio graph builds with core+whine composition,
   await startGame(page);
 
   const graph = await page.evaluate(async () => {
-    const { audio } = await import('/aero-fighters/src/audio.js');
+    const { audio } = await import('/src/web-games/aero-fighters/src/audio.js');
     return {
       hasCore: !!audio.engineCoreNoise,
       whineCount: audio.engineWhineOscs ? audio.engineWhineOscs.length : 0,
@@ -152,7 +152,7 @@ test('T-10/AC-03: turbine engine audio graph builds with core+whine composition,
   await page.keyboard.up('KeyW');
 
   const swept = await page.evaluate(async () => {
-    const { audio } = await import('/aero-fighters/src/audio.js');
+    const { audio } = await import('/src/web-games/aero-fighters/src/audio.js');
     return audio.engineCoreFilter?.frequency.value;
   });
   expect(swept).toBeGreaterThan(graph.coreFreq0); // bandpass center swept up with RPM/throttle
@@ -243,7 +243,7 @@ test('T-10/AC-05: guided missile (forced HIT) persists, curves via homing, and g
   await page.waitForTimeout(550); // lock-on window (0.35s + margin)
 
   const before = await page.evaluate(async () => {
-    const { scene } = await import('/aero-fighters/src/scene.js');
+    const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
     return scene.children.length;
   });
   await page.keyboard.press('KeyX');
@@ -251,7 +251,7 @@ test('T-10/AC-05: guided missile (forced HIT) persists, curves via homing, and g
   const idx = await page.evaluate(async (beforeCount) => beforeCount, before);
 
   const samples = await page.evaluate(async (idx) => {
-    const { scene } = await import('/aero-fighters/src/scene.js');
+    const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
     const pts = [];
     const t0 = performance.now();
     while (performance.now() - t0 < 3000) {

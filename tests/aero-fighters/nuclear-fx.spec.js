@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test('MR nuclear FX diagnostics are present and finite', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=mr-nuke');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-nuke');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   const fx = await page.evaluate(() => window.__aeroDebug.getSnapshot().nuclearFxState);
   expect(fx).toHaveProperty('stage');
@@ -25,10 +25,10 @@ test('MR nuclear FX diagnostics are present and finite', async ({ page }) => {
 // run identically under HEADLESS_FX.
 
 test('T-09/D-8: MISSILES_NUCLEAR destruction/player-damage radii are the new, larger values in the real browser bundle', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=mr-nuke-radius');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-nuke-radius');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   const radii = await page.evaluate(async () => {
-    const cfg = await import('/aero-fighters/src/config.js');
+    const cfg = await import('/src/web-games/aero-fighters/src/config.js');
     return {
       blast: cfg.MISSILES_NUCLEAR.BLAST_RADIUS,
       kill: cfg.MISSILES_NUCLEAR.PLAYER_KILL_RADIUS,
@@ -41,7 +41,7 @@ test('T-09/D-8: MISSILES_NUCLEAR destruction/player-damage radii are the new, la
 });
 
 test('T-09/AC-06/D-9: firing a real nuke runs the flash->fireball->mushroom stage timeline with a bounded fireball radius (no rise/growth overshoot regression) and a monotonically growing plume', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=mr-nuke-seq');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-nuke-seq');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game && window.game.running === true, { timeout: 3000 });
@@ -49,7 +49,7 @@ test('T-09/AC-06/D-9: firing a real nuke runs the flash->fireball->mushroom stag
   await page.keyboard.press('KeyT');
 
   const result = await page.evaluate(async () => {
-    const m = await import('/aero-fighters/src/nuclear-fx.js');
+    const m = await import('/src/web-games/aero-fighters/src/nuclear-fx.js');
     const seen = new Set();
     const samples = [];
     const t0 = performance.now();

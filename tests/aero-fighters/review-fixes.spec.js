@@ -6,7 +6,7 @@ const { test, expect } = require('@playwright/test');
 
 // ─── T-FIX-01: Runway must be free of obstacles ───────────────────────────────
 test('No spawned target lands on airport surface (runway / taxiway / service)', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=runway-clear');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=runway-clear');
   await page.waitForFunction(() => window.__aeroDebug && Array.isArray(window.game?.targets), { timeout: 15000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game.running, { timeout: 5000 });
@@ -38,7 +38,7 @@ test('No spawned target lands on airport surface (runway / taxiway / service)', 
 // Note: exact buffer value is verified by test:aero:unit terrainCollision test.
 // This E2E test confirms the game loads cleanly and physics diagnostics are finite.
 test('Physics diagnostics load with finite values (MOUNTAIN_BUFFER=5 regression)', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=islands&seed=buffer-check');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=islands&seed=buffer-check');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   const diag = await page.evaluate(() => window.__aeroDebug.getPhysicsDiagnostics?.() ?? {});
   const snap = await page.evaluate(() => window.__aeroDebug.getSnapshot());
@@ -49,7 +49,7 @@ test('Physics diagnostics load with finite values (MOUNTAIN_BUFFER=5 regression)
 
 // ─── T-FIX-03: MAYDAY minimum 2 s fall before crash fires ─────────────────────
 test('MAYDAY state persists at least 2 s before _ejectAndRespawn fires', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=islands&seed=mayday-duration');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=islands&seed=mayday-duration');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.keyboard.press('Space'); // start game
 
@@ -77,7 +77,7 @@ test('MAYDAY state persists at least 2 s before _ejectAndRespawn fires', async (
 
 // ─── T-FIX-05: No flight trembling — |Δy per frame| < 0.5 m at cruise ─────────
 test('Level cruise flight is stable: per-frame Δy < 0.5 m over 3 s', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=islands&seed=stable-flight');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=islands&seed=stable-flight');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
 
   // Skip MR takeoff: set game to airborne state directly
@@ -107,7 +107,7 @@ test('Level cruise flight is stable: per-frame Δy < 0.5 m over 3 s', async ({ p
 
 // ─── T-FIX-06: Landing sink gate accepts −4 m/s (previously rejected) ─────────
 test('Landing envelope accepts vertical speed −4 m/s (widened gate −3 → −5 m/s)', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=landing-gate');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=landing-gate');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
 
   const result = await page.evaluate(() => {
@@ -135,7 +135,7 @@ test('Landing envelope accepts vertical speed −4 m/s (widened gate −3 → �
 
 // ─── T-FIX-04: Nuclear camera keeps explosion and plane both in view ───────────
 test('Nuclear camera cinematic stores explosionPos and jetStartPos', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=islands&seed=nuclear-camera');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=islands&seed=nuclear-camera');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
 
   // Verify that when startCinematicCamera is called (via internals), it stores both positions

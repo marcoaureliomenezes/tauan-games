@@ -95,13 +95,16 @@ test('proporções verdadeiras: geometria do sistema solar é consistente (T-TP-
   assert.ok(earth.radius >= 2200, `Terra ${earth.radius} pequena demais vs a nave`);
   // 4b. HONESTIDADE ANGULAR (θ = 2R/d — bug space-war-fake-apparent-proportions):
   //     o Sol do chão da Terra entre ~1.1° e ~8.6° (nunca ~30° de céu);
-  //     Saturno visto da Terra na conjunção < 0.7° (não um disco gigante).
+  //     Saturno visto da Terra na conjunção < ~1.9° (não um disco gigante).
+  //     (2026-07-18: o teto de ~1.26° foi SUPERSEDED pela escala dos mapas
+  //     planetários da three-states-v1 — o operador pediu corpos ×1.5/×2 na
+  //     visão planetária; Saturno a 1.46° continua uma joia, não um disco.)
   const thetaSun = 2 * SUN.radius / earth.orbit;
   assert.ok(thetaSun > 0.02 && thetaSun < 0.15,
     `Sol da Terra subtende ${(thetaSun * 57.3).toFixed(1)}° — fora de [1.1°, 8.6°]`);
   const saturn = PLANETS.find((p) => /saturno/i.test(p.name));
   const thetaSat = 2 * (saturn.ring ? saturn.ring.outer : saturn.radius) / (saturn.orbit - earth.orbit);
-  assert.ok(thetaSat < 0.022, `Saturno da Terra subtende ${(thetaSat * 57.3).toFixed(2)}° — deve ser < ~1.26° (joia, não disco)`);
+  assert.ok(thetaSat < 0.034, `Saturno da Terra subtende ${(thetaSat * 57.3).toFixed(2)}° — deve ser < ~1.9° (joia, não disco)`);
   // 5. Gauge: v_esc de superfície do Sol preservada (μ/R re-gauge exato —
   //    a zona de não-retorno vive; derivado do CONFIG, não constante mágica).
   const vEsc = Math.sqrt(2 * SUN.mu / SUN.radius);

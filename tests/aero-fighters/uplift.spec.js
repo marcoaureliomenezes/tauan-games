@@ -13,7 +13,7 @@ const MAP_BUTTONS = {
 };
 
 async function bootViaButton(page, mapKey) {
-  await page.goto('/aero-fighters/index.html');
+  await page.goto('/src/web-games/aero-fighters/index.html');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForTimeout(600);
   await page.click(`text=${MAP_BUTTONS[mapKey]}`);
@@ -53,11 +53,11 @@ test.describe('Uplift — decolagem nos 4 mapas via botão (ADR-U2, CRIT-1/2b)',
 });
 
 test('U-AC-2: verdade de superfície — terra no desert, água no mar aberto (HIGH-3)', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html');
+  await page.goto('/src/web-games/aero-fighters/index.html');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForTimeout(600);
   const kinds = await page.evaluate(async () => {
-    const w = await import('/aero-fighters/src/world.js');
+    const w = await import('/src/web-games/aero-fighters/src/world.js');
     const out = {};
     window.game.activeMap = 'desert';
     out.desertOpenFloor = w.surfaceInfoAt(300, 100).kind;
@@ -115,7 +115,7 @@ test('U-AC-4: impacto na água afunda e reporta AFUNDOU NO MAR (WS-5)', async ({
 });
 
 test('U-AC-5: nuke percorre stages e a câmera permanece NORMAL (sem cinematic — operador 2026-07-01)', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?map=desert&testMode=1');
+  await page.goto('/src/web-games/aero-fighters/index.html?map=desert&testMode=1');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForTimeout(600);
   await page.keyboard.press('Space');
@@ -123,7 +123,7 @@ test('U-AC-5: nuke percorre stages e a câmera permanece NORMAL (sem cinematic �
   await takeOff(page);
   await page.keyboard.press('KeyT'); // nuke sem lock — atinge o solo à frente
   const sawStages = await page.evaluate(async () => {
-    const m = await import('/aero-fighters/src/nuclear-fx.js');
+    const m = await import('/src/web-games/aero-fighters/src/nuclear-fx.js');
     const seen = new Set();
     const t0 = performance.now();
     while (performance.now() - t0 < 15000) {
@@ -156,14 +156,14 @@ test('U-AC-6: altímetro honesto — HUD ALT = metros reais (WS-3)', async ({ pa
 });
 
 test('U-AC-7: Inhauma tem chão amplo e estruturas sólidas', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=inhauma&seed=solid-inhauma');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=solid-inhauma');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
 
   const checks = await page.evaluate(async () => {
-    const w = await import('/aero-fighters/src/world.js');
+    const w = await import('/src/web-games/aero-fighters/src/world.js');
     return {
       farHeights: [
         window.__aeroDebug.getTerrainHeightAt(7200, 0),
@@ -190,7 +190,7 @@ test('U-AC-7: Inhauma tem chão amplo e estruturas sólidas', async ({ page }) =
 
 test('U-AC-8: Inhauma tem helicópteros, comboio armado e aliados com guerra própria', async ({ page }) => {
   test.setTimeout(45000);
-  await page.goto('/aero-fighters/index.html?testMode=1&map=inhauma&seed=slow-action');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=slow-action');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.keyboard.press('Space');

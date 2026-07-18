@@ -1,2 +1,2 @@
-release: aero-fighters-flight-combat-v1
+release: far-west-character-v1
 phase: IMPLEMENTATION

@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test('MR service scene debug path refills armament after test duration', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=desert&seed=mr-service');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-service');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.evaluate(() => {
     window.game.player.missiles = 0;
@@ -21,7 +21,7 @@ test('MR service scene debug path refills armament after test duration', async (
 });
 
 test('MR service complete keeps aircraft grounded and tells player how to restart', async ({ page }) => {
-  await page.goto('/aero-fighters/index.html?testMode=1&map=inhauma&seed=mr-service-next');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=mr-service-next');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.evaluate(() => {
     window.game.missionRealism.sortie.state = 'SERVICE_SCENE';

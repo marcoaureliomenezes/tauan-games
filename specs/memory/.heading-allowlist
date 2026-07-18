@@ -1,0 +1,21 @@
+## MACRO 1 — Arquitetura dos web-games (`src/web-games/`)
+## MACRO 2 — Arquitetura dos jogos Godot (`src/godot/`)
+## Requisitos de desenvolvimento (ambos os grupos)
+## Rastreio de bugs (ambos os grupos)
+## MACRO 1 — QA dos web-games
+## MACRO 2 — QA dos jogos Godot
+## Intuito
+## Mapa
+## Mapas (operações)
+## Mapas (6 sistemas + campanha)
+## Níveis e lógica
+## Lógica
+## Lógica/física
+## Pistas (3, declarativas em tracks.js)
+## Pista (v1)
+## Carros
+## Carros (5 + tráfego)
+## Características
+## Web games (`src/web-games/`)
+## Godot games (`src/godot/`)
+## Nomenclatura

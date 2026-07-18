@@ -1,15 +1,104 @@
 {
-  "generated_at": "2026-07-01T14:46:21Z",
+  "generated_at": "2026-07-18T18:15:58Z",
   "context": "tauan-games",
   "features": [
     {
       "rank": 1,
+      "slug": "games-catalog",
+      "title": "Catálogo de jogos",
+      "category": "product",
+      "area": "product",
+      "tldr": "Todos os jogos do tauan-games por grupo de tecnologia (src/web-games e src/godot) com status.",
+      "summary": "Lista canônica dos 9 jogos do portfólio, pasta, tecnologia, descrição e status. Reescrito 2026-07-18 na reestruturação src/.",
+      "path": "specs/memory/product/games-catalog.md",
+      "tags": [
+        "product",
+        "catalog",
+        "games"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 2,
+      "slug": "aero-fighters-v2-jogo",
+      "title": "Aero Fighters v2 — o jogo",
+      "category": "product",
+      "area": "aero-fighters-v2",
+      "tldr": "Combate aéreo cel-shaded sobre Inhaúma-MG em Godot 4 — OSM + SRTM, roda em Iris Xe.",
+      "summary": "Intuito, mapa, lógica e características do aero-fighters-v2 (src/godot/aero-fighters-v2). Degrau 3 da ladder; irmão do aero-fighters Three.js.",
+      "path": "specs/memory/product/godot/aero-fighters-v2/aero-fighters-v2-jogo.md",
+      "tags": [
+        "product",
+        "aero-fighters-v2",
+        "godot",
+        "voo"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 3,
+      "slug": "speed-run-godot-jogo",
+      "title": "Speed Run (Godot) — o jogo",
+      "category": "product",
+      "area": "speed-run",
+      "tldr": "Corrida desktop Godot 4 com VehicleBody3D real — circuito com aterro, guard-rails e 3 IA.",
+      "summary": "Intuito, pista, lógica e características do speed-run Godot (src/godot/speed-run). Sucessor gráfico/físico da versão web por decisão do operador (2026-07-18).",
+      "path": "specs/memory/product/godot/speed-run/speed-run-godot-jogo.md",
+      "tags": [
+        "product",
+        "speed-run",
+        "godot",
+        "corrida"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 4,
+      "slug": "overview",
+      "title": "Identidade do produto",
+      "category": "product",
+      "area": "product",
+      "tldr": "Repositório de jogos web pessoais para o Tauan — imediatamente jogáveis, sem loading, sem erros.",
+      "summary": "Define o que é o tauan-games, para quem existe e o critério de público-alvo que filtra todas as decisões de produto. Portado do HTML legado em 2026-06-12.",
+      "path": "specs/memory/product/overview.md",
+      "tags": [
+        "product",
+        "identity"
+      ],
+      "token_estimate": 0,
+      "depends_on": [
+        "games-catalog",
+        "quality-bar"
+      ]
+    },
+    {
+      "rank": 5,
+      "slug": "quality-bar",
+      "title": "Barra de qualidade",
+      "category": "product",
+      "area": "product",
+      "tldr": "Objetivos de produto e critérios de qualidade não-negociáveis dos jogos.",
+      "summary": "Jogos realmente jogáveis para o Tauan, validados por Playwright antes da revisão do operador, operando offline e sem regressão entre releases. Portado do HTML legado em 2026-06-12.",
+      "path": "specs/memory/product/quality-bar.md",
+      "tags": [
+        "product",
+        "quality"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 6,
       "slug": "aero-strike-combat",
       "title": "Aero Strike — inimigos e armas",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "8 tipos de alvo (estáticos e móveis lentos) + boss kaiju + guerra dos aliados; canhão + 3 classes de míssil + nuke, com lock-on por cone.",
       "summary": "Especifica o catálogo de inimigos do Aero Strike (bases, fábricas, comboios, antiaéreas, helicópteros, navios, alvos lentos móveis) com HP/comportamento, o boss, o front paralelo dos aliados, e o arsenal do jogador (canhão Vulcan, mísseis leve/pesado/nuclear) com o sistema de lock-on. Detalhe suficiente para recriar o combate.",
-      "path": "specs/memory/product/aero-strike-combat.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike-combat.md",
       "tags": [
         "product",
         "aero-strike",
@@ -18,7 +107,6 @@
         "weapons"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "aero-strike",
         "aero-strike-fx",
@@ -26,13 +114,14 @@
       ]
     },
     {
-      "rank": 2,
+      "rank": 7,
       "slug": "aero-strike-flight",
       "title": "Aero Strike — voo e jogabilidade",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "Controles, modelo de energia de voo (com constantes), e a máquina de estados de surtida (aeroporto, decolagem, pouso, auto-taxi).",
       "summary": "Especifica os controles do teclado, o modelo de física de voo do F-35 com as constantes de config.js, e o sistema de surtida do modo realista (FSM sortie, aeroportos por mapa, decolagem por rotação, pouso por flare, auto-taxi e cena de serviço). Detalhe suficiente para recriar a jogabilidade.",
-      "path": "specs/memory/product/aero-strike-flight.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike-flight.md",
       "tags": [
         "product",
         "aero-strike",
@@ -40,7 +129,6 @@
         "controls"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "aero-strike",
         "aero-strike-world",
@@ -48,13 +136,14 @@
       ]
     },
     {
-      "rank": 3,
+      "rank": 8,
       "slug": "aero-strike-fx",
       "title": "Aero Strike — efeitos, nuke, câmera, HUD e áudio",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "Explosões pooladas + mega-explosão; a nuke (flash → fireball → cogumelo ~60s → shockwave → ignição de cenário); câmeras, HUD e áudio sintetizado.",
       "summary": "Especifica o sistema de FX do Aero Strike — explosões pooladas, mega-explosão, e o espetáculo da nuke (flash, fireball, cogumelo persistente, shockwave, ignição de árvores/casas), além dos 5 modos de câmera, do HUD e do motor de áudio Web Audio. Detalhe suficiente para recriar o espetáculo.",
-      "path": "specs/memory/product/aero-strike-fx.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike-fx.md",
       "tags": [
         "product",
         "aero-strike",
@@ -63,7 +152,6 @@
         "audio"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "aero-strike",
         "aero-strike-combat",
@@ -71,13 +159,14 @@
       ]
     },
     {
-      "rank": 4,
+      "rank": 9,
       "slug": "aero-strike-world",
       "title": "Aero Strike — mundo e mapas",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "4 mapas jogáveis, uma verdade de superfície única, terreno por heightfield, água/rio, estradas autorais e cenário (árvores/estruturas).",
       "summary": "Especifica os 4 mapas do Aero Strike, o modelo de superfície surfaceInfoAt, o terreno de cada mapa (ilhas, mesas, morros, heightfield contínuo de Inhauma), água e rio, a rede de estradas por spline e o cenário (árvores instanciadas, estruturas). Detalhe suficiente para recriar o mundo.",
-      "path": "specs/memory/product/aero-strike-world.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike-world.md",
       "tags": [
         "product",
         "aero-strike",
@@ -85,7 +174,6 @@
         "maps"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "aero-strike",
         "aero-strike-flight",
@@ -93,20 +181,20 @@
       ]
     },
     {
-      "rank": 5,
+      "rank": 10,
       "slug": "aero-strike",
       "title": "Aero Strike — o jogo",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "Ataque ao solo em 3ª pessoa com um F-35 (Three.js) — destrua todos os alvos militares da missão, mate o boss, volte e pouse.",
       "summary": "Especifica a identidade, o loop de jogo, o objetivo, os modos e o modelo de vidas/HP do Aero Strike (pasta aero-fighters/). Atom-raiz para recriar o jogo a partir da memória; aponta para world/flight/combat/fx.",
-      "path": "specs/memory/product/aero-strike.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike.md",
       "tags": [
         "product",
         "aero-strike",
         "gameplay"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "architecture",
         "tech-stack",
@@ -120,55 +208,106 @@
       ]
     },
     {
-      "rank": 6,
-      "slug": "games-catalog",
-      "title": "Catálogo de jogos",
+      "rank": 11,
+      "slug": "far-west-jogo",
+      "title": "Far West — o jogo",
       "category": "product",
-      "tldr": "Jogos/experimentos ativos do tauan-games e seus status de release.",
-      "summary": "Lista cada projeto do repo (tauan-trex, aero-fighters/Aero Strike, testing-infra, aero-fighters-v2) com pasta, descrição e status. Inclui a nota de nomenclatura codename vs nome visível. Portado do HTML legado em 2026-06-12.",
-      "path": "specs/memory/product/games-catalog.md",
+      "area": "far-west",
+      "tldr": "Faroeste open-world no browser — cowboy a cavalo num mundo procedural de 2048×2048 m com rios, florestas, caça e bandidos.",
+      "summary": "Intuito, mapa, lógica de mundo e características do far-west (src/web-games/far-west, Three.js). Em desenvolvimento ativo (far-west-character-v1).",
+      "path": "specs/memory/product/web-games/far-west/far-west-jogo.md",
       "tags": [
         "product",
-        "catalog",
-        "games"
+        "far-west",
+        "open-world"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": []
     },
     {
-      "rank": 7,
-      "slug": "overview",
-      "title": "Identidade do produto",
+      "rank": 12,
+      "slug": "james-bond-jogo",
+      "title": "James Bond Operações — o jogo",
       "category": "product",
-      "tldr": "Repositório de jogos web pessoais para o Tauan — imediatamente jogáveis, sem loading, sem erros.",
-      "summary": "Define o que é o tauan-games, para quem existe e o critério de público-alvo que filtra todas as decisões de produto. Portado do HTML legado em 2026-06-12.",
-      "path": "specs/memory/product/overview.md",
+      "area": "james-bond",
+      "tldr": "FPS de espionagem no browser com 6 operações, IA de guardas com A*, tudo procedural — nenhum asset do GoldenEye.",
+      "summary": "Intuito, mapas (6 operações), lógica e características do james-bond (src/web-games/james-bond, Three.js).",
+      "path": "specs/memory/product/web-games/james-bond/james-bond-jogo.md",
       "tags": [
         "product",
-        "identity"
+        "james-bond",
+        "fps"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
-      "depends_on": [
-        "games-catalog",
-        "quality-bar"
-      ]
+      "depends_on": []
     },
     {
-      "rank": 8,
-      "slug": "quality-bar",
-      "title": "Barra de qualidade",
+      "rank": 13,
+      "slug": "memoria-bichos-jogo",
+      "title": "Memória dos Bichos — o jogo",
       "category": "product",
-      "tldr": "Objetivos de produto e critérios de qualidade não-negociáveis dos jogos.",
-      "summary": "Jogos realmente jogáveis para o Tauan, validados por Playwright antes da revisão do operador, operando offline e sem regressão entre releases. Portado do HTML legado em 2026-06-12.",
-      "path": "specs/memory/product/quality-bar.md",
+      "area": "memoria-bichos",
+      "tldr": "Jogo da memória infantil em HTML/CSS/JS puro — pares de animais, por clique ou toque.",
+      "summary": "Intuito, níveis e características do memoria-bichos (src/web-games/memoria-bichos, DOM puro).",
+      "path": "specs/memory/product/web-games/memoria-bichos/memoria-bichos-jogo.md",
       "tags": [
         "product",
-        "quality"
+        "memoria-bichos",
+        "infantil"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
+      "depends_on": []
+    },
+    {
+      "rank": 14,
+      "slug": "space-war-jogo",
+      "title": "Space War — o jogo",
+      "category": "product",
+      "area": "space-war",
+      "tldr": "Combate e exploração espacial com física real documentada — 6 sistemas estelares, balística sob gravidade, viagem interestelar relativística, Sgr A*.",
+      "summary": "Intuito, mapas (sistemas), lógica e características do space-war (Three.js; ainda na raiz, migração p/ src/web-games pendente).",
+      "path": "specs/memory/product/web-games/space-war/space-war-jogo.md",
+      "tags": [
+        "product",
+        "space-war",
+        "espaço",
+        "física"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 15,
+      "slug": "speed-run-web-jogo",
+      "title": "Speed Run (web) — o jogo",
+      "category": "product",
+      "area": "speed-run",
+      "tldr": "Corrida arcade estilo Cruis'n World no browser — 3 pistas, 5 carros GLB (incl. Fiat Idea Adventure 2013), tráfego civil, capotamento.",
+      "summary": "Intuito, pistas, lógica e características do speed-run web (src/web-games/speed-run, Three.js). Versão irmã desktop em src/godot/speed-run.",
+      "path": "specs/memory/product/web-games/speed-run/speed-run-web-jogo.md",
+      "tags": [
+        "product",
+        "speed-run",
+        "corrida"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 16,
+      "slug": "tauan-trex-jogo",
+      "title": "Tauan T-Rex — o jogo",
+      "category": "product",
+      "area": "tauan-trex",
+      "tldr": "Clone aprimorado do Chrome Dino em Phaser — pular cactos, abaixar sob pterodátilos, dificuldade progressiva.",
+      "summary": "Intuito, lógica e características do tauan-trex (src/web-games/tauan-trex, Phaser 3 vendorizado).",
+      "path": "specs/memory/product/web-games/tauan-trex/tauan-trex-jogo.md",
+      "tags": [
+        "product",
+        "tauan-trex",
+        "runner"
+      ],
+      "token_estimate": 0,
       "depends_on": []
     }
   ]

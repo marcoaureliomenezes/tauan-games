@@ -14,7 +14,7 @@ async function openInhauma(page, seed = 'inhauma-fidelity') {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(e.message));
 
-  await page.goto(`/aero-fighters/index.html?testMode=1&map=inhauma&seed=${seed}`);
+  await page.goto(`/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=${seed}`);
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.keyboard.press('Space');
@@ -288,7 +288,7 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     page.on('pageerror', (e) => errors.push(e.message));
 
-    await page.goto('/aero-fighters/index.html?testMode=1&map=inhauma&seed=inhauma-attribution');
+    await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=inhauma-attribution');
     await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
     await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
 
@@ -304,7 +304,7 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
   });
 
   test('DEM attribution credit does not leak into a non-DEM map (islands)', async ({ page }) => {
-    await page.goto('/aero-fighters/index.html?testMode=1&map=islands&seed=inhauma-attribution-negative');
+    await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=islands&seed=inhauma-attribution-negative');
     await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
     await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
     const overlay = page.locator('#overlay');
@@ -381,10 +381,15 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     // budget is calibrated with headroom rather than to the exact current count.
     //
     // Triangles: measured 146276-147860 (stable/deterministic across runs, unlike
-    // calls — driven by tree instance count, not upload timing). The existing 200000
-    // threshold already has ~26% headroom over that and needs no change.
+    // calls — driven by tree instance count, not upload timing). T-V-01
+    // (aero-fighters-inhauma-visual-uplift-v1, operator decision 2026-07-18): the
+    // 200000 cap was the self-imposed ceiling the map audit identified as blocking
+    // visual upgrades (backdrop mountains, richer city geometry, finer terrain).
+    // Raised to 800000 — still far inside Iris Xe budget at 1080p — while remaining
+    // a real regression guard (e.g. an accidentally un-instanced building batch
+    // would blow past it).
     expect(stats.calls).toBeLessThan(300);
-    expect(stats.triangles).toBeLessThan(200000);
+    expect(stats.triangles).toBeLessThan(800000);
     expect(buckets.size).toBeGreaterThan(12);
   });
 });

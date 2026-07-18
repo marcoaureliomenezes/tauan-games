@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PLAYER, TARGET_LAYOUT_INHAUMA, MISSILES_NUCLEAR } from '../../../aero-fighters/src/config.js';
+import { PLAYER, TARGET_LAYOUT_INHAUMA, MISSILES_NUCLEAR } from '../../../src/web-games/aero-fighters/src/config.js';
 import {
   fireballFadeAt,
   fireballGrowthAt,
@@ -12,8 +12,8 @@ import {
   spawnNuclearFx,
   updateNuclearFx,
   nuclearFxState,
-} from '../../../aero-fighters/src/nuclear-fx.js';
-import { materializeLayout, validateMap } from '../../../aero-fighters/src/map-validation.js';
+} from '../../../src/web-games/aero-fighters/src/nuclear-fx.js';
+import { materializeLayout, validateMap } from '../../../src/web-games/aero-fighters/src/map-validation.js';
 import {
   clampDt,
   isStalled,
@@ -21,8 +21,8 @@ import {
   throttleStep,
   updateSpeed,
   validateFiniteState,
-} from '../../../aero-fighters/src/physics-core.js';
-import { inhaumaAirport } from '../../../aero-fighters/src/airport.js';
+} from '../../../src/web-games/aero-fighters/src/physics-core.js';
+import { inhaumaAirport } from '../../../src/web-games/aero-fighters/src/airport.js';
 import {
   inhaumaContinuousHeight,
   inhaumaVisualSurfaceHeight,
@@ -31,8 +31,8 @@ import {
   buildInhaumaTerrain,
   buildTown,
   getInhaumaStructures,
-} from '../../../aero-fighters/src/maps/inhauma-scene.js';
-import { demBounds, demSlopeAt } from '../../../aero-fighters/src/maps/heightmap-sampler.js';
+} from '../../../src/web-games/aero-fighters/src/maps/inhauma-scene.js';
+import { demBounds, demSlopeAt } from '../../../src/web-games/aero-fighters/src/maps/heightmap-sampler.js';
 import {
   getInhaumaRiverPolyline,
   riverCarveAt,
@@ -41,13 +41,13 @@ import {
   riverWaterLevelAt,
   RIVER_HALF_WIDTH_M,
   RIVER_BANK_BLEND_M,
-} from '../../../aero-fighters/src/maps/inhauma-river.js';
+} from '../../../src/web-games/aero-fighters/src/maps/inhauma-river.js';
 import {
   computeInhaumaBridgeCrossings,
   bridgeStructureFootprints,
-} from '../../../aero-fighters/src/maps/inhauma-bridges.js';
-import { INHAUMA_ROAD_CORRIDORS, sampleCorridor } from '../../../aero-fighters/src/maps/inhauma-road-defs.js';
-import { nearAnyRoad } from '../../../aero-fighters/src/maps/inhauma-roads.js';
+} from '../../../src/web-games/aero-fighters/src/maps/inhauma-bridges.js';
+import { INHAUMA_ROAD_CORRIDORS, sampleCorridor } from '../../../src/web-games/aero-fighters/src/maps/inhauma-road-defs.js';
+import { nearAnyRoad } from '../../../src/web-games/aero-fighters/src/maps/inhauma-roads.js';
 
 function runSimpleFlight(seconds, inputAt) {
   const dt = 1 / 60;

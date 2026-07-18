@@ -6,8 +6,8 @@ const { test, expect } = require('@playwright/test');
 
 async function load(page) {
   await page.goto('/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
 }
 
 async function startFlight(page) {
@@ -15,7 +15,7 @@ async function startFlight(page) {
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 4000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
 }
 
 // decola e mira Betelgeuse (outro sistema) — o pré-requisito do fluxo T/O/Z

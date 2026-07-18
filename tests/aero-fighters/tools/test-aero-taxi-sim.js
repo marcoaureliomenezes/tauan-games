@@ -13,10 +13,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PLAYER } from '../../../aero-fighters/src/config.js';
-import { airportSurface } from '../../../aero-fighters/src/landing-zones.js';
-import { desertAirport, inhaumaAirport } from '../../../aero-fighters/src/airport.js';
-import { createSortieMachine, SortieEvent, SortieState, transitionSortie } from '../../../aero-fighters/src/sortie-state.js';
+import { PLAYER } from '../../../src/web-games/aero-fighters/src/config.js';
+import { airportSurface } from '../../../src/web-games/aero-fighters/src/landing-zones.js';
+import { desertAirport, inhaumaAirport } from '../../../src/web-games/aero-fighters/src/airport.js';
+import { createSortieMachine, SortieEvent, SortieState, transitionSortie } from '../../../src/web-games/aero-fighters/src/sortie-state.js';
 import {
   advancePathIndex,
   buildTaxiPathIn,
@@ -24,7 +24,7 @@ import {
   stepRollOut,
   stepTowardWaypoint,
   wrapAngle,
-} from '../../../aero-fighters/src/taxi-core.js';
+} from '../../../src/web-games/aero-fighters/src/taxi-core.js';
 
 const HANDOFF_SPEED = PLAYER.TAXI_HANDOFF_SPEED;
 assert.equal(HANDOFF_SPEED, 34, 'PLAYER.TAXI_HANDOFF_SPEED must be the D-4 34 m/s handoff threshold');

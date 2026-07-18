@@ -7,12 +7,12 @@ const { test, expect } = require('@playwright/test');
 
 async function startAirborne(page) {
   await page.goto('/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 4000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
   await page.evaluate(() => window.__swDebug.goTo('terra', 4));   // no ar (landed=false)
   await page.waitForTimeout(200);
 }

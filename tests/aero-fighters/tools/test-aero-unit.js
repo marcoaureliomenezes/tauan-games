@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PLAYER, MISSILES_LIGHT } from '../../../aero-fighters/src/config.js';
+import { PLAYER, MISSILES_LIGHT } from '../../../src/web-games/aero-fighters/src/config.js';
 import {
   altitudeAboveTerrain,
   boundedAxisDelta,
@@ -13,22 +13,22 @@ import {
   throttleStep,
   updateSpeed,
   validateFiniteState,
-} from '../../../aero-fighters/src/physics-core.js';
+} from '../../../src/web-games/aero-fighters/src/physics-core.js';
 import {
   demBounds,
   demSlopeAt,
   loadInhaumaDem,
   sampleDemHeight,
-} from '../../../aero-fighters/src/maps/heightmap-sampler.js';
-import { biomeColor } from '../../../aero-fighters/src/maps/inhauma-scene.js';
-import { INHAUMA_DEM_ATTRIBUTION } from '../../../aero-fighters/src/ui/credits.js';
+} from '../../../src/web-games/aero-fighters/src/maps/heightmap-sampler.js';
+import { biomeColor } from '../../../src/web-games/aero-fighters/src/maps/inhauma-scene.js';
+import { INHAUMA_DEM_ATTRIBUTION } from '../../../src/web-games/aero-fighters/src/ui/credits.js';
 import {
   afterburnerIntensity,
   isAfterburnerStage,
   isMilitaryOrAbove,
   throttleStage,
   ThrottleStage,
-} from '../../../aero-fighters/src/throttle-stage.js';
+} from '../../../src/web-games/aero-fighters/src/throttle-stage.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -130,12 +130,16 @@ test('sampleDemHeight is bilinearly continuous (no jump at grid-cell boundaries)
   assert.ok(Math.abs(sampleDemHeight(worldX, worldZ) - expected) < EPS);
 });
 
-test('sampleDemHeight clamps at the DEM edge and blends to a plausible base level beyond it', async () => {
+test('sampleDemHeight extends relief procedurally beyond the DEM edge (T-V-10)', async () => {
   await loadInhaumaDem();
   const b = demBounds();
   assert.ok(b.maxX > b.minX && b.maxZ > b.minZ);
 
-  // Far outside the asset in every direction: stable, finite, plausible base level.
+  // T-V-10 (aero-fighters-inhauma-visual-uplift-v1): o fallback plano de 6 m foi
+  // substituído por continuação procedural (ridged+fbm ancorada na cota da borda) —
+  // fim da "panqueca" na borda do mundo (audit shot 15). Novo contrato:
+  // finito e plausível em qualquer distância, sem cliff na borda, NÃO-plano além
+  // do blend de 800 m, e ancorado na cota da borda (não numa constante).
   const far = [
     [b.maxX + 50000, 0], [b.minX - 50000, 0], [0, b.maxZ + 50000], [0, b.minZ - 50000],
     [b.maxX + 50000, b.maxZ + 50000],
@@ -143,20 +147,20 @@ test('sampleDemHeight clamps at the DEM edge and blends to a plausible base leve
   for (const [x, z] of far) {
     const h = sampleDemHeight(x, z);
     assert.ok(Number.isFinite(h), `non-finite far outside (${x},${z})`);
-    assert.ok(Math.abs(h - 6) < EPS, `expected plausible base level 6 far outside (${x},${z}), got ${h}`);
+    assert.ok(h >= 0 && h < 2000, `implausible height far outside (${x},${z}): ${h}`);
   }
 
-  // Just past the edge: no cliff — the value must stay close to the last in-bounds
-  // sample (monotonic blend toward the base level as distance from the edge grows).
+  // Just past the edge: no cliff — the value must stay close to the last in-bounds sample.
   const edgeInside = sampleDemHeight(b.maxX - 1, 0);
   const edgeJustOutside = sampleDemHeight(b.maxX + 1, 0);
   assert.ok(Math.abs(edgeJustOutside - edgeInside) < 1, 'cliff at DEM edge');
 
+  // Beyond the 800 m blend band the extension must NOT be flat: real relief variance.
   const samples = [0, 10, 100, 400, 800, 1200, 2000].map((d) => sampleDemHeight(b.maxX + d, 0));
-  for (let i = 1; i < samples.length; i++) {
-    assert.ok(samples[i] <= samples[i - 1] + EPS, 'edge blend is not monotonically settling toward the base level');
-  }
-  assert.ok(Math.abs(samples.at(-1) - 6) < EPS, 'edge blend does not fully settle by 2000m past the boundary');
+  for (const h of samples) assert.ok(Number.isFinite(h), 'non-finite in blend band');
+  const tail = samples.slice(4); // 800..2000 m — fora do blend
+  const spread = Math.max(...tail) - Math.min(...tail);
+  assert.ok(spread > 1, `procedural extension is still flat past the blend band (spread ${spread})`);
 });
 
 test('demSlopeAt is near-zero on the flat valley floor and clearly positive on a steep flank', async () => {
@@ -227,7 +231,7 @@ test('AC-09: the in-game attribution constant stays byte-identical to the vendor
   // comment there for why) — this test is the mechanical drift guard for that
   // decision: if anyone rebakes the asset with different attribution wording, this
   // fails until ui/credits.js is updated to match.
-  const metaUrl = new URL('../../../aero-fighters/assets/inhauma-dem/heightmap.json', import.meta.url);
+  const metaUrl = new URL('../../../src/web-games/aero-fighters/assets/inhauma-dem/heightmap.json', import.meta.url);
   const meta = JSON.parse(readFileSync(fileURLToPath(metaUrl), 'utf8'));
   assert.equal(INHAUMA_DEM_ATTRIBUTION, meta.attribution.text);
   // Also assert the required substring from AC-09 / TASKS.md T-10 literally appears.

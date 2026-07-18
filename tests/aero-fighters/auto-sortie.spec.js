@@ -11,7 +11,7 @@ const { test, expect } = require('@playwright/test');
 // total) — o teste flakava sem nenhum bug no jogo. As ASSERÇÕES não mudam.
 test('auto-sortie: pousou → taxi + reabastecimento + decolagem automáticos', async ({ page }) => {
   test.setTimeout(90000);
-  await page.goto('/aero-fighters/index.html?testMode=1&map=inhauma&seed=auto-sortie');
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=auto-sortie');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
 

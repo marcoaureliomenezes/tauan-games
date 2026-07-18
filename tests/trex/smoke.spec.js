@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Tauan T-Rex — Smoke Suite', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/tauan-trex/index.html');
+    await page.goto('/src/web-games/tauan-trex/index.html');
   });
 
   test('AC-1: canvas renders on load', async ({ page }) => {

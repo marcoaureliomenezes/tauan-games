@@ -1,10 +1,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { materializeLayout, validateMap, validateTargets, desertHeightAt, rioHeightAt, inhaumaHeightAt, MAP_VALIDATION_DEFS } from '../../../aero-fighters/src/map-validation.js';
-import { INHAUMA_ROADS } from '../../../aero-fighters/src/maps/inhauma-roads.js';
-import { getRoadGraphDiagnostics } from '../../../aero-fighters/src/maps/inhauma-road-diagnostics.js';
-import { INHAUMA_WEB_MAP_METADATA } from '../../../aero-fighters/src/maps/inhauma-data/metadata.js';
-import { inhaumaContinuousHeight } from '../../../aero-fighters/src/maps/inhauma-scene.js';
+import { materializeLayout, validateMap, validateTargets, desertHeightAt, rioHeightAt, inhaumaHeightAt, MAP_VALIDATION_DEFS } from '../../../src/web-games/aero-fighters/src/map-validation.js';
+import { INHAUMA_ROADS } from '../../../src/web-games/aero-fighters/src/maps/inhauma-roads.js';
+import { getRoadGraphDiagnostics } from '../../../src/web-games/aero-fighters/src/maps/inhauma-road-diagnostics.js';
+import { INHAUMA_WEB_MAP_METADATA } from '../../../src/web-games/aero-fighters/src/maps/inhauma-data/metadata.js';
+import { inhaumaContinuousHeight } from '../../../src/web-games/aero-fighters/src/maps/inhauma-scene.js';
 import { invalidMapCases } from '../fixtures/invalid-map-cases.js';
 
 function cloneTargets(targets) {
@@ -131,7 +131,7 @@ function collectJsFiles(dir, out = []) {
 }
 
 function staleRoadAuthorityMatches() {
-  const mapsDir = path.join(process.cwd(), 'aero-fighters', 'src', 'maps');
+  const mapsDir = path.join(process.cwd(), 'src', 'web-games', 'aero-fighters', 'src', 'maps');
   const forbidden = [
     { token: 'INHAUMA_ROAD_DEFS', code: 'ROAD_STALE_INHAUMA_ROAD_DEFS' },
     { token: 'buildRoadsAndCars', code: 'ROAD_STALE_BUILD_ROADS_AND_CARS' },

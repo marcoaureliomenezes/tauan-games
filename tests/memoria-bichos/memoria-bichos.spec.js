@@ -33,7 +33,7 @@ test.describe('Memoria dos Bichos — smoke e navegacao inicial', () => {
   test('abre o jogo em servidor estatico sem erros, build ou rede externa', async ({ page }) => {
     const problems = collectRuntimeProblems(page);
 
-    await page.goto('/memoria-bichos/');
+    await page.goto('/src/web-games/memoria-bichos/');
 
     await expect(page).toHaveTitle('Memoria dos Bichos');
     await expect(page.getByRole('heading', { name: 'Memoria dos Bichos' })).toBeVisible();
@@ -55,11 +55,11 @@ test.describe('Memoria dos Bichos — smoke e navegacao inicial', () => {
 
     const gameLink = page.getByRole('link', { name: /Memoria dos Bichos/i });
     await expect(gameLink).toBeVisible();
-    await expect(gameLink).toHaveAttribute('href', 'memoria-bichos/');
+    await expect(gameLink).toHaveAttribute('href', 'src/web-games/memoria-bichos/');
 
     await gameLink.click();
 
-    await expect(page).toHaveURL(/\/memoria-bichos\/$/);
+    await expect(page).toHaveURL(/\/src\/web-games\/memoria-bichos\/$/);
     await expect(page.getByRole('heading', { name: 'Memoria dos Bichos' })).toBeVisible();
     await expect(page.getByRole('button', { name: /6 cartas/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /12 cartas/i })).toBeVisible();
@@ -72,7 +72,7 @@ test.describe('Memoria dos Bichos — smoke e navegacao inicial', () => {
     const problems = collectRuntimeProblems(page);
 
     for (const cards of [6, 12, 20]) {
-      await page.goto('/memoria-bichos/');
+      await page.goto('/src/web-games/memoria-bichos/');
 
       await page.getByRole('button', { name: new RegExp(`${cards} cartas`, 'i') }).click();
 

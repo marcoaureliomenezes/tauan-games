@@ -7,8 +7,8 @@ const { test, expect } = require('@playwright/test');
 
 async function load(page) {
   await page.goto('/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
 }
 
 async function startFlight(page) {
@@ -16,10 +16,13 @@ async function startFlight(page) {
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 4000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
 }
 
 test.describe('Space War — Fidelidade Física', () => {
+  // Budgets largos (2026-07-18): CI compartilhada — boot software-GL >15s sob
+  // carga estourava o teto de 30s por TEMPO, não por asserção.
+  test.setTimeout(90000);
 
   // AC-01: a estrela de nêutrons EMITE luz (def.light), o strobe óptico ~30 Hz
   // está vivo e apontar para ela produz pixels CLAROS (núcleo + corona + halo).
