@@ -75,16 +75,32 @@ export function stepCar(st, input, world, dt) {
   st.pos.addScaledVector(_fwd, st.v * dt);
   st.pos.addScaledVector(_side, st.lat * dt);
 
-  // --- corredor: além do acostamento, parede macia empurra de volta ---
+  // --- COLISÃO com a cerca/guard-rail (operador 2026-07-18): a cerca é
+  // BARREIRA SÓLIDA, não fantasma. Bater raspando arranha e perde velocidade;
+  // bater de frente RICOCHETEIA o carro de volta para a pista.
   const q2 = world.surfaceAt(st.pos.x, st.pos.z, st.sHint);
-  const maxDist = world.def.width / 2 + 9;
-  if (q2.dist > maxDist) {
+  const FENCE = world.def.width / 2 + 2.1;             // cerca visual está a +2.4
+  st.hitWall = false;
+  if (q2.dist > FENCE) {
     const sm = q2.sm;
     const dx = st.pos.x - sm.pos.x, dz = st.pos.z - sm.pos.z;
     const dl = Math.hypot(dx, dz) || 1;
-    st.pos.x = sm.pos.x + (dx / dl) * maxDist;
-    st.pos.z = sm.pos.z + (dz / dl) * maxDist;
-    st.v *= (1 - 1.6 * dt);
+    const nx = dx / dl, nz = dz / dl;                  // normal para FORA
+    st.pos.x = sm.pos.x + nx * FENCE;
+    st.pos.z = sm.pos.z + nz * FENCE;
+    // componente da velocidade contra a cerca → ricochete amortecido
+    const vx = -Math.sin(st.heading) * st.v, vz = -Math.cos(st.heading) * st.v;
+    const vOut = vx * nx + vz * nz;                    // >0 = indo contra a cerca
+    if (vOut > 0) {
+      const rvx = vx - 1.6 * vOut * nx;                // reflete (restituição 0.6)
+      const rvz = vz - 1.6 * vOut * nz;
+      st.heading = Math.atan2(-rvx, -rvz);             // nariz acompanha o quique
+      const impact = vOut / Math.max(st.v, 1e-3);      // 0 raspão → 1 de frente
+      st.v *= Math.max(0.25, 1 - 0.7 * impact);        // raspão perde pouco, frontal muito
+      st.suspension -= 0.10 * impact;                  // tranco na suspensão
+      st.rumble = Math.min(1.6, st.rumble + 0.9 * impact);
+      st.hitWall = true;
+    }
     st.lat = 0;
   }
 

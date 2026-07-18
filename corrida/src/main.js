@@ -50,7 +50,9 @@ function playerInput() {
   return {
     throttle: (k.KeyW || k.ArrowUp) ? 1 : 0,
     brake: (k.KeyS || k.ArrowDown) ? 1 : 0,
-    steer: ((k.KeyA || k.ArrowLeft) ? -1 : 0) + ((k.KeyD || k.ArrowRight) ? 1 : 0),
+    // A/esquerda = +heading (vira p/ -X = esquerda da tela) — sinal validado
+    // em jogo; o mapeamento antigo estava INVERTIDO (bug operador 2026-07-18)
+    steer: ((k.KeyA || k.ArrowLeft) ? 1 : 0) + ((k.KeyD || k.ArrowRight) ? -1 : 0),
   };
 }
 
