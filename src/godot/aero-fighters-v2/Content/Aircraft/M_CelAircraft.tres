@@ -1,0 +1,23 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://m_cel_aircraft"]
+
+; M_CelAircraft — cel-friendly base material for the hand-modeled delta-wing pawn
+; (T-G-15). The visible toon look comes from the screen-space cel-shader pass
+; authored in T-G-10 (scenes/CelShaderPass.tscn + shaders/cel_screen_space.gdshader);
+; this material's job is only to produce clean diffuse + normal data for the post
+; pass to quantize. Matte slate blue-grey reads well after 3-band quantization.
+;
+; Per FR-V2-G-11 / FR-V2-G-03. No external textures — fully procedural / parametric
+; (foundation CV-08 no-external-assets rule).
+
+[resource]
+albedo_color = Color(0.55, 0.6, 0.65, 1)
+metallic = 0.0
+roughness = 0.8
+metallic_specular = 0.5
+cull_mode = 0
+shading_mode = 1
+diffuse_mode = 0
+specular_mode = 0
+emission_enabled = false
+normal_enabled = true
+normal_scale = 1.0

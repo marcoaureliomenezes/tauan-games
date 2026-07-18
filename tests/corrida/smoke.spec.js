@@ -2,7 +2,7 @@
 // e lombadas respondem, os 3 mapas constroem sem erro.
 import { test, expect } from '@playwright/test';
 
-const URL = '/corrida/';
+const URL = '/src/web-games/speed-run/';
 
 async function start(page, trackArrows = 0) {
   await page.goto(URL);
@@ -52,7 +52,7 @@ test.describe('Cruis\'n Tauan — smoke', () => {
   test('física: atrito por superfície definido para asfalto/terra/fora', async ({ page }) => {
     await start(page, 1);
     const surf = await page.evaluate(async () => {
-      const { SURFACES } = await import('/corrida/src/tracks.js');
+      const { SURFACES } = await import('/src/web-games/speed-run/src/tracks.js');
       return SURFACES;
     });
     expect(surf.asphalt.grip).toBeGreaterThan(surf.dirt.grip);

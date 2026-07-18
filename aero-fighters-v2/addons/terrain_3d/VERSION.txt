@@ -1,7 +1,0 @@
-Terrain3D v1.0.1
-Source: https://github.com/TokisanGames/Terrain3D
-Tag: v1.0.1
-Commit SHA: cf137ceb1f80bf0d7bf5bde0928c973bf5e2840b
-License: MIT (copyright Cory Petkovsek, Roope Palmroos)
-Installed: 2026-05-18 by operator authorization
-Used Linux x64 binary: bin/libterrain.linux.release.x86_64.so
