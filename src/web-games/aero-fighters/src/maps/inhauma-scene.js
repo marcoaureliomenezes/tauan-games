@@ -35,6 +35,15 @@ if (typeof window !== 'undefined') {
   import('../sky.js').then((m) => { _getSunData = m.getSunData; }).catch(() => {});
 }
 
+// Detecta ambiente automatizado (Playwright/headless) SEM importar scene.js (que
+// toca window/document/<canvas> no escopo de módulo e quebraria a importabilidade
+// em Node — mesmo motivo do carregamento lazy de sky.js acima). Mesmo padrão
+// self-contained já usado por prop-fire.js/nuclear-fx.js/fx.js para reduzir/pular
+// detalhe puramente decorativo sob automação — nunca instanciado em Node
+// (`navigator` não existe lá), então test-aero-sim.js/test-aero-cachoeira.mjs (que
+// rodam em Node puro) continuam vendo a densidade de floresta INTEGRAL.
+const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
+
 // DEM vendorizado (T-01/T-02) — verdade de superfície de base do vale
 // (aero-fighters-inhauma-serra-v1). Top-level await: qualquer módulo que importe
 // (direta ou transitivamente) este arquivo só termina de avaliar depois que o asset
@@ -737,7 +746,26 @@ function makeCrownGeo(spec) {
 // Candidatos sorteados antes dos filtros — calibrado empiricamente (ver relatório de
 // T-08) para o total PLANTADO ficar na mesma ordem de grandeza de antes (~1500-2500,
 // WS-3/perf) mesmo com a linha de árvore muito mais alta (620 m vs 70 m da era FBM).
-const FOREST_CANDIDATE_COUNT = 2800;
+//
+// BUG FIX (auto-sortie takeoff regression): buildForests() never had a HEADLESS
+// budget, unlike every sibling decorative-density system in this codebase (world.js
+// ocean/cloud segment counts, nuclear-fx.js sphere segment counts, prop-fire.js/
+// fx.js headless FX skip). ~1500-2500 individually-instanced trees (crown+trunk,
+// ~44-55% of the whole inhauma scene's triangle count — profiled: this InstancedMesh
+// pair set alone accounted for ~137k of ~311k triangles/frame) collapsed headless
+// SwiftShader frame rate to ~2.5 fps regardless of game state (menu, flight, ground
+// taxi — profiled uniformly slow). A pure-Node replay of the taxi_runway→line_up→
+// takeoff state-machine leg (taxi-core.js/ground-physics.js, fixed dt=1/60, i.e. NO
+// rendering at all) needs only ~16 simulated seconds — well inside the spec's 40s
+// budget — proving the GAME LOGIC was never the problem; the render cost alone
+// starved the test of wall-clock time to reach that many simulated seconds. HEADLESS
+// (`navigator.webdriver`) is `false` in Node (no `navigator` global there), so
+// test-aero-sim.js's `inhaumaTrees.length` 1500-2500 assertion and
+// test-aero-cachoeira.mjs's >500 assertion keep seeing the FULL density; only real
+// Playwright/CI browser runs get the reduced budget. inhauma-fidelity.spec.js's
+// renderer-budget assertions are upper-bound-only (`toBeLessThan`), so a lower
+// headless triangle count cannot regress them.
+const FOREST_CANDIDATE_COUNT = HEADLESS ? 220 : 2800;
 
 export function buildForests(scene) {
   inhaumaTrees.length = 0;
