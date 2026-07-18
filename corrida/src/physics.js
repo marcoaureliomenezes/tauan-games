@@ -61,7 +61,12 @@ export function stepCar(st, input, world, dt) {
     else if (!capsized) dv -= d.accel * 0.55 * input.brake * dt;      // RÉ
   }
   st.v += dv;
-  st.v = Math.max(-topSpeed * 0.28, Math.min(topSpeed * 1.15, st.v));
+  // sem TETO duro: acima do topSpeed o motor não empurra (termo 1−v/top) e o
+  // EXCESSO (impulso de colisão) decai suave por arrasto — um teto duro
+  // destruía a quantidade de movimento transferida nas batidas.
+  const vMax = topSpeed * 1.15;
+  if (st.v > vMax) st.v -= (st.v - vMax) * Math.min(1, 2.5 * dt);
+  st.v = Math.max(-topSpeed * 0.28, st.v);
   if (input.brake === 0 && input.throttle === 0 && Math.abs(st.v) < 0.4) st.v = 0;
 
   // --- direção ---
@@ -97,21 +102,26 @@ export function stepCar(st, input, world, dt) {
     const nx = dx / dl, nz = dz / dl;                  // normal para FORA
     st.pos.x = q2.cx + nx * FENCE;
     st.pos.z = q2.cz + nz * FENCE;
-    // componente da velocidade contra a cerca → ricochete amortecido
-    const vx = -Math.sin(st.heading) * st.v, vz = -Math.cos(st.heading) * st.v;
+    // componente da velocidade (frente + deriva) contra a cerca → ricochete
+    const fhx = -Math.sin(st.heading), fhz = -Math.cos(st.heading);
+    const vx = fhx * st.v - fhz * st.lat, vz = fhz * st.v + fhx * st.lat;
     const vOut = vx * nx + vz * nz;                    // >0 = indo contra a cerca
     if (vOut > 0) {
       const rvx = vx - 1.6 * vOut * nx;                // reflete (restituição 0.6)
       const rvz = vz - 1.6 * vOut * nz;
-      st.heading = Math.atan2(-rvx, -rvz);             // nariz acompanha o quique
-      const impact = vOut / Math.max(st.v, 1e-3);      // 0 raspão → 1 de frente
-      st.v *= Math.max(0.25, 1 - 0.7 * impact);        // raspão perde pouco, frontal muito
+      const impact = vOut / Math.max(Math.hypot(vx, vz), 1e-3); // 0 raspão → 1 frontal
+      // SEM teleporte do nariz: a velocidade refletida vira componentes
+      // frente/lateral do carro (heading intacto) + guinada CONTÍNUA p/ dentro
+      applyVel(st, rvx * (1 - 0.5 * impact), rvz * (1 - 0.5 * impact));
+      let dAng = Math.atan2(-rvx, -rvz) - st.heading;  // nariz gira LIMITADO p/ o quique
+      while (dAng > Math.PI) dAng -= 2 * Math.PI;
+      while (dAng < -Math.PI) dAng += 2 * Math.PI;
+      st.heading += Math.max(-0.4, Math.min(0.4, dAng)) * (0.35 + 0.65 * impact);
       st.suspension -= 0.10 * impact;                  // tranco na suspensão
       st.rumble = Math.min(1.6, st.rumble + 0.9 * impact);
       if (impact > 0.55 && Math.abs(st.v) > 22) st.rollV += (Math.random() < 0.5 ? -1 : 1) * impact * 2.6;
       st.hitWall = true;
     }
-    st.lat = 0;
   }
 
   // --- vertical: segue a estrada (Y INTERPOLADO no segmento — sem degraus/
@@ -183,14 +193,20 @@ export function collideCars(a, b) {
   const overlap = (minD - d) / 2;
   a.pos.x -= nx * overlap; a.pos.z -= nz * overlap;
   b.pos.x += nx * overlap; b.pos.z += nz * overlap;
-  const avx = -Math.sin(a.heading) * a.v, avz = -Math.cos(a.heading) * a.v;
-  const bvx = -Math.sin(b.heading) * b.v, bvz = -Math.cos(b.heading) * b.v;
+  const afx = -Math.sin(a.heading), afz = -Math.cos(a.heading);
+  const bfx = -Math.sin(b.heading), bfz = -Math.cos(b.heading);
+  const avx = afx * a.v - afz * a.lat, avz = afz * a.v + afx * a.lat;
+  const bvx = bfx * b.v - bfz * b.lat, bvz = bfz * b.v + bfx * b.lat;
   const aN = avx * nx + avz * nz, bN = bvx * nx + bvz * nz;
   const closing = aN - bN;
   if (closing <= 0) return true;
-  // ELÁSTICA (massas iguais): troca as componentes normais, restituição 0.82
-  const e = 0.82;
-  const aN2 = bN * e, bN2 = aN * e;
+  // ELÁSTICA 1-D com MASSAS REAIS ao longo da normal (conserva p = mv):
+  // carro leve que acerta caminhão perde muito; caminhão acertado voa pouco —
+  // e o atingido SEMPRE herda impulso (nada de teto de velocidade engolindo).
+  const ma = a.def.mass || 1.2, mb = b.def.mass || 1.2, e = 0.35; // carros amassam, não quicam
+  const pSum = ma * aN + mb * bN;
+  const aN2 = (pSum + mb * e * (bN - aN)) / (ma + mb);
+  const bN2 = (pSum + ma * e * (aN - bN)) / (ma + mb);
   const navx = avx + (aN2 - aN) * nx, navz = avz + (aN2 - aN) * nz;
   const nbvx = bvx + (bN2 - bN) * nx, nbvz = bvz + (bN2 - bN) * nz;
   applyVel(a, navx, navz);
@@ -206,11 +222,11 @@ export function collideCars(a, b) {
   return true;
 }
 
+// Aplica uma velocidade nova SEM teleportar o nariz (bug "movimento não
+// contínuo"): decompõe em componente FRENTE (st.v) e LATERAL (st.lat) do
+// carro. O empurrão lateral decai naturalmente no laço de deriva do stepCar.
 function applyVel(st, vx, vz) {
-  const sp = Math.hypot(vx, vz);
-  if (sp < 0.3) { st.v = 0; return; }
-  // preserva o sentido (frente/ré) em relação ao nariz atual
-  const fwdDot = vx * -Math.sin(st.heading) + vz * -Math.cos(st.heading);
-  if (fwdDot >= 0) { st.heading = Math.atan2(-vx, -vz); st.v = sp; }
-  else { st.heading = Math.atan2(vx, vz); st.v = -sp; }
+  const fx = -Math.sin(st.heading), fz = -Math.cos(st.heading);
+  st.v = vx * fx + vz * fz;
+  st.lat = vx * -fz + vz * fx;
 }

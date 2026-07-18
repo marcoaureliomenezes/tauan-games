@@ -13,43 +13,43 @@ export const CARS = [
     key: 'idea', name: 'Idea Adventure 2013 Dual Logic',
     desc: 'O monovolume aventureiro do Marco — suspensão alta, encara terra como ninguém.',
     color: 0x9ba1a8,
-    topSpeed: 62, accel: 26, handling: 2.15, grip: 0.94, brake: 46,
+    topSpeed: 62, accel: 26, handling: 2.15, grip: 0.94, brake: 46, mass: 1.28,
     dirtBonus: 0.22, model: 'SUV',
   },
   {
     key: 'muscle', name: 'Thunder V8',
     desc: 'Muscle americano — reto ninguém segura, curva é outra história.',
     color: 0xb02030,
-    topSpeed: 72, accel: 30, handling: 1.7, grip: 0.82, brake: 40,
+    topSpeed: 72, accel: 30, handling: 1.7, grip: 0.82, brake: 40, mass: 1.55,
     dirtBonus: 0, model: 'SportsCarB',
   },
   {
     key: 'exotic', name: 'Velocità GT',
     desc: 'Exótico italiano — cola no asfalto, sofre na terra.',
     color: 0xf0c020,
-    topSpeed: 76, accel: 32, handling: 2.3, grip: 0.97, brake: 52,
+    topSpeed: 76, accel: 32, handling: 2.3, grip: 0.97, brake: 52, mass: 1.3,
     dirtBonus: -0.1, model: 'SportsCarA',
   },
   {
     key: 'pickup', name: 'Mule Pickup',
     desc: 'Picape parruda — lenta no retão, trator na terra.',
     color: 0x2a5aa0,
-    topSpeed: 58, accel: 24, handling: 1.9, grip: 0.88, brake: 44,
+    topSpeed: 58, accel: 24, handling: 1.9, grip: 0.88, brake: 44, mass: 1.9,
     dirtBonus: 0.28, model: 'PickupTruck',
   },
   {
     key: 'concept', name: 'Neon 2049',
     desc: 'Conceito futurista — equilíbrio total, luzes de outro século.',
     color: 0x30c8c0,
-    topSpeed: 68, accel: 29, handling: 2.1, grip: 0.9, brake: 48,
+    topSpeed: 68, accel: 29, handling: 2.1, grip: 0.9, brake: 48, mass: 1.35,
     dirtBonus: 0.05, model: 'SportsCarC',
   },
 ];
 
 // carro de TRÁFEGO civil (caminhão/SUV lentos circulando na pista)
 export const TRAFFIC_DEFS = [
-  { key: 'civTruck', name: 'Caminhão', color: 0xd8d2c0, topSpeed: 14, accel: 8, handling: 1.2, grip: 0.9, brake: 30, dirtBonus: 0, model: 'Truck' },
-  { key: 'civSuv', name: 'SUV Civil', color: 0x6a7a52, topSpeed: 16, accel: 9, handling: 1.4, grip: 0.9, brake: 30, dirtBonus: 0, model: 'SUV' },
+  { key: 'civTruck', name: 'Caminhão', color: 0xd8d2c0, topSpeed: 14, accel: 8, handling: 1.2, grip: 0.9, brake: 30, dirtBonus: 0, mass: 4.5, model: 'Truck' },
+  { key: 'civSuv', name: 'SUV Civil', color: 0x6a7a52, topSpeed: 16, accel: 9, handling: 1.4, grip: 0.9, brake: 30, dirtBonus: 0, mass: 1.7, model: 'SUV' },
 ];
 
 const loader = new GLTFLoader();
