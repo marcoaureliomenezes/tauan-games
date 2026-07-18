@@ -271,25 +271,33 @@ func _build_rails() -> void:
 		mi.mesh = st.commit()
 		mi.mesh.surface_set_material(0, mat)
 		add_child(mi)
-		# colisor: mesma fita, mais alta (invisível)
-		var stc := SurfaceTool.new()
-		stc.begin(Mesh.PRIMITIVE_TRIANGLES)
-		for i in n:
-			var o1 := i * STEP
-			var o2 := minf((i + 1) * STEP, track_len)
+		# BARREIRA SÓLIDA (bug crítico "atravessei a cerca"): trimesh fino é
+		# atravessável por tunneling em alta velocidade (colisão discreta).
+		# Aqui: corrente de CAIXAS VOLUMÉTRICAS (1.2 m de espessura, 4 m de
+		# altura, sobrepostas) — impossível tunelar um volume sólido.
+		var sbody := StaticBody3D.new()
+		var seg := 4.0
+		var nseg := int(track_len / seg)
+		for i in nseg:
+			var o1 := i * seg
+			var o2 := fmod(o1 + seg, track_len)
 			var pa: Vector3 = curve.sample_baked(o1, true)
 			var pb: Vector3 = curve.sample_baked(o2, true)
 			var ta := (curve.sample_baked(fmod(o1 + 1.0, track_len), true) - pa).normalized()
 			var tb := (curve.sample_baked(fmod(o2 + 1.0, track_len), true) - pb).normalized()
-			var sa := Vector3(-ta.z, 0, ta.x).normalized() * off
-			var sb := Vector3(-tb.z, 0, tb.x).normalized() * off
-			for v in [pa + sa, pb + sb, pa + sa + Vector3(0, 2.2, 0),
-					pa + sa + Vector3(0, 2.2, 0), pb + sb, pb + sb + Vector3(0, 2.2, 0)]:
-				stc.add_vertex(v)
-		var sbody := StaticBody3D.new()
-		var scol := CollisionShape3D.new()
-		scol.shape = stc.commit().create_trimesh_shape()
-		sbody.add_child(scol)
+			var ca := pa + Vector3(-ta.z, 0, ta.x).normalized() * off
+			var cb := pb + Vector3(-tb.z, 0, tb.x).normalized() * off
+			var mid := (ca + cb) / 2.0 + Vector3(0, 2.0, 0)
+			var dir := (cb - ca)
+			var length := dir.length()
+			if length < 0.01:
+				continue
+			var col := CollisionShape3D.new()
+			var box := BoxShape3D.new()
+			box.size = Vector3(1.2, 4.0, length + 1.6)   # +1.6 = sobreposição
+			col.shape = box
+			col.transform = Transform3D(Basis.looking_at(dir.normalized(), Vector3.UP), mid)
+			sbody.add_child(col)
 		add_child(sbody)
 		# postes
 		var pm := MultiMesh.new()
@@ -454,6 +462,7 @@ func _physics_process(delta: float) -> void:
 			_drive_ai(car, delta)
 		else:
 			_drive_player(car, delta)
+		_anomaly_guard(car)
 		_update_progress(car)
 	_update_camera(delta)
 	_update_hud()
@@ -513,6 +522,24 @@ func _drive_ai(car: VehicleBody3D, delta: float) -> void:
 	if car.global_transform.basis.y.y < 0.1 or pos.y < -4.0:
 		_reset_car(car)
 
+var anomalies := 0            # violações de contenção detectadas (teste falha se > 0)
+
+# GUARDA DE CONTENÇÃO (bug crítico "carro embaixo do terreno"): a cada tick,
+# nenhum carro pode estar (a) abaixo do terreno, (b) além da cerca. Se estiver,
+# é anomalia: conta, loga e reseta na pista. Cinto além do CCD + caixas sólidas.
+func _anomaly_guard(car: VehicleBody3D) -> void:
+	var p := car.global_position
+	var cp: Vector3 = curve.get_closest_point(p)
+	var lateral := Vector2(p.x - cp.x, p.z - cp.z).length()
+	var below := p.y < _terrain_h(p) - 1.5
+	var escaped := lateral > ROAD_W / 2 + 3.2      # cerca fica em W/2+2.0
+	if below or escaped:
+		anomalies += 1
+		var why := "UNDERGROUND" if below else "ESCAPED"
+		print("ANOMALY %s car=%s pos=%.1f,%.1f,%.1f lat=%.1f" % [
+			why, car.name, p.x, p.y, p.z, lateral])
+		_reset_car(car)
+
 func _reset_car(car: VehicleBody3D) -> void:
 	var o := curve.get_closest_offset(car.global_position)
 	var p: Vector3 = curve.sample_baked(o, true)
@@ -561,12 +588,21 @@ func _check_test() -> void:
 	if ds > 0.5: ds -= 1.0
 	elif ds < -0.5: ds += 1.0
 	_test_travel += ds * track_len
-	if test_t < 12.0:
+	# fase de ESTRESSE DA CERCA: força o jogador contra a barreira em alta
+	# velocidade (lane bem além da pista); a contenção tem que segurar.
+	if test_t > 13.0 and test_t < 17.0:
+		pr["ai_lane"] = 30.0
+	elif test_t >= 17.0 and pr["ai_lane"] > 10.0:
+		pr["ai_lane"] = 0.0
+	if test_t < 30.0:
 		return
 	var fwd_speed: float = -player.global_transform.basis.z.dot(player.linear_velocity)
-	if _test_travel > 80.0 and fwd_speed > 3.0:
-		print("TEST PASS travel=%.0fm fwd=%.1fm/s cars=%d" % [_test_travel, fwd_speed, cars.size()])
+	var ok := _test_travel > 150.0 and fwd_speed > 3.0 and anomalies == 0
+	if ok:
+		print("TEST PASS travel=%.0fm fwd=%.1fm/s anomalies=0 cars=%d" % [
+			_test_travel, fwd_speed, cars.size()])
 		get_tree().quit(0)
 	else:
-		print("TEST FAIL travel=%.0fm fwd=%.1fm/s" % [_test_travel, fwd_speed])
+		print("TEST FAIL travel=%.0fm fwd=%.1fm/s anomalies=%d" % [
+			_test_travel, fwd_speed, anomalies])
 		get_tree().quit(1)

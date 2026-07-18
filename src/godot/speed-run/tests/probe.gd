@@ -44,4 +44,33 @@ func _physics_process(delta: float) -> void:
 			var d2 := car.global_position - start_pos
 			print("STEER+ dx=%.2f dz=%.2f heading_y=%.2f maxy=%.3f" % [
 				d2.x, d2.z, car.rotation.y, max_y])
-			get_tree().quit(0)
+			_setup_ram()
+			phase = 3
+	elif phase == 3:
+		# TRANSFERÊNCIA DE MOMENTO: A (idea, em movimento) abalroa B (pickup,
+		# parada). p = m·v deve se conservar aproximadamente na normal.
+		car.engine_force = 0.0
+		if t > 10.0:
+			var va := car.linear_velocity.length()
+			var vb := target.linear_velocity.length()
+			var pa: float = car.mass * va
+			var pb: float = target.mass * vb
+			print("RAM after: vA=%.2f vB=%.2f  pA=%.0f pB=%.0f pSum=%.0f (p0=%.0f)" % [
+				va, vb, pa, pb, pa + pb, _p0])
+			print("RAM %s" % ("PASS" if vb > 2.0 else "FAIL: B não se moveu"))
+			get_tree().quit(0 if vb > 2.0 else 1)
+
+var target: VehicleBody3D
+var _p0 := 0.0
+
+func _setup_ram() -> void:
+	car.steering = 0.0
+	car.rotation = Vector3.ZERO
+	car.global_position = Vector3(0, 0.5, 0)
+	car.linear_velocity = Vector3(0, 0, -22)   # 80 km/h para -Z
+	car.angular_velocity = Vector3.ZERO
+	_p0 = car.mass * 22.0
+	target = CarF.build("pickup")
+	target.global_transform = Transform3D(Basis(), Vector3(0, 0.5, -18))
+	add_child(target)
+	print("RAM before: A(idea %.0fkg)@22m/s → B(pickup %.0fkg)@0" % [car.mass, target.mass])

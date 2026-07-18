@@ -45,6 +45,16 @@ static func build(key: String) -> VehicleBody3D:
 	body.name = key
 	body.mass = def["mass"]
 	body.set_meta("def", def)
+	# ANTI-TUNNELING (bug crítico): colisão contínua — em alta velocidade a
+	# checagem discreta pula colisores finos (cerca/terreno) num único tick.
+	body.continuous_cd = true
+	# colisão carro-carro com física real: o motor conserva p=mv com as massas
+	# reais; bounce/atrito calibram a "vida" da batida (carros amassam: e≈0.3)
+	var pmat := PhysicsMaterial.new()
+	pmat.bounce = 0.3
+	pmat.friction = 0.7
+	body.physics_material_override = pmat
+	body.can_sleep = false
 
 	var glb: Node3D = load("res://assets/cars/%s.glb" % def["model"]).instantiate()
 	var info := _analyze(glb)
