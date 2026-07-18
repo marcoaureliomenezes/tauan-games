@@ -13,7 +13,7 @@ import { fireLaser, launchNuke, launchGravBomb, launchHiggs, updateProjectiles, 
 import { journeyToggle, journeyEligible, journeyWarp } from './journey.js';
 import { spawnEnemies, updateEnemies } from './enemies.js';
 import { startMissions, beginFlight, updateMissions, debugCompleteMission, debugKillTarget } from './missions.js';
-import { updateParticles, thruster, nukeBlast, explosion } from './fx.js';
+import { updateParticles, thruster, nukeBlast, explosion, shipBurn } from './fx.js';
 import { updateHUD, showOverlay, hideOverlay, showToast } from './hud.js';
 import { initMap, toggleMap, drawMap } from './map.js';
 import { buildNav, initNavHUD, drawNav, cycleTarget, targetBody } from './nav.js';
@@ -125,6 +125,11 @@ function loop() {
 
   // skybox sempre centrada na câmera (= infinitamente longe)
   skybox.position.copy(camera.position);
+  // Em cruzeiro relativístico o fundo pintado ESCURECE: o céu que conta é o
+  // corredor de estrelas-ponto com aberração (starfield); o mural estático
+  // competindo em brilho matava a leitura do efeito (operador 2026-07-17).
+  const jBeta = game.journey && game.journey.active ? game.journey.beta : 0;
+  skybox.material.color.setScalar(1 - 0.72 * jBeta);
 
   if ((game.phase === 'flight') && !game.paused) {
     updateOrbits(dt);
@@ -135,6 +140,8 @@ function loop() {
     _back.set(0, 0, 1).applyQuaternion(game.ship.quat);
     _thrPos.copy(shipMesh().position).addScaledVector(_back, 8);
     thruster(_thrPos, _back, game.ship.throttle * (game.ship.boost ? 2 : 1));
+    // reentrada: casco em chamas — línguas de plasma contra o vetor de velocidade
+    shipBurn(shipMesh().position, game.ship.vel, game.ship.heat || 0);
     updateEnemies(dt);
     updateProjectiles(dt);
     updateMissions(dt);
@@ -199,7 +206,10 @@ function updateGravLens() {
 function gameOver() {
   game.phase = 'gameover';
   const by = game.ship.killedBy;
+  // desintegração visível: a nave explode onde morreu (queima, esmagamento, impacto)
+  explosion(game.ship.pos.clone(), 2.6);
   const titles = {
+    burned: '🔥 CASCO DESINTEGRADO NA REENTRADA',
     blackhole: '🕳 ESPAGUETIFICADO NO BURACO NEGRO',
     neutron: '⭐ ESMAGADO PELA ESTRELA DE NÊUTRONS',
     gas: '🌪 ESMAGADO NO GIGANTE GASOSO',

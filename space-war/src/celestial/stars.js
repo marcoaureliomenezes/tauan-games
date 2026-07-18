@@ -24,6 +24,8 @@ import { CelestialBody } from './body.js';
 // e é CORTADO além da vizinhança solar.
 const FLARE_FULL = 700_000;      // até aqui: tamanho pleno (vizinhança interna)
 const FLARE_CUTOFF = 4_200_000;  // < anel de vizinhos (4.5M): lá fora, invisível
+const _occDir = new THREE.Vector3();   // oclusão do flare (câmera→sol)
+const _occV = new THREE.Vector3();
 import {
   HEADLESS, starMaterial, makeRadialSprite, flareTexture,
   diskMaterial, DISK_SYNCHROTRON,
@@ -105,7 +107,24 @@ export class Star extends CelestialBody {
         // mesmo em HEADLESS — o diagnóstico game.sunFlareVisible/Factor é o que
         // os testes de regressão asserem.
         const d = camera.position.distanceTo(group.position);
-        const vis = d < FLARE_CUTOFF;
+        // OCLUSÃO manual (bug operador 2026-07-17 "sol cega a visão"): com
+        // logarithmicDepthBuffer o teste de profundidade do Lensflare falha e o
+        // flare ATRAVESSAVA planetas, lavando a tela de branco. Testa se algum
+        // corpo opaco cruza o segmento câmera→sol (distância ponto-reta < raio).
+        let occluded = false;
+        _occDir.copy(group.position).sub(camera.position);
+        const dLen = Math.max(_occDir.length(), 1e-6);
+        _occDir.multiplyScalar(1 / dLen);
+        for (const b of (game.bodies || [])) {
+          if (!b.mesh || b.group === group || !b.def || !b.def.radius) continue;
+          if (b.def.kind === 'blackhole' || b.isSun) continue;
+          _occV.copy(b.worldPos).sub(camera.position);
+          const t = _occV.dot(_occDir);
+          if (t <= 0 || t >= dLen) continue;              // fora do segmento
+          const perp2 = _occV.lengthSq() - t * t;
+          if (perp2 < b.def.radius * b.def.radius) { occluded = true; break; }
+        }
+        const vis = d < FLARE_CUTOFF && !occluded;
         game.sunFlareVisible = vis;
         const fFlux = Math.min(1, (FLARE_FULL / Math.max(d, 1)) ** 2);
         game.sunFlareFactor = vis ? fFlux : 0;

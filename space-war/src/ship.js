@@ -557,7 +557,10 @@ function updateFlight(s, dt) {
     // aquecimento: quanto mais rápido + denso, mais o casco esquenta (reentrada)
     const heating = Math.max(0, (s.speed - ATMO.burnSpeed) / 2600) * (0.35 + depth);
     s.heat = Math.min(1, (s.heat || 0) + heating * dt * 2.2 - dt * 0.5);
-    if (heating > 0.04) s.hp -= ATMO.burnDamage * heating * dt;
+    if (heating > 0.04) {
+      s.hp -= ATMO.burnDamage * heating * dt;
+      if (s.hp <= 0 && !s.killedBy) s.killedBy = 'burned';   // desintegrou na reentrada
+    }
     s.atmoBody = dom;
   } else {
     s.heat = Math.max(0, (s.heat || 0) - dt * 0.9);

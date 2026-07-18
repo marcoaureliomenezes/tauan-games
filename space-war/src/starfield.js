@@ -44,16 +44,36 @@ function rng(seed) {
   };
 }
 
-// d0: gauge de CAMPO (I=1 p/ L=1 a d0) — típico I 0.05–1 ("poeira que acende");
-// rasante satura e o glare cresce. corePx/glareK/maxPx: PSF do campo.
+// ═══ FÍSICA REPRODUZIDA (documentação de referência — operador 2026-07-17) ═══
+// 1. ABERRAÇÃO RELATIVÍSTICA (efeito holofote/headlight): para um observador a
+//    velocidade β=v/c, a direção APARENTE de uma estrela desloca-se PARA O RUMO:
+//        cos θ_ap = (cos θ + β) / (1 + β·cos θ)
+//    A β→1 o céu inteiro se CONCENTRA num círculo cada vez menor à frente —
+//    a 0.995c uma estrela que estava a 90° aparece a ~5.7° do centro da tela.
+//    É o efeito pedido: "a luz das estrelas no horizonte concentra ao meio".
+// 2. DOPPLER RELATIVÍSTICO: δ = 1/(γ(1−β·cosθ')), γ = 1/√(1−β²). A cor de corpo
+//    negro desloca com T' = δ·T — estrelas à frente azulam SUTILMENTE, atrás
+//    avermelham. (Recolor CONTIDO: tinte leve, nunca ponto azul/vermelho puro.)
+// 3. BEAMING (headlight fotométrico): I_obs ∝ δ⁴ — a frente brilha, a traseira
+//    apaga. Aplicado no ALFA (brilho), com teto baixo na COR para o ponto
+//    continuar parecendo ESTRELA (lei do operador: ponto sólido, nunca borrão).
+// 4. PARALAXE: duas camadas em wrap infinito — NEAR (cruzamos de verdade, é o
+//    "corredor" de estrelas passando) e FAR (horizonte quase estático que só
+//    deriva). Estrelas perto do RUMO crescem ao aproximar (2R/d honesto);
+//    as periféricas cruzam a tela sem mudar de tamanho aparente.
+//
+// d0: gauge de CAMPO (I=1 p/ L=1 a d0) — típico I 0.05–1 ("poeira que acende").
+// DENSIDADE (operador 2026-07-17: "milhares; dezenas/centenas por segundo"):
+// NEAR 9000 estrelas num cubo de 520k → a 154k u/s de cruzeiro cruzamos ~dezenas
+// por segundo de perto e centenas contando o campo todo em movimento.
 const LAYERS = [
-  { count: HEADLESS ? 1400 : 3600, span: 900_000, d0: 120_000, corePx: 1.9, glareK: 2.2, maxPx: 12, radMax: 3200, seed: 1234567 },   // NEAR: paralaxe forte
-  { count: HEADLESS ? 700 : 1800, span: 3_200_000, d0: 260_000, corePx: 1.6, glareK: 1.8, maxPx: 9, radMax: 1400, seed: 7654321 },  // FAR: deriva lenta
+  { count: HEADLESS ? 2000 : 9000, span: 520_000, d0: 170_000, corePx: 1.6, glareK: 0.8, maxPx: 4, radMax: 900, seed: 1234567 },   // NEAR: paralaxe forte
+  { count: HEADLESS ? 1000 : 4000, span: 3_200_000, d0: 340_000, corePx: 1.4, glareK: 0.7, maxPx: 3.5, radMax: 500, seed: 7654321 },  // FAR: deriva lenta
 ];
-// Passagem rasante (AC-02, operador): teto do crescimento angular (2·R/d) e
-// ganho dos RISCOS tangenciais (AC-04: comprimento ∝ ω = v·senθ/d).
-const CLOSE_MAX_PX = 48;
-const STREAK_K = 12;
+// Passagem rasante (AC-02): teto do crescimento angular (2·R/d) — estrelas no
+// CENTRO crescem ao aproximar; periféricas ficam pontos. Risco tangencial quase
+// eliminado (operador 2026-07-17: "pontos consistentes, NUNCA borrões").
+const CLOSE_MAX_PX = 12;
 
 const VERT = `
 uniform vec3 uCam;
@@ -68,7 +88,6 @@ uniform float uMaxPx;
 uniform float uPxAngle;
 uniform float uSpeed;
 uniform float uCloseMax;
-uniform float uStreakK;
 uniform vec3 uCamRight;
 uniform vec3 uCamUp;
 attribute vec3 iPos;
@@ -86,49 +105,58 @@ void main() {
   float ct = dot(dir, uDir);
   // ABERRAÇÃO relativística — forma APARENTE (+β): o céu agrupa À FRENTE
   // (headlight effect); a 90° do rumo a estrela aparece em arccos β.
-  float ctA = (ct + uBeta) / max(1.0 + uBeta * ct, 1e-4);
+  // GEOMETRIA com teto β=0.90 (cone ~26°): a 0.995 o céu inteiro caberia em
+  // ~6° — fisicamente correto mas ilegível (vira meia dúzia de pixels no
+  // centro). O funil fica dramático E populado; Doppler/beaming usam o β pleno.
+  float bG = min(uBeta, 0.90);
+  float ctA = (ct + bG) / max(1.0 + bG * ct, 1e-4);
   vec3 perp = dir - uDir * ct;
   float pl = length(perp);
   vec3 dirA = (pl > 1e-5)
     ? normalize(uDir * ctA + (perp / pl) * sqrt(max(0.0, 1.0 - ctA * ctA)))
     : dir;
-  // FOTOMETRIA (espelho de physics.pointIntensity/pointPx/pointAlpha):
-  // I = L·(D0/d)²; núcleo FIXO + glare √(I−1) com teto; α = clamp(I,0,1).
+  // PONTOS SÓLIDOS (operador 2026-07-17: "estrelas consistentes, opacas,
+  // pequenos círculos"): o brilho físico modula POUCO — toda estrela do campo é
+  // um ponto legível; o fluxo I só diferencia fraca/brilhante no tamanho.
   float I = iLum * (uD0 * uD0) / (dist * dist);
   float px = min(uCorePx + ((I > 1.0) ? uGlareK * sqrt(I - 1.0) : 0.0), uMaxPx);
-  // PASSAGEM RASANTE (AC-02): tamanho ANGULAR honesto 2·R/d — estrela com
-  // parâmetro de impacto pequeno (perto do centro da tela) CRESCE antes de
-  // cruzarmos; as que se afastam do rumo continuam pontos.
+  // MAIOR AO CENTRO: estrela perto do rumo (centro da tela) cresce; periférica
+  // cruza a tela como ponto de tamanho constante.
+  px *= mix(0.9, 1.3, smoothstep(0.55, 0.98, ctA));
+  // PASSAGEM RASANTE (AC-02): tamanho ANGULAR honesto 2·R/d — a estrela que
+  // vamos cruzar de verdade vira DISCO antes da passagem.
   px = min(px + (2.0 * iRad / dist) / uPxAngle, uCloseMax);
   // fade na borda da célula do wrap: nasce APAGADA, acende ao entrar (20% finais)
   vec3 an = abs(c) / (0.5 * uSpan);
   float edge = 1.0 - smoothstep(0.80, 1.0, max(an.x, max(an.y, an.z)));
-  // DOPPLER: δ = 1/(γ(1−β·cosθ')) — recolor térmico + beaming δ⁴ (clamp 5)
-  float gamma = 1.0 / sqrt(max(1.0 - uBeta * uBeta, 1e-4));
-  float delta = 1.0 / max(gamma * (1.0 - uBeta * ctA), 1e-3);
-  float boost = clamp(pow(delta, 4.0), 0.02, 9.0);   // headlight FORTE (AC-03)
-  // corpo negro fica corpo negro com T' = δT: desloca a cor ao longo do locus
-  float shift = clamp(delta - 1.0, -0.6, 1.2);
-  vColor = mix(iColor, (shift > 0.0) ? vec3(0.75, 0.85, 1.0) : vec3(1.0, 0.45, 0.25), abs(shift) * 0.75) * boost;
-  // RISCOS TANGENCIAIS (AC-04): a taxa angular aparente ω = v·senθ'/d explode
-  // na passagem — o ponto vira um risco RADIAL de tela (persistência de visão,
-  // como nos sims de referência). streak em múltiplos da largura do quad.
-  float sinA = sqrt(max(0.0, 1.0 - ctA * ctA));
-  float streak = clamp(uStreakK * uSpeed * sinA / max(dist, 1.0), 0.0, 10.0);
-  // eixos do quad: A = direção radial-de-tela do fluxo (⊥ dirA), B = ⊥ ambos —
-  // o plano continua de frente p/ a câmera; streak 0 → PSF circular idêntica.
-  vec3 radial = dirA - uDir * dot(dirA, uDir);
-  vec3 aR = radial - dirA * dot(radial, dirA);
-  float al = length(aR);
-  vec3 axisA = (al > 1e-4) ? aR / al : uCamRight;
-  vec3 axisB = normalize(cross(dirA, axisA));
-  // energia se espalha pelo risco: α cai com o alongamento (conservação)
-  vAlpha = clamp(I, 0.0, 1.0) * edge * uFade * min(boost, 1.0) / (1.0 + 0.5 * streak);
+  // DOPPLER: δ = 1/(γ(1−β·cosθ')) — recolor térmico + beaming. Usa o MESMO β
+  // com teto da geometria: com β pleno 0.995 o beaming δ⁴ apagava TUDO fora do
+  // último grau do cone (fisicamente correto, mas a tela ficava vazia).
+  float gamma = 1.0 / sqrt(max(1.0 - bG * bG, 1e-4));
+  float delta = 1.0 / max(gamma * (1.0 - bG * ctA), 1e-3);
+  // beaming no BRILHO (alfa) — a COR tem teto BAIXO: acima o ponto virava um
+  // borrão saturado azul/vermelho (bug reportado pelo operador 2026-07-17).
+  float boost = clamp(pow(delta, 4.0), 0.02, 9.0);
+  float colorBoost = clamp(boost, 0.15, 1.35);
+  // corpo negro fica corpo negro com T' = δT: TINTE leve ao longo do locus
+  float shift = clamp(delta - 1.0, -0.35, 0.5);
+  vColor = mix(iColor, (shift > 0.0) ? vec3(0.80, 0.88, 1.0) : vec3(1.0, 0.62, 0.42), abs(shift) * 0.35) * colorBoost;
+  // SEM riscos (operador 2026-07-17): o ponto NUNCA vira traço/borrão — a
+  // sensação de velocidade vem do MOVIMENTO de centenas de pontos sólidos.
+  // BILLBOARD nos eixos da CÂMERA: o antigo par radial/cross(dirA,axisA)
+  // colapsava os quads neste driver (bug caçado por bisseção 2026-07-18 —
+  // NENHUMA estrela do campo renderizava; era ESTE o "cadê as estrelas").
+  vec3 axisA = uCamRight;
+  vec3 axisB = uCamUp;
+  // ALFA ALTO por padrão (ponto OPACO): o fluxo I só empurra de 0.65 → 1.0;
+  // beaming suavizado (δ², piso 0.5) esmaece a periferia sem apagá-la.
+  float aBoost = clamp(pow(delta, 2.0), 0.40, 1.0);
+  vAlpha = clamp(0.55 + 0.35 * min(I, 1.0), 0.0, 1.0) * edge * uFade * aBoost;
   vQuad = position.xy * 2.0;                       // −1..1 no quad
   // quad subtendendo px PIXELS (eixo A alongado pelo risco)
   float world = px * dist * uPxAngle;
   vec3 pA = uCam + dirA * dist
-    + axisA * position.x * world * (1.0 + streak)
+    + axisA * position.x * world
     + axisB * position.y * world;
   gl_Position = projectionMatrix * viewMatrix * vec4(pA, 1.0);
 }
@@ -141,8 +169,10 @@ varying vec2 vQuad;
 void main() {
   float r2 = dot(vQuad, vQuad);
   if (r2 > 1.0) discard;
-  float psf = exp(-3.2 * r2);                      // PSF gaussiana
-  gl_FragColor = vec4(vColor, psf * vAlpha);
+  // CÍRCULO SÓLIDO com borda curta (anti-alias) — ponto de estrela consistente,
+  // não gaussiana esfumaçada (lei do operador: nunca borrão).
+  float disc = 1.0 - smoothstep(0.55, 1.0, r2);
+  gl_FragColor = vec4(vColor, disc * vAlpha);
 }
 `;
 
@@ -176,7 +206,7 @@ export function buildStarfield() {
       col[i * 3] = c.r * tone; col[i * 3 + 1] = c.g * tone; col[i * 3 + 2] = c.b * tone;
       // classe de luminosidade: maioria fraca, raras brilhantes (cauda ∝ r³)
       const r = rand();
-      lum[i] = 0.25 + 3.75 * r * r * r;
+      lum[i] = 0.45 + 3.55 * r * r * r;
       // pseudo-raio (AC-02): estrelas SÃO sóis — passagens rasantes mostram
       // disco/glare crescendo (2R/d); maioria pequena, raras gigantes (∝ r²)
       const rr = rand();
@@ -205,7 +235,6 @@ export function buildStarfield() {
         uPxAngle: { value: 0.001 },
         uSpeed: { value: 0 },
         uCloseMax: { value: CLOSE_MAX_PX },
-        uStreakK: { value: STREAK_K },
         uCamRight: { value: new THREE.Vector3(1, 0, 0) },
         uCamUp: { value: new THREE.Vector3(0, 1, 0) },
       },
@@ -284,7 +313,9 @@ export function updateStarfield() {
     u.uCamRight.value.copy(_right);
     u.uCamUp.value.copy(_up);
   }
-  game.starfieldFx = { closeMaxPx: CLOSE_MAX_PX, streakK: STREAK_K, beta };
+  // streaks ELIMINADOS (lei do operador 2026-07-17: pontos sólidos, nunca
+  // borrões) — streakK permanece no diagnóstico como 0 explícito.
+  game.starfieldFx = { closeMaxPx: CLOSE_MAX_PX, streakK: 0, beta };
   game.starfieldFade = fade;                 // diagnóstico p/ e2e
   game.starfieldBeta = beta;
 
@@ -295,6 +326,8 @@ export function updateStarfield() {
       ((b.y - camera.position.y) % span + span * 1.5) % span - span * 0.5 + camera.position.y,
       ((b.z - camera.position.z) % span + span * 1.5) % span - span * 0.5 + camera.position.z,
     );
-    sp.material.opacity = 0.30 * fade;
+    // nebulosas somem em alta velocidade: a β alta elas viravam "borrões
+    // vermelhos/azuis" cruzando a tela — o corredor é de ESTRELAS-ponto.
+    sp.material.opacity = 0.30 * fade * (1 - 0.85 * beta);
   }
 }

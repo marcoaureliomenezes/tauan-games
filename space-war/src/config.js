@@ -114,7 +114,8 @@ export const PLANETS = [
   },
   {
     name: 'Marte', key: 'mars',
-    radius: 53, color: 0xb5492c, color2: 0x7d2f1c, kind: 'rock',
+    radius: 53, color: 0xc1613b, color2: 0x8a3b22, kind: 'rock',
+    caps: true, maria: true,      // calotas polares de CO₂ + mares escuros (Syrtis)
     orbit: 78000, periodFactor: 1.881, tilt: 0.03, spin: 62,
     mu: mu(0.107), soi: 2600, atmosphere: 0xd98a6a, hasAtmo: true,
     moons: [
@@ -125,6 +126,8 @@ export const PLANETS = [
   {
     name: 'Júpiter', key: 'jupiter',
     radius: 1100, color: 0xc9a878, color2: 0x8c6a4a, kind: 'gas', bands: true, redspot: true,
+    // Zonas claras (creme/branco) alternando com cinturões marrom-caramelo — Juno/HST.
+    bandColors: ['#ded0b8', '#a97a50', '#ece2cc', '#8f6242', '#d9c6a4', '#b58a5c', '#c9b494', '#9c6f4a'],
     orbit: 150000, periodFactor: 11.86, tilt: 0.02, spin: 26,
     mu: mu(317.8), soi: 28000, atmosphere: 0xd8b890, hasAtmo: true,
     moons: [
@@ -137,6 +140,8 @@ export const PLANETS = [
   {
     name: 'Saturno', key: 'saturn',
     radius: 915, color: 0xd8c89a, color2: 0xb09a6a, kind: 'gas', bands: true,
+    // Ouro pálido de baixo contraste — Cassini: bandas suaves, quase aquareladas.
+    bandColors: ['#e8d9ab', '#d2bc85', '#f0e6c8', '#c9b078', '#e0d0a0', '#d8c491'],
     orbit: 245000, periodFactor: 29.46, tilt: 0.09, spin: 28,
     mu: mu(95.2), soi: 22000, atmosphere: 0xe6d8b0, hasAtmo: true,
     ring: { inner: 1150, outer: 2150, color: 0xd9c8a0, tilt: 0.47 },
@@ -148,6 +153,8 @@ export const PLANETS = [
   {
     name: 'Urano', key: 'uranus',
     radius: 400, color: 0x9fe0e4, color2: 0x73c6cc, kind: 'ice',
+    // Voyager 2: ciano-pálido quase uniforme, bandas apenas sugeridas.
+    bandColors: ['#bde5e9', '#b2dfe4', '#c6ebee', '#aedbe0'],
     orbit: 370000, periodFactor: 84.0, tilt: 1.4, spin: 34,
     mu: mu(14.5), soi: 12000, atmosphere: 0xaff0f4, hasAtmo: true,
     ring: { inner: 520, outer: 700, color: 0x88b0b4, tilt: 1.5 },
@@ -158,7 +165,9 @@ export const PLANETS = [
   },
   {
     name: 'Netuno', key: 'neptune',
-    radius: 385, color: 0x3554d4, color2: 0x2138a0, kind: 'ice',
+    radius: 385, color: 0x3554d4, color2: 0x2138a0, kind: 'ice', darkspot: true,
+    // Voyager 2: azul-cobalto vívido com faixas sutis + Grande Mancha Escura.
+    bandColors: ['#3358d6', '#2a46b8', '#4066e2', '#2b3fa6', '#3a5cd0'],
     orbit: 480000, periodFactor: 164.8, tilt: 0.49, spin: 32,
     mu: mu(17.1), soi: 12000, atmosphere: 0x5a78f0, hasAtmo: true,
     moons: [

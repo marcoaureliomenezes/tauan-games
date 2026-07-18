@@ -70,7 +70,11 @@ function solarSystem() {
       cellScale: 26,            // granulação fina (vs células gigantes de supergigante)
       coronaScale: 5.0,
       lum: 1.0,                 // gauge fotométrico do jogo (I=1 a PHOTO_D0)
-      light: { color: SUN.light, intensity: 3.2, range: 1_000_000, flare: true },
+      // range >> órbita de Netuno (1.92M pós-×4): o three.js aplica um corte
+      // suave ~(1-(d/range)⁴)² — com range 1M os planetas externos ficavam
+      // PRETOS, e mesmo 2.6M ainda esmagava Netuno. 5M ⇒ atenuação ~0.96 em
+      // Netuno, e ainda finito (não vaza luz solar nos sistemas vizinhos).
+      light: { color: SUN.light, intensity: 3.2, range: 5_000_000, flare: true },
     }).withMotion(new Pinned(ORIGIN));
     game.sun = sun;
 

@@ -37,6 +37,21 @@ export function thruster(pos, back, throttle) {
   particle(pos, v, 0x66ccff, grain, 0.35);
 }
 
+// FOGO DE REENTRADA: plasma arrancado do casco — línguas laranja/brancas que
+// escapam CONTRA o vetor de velocidade. Intensifica com o calor: perto de 1.0
+// a nave é uma bola de fogo (e desintegra ao zerar o casco).
+export function shipBurn(pos, vel, heat) {
+  if (heat < 0.12) return;
+  const n = 2 + (heat * 6 | 0);
+  for (let i = 0; i < n; i++) {
+    if (Math.random() > 0.35 + heat) continue;
+    const back = vel.clone().multiplyScalar(-0.08);
+    back.x += (Math.random() - 0.5) * 45; back.y += (Math.random() - 0.5) * 45; back.z += (Math.random() - 0.5) * 45;
+    const col = Math.random() < heat - 0.35 ? 0xfff2cc : Math.random() < 0.5 ? 0xff7a30 : 0xffb060;
+    particle(pos, back, col, 2.2 + heat * 5.5 + Math.random() * 2, 0.3 + Math.random() * 0.35);
+  }
+}
+
 const FXS = 26;   // escala global dos efeitos (mundo grande)
 
 export function explosion(pos, scale = 1, color = 0xffaa44) {

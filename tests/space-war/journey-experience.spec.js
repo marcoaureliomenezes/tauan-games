@@ -52,7 +52,9 @@ test.describe('Space War — Experiência Interestelar', () => {
 
   // AC-02/04: os mecanismos de passagem existem e estão armados — crescimento
   // rasante (teto ~48px) e riscos tangenciais (ganho > 0) no diag do starfield.
-  test('AC-02/04: crescimento na passagem + riscos tangenciais armados', async ({ page }) => {
+  // Lei NOVA (operador 2026-07-17): pontos SÓLIDOS consistentes, nunca borrões
+  // nem riscos — passagem rasante cresce com teto CONTIDO (~12px), sem streaks.
+  test('AC-02/04: pontos sólidos com crescimento contido na passagem', async ({ page }) => {
     test.setTimeout(90000);
     await startFlight(page);
     await engageJourney(page);
@@ -64,8 +66,8 @@ test.describe('Space War — Experiência Interestelar', () => {
       beta: window.__spaceWar.starfieldBeta,
     }));
     expect(fx.field.mode).toBe('instanced-quads');
-    expect(fx.fx.closeMaxPx).toBeGreaterThanOrEqual(40);   // passagens CRESCEM até ~48px
-    expect(fx.fx.streakK).toBeGreaterThan(0);              // riscos ∝ ω = v·senθ/d
+    expect(fx.fx.closeMaxPx).toBeGreaterThanOrEqual(8);    // rasante ainda cresce…
+    expect(fx.fx.closeMaxPx).toBeLessThanOrEqual(16);      // …mas NUNCA vira borrão
     expect(fx.beta).toBeGreaterThanOrEqual(0.98);          // relatividade plena no cruzeiro
   });
 

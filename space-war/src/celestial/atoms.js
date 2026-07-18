@@ -106,7 +106,7 @@ export function rndSeed(s) {
 // Retorna um BUNDLE { map, lights, rough }: lights/rough só existem para 'earth'.
 const _texCache = new Map();
 export function planetTexture(def) {
-  const cacheKey = `${def.kind}|${def.color}|${def.color2 || 0}|${def.radius}|${def.redspot ? 1 : 0}`;
+  const cacheKey = `${def.key || ''}|${def.kind}|${def.color}|${def.color2 || 0}|${def.radius}|${def.redspot ? 1 : 0}`;
   const hit = _texCache.get(cacheKey);
   if (hit) return hit;
   const texs = buildPlanetTexture(def);
@@ -121,26 +121,81 @@ function buildPlanetTexture(def) {
   const base = hex(def.color), base2 = hex(def.color2 || def.color);
 
   if (def.kind === 'gas' || def.kind === 'ice') {
-    // Bandas horizontais com turbulência.
-    for (let y = 0; y < H; y++) {
-      const t = y / H;
-      const wob = Math.sin(t * Math.PI * (def.kind === 'gas' ? 22 : 9) + Math.sin(t * 40) * 0.6) * 0.5 + 0.5;
-      const c = mixColor(def.color, def.color2 || def.color, wob);
-      ctx.fillStyle = hex(c);
-      ctx.fillRect(0, y, W, 1);
+    if (def.bandColors && def.bandColors.length) {
+      // PALETA REAL por-planeta (Juno/Cassini/Voyager): faixas latitudinais com
+      // borda ondulada (cisalhamento) interpolando cores adjacentes da paleta.
+      const pal = def.bandColors.map((s) => parseInt(s.slice(1), 16));
+      const N = pal.length * (def.kind === 'gas' ? 2.5 : 1.5);   // nº de faixas
+      const ph1 = rnd() * 10, ph2 = rnd() * 10;
+      for (let y = 0; y < H; y++) {
+        const t = y / H;
+        // ondulação da fronteira entre faixas (jatos zonais)
+        const wob = Math.sin(t * 61 + ph1) * 0.22 + Math.sin(t * 23 + ph2) * 0.30;
+        const b = t * N + wob;
+        const i0 = ((Math.floor(b) % pal.length) + pal.length) % pal.length;
+        const i1 = (i0 + 1) % pal.length;
+        const f = b - Math.floor(b);
+        const sm = f * f * (3 - 2 * f);                          // transição suave
+        // pólos ligeiramente escurecidos (como Júpiter/Saturno reais)
+        const polar = 1 - 0.18 * Math.pow(Math.abs(t - 0.5) * 2, 3);
+        let c = mixColor(pal[i0], pal[i1], sm);
+        c = mixColor(0x000000, c, polar);
+        ctx.fillStyle = hex(c);
+        ctx.fillRect(0, y, W, 1);
+      }
+    } else {
+      // Fallback genérico: bandas horizontais com turbulência (2 cores).
+      for (let y = 0; y < H; y++) {
+        const t = y / H;
+        const wob = Math.sin(t * Math.PI * (def.kind === 'gas' ? 22 : 9) + Math.sin(t * 40) * 0.6) * 0.5 + 0.5;
+        const c = mixColor(def.color, def.color2 || def.color, wob);
+        ctx.fillStyle = hex(c);
+        ctx.fillRect(0, y, W, 1);
+      }
     }
-    // Redemoinhos suaves
+    // Redemoinhos/turbulência nas fronteiras das faixas
     ctx.globalCompositeOperation = 'overlay';
-    for (let i = 0; i < 240; i++) {
+    const swirls = def.kind === 'gas' ? 320 : 120;
+    for (let i = 0; i < swirls; i++) {
       const y = rnd() * H;
-      ctx.fillStyle = `rgba(255,255,255,${rnd() * 0.05})`;
-      ctx.beginPath(); ctx.ellipse(rnd() * W, y, 30 + rnd() * 120, 4 + rnd() * 10, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${rnd() * (def.kind === 'gas' ? 0.07 : 0.04)})`;
+      ctx.beginPath(); ctx.ellipse(rnd() * W, y, 30 + rnd() * 120, 3 + rnd() * 8, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    // ovais brancas pequenas (tempestades) só em gigantes gasosos
+    if (def.kind === 'gas') {
+      for (let i = 0; i < 14; i++) {
+        const y = H * (0.2 + rnd() * 0.6);
+        ctx.fillStyle = `rgba(255,250,240,${0.12 + rnd() * 0.18})`;
+        ctx.beginPath(); ctx.ellipse(rnd() * W, y, 8 + rnd() * 18, 4 + rnd() * 7, 0, 0, Math.PI * 2); ctx.fill();
+      }
     }
     ctx.globalCompositeOperation = 'source-over';
     if (def.redspot) {
-      const g = ctx.createRadialGradient(W * 0.62, H * 0.62, 2, W * 0.62, H * 0.62, 60);
-      g.addColorStop(0, 'rgba(220,90,40,0.95)'); g.addColorStop(1, 'rgba(220,90,40,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(W * 0.62, H * 0.62, 70, 40, 0, 0, Math.PI * 2); ctx.fill();
+      // GRANDE MANCHA VERMELHA em camadas (anticiclone real): anel externo
+      // salmão → colar escuro → núcleo laranja-tijolo, deitada num cinturão sul.
+      const sx = W * 0.62, sy = H * 0.66;
+      const layer = (rx, ry, c0, c1) => {
+        const g = ctx.createRadialGradient(sx, sy, 2, sx, sy, rx);
+        g.addColorStop(0, c0); g.addColorStop(1, c1);
+        ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+      };
+      layer(115, 62, 'rgba(226,160,120,0.55)', 'rgba(226,160,120,0)');   // halo salmão
+      layer(92, 50, 'rgba(150,70,45,0.80)', 'rgba(150,70,45,0)');        // colar escuro
+      layer(68, 38, 'rgba(212,90,50,0.95)', 'rgba(200,80,45,0)');        // corpo
+      layer(34, 20, 'rgba(235,130,80,0.9)', 'rgba(235,130,80,0)');       // núcleo
+    }
+    if (def.darkspot) {
+      // Grande Mancha Escura de Netuno + cirros brancos companheiros (Voyager 2).
+      const sx = W * 0.38, sy = H * 0.58;
+      const g = ctx.createRadialGradient(sx, sy, 2, sx, sy, 80);
+      g.addColorStop(0, 'rgba(12,20,70,0.85)'); g.addColorStop(1, 'rgba(12,20,70,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(sx, sy, 85, 42, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(240,248,255,0.55)';
+      for (let i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.ellipse(sx - 40 + rnd() * 140, sy + 46 + rnd() * 26, 26 + rnd() * 44, 3 + rnd() * 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   } else if (def.kind === 'earth') {
     // Oceano
@@ -215,6 +270,36 @@ function buildPlanetTexture(def) {
     // Rocha: base + crateras + variação.
     ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
     for (let i = 0; i < 400; i++) paintBlob(ctx, rnd() * W, rnd() * H, 4 + rnd() * 30, hex(mixColor(def.color, def.color2 || def.color, rnd())), rnd, 0.6);
+    if (def.maria) {
+      // "Mares" escuros de albedo (Syrtis Major etc.): gradientes radiais SUAVES —
+      // blobs poligonais grandes liam como low-poly na esfera.
+      const soft = (mx, my, rx, ry, rgba) => {
+        const g2 = ctx.createRadialGradient(mx, my, 2, mx, my, rx);
+        g2.addColorStop(0, rgba); g2.addColorStop(1, rgba.replace(/[\d.]+\)$/, '0)'));
+        ctx.fillStyle = g2; ctx.beginPath(); ctx.ellipse(mx, my, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+      };
+      for (let i = 0; i < 12; i++) {
+        const mx = rnd() * W, my = H * (0.25 + rnd() * 0.5);
+        soft(mx, my, 70 + rnd() * 120, 40 + rnd() * 60, 'rgba(70,38,26,0.5)');
+        soft(mx + (rnd() - 0.5) * 80, my + (rnd() - 0.5) * 50, 30 + rnd() * 60, 20 + rnd() * 30, 'rgba(52,28,20,0.4)');
+      }
+      // poeira clara equatorial (Tharsis/Arabia)
+      for (let i = 0; i < 12; i++) {
+        soft(rnd() * W, H * (0.35 + rnd() * 0.3), 50 + rnd() * 90, 30 + rnd() * 40, 'rgba(235,180,130,0.15)');
+      }
+    }
+    if (def.caps) {
+      // Calotas polares brancas com borda irregular.
+      for (const [cy, dir] of [[0, 1], [H, -1]]) {
+        ctx.fillStyle = 'rgba(255,252,248,0.96)';
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        for (let x = 0; x <= W; x += 16) {
+          ctx.lineTo(x, cy + dir * (H * 0.045 + Math.sin(x * 0.05) * H * 0.012 + rnd() * H * 0.02));
+        }
+        ctx.lineTo(W, cy); ctx.closePath(); ctx.fill();
+      }
+    }
     // Crateras
     for (let i = 0; i < 120; i++) {
       const x = rnd() * W, y = rnd() * H, r = 3 + rnd() * 14;
@@ -256,9 +341,10 @@ export function atmosphere(radius, color) {
     vertexShader: `varying vec3 vN; varying vec3 vView;
       void main(){ vN=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vView=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
     fragmentShader: `varying vec3 vN; varying vec3 vView; uniform vec3 uColor;
-      void main(){ float f=pow(1.0-max(dot(vN,vView),0.0),2.4); gl_FragColor=vec4(uColor, f*0.9); }`,
+      void main(){ float f=pow(1.0-max(dot(vN,vView),0.0),3.2); gl_FragColor=vec4(uColor, f*0.5); }`,
   });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.12, 24, 16), mat);
+  // casca fina (1.05): a 1.12 o halo virava um ANEL sólido opaco em volta do disco
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.05, 32, 20), mat);
   return mesh;
 }
 
