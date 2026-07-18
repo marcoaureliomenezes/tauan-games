@@ -3,9 +3,9 @@
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { TRACKS } from './tracks.js';
-import { CARS, buildCarMesh } from './cars.js';
+import { CARS, TRAFFIC_DEFS, buildCarMesh } from './cars.js';
 import { buildWorld, sampleAt } from './world.js';
-import { makeCarState, stepCar } from './physics.js';
+import { makeCarState, stepCar, collideCars } from './physics.js';
 import { makeAI, aiInput } from './ai.js';
 
 const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
@@ -115,6 +115,30 @@ function startRace() {
   });
   G.player = G.cars[0];
 
+  // TRÁFEGO CIVIL (operador 2026-07-18): carros comuns circulando devagar,
+  // espalhados pela pista — desviar deles faz parte da corrida (Cruis'n raiz).
+  for (let i = 0; i < 4; i++) {
+    const tdef = TRAFFIC_DEFS[i % TRAFFIC_DEFS.length];
+    const sm = sampleAt(G.world.track, 0.15 + i * 0.2);
+    const lane = (i % 2 ? 1 : -1) * trackDef.width * 0.2;
+    const spawn = new THREE.Vector3(
+      sm.pos.x + sm.side.x * lane, sm.pos.y, sm.pos.z + sm.side.z * lane);
+    const st = makeCarState(tdef, spawn, Math.atan2(-sm.tan.x, -sm.tan.z));
+    st.sHint = sm.s; st.lastS = sm.s; st.lap = 0;
+    const mesh = buildCarMesh(tdef);
+    mesh.position.copy(spawn);
+    G.scene.add(mesh);
+    makeAI(st, lane * 0.8, 0.2 + (i % 2) * 0.05);       // BEM devagar
+    G.cars.push({ st, mesh, name: tdef.name, isPlayer: false, isTraffic: true });
+  }
+
+  // reflexos de ambiente na lataria (o brilho de vitrine dos NFS): PMREM do
+  // próprio mundo — os MeshStandardMaterial dos GLB refletem céu/paisagem.
+  if (!HEADLESS) {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    G.scene.environment = pmrem.fromScene(G.scene, 0.04).texture;
+  }
+
   G.phase = 'countdown';
   G.countdown = HEADLESS ? 0.1 : 3.6;
   G.raceT = 0;
@@ -164,7 +188,7 @@ function updateHUD() {
   const st = G.player.st;
   el('speed').textContent = `${(st.v * 3.4) | 0} km/h`;
   el('lap').textContent = `VOLTA ${Math.max(1, Math.min(LAPS, st.lap))}/${LAPS}`;
-  el('pos').textContent = `${G.position}º/${G.cars.length}`;
+  el('pos').textContent = `${G.position}º/${G.cars.filter((c) => !c.isTraffic).length}`;
   const q = G.world.surfaceAt(st.pos.x, st.pos.z, st.sHint);
   el('surface').textContent = q.surface === 'dirt' ? '🟤 TERRA' : q.surface === 'offroad' ? '⚠ FORA DA PISTA' : '';
   el('time').textContent = fmtT(G.raceT);
@@ -189,8 +213,9 @@ function loop() {
     if (racing) G.raceT += dt;
 
     for (const c of G.cars) {
+      // countdown: neutro (brake acionaria a marcha à RÉ nova)
       const input = !racing && !c.st.finished
-        ? { throttle: 0, brake: 1, steer: 0 }
+        ? { throttle: 0, brake: 0, steer: 0 }
         : c.isPlayer
           ? (c.st.finished ? { throttle: 0, brake: 0.6, steer: 0 } : playerInput())
           : aiInput(c.st, G.world, G.player.st.progress);
@@ -199,15 +224,24 @@ function loop() {
       c.mesh.rotation.set(0, c.st.heading + Math.PI, 0);
       // pitch de suspensão/lombada + inclinação na curva
       c.mesh.rotation.x = c.st.airborne ? -0.12 : c.st.suspension * 1.4;
-      c.mesh.rotation.z = -input.steer * Math.min(0.5, c.st.v / 60) * 0.12;
+      c.mesh.rotation.z = -input.steer * Math.min(0.5, Math.abs(c.st.v) / 60) * 0.12
+        + c.st.roll;                                     // capotamento
+      if (Math.abs(c.st.roll) > 1.2) c.mesh.position.y = c.st.pos.y + 0.7;
       for (const w of c.mesh.userData.wheels) w.rotation.x += c.st.v * dt * 1.8;
       if (racing && !c.st.finished && c.st.lap > LAPS) {
         c.st.finished = true;
         if (c.isPlayer) finishRace();
       }
     }
-    // posição na corrida
-    const order = [...G.cars].sort((a, b) => b.st.progress - a.st.progress);
+    // COLISÕES carro-carro (elásticas) — inclui o tráfego civil
+    for (let i = 0; i < G.cars.length; i++) {
+      for (let j = i + 1; j < G.cars.length; j++) {
+        collideCars(G.cars[i].st, G.cars[j].st);
+      }
+    }
+    // posição na corrida (tráfego civil não conta)
+    const racers = G.cars.filter((c) => !c.isTraffic);
+    const order = [...racers].sort((a, b) => b.st.progress - a.st.progress);
     G.position = order.indexOf(G.player) + 1;
 
     updateCamera(dt);

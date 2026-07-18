@@ -446,10 +446,30 @@ export function buildWorld(def, scene) {
         const d = dx * dx + dz * dz;
         if (d < bd) { bd = d; best = i; }
       }
+      // PROJEÇÃO CONTÍNUA no segmento vizinho (bug "carro saltitando",
+      // 2026-07-18): o Y/centerline vinha do sample MAIS PRÓXIMO — degraus a
+      // cada ~1,5 m excitavam a suspensão sem parar. Agora interpola.
       const sm = S[best];
-      const dist = Math.sqrt(bd);
+      const nxt = S[(best + 1) % N], prv = S[(best - 1 + N) % N];
+      // escolhe o segmento (best→next ou prev→best) que contém a projeção
+      let a = sm, b = nxt, i0 = best;
+      const abx = b.pos.x - a.pos.x, abz = b.pos.z - a.pos.z;
+      let t = ((x - a.pos.x) * abx + (z - a.pos.z) * abz) / Math.max(abx * abx + abz * abz, 1e-9);
+      if (t < 0) {
+        a = prv; b = sm; i0 = (best - 1 + N) % N;
+        const ax = b.pos.x - a.pos.x, az = b.pos.z - a.pos.z;
+        t = ((x - a.pos.x) * ax + (z - a.pos.z) * az) / Math.max(ax * ax + az * az, 1e-9);
+      }
+      t = Math.max(0, Math.min(1, t));
+      const cx = a.pos.x + (b.pos.x - a.pos.x) * t;
+      const cz = a.pos.z + (b.pos.z - a.pos.z) * t;
+      const roadY = a.pos.y + (b.pos.y - a.pos.y) * t;
+      const dist = Math.hypot(x - cx, z - cz);
       const surface = dist > def.width / 2 + 1.2 ? 'offroad' : sm.surface;
-      return { sm, dist, surface, phys: SURFACES[surface], s: best / N };
+      return {
+        sm, dist, surface, phys: SURFACES[surface],
+        s: (i0 + t) / N, roadY, cx, cz,
+      };
     },
   };
 }

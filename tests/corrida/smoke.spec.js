@@ -36,10 +36,15 @@ test.describe('Cruis\'n Tauan — smoke', () => {
       const st = await page.evaluate(() => {
         const G = window.__corrida;
         const q = G.world.surfaceAt(G.player.st.pos.x, G.player.st.pos.z, G.player.st.sHint);
-        return { v: G.player.st.v, surface: q.surface, cars: G.cars.length };
+        return {
+          v: G.player.st.v, surface: q.surface,
+          racers: G.cars.filter((c) => !c.isTraffic).length,
+          traffic: G.cars.filter((c) => c.isTraffic).length,
+        };
       });
       expect(st.v).toBeGreaterThan(8);
-      expect(st.cars).toBe(6);
+      expect(st.racers).toBe(6);
+      expect(st.traffic).toBe(4);          // tráfego civil circulando
       expect(['asphalt', 'dirt', 'offroad']).toContain(st.surface);
     });
   }
