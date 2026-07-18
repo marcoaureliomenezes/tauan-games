@@ -17,3 +17,5 @@ tests/.server-*.pid
 img/
 playwright-report/
 test-results/
+tests/screenshots/
+.server-*.pid
