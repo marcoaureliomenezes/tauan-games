@@ -7,7 +7,7 @@
 // de geometria usadas também na contagem de diagnóstico (inhauma-road-props.js).
 // Sem side-effects no load.
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { routeLength, samplePolyline } from './inhauma-road-utils.js';
 
 // Borda externa das pistas na pista dupla (canteiro/2 + pista = 2 + 7,5 = 9,5 m do

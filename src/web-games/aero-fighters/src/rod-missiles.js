@@ -7,7 +7,7 @@
 // Node-testável); este módulo é o pool visual/homing runtime (DOM/THREE), como
 // projectiles.js é para os mísseis leve/pesado.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';

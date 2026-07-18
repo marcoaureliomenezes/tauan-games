@@ -3,7 +3,7 @@
 //   makeBase/makeFactory/makeBuilding/makeConvoy/makeAAGun.
 // Para adicionar tipo novo: makeXxx + entrada em TARGETS (config.js) + slot em TARGET_LAYOUT.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
@@ -485,6 +485,12 @@ export function killTarget(t) {
   if (t.type === 'base' || t.type === 'factory') {
     megaExplosion(t.mesh.position, 'target');
   } else if (t.type === 'building' || t.type === 'convoy' || t.type === 'armedConvoy' || t.type === 'helicopter' || t.type === 'tank' || t.type === 'patrolAir') {
+    explosion(t.mesh.position, 2.0);
+    spawnShockwave(t.mesh.position, 22);
+    audio.explosion(1.0, t.mesh.position);
+  } else if (t.type === 'fTank' || t.type === 'fApc' || t.type === 'fTruck' || t.type === 'fArtillery' || t.type === 'fSam' || t.type === 'fHelicopter' || t.type === 'fZeppelin') {
+    // Unidades de formação (T-C-02, campanha Inhaúma): veículos/artilharia/SAM —
+    // mesmo FX dos veículos legados acima. fTroops/fAaGun caem no else (FX pequeno).
     explosion(t.mesh.position, 2.0);
     spawnShockwave(t.mesh.position, 22);
     audio.explosion(1.0, t.mesh.position);

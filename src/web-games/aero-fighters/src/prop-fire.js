@@ -4,7 +4,7 @@
 // aditivos de um pool compartilhado. Guarda headless (não roda sob webdriver/testMode) —
 // consistente com fx.js/HEADLESS_FX. Ticado por main.js: updatePropFires(dt) a cada frame.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 
 const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;

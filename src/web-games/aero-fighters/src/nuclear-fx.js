@@ -24,7 +24,7 @@
 // test-aero-sim.js` can import and assert it directly (monotonic rise, radius/target
 // bounds, color keyframes) without a browser — see that file's "T-09" section.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 
 const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
 

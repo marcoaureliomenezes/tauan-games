@@ -12,7 +12,7 @@
 //    a gravidade permite (crista de lombada em alta velocidade), o carro
 //    DECOLA: vy balístico, sem grip no ar, pouso com afundada de suspensão.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 
 export const GRAV = 28;
 

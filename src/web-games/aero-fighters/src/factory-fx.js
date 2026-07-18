@@ -5,7 +5,7 @@
 // Pool exclusivo: factorySmokePool (30 slots) nunca compartilhado com explosões.
 // Chamado por main.js: tickSmokeEmitters(dt) + tickFactoryParticles(dt) a cada frame.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { COLORS } from './config.js';
 

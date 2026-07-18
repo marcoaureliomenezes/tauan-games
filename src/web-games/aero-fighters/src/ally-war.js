@@ -6,7 +6,7 @@
 //
 // Exporta: spawnAllyEnemies, updateAllyWar, clearAllyEnemies, spawnAllyMissile.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { explosion, spawnShockwave } from './fx.js';
 import { audio } from './audio.js';

@@ -2,7 +2,7 @@
 // Exporta: createCrosshair(), updateCrosshair(dt), missileLockedTarget().
 // Visual: SVG overlay sobre o canvas. Lock-on usa cone frontal ±15° + beep escalando.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { audio } from './audio.js';
 

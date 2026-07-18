@@ -4,8 +4,8 @@
 // Para mudar a paleta do mar/ilhas: edite a função createIsland (cores por altitude).
 // Para mover ou trocar ilhas: edite ISLAND_DEFS em config.js.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
-import { mergeGeometries } from '../../../../vendor/jsm/utils/BufferGeometryUtils.js';
+import * as THREE from '../../vendor/three.module.min.js';
+import { mergeGeometries } from '../../vendor/jsm/utils/BufferGeometryUtils.js';
 import { scene, HEADLESS } from './scene.js';
 import { game } from './state.js';
 import { ISLAND_DEFS, WORLD, COLORS, PLAYER } from './config.js';

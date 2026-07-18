@@ -5,7 +5,7 @@
 // Verdade de superfície única: inhaumaContinuousHeight(x,z) alimenta TANTO a malha
 // visual QUANTO a colisão (via a região gigante registrada em game.islands).
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
 import { applyAirportClearing } from '../landing-zones.js';
 import { fbm2D, ridgedFbm2D } from './noise.js';
@@ -24,7 +24,7 @@ import {
   RIVER_HALF_WIDTH_M,
 } from './inhauma-river.js';
 import { bridgeDeckHeightAt, buildInhaumaBridges } from './inhauma-bridges.js';
-import { mergeGeometries } from '../../../../../vendor/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from '../../../vendor/jsm/utils/BufferGeometryUtils.js';
 // T-V-12/T-V-13 (inhauma-visual-uplift-v1): tipologias/fachadas da cidade.
 import { buildCityMeshes, updateInhaumaCityLights } from './inhauma-city.js';
 

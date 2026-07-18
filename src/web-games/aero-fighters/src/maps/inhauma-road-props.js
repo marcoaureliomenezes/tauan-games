@@ -1,4 +1,4 @@
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { INHAUMA_NAMED_ROUTES } from './inhauma-roads.js';
 import { getInhaumaRoads } from './inhauma-roads.js';
 

@@ -144,6 +144,24 @@ export const TARGETS = {
   warship:  { hp: 35, score: 1200, hr2: 80, dropChance: 0.5 },
 };
 
+/** Stats das unidades de formação da campanha Inhaúma (T-C-01,
+ *  release aero-fighters-inhauma-campaign-v1). Tipos `f*` — os meshes são os
+ *  builders de `src/formations/units.js`; o fluxo de dano é o de `targets.js`.
+ *  range = engajamento contra o player (m; unidades de chão 200-220, AA 300);
+ *  speed = deslocamento (m/s); fire = tipo de fogo ('none' = desarmada);
+ *  altitude = altura de voo acima do terreno (unidades aéreas). */
+export const TARGET_STATS = {
+  fTank:       { hp: 22, score: 550, hr2: 44,  dropChance: 0.4,  range: 220, speed: 6,   fire: 'cannon',   fireInterval: 2.6 },
+  fApc:        { hp: 16, score: 480, hr2: 40,  dropChance: 0.35, range: 200, speed: 9,   fire: 'mg',       fireInterval: 1.9 },
+  fTruck:      { hp: 10, score: 320, hr2: 36,  dropChance: 0.45, range: 0,   speed: 10,  fire: 'none',     fireInterval: Infinity },
+  fTroops:     { hp: 8,  score: 260, hr2: 30,  dropChance: 0.3,  range: 200, speed: 3.5, fire: 'mg',       fireInterval: 2.2 },
+  fArtillery:  { hp: 14, score: 600, hr2: 42,  dropChance: 0.4,  range: 0,   speed: 7,   fire: 'howitzer', fireInterval: 6.0 },
+  fSam:        { hp: 18, score: 900, hr2: 55,  dropChance: 0.4,  range: 300, speed: 0,   fire: 'missile',  fireInterval: 4.0 },
+  fAaGun:      { hp: 6,  score: 250, hr2: 9,   dropChance: 0.1,  range: 300, speed: 0,   fire: 'aa',       fireInterval: 1.7 },
+  fHelicopter: { hp: 10, score: 650, hr2: 120, dropChance: 0.35, range: 220, speed: 14,  fire: 'mg',       fireInterval: 2.3, altitude: 46 },
+  fZeppelin:   { hp: 16, score: 720, hr2: 150, dropChance: 0.4,  range: 0,   speed: 5,   fire: 'none',     fireInterval: Infinity, altitude: 95 },
+};
+
 /** Canhões antiaéreos (única defesa hostil) */
 export const AA = {
   RANGE: 220,         // m

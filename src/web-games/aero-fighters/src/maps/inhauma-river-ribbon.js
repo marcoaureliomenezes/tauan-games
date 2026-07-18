@@ -20,7 +20,7 @@
 // buildInhaumaWater). Sem side-effects no load; o entalhe/colisão do rio
 // (inhauma-river.js) NÃO muda — só geometria de render.
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { getInhaumaRiverPolyline, WATER_BELOW_BANK_M, RIVER_HALF_WIDTH_M } from './inhauma-river.js';
 import { createFlowingWater } from '../environment/water-surface.js';
 

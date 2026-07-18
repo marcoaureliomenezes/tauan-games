@@ -14,7 +14,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../../.." && pwd)"           # repos/tauan-games
-PBF="$REPO_ROOT/aero-fighters-v2/Content/World/inhauma-osm.pbf"
+PBF="$REPO_ROOT/src/godot/aero-fighters-v2/Content/World/inhauma-osm.pbf"
 TMP="$REPO_ROOT/../../.dadaia/tmp/osm-roads"           # workspace .dadaia/tmp (fora do repo)
 mkdir -p "$TMP"
 

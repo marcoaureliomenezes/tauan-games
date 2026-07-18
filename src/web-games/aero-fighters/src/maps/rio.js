@@ -2,7 +2,7 @@
 // Exporta: createRioWorld, updateRioWorld, rioHeightAt.
 // Interface compatível com world.js (game.islands aponta para morros).
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
 import { applyAirportClearing } from '../landing-zones.js';
 import { rioAirport } from '../airport.js';

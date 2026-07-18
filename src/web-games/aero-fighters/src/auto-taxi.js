@@ -5,7 +5,7 @@
 //   → decolagem automática → próxima surtida.
 // Exporta: armAutoTaxi, updateAutoTaxi, isAutoTaxiActive, cancelAutoTaxi.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { audio } from './audio.js';
 import { jet, setLiftoffCarry } from './player.js';

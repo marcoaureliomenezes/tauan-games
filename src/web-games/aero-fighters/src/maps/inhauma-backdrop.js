@@ -20,7 +20,7 @@
 // Budget (D-5 da release): 3 anéis × 180 segmentos × 5 bandas × 2 tris = 5400 tris
 // (≤15k) e 3 draw calls (≤4).
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { ridgedFbm2D } from './noise.js';
 
 // sky.js toca `window` no escopo de módulo — carga LAZY (mesmo padrão de

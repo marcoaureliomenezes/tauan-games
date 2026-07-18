@@ -5,8 +5,8 @@
 // O recolor tinge o MATERIAL DOMINANTE (mais vértices) do GLB com a cor do
 // catálogo — vidros/rodas (escuros) ficam intactos.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
-import { GLTFLoader } from '../../../../vendor/jsm/loaders/GLTFLoader.js';
+import * as THREE from '../../vendor/three.module.min.js';
+import { GLTFLoader } from '../../vendor/jsm/loaders/GLTFLoader.js';
 
 export const CARS = [
   {
@@ -57,7 +57,7 @@ const _cache = new Map();
 function loadModel(name) {
   if (!_cache.has(name)) {
     _cache.set(name, new Promise((resolve, reject) => {
-      loader.load(`../../../vendor/models/cars/${name}.glb`, (g) => resolve(g.scene), undefined, reject);
+      loader.load(`../vendor/models/cars/${name}.glb`, (g) => resolve(g.scene), undefined, reject);
     }));
   }
   return _cache.get(name);

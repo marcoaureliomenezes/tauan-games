@@ -1,4 +1,4 @@
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 
 export const CameraModes = Object.freeze(['Chase', 'Wide Chase', 'Cockpit/Nose', 'Flyby/Cinematic', 'Orbit/Inspection']);
 

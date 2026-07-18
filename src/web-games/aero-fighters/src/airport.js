@@ -1,4 +1,4 @@
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 
 export const AIRPORT_TEXT = 'AEROPORTO DO TAUAN E DO PAPAI';
 

@@ -3,7 +3,7 @@
 // nuclear + fábricas + florestas + estradas com carros + cidade.
 // Exporta: createInhaumaWorld, updateInhaumaWorld, inhaumaHeightAt.
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
 import { inhaumaAirport } from '../airport.js';
 import { addSmokeEmitter } from '../factory-fx.js';

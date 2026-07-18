@@ -5,7 +5,7 @@
 // mesas estratificadas, céu com sol e nuvens, e HORIZONTE em camadas de
 // PARALLAX. Tudo procedural (canvas + geometria) — nenhum asset externo.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { SURFACES } from './tracks.js';
 import {
   asphaltTexture, dirtTexture, groundTexture, treeTexture, facadeTexture,

@@ -2,7 +2,7 @@
 // Exporta: spawnWingmen, updateWingmen, clearWingmen, wingmenList.
 // Cada wingman patrulha em ataque visível pelo mapa, dispara mísseis fracos e pode ser abatido.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { spawnAllyMissile } from './ally-war.js';
 import { explosion } from './fx.js';

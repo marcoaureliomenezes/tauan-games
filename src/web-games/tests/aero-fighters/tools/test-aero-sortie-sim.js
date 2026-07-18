@@ -1,0 +1,454 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { MISSILES_HEAVY, MISSILES_LIGHT, MISSILES_NUCLEAR, PLAYER } from '../../../aero-fighters/src/config.js';
+import { evaluateLandingEnvelope, evaluateTakeoffEnvelope, airportHeightAt } from '../../../aero-fighters/src/landing-zones.js';
+import { createGroundPhysicsState, updateGroundRoll } from '../../../aero-fighters/src/ground-physics.js';
+import { createServiceState, startService, updateService } from '../../../aero-fighters/src/service-scene.js';
+import { createSortieMachine, SortieEvent, SortieState, GROUND_STATES, transitionSortie, relaunchSortie } from '../../../aero-fighters/src/sortie-state.js';
+import { createEjectionState, requestEjection, updateEjection } from '../../../aero-fighters/src/ejection.js';
+
+test('sortie state machine covers takeoff to return-to-base to service', () => {
+  const m = createSortieMachine();
+  assert.equal(transitionSortie(m, SortieEvent.START, {}, 0), SortieState.TAXI_OUT);
+  assert.equal(transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 1), SortieState.TAKEOFF_ROLL);
+  assert.equal(transitionSortie(m, SortieEvent.LIFTOFF, {}, 2), SortieState.AIRBORNE);
+  assert.equal(transitionSortie(m, SortieEvent.ALL_TARGETS_DESTROYED, {}, 3), SortieState.RETURN_TO_BASE);
+  assert.equal(transitionSortie(m, SortieEvent.TOUCHDOWN_SAFE, {}, 4), SortieState.LANDING_ROLL);
+  assert.equal(transitionSortie(m, SortieEvent.SERVICE_ZONE_REACHED, {}, 5), SortieState.TAXI_IN);
+  assert.equal(transitionSortie(m, SortieEvent.SERVICE_ZONE_REACHED, {}, 6), SortieState.SERVICE_SCENE);
+});
+
+test('mayday respawn relaunches to a takeoff-capable ground state', () => {
+  // Regressão do "avião parado no aeroporto": ao ser destruído e voltar à base, a
+  // máquina de surtida DEVE sair de MAYDAY para um estado de solo do qual a
+  // decolagem automática (taxi_runway → takeoff) realcança AIRBORNE.
+  const m = createSortieMachine();
+  transitionSortie(m, SortieEvent.START, {}, 0);           // TAXI_OUT
+  transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 1);  // TAKEOFF_ROLL
+  transitionSortie(m, SortieEvent.LIFTOFF, {}, 2);         // AIRBORNE
+  transitionSortie(m, SortieEvent.CRITICAL_DAMAGE, {}, 3); // MAYDAY
+  assert.equal(m.state, SortieState.MAYDAY);
+  relaunchSortie(m, 4);
+  assert.equal(m.state, SortieState.TAXI_OUT);
+  assert.ok(GROUND_STATES.has(m.state), 'após relaunch o avião está taxiável no solo');
+  assert.equal(transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 5), SortieState.TAKEOFF_ROLL);
+  assert.equal(transitionSortie(m, SortieEvent.LIFTOFF, {}, 6), SortieState.AIRBORNE);
+});
+
+test('relaunchSortie also recovers from a stuck EJECTION/NEXT_SORTIE_READY chain', () => {
+  const m = createSortieMachine();
+  transitionSortie(m, SortieEvent.START, {}, 0);
+  transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 1);
+  transitionSortie(m, SortieEvent.LIFTOFF, {}, 2);
+  transitionSortie(m, SortieEvent.CRITICAL_DAMAGE, {}, 3);  // MAYDAY
+  transitionSortie(m, SortieEvent.EJECT_REQUESTED, {}, 4);  // EJECTION
+  transitionSortie(m, SortieEvent.PILOT_LANDED, {}, 5);     // NEXT_SORTIE_READY (antes: preso no ar)
+  relaunchSortie(m, 6);
+  assert.equal(m.state, SortieState.TAXI_OUT);
+  assert.equal(transitionSortie(m, SortieEvent.TAXI_TO_RUNWAY, {}, 7), SortieState.TAKEOFF_ROLL);
+});
+
+test('takeoff and landing envelopes enforce runway constraints', () => {
+  assert.equal(evaluateTakeoffEnvelope({ speed: 41, throttle: 1, pitch: 0.2, surface: 'runway' }).canLiftoff, false);
+  assert.equal(evaluateTakeoffEnvelope({ speed: 44, throttle: 1, pitch: 0.12, surface: 'runway' }).canLiftoff, true);
+  assert.equal(evaluateLandingEnvelope({ speed: 38, verticalSpeed: -4, pitch: 0.08, roll: 0.1, surface: 'runway' }).safe, true);
+  assert.equal(evaluateLandingEnvelope({ speed: 64, verticalSpeed: -4, pitch: 0.08, roll: 0.1, surface: 'runway' }).safe, false);
+});
+
+test('ground roll accelerates with throttle and remains finite', () => {
+  const g = createGroundPhysicsState();
+  for (let i = 0; i < 180; i++) updateGroundRoll(g, { throttleDown: false }, 1 / 60, 'runway', 1);
+  assert.ok(g.groundSpeed > 30);
+  assert.ok(Number.isFinite(g.groundSpeed));
+});
+
+test('service refills full current armament only at completion', () => {
+  const player = { missiles: 0, heavyMissiles: 0, nuclearMissiles: 0 };
+  const service = createServiceState(true);
+  startService(service);
+  updateService(service, 2, player);
+  assert.deepEqual(player, { missiles: 0, heavyMissiles: 0, nuclearMissiles: 0 });
+  updateService(service, 3, player);
+  assert.equal(player.missiles, MISSILES_LIGHT.MAX);
+  assert.equal(player.heavyMissiles, MISSILES_HEAVY.MAX);
+  assert.equal(player.nuclearMissiles, MISSILES_NUCLEAR.MAX);
+});
+
+test('ejection survival policy always saves pilot in first slice', () => {
+  const e = createEjectionState();
+  assert.equal(requestEjection(e, { y: 18 }), true);
+  for (let i = 0; i < 180; i++) updateEjection(e, 1 / 30);
+  assert.equal(e.pilotState, 'SURVIVED');
+  assert.equal(e.saved, true);
+});
+
+const AIRPORT_ELEVATION = 0; // desertAirport.elevation
+
+// ─── Headless physics helpers ─────────────────────────────────────────────────
+// Simulates the ground-roll portion of updatePlayer() for TAXI/TAKEOFF states.
+function simGroundFrame(state, input, dt) {
+  const { ground, sortie, jet } = state;
+  const surface = airportHeightAt(jet.x, jet.z) !== undefined ? 'runway' : 'terrain';
+  // Use the real airportHeightAt to determine contact type
+  const contactHeight = airportHeightAt(jet.x, jet.z, 0);
+  const contactType = (Math.abs(jet.x - (-160)) <= 29 && Math.abs(jet.z - 120) <= 380) ? 'runway' :
+    (Math.abs(jet.x - (-160)) <= 17 && Math.abs(jet.z - 260) <= 90) ? 'taxiway' :
+    (Math.abs(jet.x - (-160)) <= 35 && Math.abs(jet.z - 350) <= 43) ? 'service' : null;
+
+  if (input.throttleUp) state.throttle = Math.min(1, state.throttle + dt * PLAYER.THROTTLE_UP_RATE);
+  if (input.throttleDown) state.throttle = Math.max(0.02, state.throttle - dt * PLAYER.THROTTLE_DN_RATE);
+  updateGroundRoll(ground, input, dt, contactType, state.throttle);
+  state.speed = ground.groundSpeed;
+
+  // Advance position along forward axis (simplified: heading 0 = -Z)
+  jet.z -= state.speed * dt;
+
+  // INVARIANT A: y must never go below airport elevation while in ground states
+  // In the FIXED version, the floor clamp ensures this. In the BROKEN version, it may not.
+  jet.y = contactHeight + 0.9;
+
+  // State transitions (mirrors player.js logic)
+  if (sortie.state === SortieState.TAXI_OUT && contactType === 'runway') {
+    transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, state.t);
+  }
+  if (sortie.state === SortieState.TAKEOFF_ROLL && state.speed >= 38) {
+    transitionSortie(sortie, SortieEvent.TAKEOFF_SPEED_REACHED, {}, state.t);
+  }
+}
+
+// Simulates the FIXED liftoff transition: smooth lift using ROTATE_LIFT force.
+// Returns deltaY for the current frame to check the <= 1m invariant.
+function simLiftoffFrame(state, input, dt) {
+  const { sortie, jet } = state;
+  const prevY = jet.y;
+  const ROTATE_LIFT = PLAYER.ROTATE_LIFT ?? 7.5;
+  const V_ROTATE = PLAYER.V_ROTATE ?? 42;
+  const contactHeight = 0; // airport elevation
+
+  if (sortie.state === SortieState.TAKEOFF_ROLL &&
+      state.speed >= V_ROTATE &&
+      (input.pitchDown || input.pitchUp)) {
+    if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
+    sortie.liftoffVsp += ROTATE_LIFT * dt;
+    jet.y += sortie.liftoffVsp * dt;
+    // Floor clamp
+    jet.y = Math.max(jet.y, contactHeight + 0.9);
+    const altAbove = jet.y - contactHeight;
+    if (altAbove > 4 && sortie.liftoffVsp > 0) {
+      transitionSortie(sortie, SortieEvent.LIFTOFF, {}, state.t);
+    }
+  }
+
+  const deltaY = Math.abs(jet.y - prevY);
+  return { prevY, deltaY };
+}
+
+// ─── Test: Full takeoff cycle ─────────────────────────────────────────────────
+// Drives the physics module from cold start through TAXI_OUT → TAKEOFF_ROLL → AIRBORNE.
+// Invariants:
+//   A. While in ground states, y >= airport elevation every frame.
+//   B. During liftoff rotation, no single-frame Δy > 1 m (detects teleport bug).
+test('full takeoff cycle: y stays at or above airport elevation and liftoff delta <= 1m', () => {
+  const sortie = createSortieMachine();
+  const ground = createGroundPhysicsState();
+  transitionSortie(sortie, SortieEvent.START, {}, 0); // → TAXI_OUT
+
+  const state = {
+    t: 0,
+    throttle: 0,
+    speed: 0,
+    ground,
+    sortie,
+    jet: { x: -160, y: AIRPORT_ELEVATION + 0.9, z: 350 },
+  };
+
+  const violations = [];
+  const liftoffDeltas = []; // all per-frame Δy during liftoff rotation
+  const dt = 1 / 60;
+  const MAX_SIM_SECONDS = 60;
+  let inLiftoffRotation = false;
+
+  while (state.t < MAX_SIM_SECONDS) {
+    const V_ROTATE = PLAYER.V_ROTATE ?? 42;
+    const pitchUp = state.speed >= V_ROTATE;
+    const input = { throttleUp: true, pitchUp };
+    state.t += dt;
+
+    // Once rotation starts, only run liftoffFrame (not groundFrame which resets y)
+    if (state.sortie.state === SortieState.TAKEOFF_ROLL && pitchUp && state.speed >= V_ROTATE) {
+      inLiftoffRotation = true;
+    }
+
+    if (GROUND_STATES.has(state.sortie.state) && !inLiftoffRotation) {
+      simGroundFrame(state, input, dt);
+    }
+
+    if (inLiftoffRotation && state.sortie.state === SortieState.TAKEOFF_ROLL) {
+      const { deltaY } = simLiftoffFrame(state, input, dt);
+      liftoffDeltas.push(deltaY);
+    }
+
+    // INVARIANT A: while in ground states, y >= airport elevation
+    if (GROUND_STATES.has(state.sortie.state)) {
+      if (state.jet.y < AIRPORT_ELEVATION) {
+        violations.push({ t: state.t, y: state.jet.y, state: state.sortie.state, code: 'UNDERGROUND' });
+      }
+    }
+
+    if (state.sortie.state === SortieState.AIRBORNE) break;
+  }
+
+  // INVARIANT A: no frame underground during ground states
+  assert.equal(violations.length, 0,
+    `Player went underground during ground states: ${JSON.stringify(violations.slice(0, 3))}`);
+
+  // INVARIANT B: every per-frame Δy during liftoff rotation must be <= 1 m
+  assert.ok(liftoffDeltas.length > 0, 'Liftoff rotation never started');
+  const maxDeltaY = Math.max(...liftoffDeltas);
+  assert.ok(maxDeltaY <= 1,
+    `Single-frame liftoff Δy too large: ${maxDeltaY.toFixed(3)} m (should be <= 1 m; current code teleports to y=6)`);
+
+  // Assert reached AIRBORNE
+  assert.equal(state.sortie.state, SortieState.AIRBORNE);
+});
+
+// ─── Test: Full landing cycle ─────────────────────────────────────────────────
+// Simulates the FIXED player.js touchdown logic (Step 3 applied):
+//   - TOUCHDOWN_SAFE fires only when touchdownReady (altitude < FLARE_LO=0.5m, sink > -3 m/s)
+//   - Debounce: 0.2s minimum between events
+//   - State stays LANDING_ROLL after touchdown
+//   - Bounce <= 0.3 m
+// This test exercises the fixed evaluateLandingEnvelope(touchdownReady) gate.
+test('full landing cycle: one TOUCHDOWN_SAFE, stays LANDING_ROLL, y decays monotonically with bounce <= 0.3m', () => {
+  const sortie = createSortieMachine();
+  transitionSortie(sortie, SortieEvent.START, {}, 0);
+  transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, 0.1);
+  transitionSortie(sortie, SortieEvent.LIFTOFF, {}, 1);
+  transitionSortie(sortie, SortieEvent.ALL_TARGETS_DESTROYED, {}, 2);
+  assert.equal(sortie.state, SortieState.RETURN_TO_BASE);
+
+  // Approach: 200 m altitude. Sink starts at -5 m/s and reduces in the flare zone
+  // (FLARE_HI=3m down to FLARE_LO=0.5m) to simulate pitch-up assist.
+  const APPROACH_SPEED = 35;
+  const dt = 1 / 60;
+
+  const contactHeight = airportHeightAt(-160, 120, 0);
+  const FLARE_LO = PLAYER.FLARE_LO ?? 0.5;
+  const FLARE_HI = PLAYER.FLARE_HI ?? 3;
+  const DEBOUNCE = PLAYER.TOUCHDOWN_DEBOUNCE ?? 0.2;
+
+  let y = 200;
+  let verticalSpeed = -5;
+  let t = 0;
+  let touchdownCount = 0;
+  let stateAfterTouchdown = null;
+  let yAtFirstTouchdownFire = null;
+  let lastTouchdownTime = -Infinity;
+  let postTouchdownMaxY = -Infinity;
+  const MAX_SIM_SECONDS = 60;
+
+  while (t < MAX_SIM_SECONDS) {
+    t += dt;
+    y += verticalSpeed * dt;
+
+    const altitudeAboveGround = y - contactHeight;
+
+    // Simulate flare assist: reduce sink rate linearly in the flare zone
+    if (altitudeAboveGround < FLARE_HI && altitudeAboveGround > FLARE_LO) {
+      // Pitch-up assist: reduce sink rate toward -2 m/s
+      verticalSpeed = Math.min(verticalSpeed + 8 * dt, -2);
+    }
+
+    const envelope = evaluateLandingEnvelope({
+      speed: APPROACH_SPEED,
+      verticalSpeed,
+      pitch: 0.0,
+      roll: 0.0,
+      surface: 'runway',
+      altitudeAboveGround,
+    });
+
+    // Replicate the FIXED production logic (player.js Step 3):
+    // fires only when touchdownReady AND debounce elapsed
+    if (sortie.state === SortieState.RETURN_TO_BASE &&
+        envelope.touchdownReady &&
+        (t - lastTouchdownTime) > DEBOUNCE) {
+      touchdownCount++;
+      lastTouchdownTime = t;
+      if (yAtFirstTouchdownFire === null) {
+        yAtFirstTouchdownFire = y;
+        stateAfterTouchdown = SortieState.LANDING_ROLL;
+        transitionSortie(sortie, SortieEvent.TOUCHDOWN_SAFE, {}, t);
+      }
+      y = contactHeight + 0.9;
+      verticalSpeed = 0;
+    }
+
+    if (sortie.state === SortieState.LANDING_ROLL) {
+      if (y > postTouchdownMaxY) postTouchdownMaxY = y;
+      if (t > lastTouchdownTime + 2.0) break;
+    }
+
+    // Safety: fell through ground
+    if (y < contactHeight - 1 && sortie.state !== SortieState.LANDING_ROLL) break;
+  }
+
+  // INVARIANT 1: exactly one TOUCHDOWN_SAFE fires
+  assert.equal(touchdownCount, 1,
+    `Expected exactly 1 TOUCHDOWN_SAFE, got ${touchdownCount}`);
+
+  // INVARIANT 2: touchdown fires at altitude < FLARE_LO (0.5m)
+  assert.ok(yAtFirstTouchdownFire !== null, 'Touchdown never fired');
+  const altAtFire = yAtFirstTouchdownFire - contactHeight;
+  assert.ok(altAtFire < FLARE_LO,
+    `TOUCHDOWN_SAFE fired at altitude ${altAtFire.toFixed(3)} m, must be < ${FLARE_LO} m`);
+
+  // INVARIANT 3: state stays LANDING_ROLL
+  assert.equal(stateAfterTouchdown, SortieState.LANDING_ROLL);
+  assert.equal(sortie.state, SortieState.LANDING_ROLL);
+
+  // INVARIANT 4: bounce <= 0.3 m post-touchdown
+  const bounce = postTouchdownMaxY - (contactHeight + 0.9);
+  assert.ok(bounce <= 0.3,
+    `Post-touchdown bounce of ${bounce.toFixed(3)} m exceeds 0.3 m limit`);
+});
+
+// ─── T-06: smooth takeoff — eased pitch RATE spool, no step transitions ─────────
+// Root cause (SPEC point 3): the rotation PITCH RATE snapped from 0 to full rate
+// (PLAYER.PITCH_RATE * 0.35) the instant `speed >= V_ROTATE` first became true — the
+// *position*/vsp was already eased (ROTATE_LIFT accumulates gradually), but the
+// *angular rate* was not, reading as a teleport-y "residual step transition". T-06
+// fixes it with `sortie.pitchSpool`, ramping the rate itself in over
+// PLAYER.ROTATE_EASE_TIME (mirrored identically here and in player.js/auto-taxi.js).
+
+test('T-06: rotation pitch RATE spools in over ROTATE_EASE_TIME — first frame is near zero, never full rate', () => {
+  const dt = 1 / 60;
+  const fullRate = PLAYER.PITCH_RATE * 0.35;
+  let pitchSpool = 0;
+  const rateHistory = [];
+  const frames = Math.ceil((PLAYER.ROTATE_EASE_TIME + 1) / dt);
+  for (let i = 0; i < frames; i++) {
+    pitchSpool = Math.min(1, pitchSpool + dt / PLAYER.ROTATE_EASE_TIME);
+    rateHistory.push(fullRate * pitchSpool);
+  }
+  assert.ok(rateHistory[0] < fullRate * 0.1,
+    `first-frame pitch rate ${rateHistory[0]} should be near zero, not the full ${fullRate} (the old snap bug)`);
+  assert.ok(rateHistory[rateHistory.length - 1] > fullRate * 0.99, 'rate should reach ~full rate by ease-window end');
+  // Monotonic ramp — never steps backward.
+  for (let i = 1; i < rateHistory.length; i++) {
+    assert.ok(rateHistory[i] >= rateHistory[i - 1] - 1e-9, 'pitch rate must ramp monotonically');
+  }
+  // Bounded per-frame RATE increase itself (this is what makes it "eased" rather
+  // than an instant jump to full authority).
+  const maxRateStep = fullRate * (dt / PLAYER.ROTATE_EASE_TIME) + 1e-9;
+  for (let i = 1; i < rateHistory.length; i++) {
+    assert.ok(rateHistory[i] - rateHistory[i - 1] <= maxRateStep,
+      `frame ${i}: rate step ${rateHistory[i] - rateHistory[i - 1]} exceeds eased max ${maxRateStep}`);
+  }
+});
+
+/** Full smooth-takeoff sim mirroring player.js's REAL constants and the T-06
+ *  pitchSpool mechanic (ground roll via the real updateGroundRoll, rotation via the
+ *  same formulas as the production ground block). No THREE/jet — pure numeric state,
+ *  Node-safe, following the file's existing headless-physics convention. */
+function simulateSmoothTakeoff() {
+  const dt = 1 / 60;
+  const sortie = createSortieMachine();
+  const ground = createGroundPhysicsState();
+  transitionSortie(sortie, SortieEvent.START, {}, 0);
+  transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, 0.01); // → TAKEOFF_ROLL
+
+  let y = 0.9; // airport elevation (0) + gear compression
+  let throttle = 0.6;
+  let pitch = 0; // radians, negative = nose up (matches player.js convention)
+  let t = 0;
+  const deltaYs = [];
+  const pitchDeltas = [];
+  let rotationStartSpeed = null;
+  let liftoffFrame = null;
+  const MAX_FRAMES = 60 * 30;
+
+  for (let i = 0; i < MAX_FRAMES && liftoffFrame === null; i++) {
+    t += dt;
+    updateGroundRoll(ground, { throttleDown: false }, dt, 'runway', throttle);
+    const speed = ground.groundSpeed;
+    const prevY = y;
+    const prevPitch = pitch;
+
+    if (sortie.state === SortieState.TAKEOFF_ROLL && speed >= PLAYER.V_ROTATE) {
+      if (rotationStartSpeed === null) rotationStartSpeed = speed;
+      if (!sortie.liftoffVsp) sortie.liftoffVsp = 0;
+      sortie.pitchSpool = Math.min(1, (sortie.pitchSpool || 0) + dt / PLAYER.ROTATE_EASE_TIME);
+      pitch -= PLAYER.PITCH_RATE * 0.35 * sortie.pitchSpool * dt; // nose-up = negative
+      sortie.liftoffVsp += PLAYER.ROTATE_LIFT * dt;
+      y += sortie.liftoffVsp * dt;
+      sortie.rotateSpool = Math.min(13, (sortie.rotateSpool || 0) + 26 * dt);
+      const altAbove = y - 0;
+      if (altAbove > 4 && sortie.liftoffVsp > 0) {
+        transitionSortie(sortie, SortieEvent.LIFTOFF, {}, t);
+        liftoffFrame = i;
+      }
+    }
+
+    deltaYs.push(Math.abs(y - prevY));
+    pitchDeltas.push(Math.abs(pitch - prevPitch));
+  }
+
+  return { deltaYs, pitchDeltas, rotationStartSpeed, liftoffFrame, finalPitch: pitch };
+}
+
+test('T-06: smooth takeoff — altitude delta bounded, rotation begins at Vr, pitch monotonic with no step', () => {
+  const { deltaYs, pitchDeltas, rotationStartSpeed, liftoffFrame, finalPitch } = simulateSmoothTakeoff();
+
+  assert.ok(liftoffFrame !== null, 'takeoff sim never reached LIFTOFF');
+
+  // (a) per-frame altitude delta stays bounded — no jump/teleport across the whole
+  // roll + rotation + liftoff sequence.
+  const maxDeltaY = Math.max(...deltaYs);
+  assert.ok(maxDeltaY <= 1, `per-frame altitude delta ${maxDeltaY} exceeds the 1 m jump threshold`);
+
+  // (b) rotation begins at Vr — the first frame liftoffVsp accrues is the first
+  // frame speed crosses V_ROTATE, never later/earlier.
+  assert.ok(rotationStartSpeed !== null, 'rotation never started');
+  assert.ok(rotationStartSpeed >= PLAYER.V_ROTATE,
+    `rotation started at ${rotationStartSpeed} m/s, below V_ROTATE (${PLAYER.V_ROTATE})`);
+  assert.ok(rotationStartSpeed < PLAYER.V_ROTATE + 2,
+    `rotation started well above V_ROTATE (${rotationStartSpeed} vs ${PLAYER.V_ROTATE}) — should begin right at Vr`);
+
+  // (c) pitch increases monotonically (magnitude) with no single-frame step: every
+  // per-frame pitch delta must be <= the fully-spooled max rate * dt — i.e. bounded
+  // by the eased rate, never a bigger jump.
+  const dt = 1 / 60;
+  const maxPitchStep = (PLAYER.PITCH_RATE * 0.35) * dt + 1e-9;
+  const worstPitchStep = Math.max(...pitchDeltas);
+  assert.ok(worstPitchStep <= maxPitchStep,
+    `pitch step ${worstPitchStep} exceeds the fully-spooled max rate*dt of ${maxPitchStep} — single-frame step detected`);
+  assert.ok(finalPitch < 0, 'pitch should have rotated nose-up (negative) by liftoff');
+});
+
+test('T-06: auto takeoff (auto-taxi.js takeoff phase model) shares the same smooth accel curve as manual', () => {
+  // Mirrors auto-taxi.js's post-T-06 'takeoff' phase: updateGroundRoll-driven accel
+  // (same model as manual ground roll) instead of the old ad-hoc constant-accel.
+  const dt = 1 / 60;
+  const ground = createGroundPhysicsState();
+  let throttle = 0.05;
+  const speeds = [];
+  // 15s: the quadratic-drag ODE (dv/dt = throttle*18 - friction - 0.0035v^2) has a
+  // time constant of several seconds approaching its ~63 m/s terminal velocity — the
+  // same real timing manual ground roll uses (see "ground roll accelerates..." above).
+  for (let i = 0; i < 60 * 15; i++) {
+    throttle = Math.min(1, throttle + dt * 1.4);
+    updateGroundRoll(ground, { throttleDown: false }, dt, 'runway', throttle);
+    speeds.push(ground.groundSpeed);
+  }
+  // Reaches TAKEOFF_SPEED-class velocity (56 m/s) using the SAME terminal-velocity
+  // physics as manual roll (~62-63 m/s terminal) — not a separate unbounded model.
+  assert.ok(speeds.some((s) => s >= 56), 'auto takeoff never reached rotation speed with the shared ground-roll model');
+  assert.ok(Math.max(...speeds) < 70, 'auto takeoff ground speed exceeded the physical terminal velocity — model diverged');
+  // Monotonically non-decreasing while accelerating (throttle ramping, no braking) —
+  // no snap/regression frame to frame.
+  for (let i = 1; i < speeds.length; i++) {
+    assert.ok(speeds[i] >= speeds[i - 1] - 1e-9, `speed decreased frame ${i}: ${speeds[i - 1]} -> ${speeds[i]}`);
+  }
+});

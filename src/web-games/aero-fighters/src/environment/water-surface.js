@@ -13,8 +13,8 @@
 //
 // Headless/CI: cai para o shader raso também no lago (sem render-to-texture).
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
-import { Water } from '../../../../../vendor/jsm/objects/Water.js';
+import * as THREE from '../../../vendor/three.module.min.js';
+import { Water } from '../../../vendor/jsm/objects/Water.js';
 
 // Sem import de scene.js: este módulo precisa carregar também em Node (validador de
 // mapa). Detecção de headless local, mesmo padrão de nuclear-fx.js.
@@ -28,7 +28,7 @@ function waterNormals() {
     // Relativo à PÁGINA (/src/web-games/aero-fighters/): sobe três níveis até
     // /vendor — funciona na raiz do dev server E sob o subpath /tauan-games/
     // do GitHub Pages.
-    _normalsTex = new THREE.TextureLoader().load('../../../vendor/textures/waternormals.jpg', (t) => {
+    _normalsTex = new THREE.TextureLoader().load('../vendor/textures/waternormals.jpg', (t) => {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
     });
     _normalsTex.wrapS = _normalsTex.wrapT = THREE.RepeatWrapping;

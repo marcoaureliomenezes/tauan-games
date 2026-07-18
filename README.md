@@ -6,26 +6,28 @@ Jogos web do Tauan — jogáveis direto no navegador, sem build step.
 
 | Jogo | Engine | URL |
 |---|---|---|
-| 🌌 **Space War** — simulador de universo com 5 sistemas estelares, física orbital real, buraco negro, pulsar e núcleo galáctico | Three.js r165 (vendorado) | [/space-war/](https://marcoaureliomenezes.github.io/tauan-games/space-war/) |
-| ✈️ **Aero Strike** — ataque ao solo com F-35: 4 mapas, decolagem/pouso, canhão, mísseis e NUKE com cogumelo volumétrico | Three.js r165 (vendorado) | [/aero-fighters/](https://marcoaureliomenezes.github.io/tauan-games/aero-fighters/) |
-| 🦖 **Tauan T-Rex** — corrida infinita do dinossauro | Phaser 3 | [/tauan-trex/](https://marcoaureliomenezes.github.io/tauan-games/tauan-trex/) |
+| 🌌 **Space War** — simulador de universo com 5 sistemas estelares, física orbital real, buraco negro, pulsar e núcleo galáctico | Three.js r165 (vendorado) | [/src/web-games/space-war/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/space-war/) |
+| ✈️ **Aero Strike** — ataque ao solo com F-35: 4 mapas, decolagem/pouso, canhão, mísseis e NUKE com cogumelo volumétrico | Three.js r165 (vendorado) | [/src/web-games/aero-fighters/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/aero-fighters/) |
+| 🦖 **Tauan T-Rex** — corrida infinita do dinossauro | Phaser 3 | [/src/web-games/tauan-trex/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/tauan-trex/) |
 
 `aero-fighters-v2/` é o remake em Godot 4.4 (pausado — só CI de lint/validade de cena).
 
 ## Rodar localmente
 
-Qualquer servidor estático na **raiz do repo** (os jogos importam `/vendor/` compartilhado):
+Qualquer servidor estático na **raiz do repo** (os jogos importam o vendor
+compartilhado em `src/web-games/vendor/`):
 
 ```bash
 python3 -m http.server 8146
 # http://127.0.0.1:8146/                → landing
-# http://127.0.0.1:8146/aero-fighters/  → Aero Strike
-# http://127.0.0.1:8146/space-war/      → Space War
+# http://127.0.0.1:8146/src/web-games/aero-fighters/  → Aero Strike
+# http://127.0.0.1:8146/src/web-games/space-war/  → Space War
 ```
 
 ## Testes
 
 ```bash
+cd src/web-games
 npm install                      # 1ª vez (Playwright)
 npm run validate:aero-map        # validador de mapas (Node, rápido)
 npm run test:aero:unit           # unit (Node)
@@ -56,15 +58,15 @@ O fluxo completo, do código ao ar:
    push de novo e esperar verde. **Nunca fazer merge com job vermelho ou pendente.**
 5. **Merge do PR** (merge commit): `gh pr merge <n> --merge`
 6. O merge dispara o **`Deploy to GitHub Pages`** em `main`, que:
-   - monta `_site/` = `index.html` (landing) + `aero-fighters/` + `space-war/` +
-     `tauan-trex/` + `vendor/` (three.js + jsm compartilhados);
+   - monta `_site/` = `index.html` (landing) + `src/` (web-games com vendor
+     compartilhado — three.js + jsm);
    - publica via `actions/deploy-pages` (Settings → Pages → Source: *GitHub Actions*).
 7. **Acompanhar até o fim**: `gh run list --branch main` → o run `Deploy to GitHub
    Pages` precisa concluir `success`.
 8. **Verificar no ar**:
    - <https://marcoaureliomenezes.github.io/tauan-games/> (landing)
-   - <https://marcoaureliomenezes.github.io/tauan-games/aero-fighters/>
-   - <https://marcoaureliomenezes.github.io/tauan-games/space-war/>
+   - <https://marcoaureliomenezes.github.io/tauan-games/src/web-games/aero-fighters/>
+   - <https://marcoaureliomenezes.github.io/tauan-games/src/web-games/space-war/>
    - **Ctrl+Shift+R** (hard refresh) na primeira visita pós-deploy — o Chrome
      cacheia módulos ES antigos e pode quebrar imports com a versão velha.
 
@@ -73,7 +75,8 @@ O fluxo completo, do código ao ar:
 - **Caminhos sempre RELATIVOS** dentro dos jogos (`src/main.js`,
   `../vendor/...`) — o site vive sob o subpath `/tauan-games/`; caminho absoluto
   (`/vendor/...`) quebra no Pages.
-- **`vendor/` é compartilhado e vendorado** (three.module.min.js + examples/jsm
-  patchados para import relativo) — nada de CDN, nada de npm em runtime.
-- **Jogo novo** = pasta na raiz + card no `index.html` + acrescentar a pasta no
-  passo *Build site directory* do `pages.yml`.
+- **`vendor/` é compartilhado e vendorado** em `src/web-games/vendor/`
+  (three.module.min.js + examples/jsm patchados para import relativo) — nada de
+  CDN, nada de npm em runtime.
+- **Jogo novo** = pasta em `src/web-games/<jogo>/` + card no `index.html` — o
+  passo *Build site directory* do `pages.yml` já copia `src/` inteiro.

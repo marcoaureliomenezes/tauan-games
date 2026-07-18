@@ -3,11 +3,11 @@
 //   initComposer(), renderFrame(), attachToBody().
 // Céu dinâmico em sky.js (dome Preetham — T-V-05); bloom sutil via composer (T-V-06).
 
-import * as THREE from '../../../../vendor/three.module.min.js';
-import { EffectComposer } from '../../../../vendor/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from '../../../../vendor/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from '../../../../vendor/jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from '../../../../vendor/jsm/postprocessing/OutputPass.js';
+import * as THREE from '../../vendor/three.module.min.js';
+import { EffectComposer } from '../../vendor/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from '../../vendor/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../../vendor/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from '../../vendor/jsm/postprocessing/OutputPass.js';
 import { WORLD } from './config.js';
 
 export const scene = new THREE.Scene();

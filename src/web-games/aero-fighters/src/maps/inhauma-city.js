@@ -7,7 +7,7 @@
 // Para adicionar uma tipologia nova, edite FACADE_SPECS e o roteamento em buildTown
 // (inhauma-scene.js) que atribui block.kind.
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 
 // ─── Paletas por distrito (T-V-13) ───────────────────────────────────────────
 // Extensão do esquema de 2 cores anterior (downtown azul-acinzentado 0x9fb0c2 /

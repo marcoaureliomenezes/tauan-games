@@ -31,7 +31,7 @@
 // (não só no cruzamento) seria puxado para a altura do tabuleiro, o que corromperia o
 // entalhe do rio no resto do seu traçado.
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { INHAUMA_ROAD_CORRIDORS, sampleCorridor } from './inhauma-road-defs.js';
 import { INHAUMA_OSM_MAJOR_CORRIDORS } from './inhauma-osm-roads.js';
 import {

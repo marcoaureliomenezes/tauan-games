@@ -2,7 +2,7 @@
 // Exporta: spawnMission, startGame, restartGame, gameOver, crashAndDie, nextMission, targetCountForMission.
 // Para adicionar uma missão diferente: edite TARGET_LAYOUT em config.js.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { game } from './state.js';
 import { TARGET_LAYOUT, MISSION } from './config.js';
 import { spawnTarget, clearTargets } from './targets.js';

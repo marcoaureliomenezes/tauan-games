@@ -7,7 +7,7 @@
 
 ## Tarefas
 
-- [-] **T-CH-01 — Character: pose única homem-cavalo + colisão + mira/tiro coerente**
+- [x] **T-CH-01 — Character: pose única homem-cavalo + colisão + mira/tiro coerente**
   - **Owner:** game-developer
   - **Write set:** `src/web-games/far-west/src/player.js`, `src/web-games/far-west/src/horse.js`,
     `src/web-games/far-west/src/camera.js`, `src/web-games/far-west/src/combat.js`, `src/web-games/far-west/src/collision.js` (new),

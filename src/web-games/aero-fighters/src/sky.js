@@ -11,8 +11,8 @@
 // FIX (legado): _skyGroup segue a câmera a cada frame para que o dome e os
 // objetos noturnos nunca saiam do frustum ao voar longe da origem.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
-import { Sky } from '../../../../vendor/jsm/objects/Sky.js';
+import * as THREE from '../../vendor/three.module.min.js';
+import { Sky } from '../../vendor/jsm/objects/Sky.js';
 import { game } from './state.js';
 import { DAY_CYCLE_SPEED, SKY } from './config.js';
 import { camera } from './scene.js';

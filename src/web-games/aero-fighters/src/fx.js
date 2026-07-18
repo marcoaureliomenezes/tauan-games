@@ -2,7 +2,7 @@
 // Exporta: explosion, megaExplosion, spawnShockwave, spawnMuzzleFlash, spawnFlash,
 //   spawnMissileSmoke, nuclearExplosion, updateParticles, scheduleDelayed.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { COLORS } from './config.js';

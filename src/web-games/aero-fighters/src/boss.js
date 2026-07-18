@@ -10,7 +10,7 @@
 //    caso especial (não conta no wave; dispara onDeath daqui).
 //  - game.flags.bossActive = true enquanto vivo → player.js bloqueia o pouso.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { game } from './state.js';
 import { audio } from './audio.js';

@@ -1,7 +1,7 @@
 // main.js — Cruis'n Tauan: menu (pista+carro) → contagem → corrida de 3 voltas
 // → pódio. Chase-cam com shake de rumble, HUD de velocidade/volta/posição.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { TRACKS } from './tracks.js';
 import { CARS, TRAFFIC_DEFS, buildCarMesh } from './cars.js';
 import { buildWorld, sampleAt } from './world.js';

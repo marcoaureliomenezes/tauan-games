@@ -3,7 +3,7 @@
 // fachadas com janelas, estratos de mesa, céu com nuvens, árvores billboard.
 // A estética N64 é low-poly + textura rica — a textura é quem faz o jogo.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 
 function rng(seed) {
   let x = seed | 0 || 88675123;

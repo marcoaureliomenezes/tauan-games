@@ -264,7 +264,7 @@ async function main() {
 
   const banner = `// maps/inhauma-osm-roads.js — VENDORIZADO, GERADO OFFLINE (T-V-16,
 // aero-fighters-inhauma-visual-uplift-v1) por tools/extract-osm-roads.mjs a partir de
-// aero-fighters-v2/Content/World/inhauma-osm.pbf (sha256 ${INHAUMA_WEB_MAP_METADATA.inputSha256})
+// src/godot/aero-fighters-v2/Content/World/inhauma-osm.pbf (sha256 ${INHAUMA_WEB_MAP_METADATA.inputSha256})
 // via osmium tags-filter highway=motorway,trunk,primary,secondary + osmium export.
 // NÃO EDITAR À MÃO — regerar com tools/extract-osm-roads.sh.
 // Reimport seletivo APROVADO pelo operador na SPEC da release (auditoria §2.6):

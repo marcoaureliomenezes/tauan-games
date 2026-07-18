@@ -1,0 +1,96 @@
+{
+  "models": {
+    "horse": {
+      "file": "Horse.glb",
+      "pack": "Quaternius Ultimate Animated Animals (model: Horse)",
+      "source": "https://poly.pizza/m/qvTrSG9pZF",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Idle", "Walk", "Gallop", "Gallop_Jump", "Eating", "Attack_Headbutt", "Attack_Kick", "Death"]
+    },
+    "deer": {
+      "file": "Deer.glb",
+      "pack": "Quaternius Ultimate Animated Animals (model: Stag)",
+      "source": "https://poly.pizza/m/tQdzbZ1Cmw",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Idle", "Walk", "Gallop", "Gallop_Jump", "Eating", "Attack_Headbutt", "Attack_Kick", "Death"]
+    },
+    "snake": {
+      "file": "Snake.glb",
+      "pack": "Quaternius Animals (model: Snake)",
+      "source": "https://poly.pizza/m/x9x0viZs8V",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Snake_Idle", "Snake_Walk", "Snake_Attack", "Snake_Jump"]
+    },
+    "eagle": {
+      "file": "Eagle.glb",
+      "pack": "Quaternius (model: Bird)",
+      "source": "https://poly.pizza/m/gYYC0gYMnw",
+      "license": "CC0",
+      "animated": false,
+      "note": "Static bird mesh; no CC0 animated eagle/hawk found. Animate flight procedurally in-game."
+    },
+    "cowboy": {
+      "file": "Cowboy.glb",
+      "pack": "Quaternius Ultimate Animated Character Pack (model: Adventurer)",
+      "source": "https://poly.pizza/m/ZwF0K7WBmu",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Idle", "Walk", "Run", "Idle_Gun", "Idle_Gun_Pointing", "Gun_Shoot", "Run_Shoot", "HitRecieve", "Death", "Punch_Left", "Punch_Right", "Roll", "Wave"]
+    },
+    "woman": {
+      "file": "Woman.glb",
+      "pack": "Quaternius Ultimate Animated Character Pack (model: Animated Woman)",
+      "source": "https://poly.pizza/m/nIItLV9nxS",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Idle", "Walk", "Run", "Idle_Gun", "Idle_Gun_Pointing", "Gun_Shoot", "Run_Shoot", "HitRecieve", "Death", "Punch_Left", "Punch_Right", "Roll", "Wave"]
+    },
+    "native": {
+      "file": "Native.glb",
+      "pack": "Quaternius (model: Tribal)",
+      "source": "https://poly.pizza/m/t91lDHaqRW",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Death", "Headbutt", "Punch", "HitReact", "Yes", "No"],
+      "note": "Rigged and animated, but the clip set is limited (no Walk/Run/Idle clips)."
+    },
+    "trainEngine": {
+      "file": "TrainEngine.glb",
+      "pack": "Quaternius Modular Train (model: Locomotive Front)",
+      "source": "https://poly.pizza/m/WY84FHug9s",
+      "license": "CC0",
+      "animated": false
+    },
+    "trainWagon": {
+      "file": "TrainWagon.glb",
+      "pack": "Quaternius Modular Train (model: Locomotive Wagon)",
+      "source": "https://poly.pizza/m/JCwr52pnuO",
+      "license": "CC0",
+      "animated": false
+    },
+    "treePine": {
+      "file": "TreePine.glb",
+      "pack": "Quaternius Nature (model: Pine Trees)",
+      "source": "https://poly.pizza/m/oYtDty0fR6",
+      "license": "CC0",
+      "animated": false
+    },
+    "treeLeaf": {
+      "file": "TreeLeaf.glb",
+      "pack": "Quaternius Nature (model: Trees, broadleaf)",
+      "source": "https://poly.pizza/m/etFGNvsiFv",
+      "license": "CC0",
+      "animated": false
+    },
+    "rock": {
+      "file": "Rock.glb",
+      "pack": "Quaternius Nature (model: Rocks)",
+      "source": "https://poly.pizza/m/OQvi8PIZ40",
+      "license": "CC0",
+      "animated": false
+    }
+  }
+}

@@ -15,7 +15,7 @@
 // `document` existe (test:aero:sim roda buildInhaumaTerrain em Node sem DOM).
 // Texturas procedurais canvas são permitidas (T-V-03, CONVENTIONS.md).
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { fbm2D } from './noise.js';
 
 const TEX_SIZE = 256;

@@ -5,7 +5,7 @@
 //
 // Acoplamento intencional: importa damageTarget de targets.js (exceção α — ver CONVENTIONS).
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';

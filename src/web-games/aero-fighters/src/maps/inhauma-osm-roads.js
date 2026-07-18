@@ -1,6 +1,6 @@
 // maps/inhauma-osm-roads.js — VENDORIZADO, GERADO OFFLINE (T-V-16,
 // aero-fighters-inhauma-visual-uplift-v1) por tools/extract-osm-roads.mjs a partir de
-// aero-fighters-v2/Content/World/inhauma-osm.pbf (sha256 0a8977310e7eb0ae2787453b0a7e3dbc33c90e98e991c9ffdbbb55c7a68cf8f1)
+// src/godot/aero-fighters-v2/Content/World/inhauma-osm.pbf (sha256 0a8977310e7eb0ae2787453b0a7e3dbc33c90e98e991c9ffdbbb55c7a68cf8f1)
 // via osmium tags-filter highway=motorway,trunk,primary,secondary + osmium export.
 // NÃO EDITAR À MÃO — regerar com tools/extract-osm-roads.sh.
 // Reimport seletivo APROVADO pelo operador na SPEC da release (auditoria §2.6):

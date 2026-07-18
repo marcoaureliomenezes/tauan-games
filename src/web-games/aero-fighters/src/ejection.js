@@ -1,4 +1,4 @@
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 
 export function createEjectionState() {
   return { active: false, pilotState: 'IN_AIRCRAFT', elapsed: 0, descentY: 0, saved: false };

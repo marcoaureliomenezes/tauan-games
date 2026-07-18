@@ -1,4 +1,4 @@
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { getInhaumaRoads, nearAnyRoad } from './inhauma-roads.js';
 import { inhaumaAirportExclusionZoneAt, isInhaumaAirportSurface } from './inhauma-road-airport.js';
 import { routeLength, samplePolyline } from './inhauma-road-utils.js';

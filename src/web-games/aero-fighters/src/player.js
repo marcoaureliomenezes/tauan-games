@@ -6,7 +6,7 @@
 // Decisão arquitetural: speed/throttle/stalled vivem ÚNICOS em game.player.
 // (Antes existiam duplicados em variáveis de módulo — bug latente eliminado.)
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';

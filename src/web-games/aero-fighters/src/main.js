@@ -1,7 +1,7 @@
 // main.js — Orquestrador. Zero lógica de jogo, só wire-up dos módulos.
 // Carregado pelo index.html como <script type="module">.
 
-import * as THREE from '../../../../vendor/three.module.min.js';
+import * as THREE from '../../vendor/three.module.min.js';
 
 import { game } from './state.js';
 import { CANNON, WORLD } from './config.js';

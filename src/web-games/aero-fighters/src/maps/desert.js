@@ -2,7 +2,7 @@
 // Exporta: createDesertWorld, updateDesertWorld, desertHeightAt.
 // Interface compatível com world.js (game.islands aponta para mesas).
 
-import * as THREE from '../../../../../vendor/three.module.min.js';
+import * as THREE from '../../../vendor/three.module.min.js';
 import { game } from '../state.js';
 import { airportSurface, applyAirportClearing } from '../landing-zones.js';
 import { desertAirport } from '../airport.js';
