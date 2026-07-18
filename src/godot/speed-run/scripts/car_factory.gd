@@ -8,11 +8,14 @@
 # para o lado direito — o Godot gira/esterça o visual da roda sozinho.
 class_name CarFactory
 
+const IdeaF := preload("res://scripts/idea_factory.gd")
+
 const CATALOG := {
 	"idea": {
 		"name": "Idea Adventure 2013 Dual Logic", "model": "SUV",
-		"color": Color(0.61, 0.63, 0.66), "mass": 1280.0,
-		"engine": 5200.0, "brake": 55.0, "steer": 0.55, "top": 46.0, "grip": 3.4,
+		"color": Color(0.72, 0.73, 0.75), "mass": 1325.0,   # ficha técnica real
+		"engine": 5200.0, "brake": 55.0, "steer": 0.55, "top": 50.0, "grip": 3.4,
+		"replica": true,                                    # carroceria IdeaFactory
 	},
 	"muscle": {
 		"name": "Thunder V8", "model": "SportsCarB",
@@ -60,32 +63,45 @@ static func build(key: String) -> VehicleBody3D:
 	var info := _analyze(glb)
 	var s: float = CAR_LEN / info["length"]
 
-	# --- visual da carroceria (sem as rodas do GLB) ---
-	var visual := Node3D.new()
-	visual.name = "Visual"
-	for mi in info["body_meshes"]:
-		var inst := MeshInstance3D.new()
-		inst.mesh = mi.mesh
-		_recolor(inst, mi, def["color"])
-		visual.add_child(inst)
-	# frente dos GLB é +Z; frente do Godot é -Z → gira π e escala
-	visual.transform = Transform3D(Basis.from_euler(Vector3(0, PI, 0)).scaled(Vector3(s, s, s)),
-		Vector3(0, -info["base_y"] * s - 0.30, 0))
-	body.add_child(visual)
+	var replica: bool = def.get("replica", false)
+	if replica:
+		# RÉPLICA do Idea Adventure 2013 (medidas reais em metros — sem escala)
+		var rv: Node3D = IdeaF.build_visual()
+		rv.position.y = -0.30
+		body.add_child(rv)
+		var rshape := CollisionShape3D.new()
+		var rbox := BoxShape3D.new()
+		rbox.size = Vector3(1.75, 1.05, IdeaF.LEN * 0.94)
+		rshape.shape = rbox
+		rshape.position = Vector3(0, 0.35, 0)
+		body.add_child(rshape)
+	else:
+		# --- visual da carroceria (sem as rodas do GLB) ---
+		var visual := Node3D.new()
+		visual.name = "Visual"
+		for mi in info["body_meshes"]:
+			var inst := MeshInstance3D.new()
+			inst.mesh = mi.mesh
+			_recolor(inst, mi, def["color"])
+			visual.add_child(inst)
+		# frente dos GLB é +Z; frente do Godot é -Z → gira π e escala
+		visual.transform = Transform3D(Basis.from_euler(Vector3(0, PI, 0)).scaled(Vector3(s, s, s)),
+			Vector3(0, -info["base_y"] * s - 0.30, 0))
+		body.add_child(visual)
 
-	# --- colisor da carroceria ---
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(info["width"] * s, info["height"] * s * 0.7, CAR_LEN * 0.94)
-	shape.shape = box
-	shape.position = Vector3(0, info["height"] * s * 0.35 - 0.30 + 0.05, 0)
-	body.add_child(shape)
+		# --- colisor da carroceria ---
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(info["width"] * s, info["height"] * s * 0.7, CAR_LEN * 0.94)
+		shape.shape = box
+		shape.position = Vector3(0, info["height"] * s * 0.35 - 0.30 + 0.05, 0)
+		body.add_child(shape)
 
 	# --- rodas (VehicleWheel3D) ---
-	var wr: float = info["wheel_radius"] * s
-	var wx: float = info["wheel_x"] * s
-	var zf: float = -info["wheel_zf"] * s     # GLB +Z (frente) → Godot -Z
-	var zr: float = -info["wheel_zr"] * s
+	var wr: float = 0.30 if replica else info["wheel_radius"] * s   # 185/65R15 ≈ 0,30 m
+	var wx: float = 0.74 if replica else info["wheel_x"] * s
+	var zf: float = -1.33 if replica else -info["wheel_zf"] * s   # entre-eixos real 2,511
+	var zr: float = 1.18 if replica else -info["wheel_zr"] * s
 	var wy: float = wr - 0.30 + 0.10          # centro da roda ≈ raio acima do chão + curso
 	for w in [
 		{"n": "WFL", "p": Vector3(wx, wy, zf), "steer": true, "mirror": false},
@@ -109,7 +125,8 @@ static func build(key: String) -> VehicleBody3D:
 		var wm := MeshInstance3D.new()
 		wm.mesh = info["wheel_mesh"]
 		# roda direita = roda esquerda girada 180° (winding intacto, sem escala negativa)
-		var wb := Basis.from_euler(Vector3(0, 0.0 if w["mirror"] else PI, 0)).scaled(Vector3(s, s, s))
+		var ws_f: float = (wr / info["wheel_radius"]) if replica else s
+		var wb := Basis.from_euler(Vector3(0, 0.0 if w["mirror"] else PI, 0)).scaled(Vector3(ws_f, ws_f, ws_f))
 		wm.transform = Transform3D(wb, -(wb * Vector3(info["wheel_center"])))
 		wheel.add_child(wm)
 		body.add_child(wheel)
