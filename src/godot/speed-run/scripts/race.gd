@@ -89,23 +89,69 @@ func _build_environment() -> void:
 	we.environment = env
 	add_child(we)
 
-	# chão de grama
-	var ground := StaticBody3D.new()
-	var gcol := CollisionShape3D.new()
-	var gshape := WorldBoundaryShape3D.new()
-	gcol.shape = gshape
-	ground.add_child(gcol)
-	var gmesh := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(3200, 3200)
-	gmesh.mesh = plane
+	# rede de segurança bem abaixo de tudo
+	var net := StaticBody3D.new()
+	var ncol := CollisionShape3D.new()
+	ncol.shape = WorldBoundaryShape3D.new()
+	net.position = Vector3(0, -2.0, 0)
+	net.add_child(ncol)
+	add_child(net)
+	_build_terrain()
+
+var _tnoise: FastNoiseLite
+
+# altura do terreno em p (mesma lei usada na malha — árvores usam também)
+func _terrain_h(p: Vector3) -> float:
+	if _tnoise == null:
+		_tnoise = FastNoiseLite.new()
+		_tnoise.frequency = 0.008
+	var cp: Vector3 = curve.get_closest_point(p)
+	var d := Vector2(p.x - cp.x, p.z - cp.z).length()
+	var t := clampf((d - ROAD_W / 2 - 1.0) / 46.0, 0.0, 1.0)
+	var rolling: float = _tnoise.get_noise_2d(p.x, p.z) * 2.6 * t
+	return lerpf(cp.y - 0.18, maxf(rolling, 0.0), t * t * (3.0 - 2.0 * t))
+
+# TERRENO com relevo que ACOMPANHA a elevação da pista (bug "pista a 1 m do
+# chão"): altura = Y da estrada no ponto mais próximo, decaindo suave até 0
+# longe dela — a estrada vira aterro contínuo, nunca fita flutuante.
+func _build_terrain() -> void:
+	var x0 := -400.0; var x1 := 340.0
+	var z0 := -380.0; var z1 := 180.0
+	var cell := 6.0
+	var nx := int((x1 - x0) / cell) + 1
+	var nz := int((z1 - z0) / cell) + 1
+	var hs := PackedFloat32Array()
+	hs.resize(nx * nz)
+	for j in nz:
+		for i in nx:
+			hs[j * nx + i] = _terrain_h(Vector3(x0 + i * cell, 0, z0 + j * cell))
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for j in nz - 1:
+		for i in nx - 1:
+			var a := Vector3(x0 + i * cell, hs[j * nx + i], z0 + j * cell)
+			var b := Vector3(x0 + (i + 1) * cell, hs[j * nx + i + 1], z0 + j * cell)
+			var c := Vector3(x0 + i * cell, hs[(j + 1) * nx + i], z0 + (j + 1) * cell)
+			var d2 := Vector3(x0 + (i + 1) * cell, hs[(j + 1) * nx + i + 1], z0 + (j + 1) * cell)
+			for v in [a, b, c, b, d2, c]:
+				st.set_uv(Vector2(v.x, v.z) * 0.09)
+				st.add_vertex(v)
+	st.generate_normals()
+	var mesh := st.commit()
 	var gmat := StandardMaterial3D.new()
-	gmat.albedo_texture = _noise_tex(Color(0.24, 0.42, 0.16), Color(0.30, 0.50, 0.20), 3.0)
-	gmat.uv1_scale = Vector3(220, 220, 1)
+	gmat.albedo_color = Color(0.28, 0.46, 0.19)   # verde SÓLIDO (texture só modula)
+	gmat.albedo_texture = _noise_tex(Color(0.72, 0.72, 0.72), Color(1, 1, 1), 3.0)
 	gmat.roughness = 1.0
-	gmesh.mesh.surface_set_material(0, gmat)
-	ground.add_child(gmesh)
-	add_child(ground)
+	gmat.cull_mode = BaseMaterial3D.CULL_DISABLED   # terreno visível de qualquer lado
+	mesh.surface_set_material(0, gmat)
+	var gmi := MeshInstance3D.new()
+	gmi.mesh = mesh
+	var gbody := StaticBody3D.new()
+	var gcol2 := CollisionShape3D.new()
+	gcol2.shape = mesh.create_trimesh_shape()
+	gbody.add_child(gcol2)
+	gbody.add_child(gmi)
+	add_child(gbody)
 
 func _noise_tex(a: Color, b: Color, scale_: float) -> ImageTexture:
 	var img := Image.create(128, 128, false, Image.FORMAT_RGB8)
@@ -115,6 +161,7 @@ func _noise_tex(a: Color, b: Color, scale_: float) -> ImageTexture:
 		for x in 128:
 			var t := (noise.get_noise_2d(x, y) + 1.0) / 2.0
 			img.set_pixel(x, y, a.lerp(b, t))
+	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
 
 func _asphalt_tex() -> ImageTexture:
@@ -296,8 +343,9 @@ func _build_scenery() -> void:
 		var p: Vector3 = curve.sample_baked(o, true)
 		var t3 := (curve.sample_baked(fmod(o + 1.0, track_len), true) - p).normalized()
 		var pos := p + Vector3(-t3.z, 0, t3.x).normalized() * lat
-		pos.y = 0.0
-		if curve.get_closest_point(pos).distance_to(pos) < ROAD_W / 2 + 4.0:
+		pos.y = _terrain_h(pos)
+		var cp2: Vector3 = curve.get_closest_point(pos)
+		if Vector2(cp2.x - pos.x, cp2.z - pos.z).length() < ROAD_W / 2 + 4.0:
 			continue
 		var sc := rng.randf_range(0.8, 1.7)
 		placed.append(Transform3D(Basis().rotated(Vector3.UP, rng.randf() * TAU)
@@ -417,19 +465,20 @@ func _drive_player(car: VehicleBody3D, delta: float) -> void:
 	var steer := Input.get_action_strength("steer_left") - Input.get_action_strength("steer_right")
 	var speed := car.linear_velocity.length()
 	var fwd_speed := -car.global_transform.basis.z.dot(car.linear_velocity)
-	# ré: freio com o carro parado
+	# CONVENÇÃO MEDIDA (tests/probe.gd): engine_force POSITIVO = ré (+Z);
+	# frente exige força NEGATIVA. Nunca confiar no doc — medir.
 	if brake_in > 0 and fwd_speed < 0.5:
-		car.engine_force = -def["engine"] * 0.5 * brake_in
+		car.engine_force = def["engine"] * 0.45 * brake_in    # ré
 		car.brake = 0
 	else:
 		var lim: float = clampf(1.0 - fwd_speed / def["top"], 0.0, 1.0)
-		car.engine_force = def["engine"] * throttle * lim
+		car.engine_force = -def["engine"] * throttle * lim    # frente
 		car.brake = def["brake"] * brake_in
 	if Input.is_action_pressed("handbrake"):
 		car.brake = maxf(car.brake, def["brake"] * 1.2)
-	# esterço suave, menor em alta velocidade
-	var max_steer: float = def["steer"] * (1.0 - clampf(speed / 70.0, 0.0, 0.72))
-	car.steering = move_toward(car.steering, steer * max_steer, 2.6 * delta)
+	# esterço: resposta rápida, reduz menos em alta velocidade
+	var max_steer: float = def["steer"] * (1.0 - clampf(speed / 80.0, 0.0, 0.6))
+	car.steering = move_toward(car.steering, steer * max_steer, 4.2 * delta)
 	if Input.is_action_just_pressed("reset_car"):
 		_reset_car(car)
 
@@ -454,7 +503,8 @@ func _drive_ai(car: VehicleBody3D, delta: float) -> void:
 	var straight: float = clampf(here_t.dot(ahead_t), 0.0, 1.0)
 	var target_speed: float = def["top"] * (0.42 + 0.58 * straight * straight)
 	if speed < target_speed:
-		car.engine_force = def["engine"] * clampf(1.0 - speed / def["top"], 0.0, 1.0)
+		# sinal MEDIDO: frente = engine_force negativo (tests/probe.gd)
+		car.engine_force = -def["engine"] * clampf(1.0 - speed / def["top"], 0.0, 1.0)
 		car.brake = 0
 	else:
 		car.engine_force = 0
@@ -503,15 +553,20 @@ func _update_hud() -> void:
 	hud["lap"].text = "VOLTA %d/%d  ·  %dº/%d" % [mini(pr["lap"], LAPS), LAPS, pos_rank, cars.size()]
 	hud["time"].text = "%d:%04.1f" % [int(race_t / 60), fmod(race_t, 60.0)]
 
+var _test_travel := 0.0     # avanço REAL no sentido da corrida (ré desconta)
+
 func _check_test() -> void:
-	if test_t < 10.0:
-		return
 	var pr: Dictionary = progress[player]
-	var dist: float = (pr["lap"] - 1 + pr["s"]) * track_len
-	var speed := player.linear_velocity.length()
-	if dist > 40.0 and speed > 3.0:
-		print("TEST PASS dist=%.0fm speed=%.1fm/s cars=%d" % [dist, speed, cars.size()])
+	var ds: float = pr["s"] - pr["last_s"]
+	if ds > 0.5: ds -= 1.0
+	elif ds < -0.5: ds += 1.0
+	_test_travel += ds * track_len
+	if test_t < 12.0:
+		return
+	var fwd_speed: float = -player.global_transform.basis.z.dot(player.linear_velocity)
+	if _test_travel > 80.0 and fwd_speed > 3.0:
+		print("TEST PASS travel=%.0fm fwd=%.1fm/s cars=%d" % [_test_travel, fwd_speed, cars.size()])
 		get_tree().quit(0)
 	else:
-		print("TEST FAIL dist=%.0fm speed=%.1fm/s" % [dist, speed])
+		print("TEST FAIL travel=%.0fm fwd=%.1fm/s" % [_test_travel, fwd_speed])
 		get_tree().quit(1)
