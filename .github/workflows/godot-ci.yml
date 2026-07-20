@@ -1,0 +1,104 @@
+# godot-ci — CI genérico para todos os projetos Godot 4.x em src/godot/**
+#
+#   1. gdscript-lint — gdtoolkit 4.x gdlint em todos os .gd (exceto addons/ de terceiros)
+#   2. project-validate — Godot 4.7.1 headless --import --quit por projeto (parse de cenas/scripts)
+#   3. gdunit4-tests — gdUnit4-action por projeto, somente quando o projeto tem test/ com testes
+#
+# O aero-fighters-v2 mantém seu workflow dedicado (aero-v2-godot-ci.yml); este cobre os demais.
+
+name: Godot CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/godot/**"
+      - ".github/workflows/godot-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/godot/**"
+      - ".github/workflows/godot-ci.yml"
+
+concurrency:
+  group: godot-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.1
+
+jobs:
+  gdscript-lint:
+    name: GDScript Lint (gdtoolkit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install gdtoolkit 4.x
+        run: pip install "gdtoolkit==4.*"
+
+      - name: gdlint
+        run: |
+          mapfile -t files < <(find src/godot -name '*.gd' -not -path '*/addons/*')
+          echo "Linting ${#files[@]} GDScript files"
+          gdlint "${files[@]}"
+
+  project-validate:
+    name: Headless Import (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [speed-run, space-war, bang-bag]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.1
+          use-dotnet: false
+
+      - name: Import project headless
+        run: |
+          cd "src/godot/${{ matrix.project }}"
+          godot --headless --import --quit
+        env:
+          GODOT_AI_DISABLE_TELEMETRY: "true"
+
+  gdunit4-tests:
+    name: gdUnit4 Tests (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [speed-run]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for tests
+        id: has-tests
+        run: |
+          if compgen -G "src/godot/${{ matrix.project }}/test/**/*_test.gd" > /dev/null \
+             || compgen -G "src/godot/${{ matrix.project }}/test/*_test.gd" > /dev/null; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No gdUnit4 tests yet — skipping."
+          fi
+
+      - name: Run gdUnit4
+        if: steps.has-tests.outputs.found == 'true'
+        uses: MikeSchulze/gdUnit4-action@v1
+        with:
+          godot-version: 4.7.1
+          project_dir: src/godot/${{ matrix.project }}
+          paths: res://test
