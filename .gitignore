@@ -15,3 +15,7 @@ tests/.server-*.pid
 
 # prints de referência do operador (material de estudo, não asset do jogo)
 img/
+playwright-report/
+test-results/
+tests/screenshots/
+.server-*.pid

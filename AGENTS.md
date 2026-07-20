@@ -22,8 +22,8 @@ outside a reserved `game-developer` task, the game-folder exclusivity above stan
 
 | Game | Folder | Engine | Description |
 |---|---|---|---|
-| Tauan T-Rex | `tauan-trex/` | Phaser 3.60 (vendor-local) | Endless runner clone (dinosaur jumps over obstacles). Single-file (`game.js`, ~773 lines). Fully implemented; all 8 ACs pass. |
-| Aero Strike | `aero-fighters/` | Three.js r165 (vendor-local, ES modules) | F-35 ground-strike simulator: destroy military targets (bases, factories, buildings, convoys, AA guns) over a 3D ocean world. 15-module architecture under `src/`. Fully implemented; all 18 ACs pass. |
+| Tauan T-Rex | `src/web-games/tauan-trex/` | Phaser 3.60 (vendor-local) | Endless runner clone (dinosaur jumps over obstacles). Single-file (`game.js`, ~773 lines). Fully implemented; all 8 ACs pass. |
+| Aero Strike | `src/web-games/aero-fighters/` | Three.js r165 (vendor-local, ES modules) | F-35 ground-strike simulator: destroy military targets (bases, factories, buildings, convoys, AA guns) over a 3D ocean world. 15-module architecture under `src/`. Fully implemented; all 18 ACs pass. |
 
 ## Spec Structure
 
@@ -41,31 +41,31 @@ Approval marker: `[x] Approved` in the spec header is required before any implem
 
 Stop and ask the operator if:
 - A spec for the affected feature is in `Draft` or `In Review` status (no implementation without `[x] Approved`)
-- A change touches `vendor/` (Phaser, Three.js) — vendors are pinned and must not be upgraded without a spec change
-- A change to `aero-fighters/src/state.js` or `window.game` contract would break existing Playwright ACs
+- A change touches `src/web-games/vendor/` (Phaser, Three.js) — vendors are pinned and must not be upgraded without a spec change
+- A change to `src/web-games/aero-fighters/src/state.js` or `window.game` contract would break existing Playwright ACs
 - Any new module would push a source file above 250 lines without a plan to split it
 - A task involves adding secrets, API keys, or network calls to a game (all games must be fully offline)
 
 ## Key Paths
 
-- `tauan-trex/game.js` — entire T-Rex game (single file, Phaser scene)
-- `tauan-trex/index.html` — loads `../vendor/phaser.min.js` and `game.js`
-- `aero-fighters/src/state.js` — single source of truth (`window.game`); all modules import `game` from here
-- `aero-fighters/src/config.js` — all numeric constants; change gameplay feel here, not in game modules
-- `aero-fighters/src/main.js` — game loop orchestrator; wires all modules together
-- `aero-fighters/src/fx.js` — particle/smoke/explosion pools (two separate smoke pools: `smokeExplPool` for explosions, `smokeChimPool` for factory chimneys)
-- `aero-fighters/ARCHITECTURE.md` — architectural decisions and module dependency map
-- `aero-fighters/CONVENTIONS.md` — code conventions including 250-line module limit
-- `vendor/phaser.min.js` — Phaser 3.60, committed offline copy
-- `vendor/three.module.min.js` — Three.js r165 ES module build, committed offline copy
-- `tests/` — Playwright smoke suite (26 ACs total: 8 T-Rex + 18 Aero Fighters)
-- `tests/playwright.config.js` — Playwright config (baseURL port 8080, python3 http.server globalSetup)
+- `src/web-games/tauan-trex/game.js` — entire T-Rex game (single file, Phaser scene)
+- `src/web-games/tauan-trex/index.html` — loads `../vendor/phaser.min.js` and `game.js`
+- `src/web-games/aero-fighters/src/state.js` — single source of truth (`window.game`); all modules import `game` from here
+- `src/web-games/aero-fighters/src/config.js` — all numeric constants; change gameplay feel here, not in game modules
+- `src/web-games/aero-fighters/src/main.js` — game loop orchestrator; wires all modules together
+- `src/web-games/aero-fighters/src/fx.js` — particle/smoke/explosion pools (two separate smoke pools: `smokeExplPool` for explosions, `smokeChimPool` for factory chimneys)
+- `src/web-games/aero-fighters/ARCHITECTURE.md` — architectural decisions and module dependency map
+- `src/web-games/aero-fighters/CONVENTIONS.md` — code conventions including 250-line module limit
+- `src/web-games/vendor/phaser.min.js` — Phaser 3.60, committed offline copy
+- `src/web-games/vendor/three.module.min.js` — Three.js r165 ES module build, committed offline copy
+- `src/web-games/tests/` — Playwright smoke suite (26 ACs total: 8 T-Rex + 18 Aero Fighters)
+- `src/web-games/tests/playwright.config.js` — Playwright config (baseURL port 8080, python3 http.server globalSetup serving the repo root)
 
 ## Key Commands
 
 ```bash
 # Run all tests (26 ACs — requires no process on port 8080)
-cd /home/ubuntu/workspace/repos/tauan-games
+cd /home/marco/workspace/dadaia/repos/tauan-games/src/web-games
 npx playwright test --config tests/playwright.config.js
 
 # Run only Aero Fighters tests
@@ -75,6 +75,8 @@ npx playwright test --config tests/playwright.config.js tests/aero-fighters/
 npx playwright test --config tests/playwright.config.js tests/trex/
 
 # Serve games manually for browser play (open http://localhost:8080)
+# MUST run from the REPO ROOT — game URLs are /src/web-games/<game>/
+cd /home/marco/workspace/dadaia/repos/tauan-games
 python3 -m http.server 8080
 ```
 
