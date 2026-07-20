@@ -50,12 +50,8 @@ jobs:
           gdlint "${files[@]}"
 
   project-validate:
-    name: Headless Import (${{ matrix.project }})
+    name: Headless Import (all present projects)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [speed-run, space-war, bang-bag]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,10 +62,22 @@ jobs:
           version: 4.7.1
           use-dotnet: false
 
-      - name: Import project headless
+      - name: Import each Godot project headless
         run: |
-          cd "src/godot/${{ matrix.project }}"
-          godot --headless --import --quit
+          # Descobre dinamicamente os projetos presentes no branch (a árvore
+          # local do operador pode ter projetos ainda não commitados).
+          status=0
+          for proj in $(find src/godot -maxdepth 2 -name project.godot | sort); do
+            dir=$(dirname "$proj")
+            case "$dir" in *aero-fighters-v2*) continue ;; esac
+            echo "::group::Import $dir"
+            if ! (cd "$dir" && godot --headless --import --quit); then
+              echo "::error::Import failed for $dir"
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $status
         env:
           GODOT_AI_DISABLE_TELEMETRY: "true"
 
@@ -87,12 +95,13 @@ jobs:
       - name: Check for tests
         id: has-tests
         run: |
-          if compgen -G "src/godot/${{ matrix.project }}/test/**/*_test.gd" > /dev/null \
-             || compgen -G "src/godot/${{ matrix.project }}/test/*_test.gd" > /dev/null; then
+          if [ -d "src/godot/${{ matrix.project }}" ] \
+             && { compgen -G "src/godot/${{ matrix.project }}/test/**/*_test.gd" > /dev/null \
+                  || compgen -G "src/godot/${{ matrix.project }}/test/*_test.gd" > /dev/null; }; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No gdUnit4 tests yet — skipping."
+            echo "No project/tests present — skipping."
           fi
 
       - name: Run gdUnit4
