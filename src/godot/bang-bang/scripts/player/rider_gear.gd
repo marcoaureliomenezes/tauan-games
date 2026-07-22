@@ -12,8 +12,40 @@ const FOLLOW_Y := 0.90      # origem do follow em y-mundo (up_offset -0.60)
 func _ready() -> void:
 	_hat()
 	_boots()
+	_outfit()
 	for side in [-1.0, 1.0]:
 		_spur(side)
+
+# figurino western por SUPERFÍCIE (os materiais do Adventurer são cores chapadas
+# nomeadas): colete de couro escuro, camisa creme, calça jeans. Pele/cabelo intactos.
+func _outfit() -> void:
+	var rules_body := {
+		"LightGreen": Color(0.22, 0.13, 0.07),   # colete couro
+		"Green": Color(0.16, 0.10, 0.05),        # detalhes do colete
+		"White": Color(0.78, 0.72, 0.58),        # camisa creme
+		"Gold": Color(0.45, 0.30, 0.10),         # fivelas/correias
+	}
+	var rules_legs := {
+		"LightGreen": Color(0.16, 0.22, 0.34),   # jeans
+		"White": Color(0.14, 0.19, 0.30),        # jeans (sombra)
+		"Gold": Color(0.30, 0.20, 0.08),
+		"Skin": Color(0.17, 0.23, 0.36),         # o Adventurer usa shorts: perna
+		"Brown2": Color(0.15, 0.20, 0.32),       # de pele vira CALÇA jeans
+	}
+	for mi in get_parent().find_children("Adventurer_*", "MeshInstance3D", true, false):
+		if mi.name == "Adventurer_Feet":
+			continue   # botas já cobertas por material_override
+		var rules: Dictionary = rules_legs if mi.name == "Adventurer_Legs" else rules_body
+		if mi.name == "Adventurer_Head":
+			continue   # pele + cabelo ficam originais (chapéu já cobre)
+		for i in range(mi.mesh.get_surface_count()):
+			var src = mi.mesh.surface_get_material(i)
+			if src == null or not rules.has(src.resource_name):
+				continue
+			var m := StandardMaterial3D.new()
+			m.albedo_color = rules[src.resource_name]
+			m.roughness = 0.85
+			mi.set_surface_override_material(i, m)
 
 func _leather(dark := false) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
