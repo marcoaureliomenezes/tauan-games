@@ -22,7 +22,7 @@
 |------|-------|------|
 | `aero-fighters-v2-jogo` | Aero Fighters v2 — o jogo | Combate aéreo cel-shaded sobre Inhaúma-MG em Godot 4 — OSM + SRTM, roda em Iris Xe. |
 
-### demolition-ball-opus-5
+### demolition-ball
 
 | slug | title | tldr |
 |------|-------|------|
@@ -75,3 +75,4 @@
 | slug | title | tldr |
 |------|-------|------|
 | `tauan-trex-jogo` | Tauan T-Rex — o jogo | Clone aprimorado do Chrome Dino em Phaser — pular cactos, abaixar sob pterodátilos, dificuldade progressiva. |
+

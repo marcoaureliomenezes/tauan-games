@@ -3,7 +3,7 @@ slug: demolition-ball-jogo
 title: Demolition Ball — o jogo
 category: product
 tldr: Trator-guindaste com bola de demolição de 4,2 t numa cidade procedural viva; contratos de destruição; WebGL2 100% próprio (zero libs, só snoise MIT).
-summary: Identidade, intuito e leis do demolition-ball-opus-5 (src/web-games/demolition-ball-opus-5). Construído em 1 shot, memorializado e expandido na v0.9.0.
+summary: Identidade, intuito e leis do demolition-ball (src/web-games/demolition-ball). Construído em 1 shot, memorializado e expandido na v0.9.0.
 tags: [product, demolition-ball, demolicao]
 token_estimate: 0
 last_updated: "2026-08-11"
@@ -34,5 +34,5 @@ Público primário: o filho de 3 anos do operador.
 `city.js` (geração, rio), `destruction.js`, `debris.js`, `missions.js`,
 `modes.js`, `traffic.js`, `pedestrians.js`, `crew.js`, `renderer.js`,
 `shaders.js`, `geometry.js`, `gl.js`, `math.js`, `minimap.js`, `audio.js`,
-`vendor/snoise.js`. Testes: `src/web-games/tests/demolition-ball-opus-5/`
+`vendor/snoise.js`. Testes: `src/web-games/tests/demolition-ball/`
 (unit.mjs headless + e2e Playwright com config GL dedicada).

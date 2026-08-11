@@ -16,7 +16,10 @@
     "test:aero:qa": "npm run validate:aero-map && npm run test:aero:unit && npm run test:aero:sim && npm run test:aero:e2e",
     "test:space-war:unit": "node --experimental-default-type=module tests/space-war/tools/test-celestial-unit.js && node --experimental-default-type=module tests/space-war/tools/test-ballistics-unit.js && node --experimental-default-type=module tests/space-war/tools/test-physics-unit.js && node --experimental-default-type=module tests/space-war/tools/test-mode-unit.js",
     "test:space-war": "playwright test tests/space-war/ --config=tests/playwright.config.js",
-    "test:far-west": "playwright test tests/far-west/ --config=tests/playwright.config.js"
+"test:far-west": "playwright test tests/far-west/ --config=tests/playwright.config.js",
+    "test:demolition-ball:unit": "node tests/demolition-ball/unit.mjs",
+    "test:demolition-ball:e2e": "playwright test --config=tests/demolition-ball/playwright.config.js",
+    "test:demolition-ball": "npm run test:demolition-ball:unit && npm run test:demolition-ball:e2e"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0"

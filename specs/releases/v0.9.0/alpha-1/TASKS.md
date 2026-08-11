@@ -73,12 +73,12 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
 - [x] T10 - Memória SDD + docs (R-13, R-14, WS-8)
   - **Owner:** product-engineer
   - **Acceptance:** AC-8 — games-catalog atualizado; atoms em
-    `specs/memory/product/web-games/demolition-ball-opus-5/`; README do jogo e raiz
+    `specs/memory/product/web-games/demolition-ball/`; README do jogo e raiz
     coerentes; `dadaia backlog doctor` sem erros novos.
 
 - [-] T11 - Fecho: suíte completa + screenshots finais + aceitação
   - **Owner:** qa-engineer
-  - **Acceptance:** AC-1..AC-8; `node tests/demolition-ball-opus-5/unit.mjs` e
+  - **Acceptance:** AC-1..AC-8; `node tests/demolition-ball/unit.mjs` e
     Playwright do jogo verdes; relatório de QA + handoff; operador (e filho) jogam.
   - **Estado (2026-08-11):** SUÍTE COMPLETA VERDE — 30 unit + 9/9 e2e (incl.
     fps ≥20 em quality=low, AC-1 modos, AC-5 equipe). Nota: houve UMA reprova de
@@ -86,4 +86,4 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
     ~10% (baseline 15,5 vs v0.9.0 13,9); com Chromium 147 e load menor, verde.
     Screenshots de evidência capturados (modos, fachadas, praça, rio/pontes,
     pedestres, cones, operador). **Pendente apenas: operador (e filho) jogarem
-    e aceitarem — servidor registrado em http://127.0.0.1:8148/demolition-ball-opus-5/**
+    e aceitarem — servidor registrado em http://127.0.0.1:8148/demolition-ball/**

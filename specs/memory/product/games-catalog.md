@@ -26,7 +26,7 @@ jogo: atoms em `product/web-games/<jogo>/` e `product/godot/<jogo>/`.
 | Memória dos Bichos | `src/web-games/memoria-bichos/` | HTML/CSS/JS puro | Jogável |
 | Speed Run (web) | `src/web-games/speed-run/` | Three.js r165 | Jogável; 3 pistas, 5 carros |
 | Tauan T-Rex | `src/web-games/tauan-trex/` | Phaser 3 (vendor) | Jogável |
-| Demolition Ball | `src/web-games/demolition-ball-opus-5/` | WebGL2 puro (renderer/física/áudio do zero; só `snoise` MIT vendor) | Jogável; v0.9.0 cidade viva + Modo Tauan |
+| Demolition Ball | `src/web-games/demolition-ball/` | WebGL2 puro (renderer/física/áudio do zero; só `snoise` MIT vendor) | Jogável; v0.9.0 cidade viva + Modo Tauan |
 | Space War | `space-war/` ⚠ raiz | Three.js r165 | Jogável; MIGRAÇÃO p/ src/web-games pendente |
 
 ## Godot games (`src/godot/`)

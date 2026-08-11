@@ -112,7 +112,7 @@ concreto por quadro sem custo de CPU por objeto.
 
 ```bash
 cd src/web-games
-node tests/demolition-ball-opus-5/unit.mjs                        # simulação pura
-TEST_PORT=8177 npx playwright test tests/demolition-ball-opus-5/ \
+node tests/demolition-ball/unit.mjs                        # simulação pura
+TEST_PORT=8177 npx playwright test tests/demolition-ball/ \
   --config=tests/playwright.config.js                             # E2E no browser
 ```

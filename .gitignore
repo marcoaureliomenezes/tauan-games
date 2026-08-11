@@ -1,5 +1,5 @@
 # Dependencies
-node_modules/
+node_modules
 
 # Playwright output
 test-results/
@@ -19,3 +19,7 @@ playwright-report/
 test-results/
 tests/screenshots/
 .server-*.pid
+
+# e2e output dirs (regenerated every run)
+src/web-games/screenshots/
+src/web-games/tests/screenshots/

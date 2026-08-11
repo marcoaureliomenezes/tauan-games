@@ -2,16 +2,16 @@
 // No DOM, no WebGL — city generation, voxel destruction, collapse and missions.
 
 import assert from 'node:assert/strict';
-import { buildCity, Structure, StructureIndex } from '../../demolition-ball-opus-5/src/city.js';
-import { applyImpact, collapseUnsupported } from '../../demolition-ball-opus-5/src/destruction.js';
-import { DebrisField } from '../../demolition-ball-opus-5/src/debris.js';
-import { MissionSystem, CONTRACTS } from '../../demolition-ball-opus-5/src/missions.js';
-import { Rig, safeBallPos } from '../../demolition-ball-opus-5/src/rig.js';
-import { Traffic } from '../../demolition-ball-opus-5/src/traffic.js';
-import { Pedestrians } from '../../demolition-ball-opus-5/src/pedestrians.js';
-import { Crew } from '../../demolition-ball-opus-5/src/crew.js';
-import { MODES } from '../../demolition-ball-opus-5/src/modes.js';
-import { v3, sphereVsBox, qIntegrate, mulberry32, vlen } from '../../demolition-ball-opus-5/src/math.js';
+import { buildCity, Structure, StructureIndex } from '../../demolition-ball/src/city.js';
+import { applyImpact, collapseUnsupported } from '../../demolition-ball/src/destruction.js';
+import { DebrisField } from '../../demolition-ball/src/debris.js';
+import { MissionSystem, CONTRACTS } from '../../demolition-ball/src/missions.js';
+import { Rig, safeBallPos } from '../../demolition-ball/src/rig.js';
+import { Traffic } from '../../demolition-ball/src/traffic.js';
+import { Pedestrians } from '../../demolition-ball/src/pedestrians.js';
+import { Crew } from '../../demolition-ball/src/crew.js';
+import { MODES } from '../../demolition-ball/src/modes.js';
+import { v3, sphereVsBox, qIntegrate, mulberry32, vlen } from '../../demolition-ball/src/math.js';
 
 let passed = 0;
 const test = (name, fn) => {
@@ -21,7 +21,7 @@ const test = (name, fn) => {
   }
 };
 
-console.log('demolition-ball-opus-5 :: unit');
+console.log('demolition-ball :: unit');
 
 test('math: deterministic PRNG is stable and in range', () => {
   const a = mulberry32(7), b = mulberry32(7);

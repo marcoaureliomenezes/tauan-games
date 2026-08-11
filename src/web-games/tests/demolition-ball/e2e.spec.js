@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const URL = '/src/web-games/demolition-ball-opus-5/index.html?quality=low';
+const URL = '/src/web-games/demolition-ball/index.html?quality=low';
 
 async function boot(page) {
   const errors = [];
@@ -124,7 +124,7 @@ test('HUD mostra contrato, alvos e caixa', async ({ page }) => {
   await expect(page.locator('#mission-title')).toContainText('Contrato');
   await expect(page.locator('#target-list li')).not.toHaveCount(0);
   await expect(page.locator('#money')).toContainText('$');
-  await page.screenshot({ path: 'screenshots/demolition-ball-opus-5.png' });
+  await page.screenshot({ path: 'screenshots/demolition-ball.png' });
 });
 
 // ---------------------------------------------------------------- v0.9.0 (R-05..R-08)
