@@ -1,0 +1,71 @@
+# demolition-ball-ci — suíte dedicada do Demolition Ball (config próprio com as
+# 5 flags GL/ANGLE, v0.10.0 T-03). Roda só quando o jogo ou seus testes mudam;
+# em paralelo com o job principal (o config raiz ignora
+# tests/demolition-ball-opus-5/** desde v0.10.0).
+
+name: Demolition Ball CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/web-games/demolition-ball-opus-5/**"
+      - "src/web-games/tests/demolition-ball-opus-5/**"
+      - ".github/workflows/demolition-ball-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/web-games/demolition-ball-opus-5/**"
+      - "src/web-games/tests/demolition-ball-opus-5/**"
+      - ".github/workflows/demolition-ball-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: demolition-ball-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  demolition-ball-tests:
+    name: Demolition Ball Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: src/web-games
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/web-games/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('src/web-games/package-lock.json') }}
+          restore-keys: |
+            playwright-chromium-
+
+      - name: Install Playwright Chromium with system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Chromium system deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run tests
+        run: npm run test:demolition-ball

@@ -6,6 +6,11 @@ const evidence = path.resolve(__dirname, '../../../../../../.dadaia/tmp/root/202
 // CONFIG.floorHeight (3.55) + 1 de offset dos pés = altura do jogador em pé no
 // mezanino. Chegar acima disso só é possível subindo a escada.
 const CONFIG_FLOOR_TOP = 4.4;
+// M1/M2/M3 — mesmo padrão de espelhar CONFIG aqui (ver CONFIG_FLOOR_TOP
+// acima): config.js não é importável no browser a partir do teste Node.
+const CONFIG_ROOF_HEIGHT = 6.55; // floorHeight (3.55) + upperWallHeight (3.0)
+const CONFIG_TOWER_HEIGHT = 10.2;
+const CONFIG_UNDERGROUND_DEPTH = 3.0;
 
 test('boots offline, renders and plays the first operation', async ({ page }) => {
   // Boot de página + deploy() (pré-aquecimento de shader síncrono sem GPU —
@@ -277,6 +282,128 @@ test('every operation has a second floor the player can climb to', async ({ page
   expect(landed.playerY).toBeGreaterThan(4.4); // 3.55 (laje) + 1 (offset dos pés)
   expect(landed.playerY).toBeLessThan(4.7);
   expect(landed.grounded).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+// M1 (telhado) + M2 (torre) + M3 (passagem subterrânea) — expansão do mapa.
+// Para as SEIS missões: auditMap()/auditSolids() cobrindo os níveis NOVOS
+// (mesma física real usada pelo movimento, nunca uma cópia que possa
+// divergir — ver main.js), teleporte real ao topo da torre e a uma célula da
+// passagem (ida e volta, nunca preso), e a métrica de aceitação da
+// remediação de performance (luzes/programas CONSTANTES) continua valendo
+// com a geometria nova — nenhum material/luz é criado fora do deploy.
+test('M1/M2/M3: rooftop, watchtower and underground passage are solid, auditable and traversable in all six operations', async ({ page }) => {
+  test.setTimeout(900000);
+  const errors = [];
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/src/web-games/james-bond/');
+  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
+  await page.evaluate(() => window.game.api.unlockAll());
+
+  for (let mission = 0; mission < 6; mission += 1) {
+    const code = `OP-0${mission + 1}`;
+    await page.evaluate((index) => window.game.api.deploy(index), mission);
+    await page.waitForFunction(() => window.game.phase === 'playing');
+    await page.waitForTimeout(200);
+
+    // (d) — luzes/programas: mesma métrica da remediação de performance,
+    // capturada ANTES de qualquer teleporte/auditoria desta missão.
+    const before = await page.evaluate(() => window.game.api.rendererStats());
+    expect(before.lights, `${code}: pool de luzes deve existir`).toBeGreaterThan(0);
+    expect(before.programs, `${code}: shaders devem estar pré-compilados`).toBeGreaterThan(0);
+
+    // Sanidade de config: as três features existem no mundo construído.
+    const shape = await page.evaluate(() => {
+      const world = window.game.world;
+      return {
+        roofCells: world.roof?.cells?.size || 0,
+        roofStairs: world.roof?.stairs?.length || 0,
+        tower: Boolean(world.tower),
+        undergroundCells: world.underground?.cells?.size || 0,
+        undergroundEntrances: world.underground?.entrances?.length || 0,
+      };
+    });
+    expect(shape.roofCells, `${code}: telhado sem células`).toBeGreaterThan(0);
+    expect(shape.roofStairs, `${code}: telhado sem escada`).toBeGreaterThan(0);
+    expect(shape.tower, `${code}: torre não construída`).toBe(true);
+    expect(shape.undergroundCells, `${code}: passagem sem células`).toBeGreaterThan(0);
+    expect(shape.undergroundEntrances, `${code}: passagem sem bocas de visita`).toBeGreaterThanOrEqual(2);
+
+    // (a) auditMap() — física real, três níveis novos incluídos.
+    const audit = await page.evaluate(() => window.game.api.auditMap());
+    expect(audit.inside, `${code}: pontos DENTRO de sólido (todos os níveis)`).toEqual([]);
+    expect(audit.trapped, `${code}: pontos sem saída (todos os níveis)`).toEqual([]);
+    expect(audit.unreachable, `${code}: objetivo/extração inacessível`).toEqual([]);
+    expect(audit.orphanRoof, `${code}: célula de telhado inalcançável`).toEqual([]);
+    expect(audit.roofIslands, `${code}: escada do telhado sem saída na laje`).toEqual([]);
+    expect(audit.roofReached, `${code}: telhado transitável por inteiro`).toBe(audit.roofCells);
+    expect(audit.orphanUnderground, `${code}: célula de passagem inalcançável`).toEqual([]);
+    expect(audit.undergroundIslands, `${code}: boca de visita sem saída na passagem`).toEqual([]);
+    expect(audit.undergroundReached, `${code}: passagem transitável por inteiro`).toBe(audit.undergroundCells);
+    for (const stair of audit.stairs) {
+      expect(stair.climbed, `${code}: ${stair.cell} sobe (ou desce) andando`).toBe(true);
+      expect(stair.descended, `${code}: ${stair.cell} desce (ou sobe) de volta andando`).toBe(true);
+      expect(stair.reachable, `${code}: pé de ${stair.cell} alcançável do spawn`).toBe(true);
+    }
+
+    // (b) auditSolids() — nada sólido invisível, nada invisível sólido.
+    const solids = await page.evaluate(() => window.game.api.auditSolids());
+    expect(solids.invisible, `${code}: colisores SEM geometria visível`).toEqual([]);
+    expect(solids.seeThrough, `${code}: colisores só cobertos por transparência`).toEqual([]);
+
+    // (c) Torre: teleporta ao TOPO real (world.tower.top) e prova, com a MESMA
+    // sonda de física do movimento (physics.probe), que não está preso —
+    // nem dentro de sólido, nem sem saída horizontal.
+    const towerCheck = await page.evaluate((towerHeight) => {
+      const { physics, world } = window.game;
+      const top = world.tower.top;
+      // api.teleport(x, z, y) recebe player.y (pés + 1 — ver engine/physics.js),
+      // não a altura da superfície: para os PÉS pousarem em `towerHeight`
+      // (o topo real da plataforma), y = towerHeight + 1.
+      window.game.api.teleport(top.x, top.z, towerHeight + 1);
+      const p = physics.position();
+      const inside = physics.probe(p.x, p.y, p.z);
+      const escapes = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      const trapped = !escapes.some(([ex, ez]) => !physics.probe(p.x + ex * 0.4, p.y, p.z + ez * 0.4));
+      return { y: p.y, inside, trapped };
+    }, CONFIG_TOWER_HEIGHT);
+    expect(towerCheck.inside, `${code}: topo da torre está dentro de geometria sólida`).toBe(false);
+    expect(towerCheck.trapped, `${code}: topo da torre sem saída`).toBe(false);
+    expect(towerCheck.y, `${code}: teleporte não pousou perto do topo da torre`).toBeGreaterThan(CONFIG_TOWER_HEIGHT - 0.5);
+
+    // (c) Passagem: teleporta a UMA célula real da passagem (world.underground
+    // .cells) e prova o mesmo — dentro/preso pela física real — e depois volta
+    // ao spawn e confirma que a volta também não prende o jogador.
+    const undergroundCheck = await page.evaluate((depth) => {
+      const { physics, world } = window.game;
+      const key = world.underground.cells.values().next().value;
+      const [x, z] = key.split(',').map(Number);
+      const point = world.toWorld({ x, z });
+      window.game.api.teleport(point.x, point.z, -depth + 1);
+      const p = physics.position();
+      const inside = physics.probe(p.x, p.y, p.z);
+      const escapes = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      const trapped = !escapes.some(([ex, ez]) => !physics.probe(p.x + ex * 0.4, p.y, p.z + ez * 0.4));
+      // E volta: teleporta ao spawn da missão — a "ida e volta" da passagem.
+      window.game.api.teleport(world.start.x, world.start.z, 1);
+      const back = physics.position();
+      const backInside = physics.probe(back.x, back.y, back.z);
+      return { y: p.y, inside, trapped, backInside, backY: back.y };
+    }, CONFIG_UNDERGROUND_DEPTH);
+    expect(undergroundCheck.inside, `${code}: célula da passagem está dentro de geometria sólida`).toBe(false);
+    expect(undergroundCheck.trapped, `${code}: célula da passagem sem saída`).toBe(false);
+    expect(undergroundCheck.y, `${code}: teleporte não pousou perto do piso da passagem`).toBeLessThan(-CONFIG_UNDERGROUND_DEPTH + 1.5);
+    expect(undergroundCheck.backInside, `${code}: volta ao spawn ficou dentro de sólido`).toBe(false);
+    expect(undergroundCheck.backY, `${code}: volta ao spawn não pousou no térreo`).toBeLessThan(1.5);
+
+    // (d) — luzes/programas continuam CONSTANTES: nenhum teleporte/auditoria
+    // acima criou material ou luz nova (nenhum `scene.add`/`new *Material`
+    // fora de deploy() — ver comentário de topo de fx.js).
+    const after = await page.evaluate(() => window.game.api.rendererStats());
+    expect(after.lights, `${code}: contagem de luzes mudou fora do deploy`).toBe(before.lights);
+    expect(after.programs, `${code}: contagem de programas mudou fora do deploy`).toBe(before.programs);
+  }
   expect(errors).toEqual([]);
 });
 

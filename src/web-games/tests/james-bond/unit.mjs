@@ -5,6 +5,7 @@ import { createRandom, hashSeed } from '../../james-bond/src/random.js';
 import { createPhysics } from '../../james-bond/src/engine/physics.js';
 import { CONFIG, SENSITIVITY, clampSensitivity } from '../../james-bond/src/config.js';
 import { slabCells, stairDirection, STAIR_STEPS } from '../../james-bond/src/upper-floor.js';
+import { roofStairDirection } from '../../james-bond/src/roof.js';
 import { isSolid, SOLID_TILES, GROUND_TILES, MARKERS } from '../../james-bond/src/content/tiles.js';
 import { stepProjectile } from '../../james-bond/src/gameplay/ballistics.js';
 import { isPrecisionShot, computeSpread } from '../../james-bond/src/gameplay/spread.js';
@@ -111,6 +112,95 @@ for (const mission of MISSIONS) {
     assert.ok(cells.has(`${x},${z}`) && !isSolid(chars[z][x]),
       `${mission.code} upper guard (${x},${z}) must spawn on a slab cell`);
   }
+
+  // --- M1/M2/M3: as SEIS missões declaram telhado, torre e passagem --------
+  const width = chars[0].length;
+  const height = chars.length;
+  const inBounds = (x, z) => Number.isInteger(x) && Number.isInteger(z)
+    && x >= 0 && x < width && z >= 0 && z < height;
+
+  // M1 — telhado: sub-retângulo da laje do mezanino, escada nasce na PRÓPRIA
+  // laje (fora do retângulo do telhado, dentro da laje do mezanino).
+  assert.ok(mission.roof?.slabs?.length, `${mission.code} must declare roof.slabs`);
+  assert.ok(mission.roof?.stairs?.length, `${mission.code} must declare roof.stairs`);
+  const roofCells = slabCells(mission.roof);
+  assert.ok(roofCells.size > 0, `${mission.code} roof must have at least one walkable cell`);
+  for (const key of roofCells) {
+    assert.ok(cells.has(key), `${mission.code} roof cell ${key} must sit within the mezzanine it caps`);
+  }
+  for (const [x, z] of mission.roof.stairs) {
+    assert.ok(inBounds(x, z), `${mission.code} roof stair (${x},${z}) out of grid bounds`);
+    assert.ok(!roofCells.has(`${x},${z}`),
+      `${mission.code} roof stair (${x},${z}) must sit OUTSIDE the roof rectangle — inside it splits the roof`);
+    const direction = roofStairDirection(roofCells, cells, x, z);
+    assert.ok(direction, `${mission.code} roof stair (${x},${z}) needs a walkable exit onto the roof and a landing on the mezzanine`);
+  }
+
+  // M2 — torre: base numa célula do térreo NÃO sólida/marcador, com porta
+  // apontando para uma célula vizinha andável (a torre não pode nascer
+  // trancada nem em cima de um objetivo/spawn/guarda existente).
+  assert.ok(Array.isArray(mission.tower?.base) && mission.tower.base.length === 2,
+    `${mission.code} must declare tower.base as [x, z]`);
+  const [towerX, towerZ] = mission.tower.base;
+  assert.ok(inBounds(towerX, towerZ), `${mission.code} tower base (${towerX},${towerZ}) out of grid bounds`);
+  const towerChar = chars[towerZ][towerX];
+  assert.ok(!isSolid(towerChar) && !'SEGABCX'.includes(towerChar),
+    `${mission.code} tower base (${towerX},${towerZ}) must sit on empty walkable ground (got '${towerChar}')`);
+  assert.ok(Array.isArray(mission.tower?.door) && mission.tower.door.length === 2,
+    `${mission.code} must declare tower.door as [dx, dz]`);
+  const [doorDx, doorDz] = mission.tower.door;
+  assert.ok([-1, 0, 1].includes(doorDx) && [-1, 0, 1].includes(doorDz) && Math.abs(doorDx) + Math.abs(doorDz) === 1,
+    `${mission.code} tower.door must be one of the 4 cardinal unit directions`);
+  const doorChar = chars[towerZ + doorDz]?.[towerX + doorDx];
+  assert.ok(doorChar && !isSolid(doorChar) && !'SEGABCX'.includes(doorChar),
+    `${mission.code} tower door must open onto walkable ground (got '${doorChar}')`);
+
+  // M3 — passagem subterrânea: 2-3 bocas de visita EXTERNAS ao corredor, em
+  // chão livre, cada uma com saída pisável de um lado (mesma regra da
+  // escadaria do mezanino, aplicada a um nível abaixo do chão).
+  assert.ok(mission.underground?.slabs?.length, `${mission.code} must declare underground.slabs`);
+  const undergroundEntrances = mission.underground?.entrances || [];
+  assert.ok(undergroundEntrances.length >= 2 && undergroundEntrances.length <= 3,
+    `${mission.code} underground must declare 2-3 entrances (got ${undergroundEntrances.length})`);
+  const undergroundCells = slabCells(mission.underground);
+  assert.ok(undergroundCells.size > 0, `${mission.code} underground must have at least one walkable cell`);
+  for (const [x, z] of undergroundEntrances) {
+    assert.ok(inBounds(x, z), `${mission.code} underground entrance (${x},${z}) out of grid bounds`);
+    assert.ok(!isSolid(chars[z][x]) && !'SEGABCX'.includes(chars[z][x]),
+      `${mission.code} underground entrance (${x},${z}) must sit on empty walkable ground`);
+    assert.ok(!undergroundCells.has(`${x},${z}`),
+      `${mission.code} underground entrance (${x},${z}) must sit OUTSIDE the corridor — a boca inside it splits the passage`);
+    const direction = stairDirection(undergroundCells, chars, x, z);
+    assert.ok(direction, `${mission.code} underground entrance (${x},${z}) needs a walkable descent into the corridor and a landing on the street`);
+  }
+
+  // Nenhuma célula especial (torre/bocas) pode coincidir — cada uma precisa
+  // do seu próprio colisor/estrutura, e uma coincidência quebraria as duas.
+  const specialCells = new Map();
+  const claim = (x, z, label) => {
+    const key = `${x},${z}`;
+    assert.ok(!specialCells.has(key),
+      `${mission.code} cell ${key} claimed by both ${specialCells.get(key)} and ${label} — M2/M3 placements must be disjoint`);
+    specialCells.set(key, label);
+  };
+  claim(towerX, towerZ, 'tower.base');
+  undergroundEntrances.forEach(([x, z], index) => claim(x, z, `underground.entrances[${index}]`));
+}
+
+// Regressão do bug achado ao implementar a passagem subterrânea (M3):
+// `supportHeight` partia de um `best = 0` implícito, como se houvesse sempre
+// um chão absoluto em y=0 — nunca aparecia antes porque toda missão tinha
+// uma plataforma REAL em y=0 cobrindo o mapa inteiro. A passagem introduziu
+// o primeiro piso genuinamente ABAIXO de y=0 (nenhuma plataforma em y=0
+// naquela coluna — a boca de visita removeu o piso térreo ali de propósito),
+// e o `0` default vencia incondicionalmente mesmo sem nenhum apoio real.
+{
+  const below = await createPhysics();
+  below.addPlatform(0, 0, 1.8, 1.8, -3.0); // piso da passagem, sem NADA em y=0 nesta coluna
+  assert.equal(below.supportHeight(0, 0, -3.0), -3.0,
+    'supportHeight deve achar um piso real abaixo de y=0 quando é o único apoio na coluna');
+  assert.equal(below.supportHeight(50, 50, 0), 0,
+    'longe de qualquer plataforma, o fallback continua 0 (nenhuma regressão para o caso sem apoio nenhum)');
 }
 
 // O degrau da escadaria tem de ser vencível pelo passo automático do jogador.
