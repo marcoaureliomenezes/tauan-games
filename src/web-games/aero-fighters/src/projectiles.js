@@ -1,6 +1,9 @@
 // projectiles.js — Balas, mísseis homing e pickups (drops de munição).
 // Exporta: spawnBullet, recycleBullet, updateBullets, spawnMissile, updateMissiles,
-//   spawnPickup, updatePickups.
+//   spawnPickup, updatePickups, spawnMgBullet, updateMgBullets, clearMgBullets,
+//   spawnAaMissile, updateAaMissiles, clearAaMissiles,
+//   spawnRodDart, updateRodDarts, clearRodDarts,
+//   spawnDefenseNuke, updateDefenseNukes, clearDefenseNukes.
 // Para adicionar projétil novo (foguete, bomba): novo pool aqui ou módulo dedicado.
 //
 // Acoplamento intencional: importa damageTarget de targets.js (exceção α — ver CONVENTIONS).
@@ -9,16 +12,18 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
-import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, COLORS } from './config.js';
+import { CANNON, MISSILES_LIGHT, MISSILES_HEAVY, MISSILES_NUCLEAR, COLORS, AA_DEFENSE } from './config.js';
 import { explosion, spawnMissileSmoke, nuclearExplosion, spawnScorchMark, scheduleDelayed as fxDelay } from './fx.js';
 import { spawnNuclearFx } from './nuclear-fx.js';
-import { spawnPropFire } from './prop-fire.js';
-import { inhaumaTrees, getInhaumaStructures } from './maps/inhauma-scene.js';
+import { spawnFirestorm } from './firestorm.js';
 import { damageTarget } from './targets.js';
 import { deformTerrainNuclear, surfaceInfoAt } from './world.js';
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { transitionSortie, SortieEvent } from './sortie-state.js';
+import { shaveCooldown } from './weapon-cooldowns.js';
 import { rollMissileHit } from './weapons-core.js';
+import { mgStepBullet, pnStep } from './defense/turret-weapons.js'; // T-D-04/T-D-05
+import { pickRetarget, stepRod, stepNukeArc, stepNukeGuided, nightFactor } from './defense/weapons-v1.js'; // WEAPONS-V1
 
 // ─── Balas ───────────────────────────────────────────────────────────────────
 // Tracer estilo M61 Vulcan: cilindro alongado amarelo brilhante, trilhando atrás da bala
@@ -29,8 +34,10 @@ const ENEMY_B_MAT = new THREE.MeshBasicMaterial({ color: COLORS.bulletEnemy });
 
 const bulletPoolPlayer = [], bulletPoolEnemy = [];
 
-/** Spawna uma bala. @param orig posição inicial @param dir direção normalizada */
-export function spawnBullet(orig, dir, isEnemy = false) {
+/** Spawna uma bala. @param orig posição inicial @param dir direção normalizada
+ *  @param opts (T-C-10) override de speed/life para o fogo de formação de Inhaúma
+ *  (80 m/s desviável) — sem opts o inimigo legado segue a 56 m/s (demais mapas). */
+export function spawnBullet(orig, dir, isEnemy = false, opts = null) {
   const pool = isEnemy ? bulletPoolEnemy : bulletPoolPlayer;
   let mesh = pool.pop();
   if (!mesh) mesh = new THREE.Mesh(BULLET_GEOM, isEnemy ? ENEMY_B_MAT : BULLET_MAT);
@@ -38,12 +45,12 @@ export function spawnBullet(orig, dir, isEnemy = false) {
   // Aponta o tracer ao longo da direção de voo (cilindro estende-se atrás da bala)
   mesh.lookAt(orig.x + dir.x * 10, orig.y + dir.y * 10, orig.z + dir.z * 10);
   mesh.visible = true; scene.add(mesh);
-  const spd = isEnemy ? 56 : CANNON.BULLET_SPD;
+  const spd = isEnemy ? (opts?.speed ?? 56) : CANNON.BULLET_SPD;
   // CONTRATO: writer de game.projectiles
   game.projectiles.push({
     mesh,
     velocity: new THREE.Vector3(dir.x * spd, dir.y * spd, dir.z * spd),
-    life: CANNON.BULLET_LIFE,
+    life: opts?.life ?? CANNON.BULLET_LIFE,
     isEnemy,
   });
 }
@@ -93,6 +100,344 @@ export function updateBullets(dt, jetPos, onPlayerHit, wingmen = []) {
     }
     if (consumed || p.life <= 0) { recycleBullet(p); game.projectiles.splice(i, 1); }
   }
+}
+
+// ─── .50 da bateria antiaérea (T-D-04, modo inhauma-defense) ─────────────────
+// Pool PRÓPRIO de tracers: a .50 tem balística real (queda leve, cap de
+// alcance, impacto no terreno) — diferente das balas do jato (retas). EXTENSÃO
+// aditiva: nenhum caller existente é tocado. A matemática (mgStepBullet) é
+// pura em defense/turret-weapons.js; quem orquestra é o defense-mode.
+const MG_TRACER_GEOM = new THREE.CylinderGeometry(0.27, 0.27, 11.9, 6); // calibre +70% (operador 2026-07-19)
+MG_TRACER_GEOM.rotateX(Math.PI / 2);
+const MG_TRACER_MAT = new THREE.MeshBasicMaterial({ color: 0xffe27a }); // tracer claro
+// Mistura 1-em-4 (padrão real de fita .50): a cada 4 tiros um tracer maior e
+// mais quente — lê bem de trás da bateria (os demais foreshortenam a pontos).
+const MG_TRACER_BIG_GEOM = new THREE.CylinderGeometry(0.51, 0.51, 18.7, 6);
+MG_TRACER_BIG_GEOM.rotateX(Math.PI / 2);
+const MG_TRACER_BIG_MAT = new THREE.MeshBasicMaterial({ color: 0xffa133 });
+const mgTracerPool = [], mgTracerBigPool = [], mgTracers = [];
+let _mgShotCount = 0;
+
+/** Spawna um tracer da .50 a partir da boca do cano. */
+export function spawnMgBullet(orig, dir) {
+  const big = (_mgShotCount++ % 4) === 3;
+  const pool = big ? mgTracerBigPool : mgTracerPool;
+  let mesh = pool.pop();
+  if (!mesh) mesh = new THREE.Mesh(big ? MG_TRACER_BIG_GEOM : MG_TRACER_GEOM, big ? MG_TRACER_BIG_MAT : MG_TRACER_MAT);
+  mesh.position.copy(orig);
+  mesh.lookAt(orig.x + dir.x * 10, orig.y + dir.y * 10, orig.z + dir.z * 10);
+  mesh.visible = true; scene.add(mesh);
+  const s = AA_DEFENSE.MG_SPEED;
+  mgTracers.push({
+    mesh, big,
+    x: orig.x, y: orig.y, z: orig.z,
+    vx: dir.x * s, vy: dir.y * s, vz: dir.z * s,
+    dist: 0,
+  });
+}
+
+/** Atualiza os tracers da .50: balística real + alvos + terreno + cap de
+ *  alcance. @param ctx {heightAt(x,z)?, targets[]?, onTargetHit(t, b)?, onTerrainHit(b)?} */
+export function updateMgBullets(dt, ctx = {}) {
+  for (let i = mgTracers.length - 1; i >= 0; i--) {
+    const b = mgTracers[i];
+    mgStepBullet(b, dt);
+    b.mesh.position.set(b.x, b.y, b.z);
+    let dead = b.dist >= AA_DEFENSE.MG_RANGE;
+    if (!dead && ctx.targets) {
+      for (const t of ctx.targets) {
+        if (t.dead) continue;
+        const dx = b.x - t.x, dy = b.y - t.y, dz = b.z - t.z;
+        if (dx * dx + dy * dy + dz * dz < t.hr2) { ctx.onTargetHit?.(t, b); dead = true; break; }
+      }
+    }
+    if (!dead && ctx.heightAt && b.y <= ctx.heightAt(b.x, b.z)) {
+      ctx.onTerrainHit?.(b);
+      dead = true;
+    }
+    if (dead) {
+      scene.remove(b.mesh); b.mesh.visible = false;
+      (b.big ? mgTracerBigPool : mgTracerPool).push(b.mesh);
+      mgTracers.splice(i, 1);
+    }
+  }
+}
+
+/** Limpa os tracers da .50 (dispose do modo defesa). */
+export function clearMgBullets() {
+  for (const b of mgTracers) {
+    scene.remove(b.mesh); b.mesh.visible = false;
+    (b.big ? mgTracerBigPool : mgTracerPool).push(b.mesh);
+  }
+  mgTracers.length = 0;
+}
+
+// ─── Míssil AA da bateria (T-D-05, modo inhauma-defense) ─────────────────────
+// Homing por navegação proporcional simplificada (pnStep, pura/Node-testável):
+// velocidade > alvo, aceleração lateral capada, vida finita (autodestruição =
+// miss documentado). Sem hit-roll: acerta/errado pela GEOMETRIA do envelope —
+// EXCETO o roll de fase do T-W-08 (willHit=false ⇒ offset terminal seedado).
+const aaMissiles = [];
+
+// T-W-07: trilha discreta (~1 s de fade) + glow de propulsão noturno
+const TRAIL_OPTS = { life: 1.0, opacity: 0.4, scale: 0.3, maxScale: 2.0 };
+const NIGHT_GLOW_GEOM = new THREE.SphereGeometry(0.55, 6, 6);
+const NIGHT_GLOW_MAT = new THREE.MeshBasicMaterial({
+  color: 0xffaa33, transparent: true, opacity: 0.9,
+  blending: THREE.AdditiveBlending, depthWrite: false,
+});
+/** Anexa o glow noturno (nasce invisível — o update liga à noite). */
+function attachNightGlow(mesh, z, scale = 1) {
+  const g = new THREE.Mesh(NIGHT_GLOW_GEOM, NIGHT_GLOW_MAT);
+  g.position.z = z; g.scale.setScalar(scale); g.visible = false;
+  mesh.add(g);
+  return g;
+}
+const _nightNow = () => nightFactor(game.timeOfDay ?? 0.35) > 0.3;
+
+/** Lança um míssil AA travado num alvo {x,y,z,vx,vy,vz,dead}.
+ *  WEAPONS-V1: opts {damage, tier} — tier 'b' (forte, 1-hit) usa o mesh heavy;
+ *  sem opts o dano default é letal (contrato anterior: 1-hit kill).
+ *  T-W-08: opts.willHit — roll da fase da mira; false ⇒ offset terminal
+ *  seedado (o míssil passa a poucos metros do alvo, sem dano). */
+export function spawnAaMissile(orig, dir, target, opts = {}) {
+  const mesh = buildMissileMesh(opts.tier === 'b' ? 'heavy' : 'light');
+  mesh.position.copy(orig);
+  scene.add(mesh);
+  const s = AA_DEFENSE.AA_INITIAL_SPD;
+  const m = {
+    mesh, target,
+    damage: opts.damage ?? Infinity, // default = contrato antigo (kill em 1 hit)
+    willHit: opts.willHit ?? true,
+    missOffset: null,
+    x: orig.x, y: orig.y, z: orig.z,
+    vx: dir.x * s, vy: dir.y * s, vz: dir.z * s,
+    life: AA_DEFENSE.AA_LIFE, smokeTimer: 0,
+    glow: attachNightGlow(mesh, 0.95, opts.tier === 'b' ? 1.5 : 1), // T-W-07
+  };
+  // T-W-08: MISS rolado — offset perpendicular seedado (LOCK_MISS_OFFSET m)
+  if (m.willHit === false && target) {
+    const tx = target.x - orig.x, tz = target.z - orig.z;
+    let px = -tz, pz = tx; // perpendicular horizontal à linha de tiro
+    const pl = Math.hypot(px, pz);
+    if (pl < 1e-4) { px = 1; pz = 0; } else { px /= pl; pz /= pl; }
+    const [oMin, oMax] = AA_DEFENSE.LOCK_MISS_OFFSET;
+    const mag = oMin + game.rng.random() * (oMax - oMin);
+    const side = game.rng.random() < 0.5 ? -1 : 1;
+    m.missOffset = {
+      x: px * mag * side,
+      y: (game.rng.random() - 0.3) * mag * 0.6,
+      z: pz * mag * side,
+    };
+  }
+  aaMissiles.push(m);
+  audio.missile();
+}
+
+const _aaAim = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 }; // scratch (offset MISS)
+
+/** Atualiza os mísseis AA: PN + smoke trail + espoleta de proximidade.
+ *  WEAPONS-V1: alvo morto em voo → RETARGET ao vivo mais próximo no cone à
+ *  frente (ctx.targets); impacto aplica m.damage no HP do alvo (onHit por
+ *  acerto não-letal, onKill quando zera). Sem ctx.targets o comportamento é o
+ *  legado (balístico ao perder o alvo; kill direto na espoleta com dano ∞).
+ *  T-W-08: willHit=false ⇒ PN mira no ponto deslocado (missOffset), o gate de
+ *  dano nunca dispara e, ao passar do alvo, a vida encurta p/ o "quase acerto".
+ *  @param ctx {heightAt(x,z)?, targets[]?, onKill(target)?, onHit(target)?} */
+export function updateAaMissiles(dt, ctx = {}) {
+  const fuse2 = AA_DEFENSE.AA_PROX_FUSE * AA_DEFENSE.AA_PROX_FUSE;
+  const night = _nightNow(); // T-W-07
+  for (let i = aaMissiles.length - 1; i >= 0; i--) {
+    const m = aaMissiles[i];
+    m.life -= dt;
+    // T-W-03: órfão (alvo morreu) → retarget ao vivo mais próximo no cone.
+    // O roll/offset era contra o alvo original: no novo alvo o homing é limpo.
+    if (m.target && m.target.dead && ctx.targets) {
+      m.target = pickRetarget(m, ctx.targets);
+      if (m.target) { m.willHit = true; m.missOffset = null; }
+    }
+    if (m.target && !m.target.dead) {
+      let aim = m.target;
+      if (m.missOffset) { // T-W-08: MISS mira o ponto deslocado
+        _aaAim.x = m.target.x + m.missOffset.x;
+        _aaAim.y = m.target.y + m.missOffset.y;
+        _aaAim.z = m.target.z + m.missOffset.z;
+        _aaAim.vx = m.target.vx; _aaAim.vy = m.target.vy; _aaAim.vz = m.target.vz;
+        aim = _aaAim;
+      }
+      pnStep(m, aim, dt);
+      // T-W-08: MISS que já passou do alvo (afastando) encurta a vida —
+      // "quase acerto" visível seguido de autodestruição
+      if (m.willHit === false && m.life > 0.6) {
+        const dx = m.target.x - m.x, dy = m.target.y - m.y, dz = m.target.z - m.z;
+        if (dx * m.vx + dy * m.vy + dz * m.vz < 0) m.life = 0.6;
+      }
+    } else { m.x += m.vx * dt; m.y += m.vy * dt; m.z += m.vz * dt; } // sem alvo: balístico
+    m.mesh.position.set(m.x, m.y, m.z);
+    if (m.vx * m.vx + m.vy * m.vy + m.vz * m.vz > 0.01) {
+      m.mesh.lookAt(m.x + m.vx, m.y + m.vy, m.z + m.vz);
+    }
+    if (m.glow) m.glow.visible = night; // T-W-07: chama só à noite
+    m.smokeTimer -= dt;
+    if (m.smokeTimer <= 0) { m.smokeTimer = 0.05; spawnMissileSmoke(m.mesh.position, TRAIL_OPTS); }
+
+    let kill = false;
+    // T-W-08: um MISS rolado NUNCA entra no gate de dano
+    if (m.target && !m.target.dead && m.willHit !== false) {
+      const dx = m.x - m.target.x, dy = m.y - m.target.y, dz = m.z - m.target.z;
+      kill = dx * dx + dy * dy + dz * dz < fuse2;
+    }
+    const ground = ctx.heightAt && m.y <= ctx.heightAt(m.x, m.z);
+    if (kill || ground || m.life <= 0) {
+      explosion(m.mesh.position, kill ? 1.2 : 0.6, COLORS.fireYellow);
+      audio.explosion(kill ? 0.8 : 0.4, m.mesh.position);
+      if (kill) {
+        // T-W-02: dano por tier (X avaria; B/default abate)
+        m.target.hp -= m.damage;
+        if (m.target.hp <= 0) ctx.onKill?.(m.target);
+        else ctx.onHit?.(m.target);
+      }
+      scene.remove(m.mesh);
+      aaMissiles.splice(i, 1);
+    }
+  }
+}
+
+/** Limpa os mísseis AA (dispose do modo defesa). */
+export function clearAaMissiles() {
+  for (const m of aaMissiles) if (m.mesh?.parent) scene.remove(m.mesh);
+  aaMissiles.length = 0;
+}
+
+// ─── Rod cinético da bateria (T-W-04, weapons-v1) ────────────────────────────
+// Dardo perfurante: 3× a velocidade do míssil fraco, PN direto, atravessa o
+// caça abatido e retargeta ao vivo mais próximo — até ROD_PIERCE kills.
+// Visual: tracer-dart fino e brilhante + trilha de fumaça curta.
+const rodDarts = [];
+const ROD_GEOM = new THREE.CylinderGeometry(0.16, 0.16, 7.5, 6);
+ROD_GEOM.rotateX(Math.PI / 2);
+const ROD_MAT = new THREE.MeshBasicMaterial({ color: 0xeaf6ff }); // dart branco-azulado
+
+/** Lança um rod. @param target alvo inicial (lock ou mais próximo no cone) — pode ser null. */
+export function spawnRodDart(orig, dir, target) {
+  const mesh = new THREE.Mesh(ROD_GEOM, ROD_MAT);
+  mesh.position.copy(orig);
+  mesh.lookAt(orig.x + dir.x * 10, orig.y + dir.y * 10, orig.z + dir.z * 10);
+  scene.add(mesh);
+  const s = AA_DEFENSE.AA_SPEED * AA_DEFENSE.ROD_SPEED_MULT;
+  rodDarts.push({
+    mesh, target,
+    x: orig.x, y: orig.y, z: orig.z,
+    vx: dir.x * s, vy: dir.y * s, vz: dir.z * s,
+    life: AA_DEFENSE.ROD_LIFE, pierceLeft: AA_DEFENSE.ROD_PIERCE, kills: 0, smokeTimer: 0,
+    glow: attachNightGlow(mesh, 0, 1.2), // T-W-07
+  });
+  audio.missile();
+}
+
+/** Atualiza os rods: PN + perfuração em cadeia + retarget.
+ *  @param ctx {heightAt(x,z)?, targets[]?, onRodKill(target, rod)?} */
+export function updateRodDarts(dt, ctx = {}) {
+  const night = _nightNow(); // T-W-07
+  for (let i = rodDarts.length - 1; i >= 0; i--) {
+    const r = rodDarts[i];
+    // alvo morreu em voo (outra arma) → retarget; sem vivos → balístico
+    if (r.target && r.target.dead) r.target = ctx.targets ? pickRetarget(r, ctx.targets) : null;
+    const ev = stepRod(r, dt);
+    let dead = ev === 'expired';
+    if (ev === 'hit' && r.target && !r.target.dead) {
+      const t = r.target;
+      explosion(new THREE.Vector3(r.x, r.y, r.z), 0.7, COLORS.fireYellow);
+      ctx.onRodKill?.(t, r); // o caller aplica o kill real (marca t.dead)
+      r.kills += 1;
+      r.pierceLeft -= 1;
+      if (r.pierceLeft <= 0) dead = true; // 3 kills: rod gasto
+      else r.target = ctx.targets ? pickRetarget(r, ctx.targets) : null; // atravessa → próximo
+    }
+    if (!dead && ctx.heightAt && r.y <= ctx.heightAt(r.x, r.z)) {
+      explosion(new THREE.Vector3(r.x, r.y, r.z), 0.5, COLORS.fireYellow);
+      dead = true; // dart cinético enterra no terreno
+    }
+    if (dead) {
+      scene.remove(r.mesh);
+      rodDarts.splice(i, 1);
+      continue;
+    }
+    r.mesh.position.set(r.x, r.y, r.z);
+    if (r.vx * r.vx + r.vy * r.vy + r.vz * r.vz > 0.01) {
+      r.mesh.lookAt(r.x + r.vx, r.y + r.vy, r.z + r.vz);
+    }
+    if (r.glow) r.glow.visible = night; // T-W-07
+    r.smokeTimer -= dt;
+    if (r.smokeTimer <= 0) { r.smokeTimer = 0.04; spawnMissileSmoke(r.mesh.position, TRAIL_OPTS); }
+  }
+}
+
+/** Limpa os rods (dispose do modo defesa). */
+export function clearRodDarts() {
+  for (const r of rodDarts) if (r.mesh?.parent) scene.remove(r.mesh);
+  rodDarts.length = 0;
+}
+
+// ─── Nuke tática da bateria (T-W-05, weapons-v1) ─────────────────────────────
+// Projétil pesado em arco alto balístico; o impacto (megaExplosion + wipe por
+// raio) é resolvido pelo caller via ctx.onImpact — defense-mode aplica o wipe
+// em caças e na horda.
+const defNukes = [];
+
+/** Lança a nuke tática: arco balístico curto (NUKE_ARC_S) + glide guiado por
+ *  PN sobre o ponto de mira — cai ONDE o artilheiro mirou (±uns metros). */
+export function spawnDefenseNuke(orig, dir, aimPoint) {
+  const mesh = buildMissileMesh('heavy');
+  mesh.scale.set(2.4, 2.4, 2.4); // projétil pesado
+  mesh.position.copy(orig);
+  scene.add(mesh);
+  // Velocidade na direção do ponto de mira + lift (arco alto)
+  const dx = aimPoint.x - orig.x, dy = aimPoint.y - orig.y, dz = aimPoint.z - orig.z;
+  const dl = Math.hypot(dx, dy, dz) || 1e-9;
+  const s = AA_DEFENSE.NUKE_SPEED;
+  defNukes.push({
+    mesh,
+    x: orig.x, y: orig.y, z: orig.z,
+    vx: (dx / dl) * s, vy: (dy / dl) * s + AA_DEFENSE.NUKE_ARC_LIFT * s, vz: (dz / dl) * s,
+    aim: { x: aimPoint.x, y: aimPoint.y, z: aimPoint.z, vx: 0, vy: 0, vz: 0 },
+    arcT: AA_DEFENSE.NUKE_ARC_S,
+    life: AA_DEFENSE.NUKE_LIFE, smokeTimer: 0,
+    glow: attachNightGlow(mesh, 0.95, 2.4), // T-W-07
+  });
+  audio.missile();
+}
+
+/** Atualiza as nukes: arco (balístico) → glide (PN ao ponto de mira) + trilha;
+ *  impacto no terreno (ou cap de vida) dispara ctx.onImpact(n) — o wipe por
+ *  raio é do caller. @param ctx {heightAt(x,z)?, onImpact(nuke)?} */
+export function updateDefenseNukes(dt, ctx = {}) {
+  const night = _nightNow(); // T-W-07
+  for (let i = defNukes.length - 1; i >= 0; i--) {
+    const n = defNukes[i];
+    if (n.arcT > 0) { n.arcT -= dt; stepNukeArc(n, dt); }
+    else stepNukeGuided(n, dt); // cruzeiro alto + mergulho terminal sobre a mira
+    n.mesh.position.set(n.x, n.y, n.z);
+    if (n.vx * n.vx + n.vy * n.vy + n.vz * n.vz > 0.01) {
+      n.mesh.lookAt(n.x + n.vx, n.y + n.vy, n.z + n.vz);
+    }
+    if (n.glow) n.glow.visible = night; // T-W-07
+    n.smokeTimer -= dt;
+    if (n.smokeTimer <= 0) { n.smokeTimer = 0.04; spawnMissileSmoke(n.mesh.position, TRAIL_OPTS); }
+    const ground = ctx.heightAt && n.y <= ctx.heightAt(n.x, n.z);
+    if (ground || n.life <= 0) {
+      if (ground && ctx.heightAt) n.y = ctx.heightAt(n.x, n.z);
+      ctx.onImpact?.(n);
+      scene.remove(n.mesh);
+      defNukes.splice(i, 1);
+    }
+  }
+}
+
+/** Limpa as nukes táticas (dispose do modo defesa). */
+export function clearDefenseNukes() {
+  for (const n of defNukes) if (n.mesh?.parent) scene.remove(n.mesh);
+  defNukes.length = 0;
 }
 
 // ─── Mísseis ─────────────────────────────────────────────────────────────────
@@ -301,13 +646,19 @@ export function clearMissiles() {
 // ─── Pickups (resupply de mísseis) ───────────────────────────────────────────
 const pickups = [];
 
+// T-C-08 (inhauma-campaign-v1): míssil leve é INFINITO — pickups não dão mais
+// munição leve. A mesa de drops foi re-tabelada: heavy (comum) ou nuke (raro,
+// ≤5%). O tipo é sorteado no SPAWN com game.rng (seedado — determinístico).
+const PICKUP_NUKE_CHANCE = 0.05;
+
 export function spawnPickup(pos) {
+  const kind = game.rng.random() < PICKUP_NUKE_CHANCE ? 'nuke' : 'heavy';
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.7, 8, 8),
-    new THREE.MeshBasicMaterial({ color: COLORS.pickup }),
+    new THREE.MeshBasicMaterial({ color: kind === 'nuke' ? 0x44ddff : COLORS.pickup }),
   );
   mesh.position.copy(pos); mesh.position.y += 4; scene.add(mesh);
-  pickups.push({ mesh, life: 18.0 });
+  pickups.push({ mesh, kind, life: 18.0 });
 }
 
 export function updatePickups(dt, jetPos) {
@@ -315,8 +666,17 @@ export function updatePickups(dt, jetPos) {
     const p = pickups[i]; p.life -= dt;
     p.mesh.position.y += Math.sin(performance.now() * 0.005) * dt * 0.5;
     if (p.mesh.position.distanceTo(jetPos) < 3) {
-      // CONTRATO: writer de game.player.missiles
-      game.player.missiles = Math.min(game.player.missiles + 10, MISSILES_LIGHT.MAX);
+      // 2026-08-11: pickups viraram RECARGA — encurtam o cooldown corrente
+      // (weapon-cooldowns.js). Nuke (raro) zera a recarga da nuclear; o comum
+      // zera as armas táticas (heavy/rod/light).
+      const cd = game.player.weaponCooldowns;
+      if (p.kind === 'nuke') {
+        shaveCooldown(cd, 'nuclear', Infinity);
+      } else {
+        shaveCooldown(cd, 'heavy', Infinity);
+        shaveCooldown(cd, 'rod', Infinity);
+        shaveCooldown(cd, 'light', Infinity);
+      }
       scene.remove(p.mesh); pickups.splice(i, 1); continue;
     }
     if (p.life <= 0) { scene.remove(p.mesh); pickups.splice(i, 1); }
@@ -360,10 +720,9 @@ function buildNuclearMesh() {
   return g;
 }
 
-/** Lança um míssil nuclear. */
+/** Lança um míssil nuclear. 2026-08-11: sem munição — a cadência (1/min) é
+ * controlada pelo cooldown no caller (main.js / weapon-cooldowns.js). */
 export function spawnNuclearMissile(orig, target, jetQuat) {
-  if (game.player.nuclearMissiles <= 0) return;
-  game.player.nuclearMissiles--;
   const mesh = buildNuclearMesh();
   mesh.position.copy(orig);
   mesh.quaternion.copy(jetQuat);
@@ -409,33 +768,6 @@ function applyNuclearShockwave(epicenter) {
 
   // Deforma o terreno — cria cratera nas ilhas/montanhas dentro do raio
   deformTerrainNuclear(epicenter, MISSILES_NUCLEAR.BLAST_RADIUS);
-}
-
-// WS-5: incendiar árvores e casas dentro do raio da nuke (só o mapa inhauma tem esse
-// cenário rico). Cap rígido de focos + amostragem probabilística longe do epicentro para
-// proteger FPS; spawnPropFire já ignora headless/testMode.
-const NUKE_IGNITE_CAP = 42;
-function igniteNearbyProps(ep) {
-  if (game.activeMap !== 'inhauma') return;
-  const R = MISSILES_NUCLEAR.BLAST_RADIUS;
-  const R2 = R * R, near2 = R2 * 0.25;
-  let lit = 0;
-  for (const tr of inhaumaTrees) {
-    if (lit >= NUKE_IGNITE_CAP) break;
-    const dx = tr.x - ep.x, dz = tr.z - ep.z;
-    const d2 = dx * dx + dz * dz;
-    if (d2 > R2) continue;
-    if (d2 > near2 && Math.random() > 0.35) continue; // longe: amostra
-    spawnPropFire(tr.x, tr.y + 3, tr.z, 1.0, 24);
-    lit++;
-  }
-  for (const s of getInhaumaStructures()) {
-    if (lit >= NUKE_IGNITE_CAP) break;
-    const dx = s.x - ep.x, dz = s.z - ep.z;
-    if (dx * dx + dz * dz > R2) continue;
-    spawnPropFire(s.x, (s.topY || 6) * 0.6, s.z, 1.8, 34);
-    lit++;
-  }
 }
 
 /** Atualiza mísseis nucleares: homing + impacto + explosão. */
@@ -486,8 +818,9 @@ export function updateNuclears(dt) {
       // o jogador assiste ao cogumelo da câmera normal (shake + flash mantidos).
       applyNuclearShockwave(ep.clone());
 
-      // WS-5: árvores e casas próximas ao epicentro pegam fogo (cap + guarda headless).
-      igniteNearbyProps(ep);
+      // T-N-02: firestorm — todo inflamável em 260 m (2× fireball) pega fogo:
+      // 60 s de chamas → 120 s de fumaça → carbonizado permanente (firestorm.js).
+      spawnFirestorm(ep);
 
       // ADR-U4: slow-mo global 0.35× por 1.5 s — nunca em testMode/webdriver
       const _headless = typeof navigator !== 'undefined' && navigator.webdriver === true;

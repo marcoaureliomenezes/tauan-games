@@ -7,10 +7,12 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
 import { audio } from './audio.js';
 import { game } from './state.js';
-import { TARGETS, AA, MISSION, TARGET_LAYOUT, WARSHIP, SLOW_TARGETS, COLORS } from './config.js';
+import { TARGETS, AA, MISSION, TARGET_LAYOUT, WARSHIP, SLOW_TARGETS, COLORS, ENEMY_FIRE } from './config.js';
 import { explosion, megaExplosion, spawnShockwave, scheduleDelayed } from './fx.js';
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { spawnBullet, spawnPickup } from './projectiles.js';
+import { updateFormationFire } from './formations/formation.js';
+import { shaveCooldown } from './weapon-cooldowns.js';
 import { getActiveHeightFn } from './world.js';
 import { airportSurface } from './landing-zones.js';
 import { INHAUMA_ROADS } from './maps/inhauma-roads.js';
@@ -96,18 +98,30 @@ export function makeBuilding() {
   return g;
 }
 
-/** Comboio: 5 caminhões militares enfileirados. */
+/** Comboio: 5 caminhões militares enfileirados.
+ *  T-C-12 (Onda 5): capô, para-brisa e arcos de lona por caminhão — posições,
+ *  escala e rodas preservadas (contrato dos outros mapas). */
 export function makeConvoy() {
   const g = new THREE.Group();
   const cab = new THREE.MeshLambertMaterial({ color: 0x4a5040 });
   const bed = new THREE.MeshLambertMaterial({ color: 0x3a4030 });
   const tire = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const glass = new THREE.MeshLambertMaterial({ color: 0x2a3742 });
+  const rib = new THREE.MeshLambertMaterial({ color: 0x8f8a5e });
   for (let i = 0; i < 5; i++) {
     const truck = new THREE.Group();
     const c = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.2, 1.0), cab);
     c.position.set(0, 0.95, -0.6); truck.add(c);
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.6, 0.5), cab);
+    hood.position.set(0, 0.7, -1.3); truck.add(hood);
+    const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.45, 0.06), glass);
+    shield.position.set(0, 1.15, -1.08); truck.add(shield);
     const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 1.8), bed);
     b.position.set(0, 0.9, 0.9); truck.add(b);
+    for (const rz of [0.3, 0.9, 1.5]) {
+      const r = new THREE.Mesh(new THREE.BoxGeometry(1.46, 0.08, 0.08), rib);
+      r.position.set(0, 1.48, rz); truck.add(r);
+    }
     for (const [tx, tz] of [[-0.65, -0.5], [0.65, -0.5], [-0.65, 1.4], [0.65, 1.4]]) {
       const w = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.22, 8), tire);
       w.rotation.z = Math.PI / 2;
@@ -147,27 +161,45 @@ export function makeArmedConvoy() {
   return g;
 }
 
-/** Helicóptero inimigo lento: alvo aéreo com rotor animado. */
+/** Helicóptero inimigo lento: alvo aéreo com rotor animado.
+ *  T-C-12 (Onda 5): dorso do motor + escapes, boom afunilado, estabilizador e
+ *  pods de foguete — rotor/tailRotor (userData), escala e alturas preservados. */
 export function makeHelicopter() {
   const g = new THREE.Group();
   const bodyMat = new THREE.MeshLambertMaterial({ color: 0x394238 });
   const glassMat = new THREE.MeshBasicMaterial({ color: 0x7fd0ff, transparent: true, opacity: 0.78 });
   const darkMat = new THREE.MeshLambertMaterial({ color: 0x161a16 });
+  const armorMat = new THREE.MeshLambertMaterial({ color: 0x2c332b });
   const body = new THREE.Mesh(new THREE.BoxGeometry(5.4, 2.2, 8.2), bodyMat);
   body.position.y = 1.8; g.add(body);
   const nose = new THREE.Mesh(new THREE.SphereGeometry(1.55, 12, 8), glassMat);
   nose.scale.set(1.35, 0.7, 1.1);
   nose.position.set(0, 2.05, -4.2); g.add(nose);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.0, 4.2), armorMat);
+  deck.position.set(0, 3.3, 0.5); g.add(deck);
+  for (const x of [-1.5, 1.5]) {
+    const exh = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.42, 1.4, 6), darkMat);
+    exh.rotation.x = 1.2;
+    exh.position.set(x, 3.1, 2.6); g.add(exh);
+    const pod = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 2.6), armorMat);
+    pod.position.set(x * 1.8, 1.2, -1.3); g.add(pod);
+  }
   const tail = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 7.5), bodyMat);
   tail.position.set(0, 2.0, 5.8); g.add(tail);
+  const tailTip = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.5, 2.2), bodyMat);
+  tailTip.position.set(0, 2.1, 10.6); g.add(tailTip);
   const fin = new THREE.Mesh(new THREE.BoxGeometry(0.25, 2.1, 1.1), darkMat);
   fin.position.set(0, 2.8, 9.5); g.add(fin);
+  const stab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.16, 0.9), bodyMat);
+  stab.position.set(0, 2.2, 8.6); g.add(stab);
   const rotor = new THREE.Group();
   for (let i = 0; i < 4; i++) {
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 11.5), darkMat);
     blade.rotation.y = (i * Math.PI) / 2;
     rotor.add(blade);
   }
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.6, 8), darkMat);
+  hub.position.y = -0.2; rotor.add(hub);
   rotor.position.set(0, 3.35, -0.3); g.add(rotor);
   const tailRotor = new THREE.Group();
   for (let i = 0; i < 2; i++) {
@@ -186,21 +218,39 @@ export function makeHelicopter() {
   return g;
 }
 
-/** Canhão antiaéreo: base octagonal + torre + 2 canos. ÚNICO que atira no player. */
+/** Canhão antiaéreo: base octagonal + torre + 2 canos. ÚNICO que atira no player.
+ *  T-C-12 (Onda 5): plataforma, rodas, caixa de munição e freios de boca —
+ *  userData.barrels, posições e escala preservados. */
 export function makeAAGun() {
   const g = new THREE.Group();
   const base = new THREE.MeshLambertMaterial({ color: 0x554a3a });
   const turret = new THREE.MeshLambertMaterial({ color: 0x3a3a2a });
   const barrel = new THREE.MeshLambertMaterial({ color: 0x202020 });
+  const tire = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const crate = new THREE.MeshLambertMaterial({ color: 0x8f8a5e });
+  const plat = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 0.18, 8), turret);
+  plat.position.set(0, 0.09, 0); g.add(plat);
   const b = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 0.8, 8), base);
   b.position.set(0, 0.4, 0); g.add(b);
+  for (const x of [-1.5, 1.5]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.25, 8), tire);
+    w.rotation.z = Math.PI / 2;
+    w.position.set(x, 0.45, 0.6); g.add(w);
+  }
   const t = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.7, 1.2), turret);
   t.position.set(0, 1.1, 0); g.add(t);
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 0.12), base);
+  shield.position.set(0, 1.4, -0.5); shield.rotation.x = -0.2; g.add(shield);
+  const ammo = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.5), crate);
+  ammo.position.set(-0.95, 0.55, 0.75); g.add(ammo);
   const barrels = new THREE.Group();
   for (const off of [-0.25, 0.25]) {
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.2, 6), barrel);
     bar.rotation.x = -Math.PI / 4;
     bar.position.set(off, 0.6, -0.8); barrels.add(bar);
+    const muz = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.3, 6), barrel);
+    muz.rotation.x = -Math.PI / 4;
+    muz.position.set(off, 0.6 + 0.81, -0.8 - 0.81); barrels.add(muz);
   }
   barrels.position.set(0, 1.1, 0);
   g.add(barrels);
@@ -278,39 +328,76 @@ export function makeWarship() {
   return g;
 }
 
-/** Tanque de solo lento (WS-4): casco + esteiras + torre giratória + canhão. */
+/** Tanque de solo lento (WS-4): casco + esteiras + torre giratória + canhão.
+ *  T-C-12 (Onda 5): glacis inclinado, saias de esteira, freio de boca e escotilha —
+ *  userData.turret (mira), escala 1.5 e footprints preservados. */
 export function makeTank() {
   const g = new THREE.Group();
   const hullMat = new THREE.MeshLambertMaterial({ color: 0x4b5133 });
   const turMat = new THREE.MeshLambertMaterial({ color: 0x3d4029 });
   const darkMat = new THREE.MeshLambertMaterial({ color: 0x161613 });
+  const accentMat = new THREE.MeshLambertMaterial({ color: 0x8f8a5e });
   const hull = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.1, 5.0), hullMat);
   hull.position.y = 1.0; g.add(hull);
+  const glacis = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.7, 1.5), hullMat);
+  glacis.rotation.x = 0.42; glacis.position.set(0, 1.0, -2.55); g.add(glacis);
   for (const x of [-1.7, 1.7]) {
     const track = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 5.4), darkMat);
     track.position.set(x, 0.55, 0); g.add(track);
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.32, 5.2), turMat);
+    skirt.position.set(x, 1.12, 0); g.add(skirt);
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.4, 1.0), accentMat);
+    mark.position.set(x * 1.24, 1.35, -0.5); g.add(mark);
   }
   const turret = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 0.9, 8), turMat);
   turret.position.set(0, 1.9, 0.2);
+  const face = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.65, 0.9), turMat);
+  face.position.set(0, 0.05, -1.15); turret.add(face);
   const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 3.4, 8), darkMat);
   barrel.rotation.x = Math.PI / 2;
   barrel.position.set(0, 0.1, -2.0); turret.add(barrel);
+  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.55, 8), darkMat);
+  muzzle.rotation.x = Math.PI / 2;
+  muzzle.position.set(0, 0.1, -3.6); turret.add(muzzle);
+  const hatch = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.14, 8), darkMat);
+  hatch.position.set(0.45, 0.5, 0.3); turret.add(hatch);
   g.add(turret);
   g.userData.turret = turret;
   g.scale.setScalar(1.5);
   return g;
 }
 
-/** Dirigível de patrulha lento (WS-4): envelope charuto + gôndola + barbatanas. */
+/** Dirigível de patrulha lento (WS-4): envelope charuto + gôndola + barbatanas.
+ *  T-C-12 (Onda 5): cone de proa, janelas da gôndola, naceles com hélices —
+ *  posições do envelope/gôndola e escala 1.4 preservados. */
 export function makePatrolAir() {
   const g = new THREE.Group();
   const envMat = new THREE.MeshLambertMaterial({ color: 0x9a9f88 });
   const gondMat = new THREE.MeshLambertMaterial({ color: 0x3a3f36 });
   const finMat = new THREE.MeshLambertMaterial({ color: 0x6a5040 });
+  const accentMat = new THREE.MeshLambertMaterial({ color: 0x8f8a5e });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0x7fd0ff });
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x161613 });
   const env = new THREE.Mesh(new THREE.SphereGeometry(4.5, 16, 10), envMat);
   env.scale.set(1, 1, 2.6); g.add(env);
+  const noseCap = new THREE.Mesh(new THREE.SphereGeometry(1.3, 8, 6), accentMat);
+  noseCap.position.set(0, 0, -11.4); g.add(noseCap);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 8.5), accentMat);
+  stripe.position.set(0, 4.4, -2); g.add(stripe);
   const gondola = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 4.0), gondMat);
   gondola.position.set(0, -4.3, 0); g.add(gondola);
+  for (let i = 0; i < 3; i++) {
+    for (const x of [-1.11, 1.11]) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.6), glassMat);
+      win.position.set(x, -4.25, -1.1 + i * 1.1); g.add(win);
+    }
+  }
+  for (const x of [-2.4, 2.4]) {
+    const pod = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 1.6), darkMat);
+    pod.position.set(x, -3.4, 1.9); g.add(pod);
+    const prop = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.3, 0.14), darkMat);
+    prop.position.set(x, -3.4, 2.8); g.add(prop);
+  }
   for (let i = 0; i < 4; i++) {
     const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.4, 2.0), finMat);
     fin.position.set(0, 0, 10.6);
@@ -504,9 +591,10 @@ export function killTarget(t) {
   game.score += t.score;
   game.kills += 1;
   game.targetsDestroyed += 1;
-  // Award 1 nuclear missile every 5 targets destroyed
+  // 2026-08-11: recompensa de 5 kills no mundo dos cooldowns — desconta 10 s
+  // da recarga da nuclear (antes: +1 nuke de munição, sem clamp — bug conhecido).
   if (!game.missionRealism?.enabled && game.targetsDestroyed % 5 === 0) {
-    game.player.nuclearMissiles = (game.player.nuclearMissiles || 0) + 1;
+    shaveCooldown(game.player.weaponCooldowns, 'nuclear', 10);
   }
   scene.remove(t.mesh);
 }
@@ -528,6 +616,22 @@ export function updateTargets(dt, jetPos) {
     if (t.type === 'tank') updateTank(t, dt, jetPos);
     if (t.type === 'patrolAir') updatePatrolAir(t, dt, jetPos);
   }
+  // T-C-10: fogo das unidades de FORMAÇÃO (campanha Inhaúma) contra o jato —
+  // modelo por distância (config.ENEMY_FIRE), projéteis retos a 80 m/s. Legado
+  // intocado (aaGun dos outros mapas segue em updateAAGun a 56 m/s). Em Inhaúma
+  // não há aaGun legado spawnado (a defesa é 100% de formações da guarnição/
+  // campanha — garrison.js/campaign.js), então nada a adotar aqui.
+  updateFormationFire(dt, game, jetPos, formationFireHook);
+}
+
+/** Disparo de uma unidade de formação: bala inimiga a 80 m/s (desviável, reta),
+ *  flash de cano pequeno + som de AA reaproveitados. */
+function formationFireHook(t, orig, dir) {
+  _aaOrig.set(orig.x, orig.y, orig.z);
+  _aaDir.set(dir.x, dir.y, dir.z);
+  spawnBullet(_aaOrig, _aaDir, true, { speed: ENEMY_FIRE.BULLET_SPD, life: ENEMY_FIRE.BULLET_LIFE });
+  explosion(_aaOrig, 0.3, COLORS.fireOrange);
+  audio.aaFire(t.mesh.position);
 }
 
 function updateAAGun(t, dt, jetPos) {

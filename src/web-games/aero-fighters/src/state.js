@@ -8,6 +8,7 @@ import { createGroundPhysicsState } from './ground-physics.js';
 import { createServiceState } from './service-scene.js';
 import { createEjectionState } from './ejection.js';
 import { createCameraRig } from './camera-modes.js';
+import { createWeaponCooldowns } from './weapon-cooldowns.js';
 
 const runtimeConfig = parseRuntimeConfig(typeof window !== 'undefined' ? window.location.search : '');
 const runtimeRng = createRng(runtimeConfig.seed);
@@ -32,11 +33,18 @@ function createInitialState() {
     enemies: [],        // alias mantido para compat com tests legados
     kills: 0,
     cycle: 1,
-    targetsTotal: 0,
-    targetsDestroyed: 0,
+    targetsTotal: 0,       // em Inhaúma: espelho do objetivo do ATO (campaign.js, T-C-06)
+    targetsDestroyed: 0,   // idem — semântica de "total" = alvos do ato (SPEC §F)
     islands: [],
     wingmen: [],           // aliados AI em formação
     allyEnemies: [],       // inimigos DOS ALIADOS (frente de batalha separada da do player)
+    // campaign: anexado por campaign.js#initCampaign no create do mapa Inhaúma
+    // (T-C-06 — ADITIVO: { act, actTargetsTotal, actTargetsDestroyed, spawnedCount,
+    // quota, victory, failed, ... }). null/ausente nos mapas legados.
+    // defense: anexado por defense/defense-mode.js#createDefenseMode no modo
+    // 'inhauma-defense' (T-D-02 — ADITIVO: { turret, cityIntegrity, score, heat,
+    // missiles, alert }). null em todos os modos de voo.
+    defense: null,
     timeOfDay: 0.35,    // ciclo dia/noite: 0.0 (meia-noite) → 1.0 (meia-noite)
     time: 0,            // tempo total de jogo em segundos (para animações)
     activeMap: runtimeConfig.map || 'desert', // mapa ativo: 'islands' | 'desert' | 'rio'
@@ -62,10 +70,14 @@ function createInitialState() {
       x: initialPlayer.x, y: initialPlayer.y, pitch: 0, pz: initialPlayer.pz,
       dead: false, lives: 3,
       hp: 3,                 // pontos de dano dentro da vida atual (3 hits → mayday)
-      missiles: 100,         // mísseis leves (X)
-      heavyMissiles: 10,     // mísseis pesados (B) — dano 5x, supply limitado
-      nuclearMissiles: 3,    // mísseis nucleares (N) — devastadores, supply 3
-      rodMissiles: 4,        // mísseis "rod" (R) — cinéticos, perfuram até 3 alvos (D-3)
+      // 2026-08-11: munição finita APOSENTADA — toda arma é infinita e limitada
+      // por cooldown (weapon-cooldowns.js). Os contadores abaixo ficaram como
+      // constantes para os visuais de asa/debug legados; NUNCA são decrementados.
+      missiles: 100,         // mísseis leves (X) — visual de asa/debug apenas
+      heavyMissiles: 10,     // mísseis pesados (B) — visual de asa/debug apenas
+      nuclearMissiles: 3,    // mísseis nucleares (T) — visual de asa/debug apenas
+      rodMissiles: 4,        // mísseis "rod" (R) — visual de asa/debug apenas
+      weaponCooldowns: createWeaponCooldowns(), // X 0.2s | B 1s | R 5s | T 60s
       speed: 0, throttle: 0.05, stalled: false,
     },
     flags: {

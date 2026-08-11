@@ -60,8 +60,9 @@ function buildRodMesh() {
  * @param seedTarget alvo travado no momento do disparo, ou null (sem lock)
  * @param jetQuat quaternion do jato no disparo (direção inicial) */
 export function spawnRodMissile(orig, seedTarget, jetQuat) {
-  if (game.player.rodMissiles <= 0) return;
-
+  // 2026-08-11: sem munição — cadência controlada por cooldown no caller
+  // (main.js). Retorna true só quando o rod de fato sai, para o caller armar
+  // o cooldown apenas em disparo real.
   const actionRadius = MISSILES_NUCLEAR.BLAST_RADIUS; // D-3: reusa a constante, não copia
   const r2 = actionRadius * actionRadius;
   const validSeed = seedTarget && !seedTarget.dead &&
@@ -70,10 +71,7 @@ export function spawnRodMissile(orig, seedTarget, jetQuat) {
   const pool = validSeed ? game.targets.filter((t) => t !== validSeed) : game.targets;
   const rest = selectRodTargets(pool, orig, actionRadius, validSeed ? 2 : 3);
   const chain = validSeed ? [validSeed, ...rest] : rest;
-  if (chain.length === 0) return; // nenhum alvo válido no raio — não gasta munição
-
-  // CONTRATO: writer de game.player.rodMissiles
-  game.player.rodMissiles -= 1;
+  if (chain.length === 0) return false; // nenhum alvo válido no raio — não dispara
 
   const mesh = buildRodMesh();
   mesh.position.copy(orig);
@@ -90,6 +88,7 @@ export function spawnRodMissile(orig, seedTarget, jetQuat) {
     smokeTimer: 0,
   });
   audio.missile();
+  return true;
 }
 
 /** Atualiza rods: homing agressivo (sempre converge) + perfuração em cadeia. */

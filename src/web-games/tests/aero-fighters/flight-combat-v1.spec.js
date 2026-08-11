@@ -1,5 +1,15 @@
 // flight-combat-v1.spec.js — six-point acceptance smoke + rod e2e for release
-// aero-fighters-flight-combat-v1 (T-10, qa-engineer final gate).
+// v0.2.12 (T-10, qa-engineer final gate).
+//
+// T-C-14 (release v0.3.4 — SPEC §F) re-check: estes ACs
+// rodam no mapa DEFAULT (islands — main.js#selectMap), que segue o loop arcade
+// legado intocado (waves + layout fixo; boss.js continua existindo mas NENHUM AC
+// aqui depende dele). As armas (homing/nuke/rod) operam sobre game.targets —
+// barramento único preservado pela campanha (registerAsTargets coloca unidades
+// 'f*' no mesmo fluxo de dano), então as invariantes de arma deste arquivo valem
+// nos dois mundos; os tipos estáticos manipulados abaixo só existem nos mapas de
+// waves, por isso os testes NÃO são replicados para Inhaúma (cobertura de
+// campanha: test-aero-campaign.mjs / test-aero-formations.mjs / smoke AC-12).
 //
 // Mirrors the existing smoke.spec.js/uplift.spec.js/nuclear-fx.spec.js convention:
 // dynamic `import()` of the real ES modules served by the static dev server to reach
@@ -15,9 +25,11 @@
 
 const { test, expect } = require('@playwright/test');
 
+test.setTimeout(120000); // teto de wall clock p/ game time lento sob load alto (2026-07-21)
+
 async function startGame(page) {
   await page.goto('/src/web-games/aero-fighters/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
   await page.waitForTimeout(800);
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game && window.game.running === true, { timeout: 3000 });
@@ -28,8 +40,8 @@ async function startGame(page) {
 // taxi arms only at/under TAXI_HANDOFF_SPEED on paved surface ──────────────────
 test('T-10/AC-01: roll-out stays on pavement; guided taxi arms only at handoff speed on paved surface', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=qa-rollout');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
 
@@ -331,7 +343,10 @@ test('T-10/AC-07: rod (R) chains kills on clustered targets, decrements ammo onc
     }
   });
 
-  const before = await page.evaluate(() => window.game.player.rodMissiles);
+  // 2026-08-11: rod sem munição — o disparo arma o cooldown de 5 s UMA vez por
+  // lançamento (não por kill), e o HUD mostra a recarga em vez de contagem.
+  const cdBefore = await page.evaluate(() => window.game.player.weaponCooldowns.rod);
+  expect(cdBefore).toBe(0);
   await page.keyboard.press('KeyR');
 
   await page.waitForFunction(
@@ -339,9 +354,10 @@ test('T-10/AC-07: rod (R) chains kills on clustered targets, decrements ammo onc
     { timeout: 8000 },
   );
 
-  const after = await page.evaluate(() => window.game.player.rodMissiles);
-  expect(after).toBe(before - 1); // ammo decrements ONCE per launch, not per kill
+  const cdAfter = await page.evaluate(() => window.game.player.weaponCooldowns.rod);
+  expect(cdAfter).toBeGreaterThan(0); // cooldown armado no lançamento
+  expect(cdAfter).toBeLessThanOrEqual(5.0); // 1 tiro por lançamento → 1 recarga
 
   const hud = await page.evaluate(() => document.getElementById('rod-missiles').textContent);
-  expect(hud).toContain(String(after));
+  expect(hud).toContain('R ROD:');
 });

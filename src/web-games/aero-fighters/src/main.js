@@ -13,13 +13,15 @@ import { getActiveHeightFn } from './world.js';
 import { updateParticles, spawnMuzzleFlash } from './fx.js';
 import { tickSmokeEmitters, tickFactoryParticles } from './factory-fx.js';
 import { updatePropFires } from './prop-fire.js';
-import { input, installListeners, onAction } from './input.js';
+import { input, installListeners, onAction, requestPointerLock, exitPointerLock } from './input.js';
 import { jet, updatePlayer, playerHit, barrelRoll, firePosition, respawnJet, respawnAndRelaunch } from './player.js';
-import { updateTargets } from './targets.js';
+import { updateTargets, damageTarget } from './targets.js';
 import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups, spawnNuclearMissile, updateNuclears } from './projectiles.js';
 import { spawnRodMissile, updateRodMissiles } from './rod-missiles.js';
+import { tickWeaponCooldowns, weaponReady, tryConsume } from './weapon-cooldowns.js';
 import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } from './hud.js';
 import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver, spawnMission } from './missions.js';
+import { updateCampaign } from './campaign.js';
 import { createCrosshair, updateCrosshair, missileLockedTarget } from './crosshair.js';
 import { initMinimap, updateMinimap } from './ui/minimap.js';
 import { INHAUMA_DEM_ATTRIBUTION } from './ui/credits.js';
@@ -31,8 +33,13 @@ import { installDebugApi, recordFrame } from './debug.js';
 import { createAirportFor } from './airport.js';
 import { startService, updateService } from './service-scene.js';
 import { requestEjection, updateEjection, createPilotVisual } from './ejection.js';
-import { cycleCameraMode, updateCameraRig } from './camera-modes.js';
+import { cycleCameraMode, updateCameraRig, isDefenseMapKey } from './camera-modes.js';
+import {
+  createDefenseMode, updateDefenseMode, updateDefenseCamera,
+  startDefenseRun, disposeDefenseMode, defenseAnchor,
+} from './defense/defense-mode.js';
 import { updateNuclearFx } from './nuclear-fx.js';
+import { updateFirestorm, setFirestormHooks } from './firestorm.js';
 import { updateBoss } from './boss.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
 
@@ -45,6 +52,9 @@ createIslands();
 createCrosshair();
 initMinimap();
 const pilotVisual = createPilotVisual(scene);
+// T-N-02: firestorm mantém-se Node-safe — malha dos pools e dano de fogo são
+// injetados aqui (padrão city-war.js#setCityWarHooks).
+setFirestormHooks({ addMesh: (m) => scene.add(m), damageTarget });
 
 // ─── Seleção de Mapa ─────────────────────────────────────────────────────────
 // Guarda referência aos objetos extras criados pelos mapas alternativos
@@ -92,8 +102,29 @@ window.selectMap = function(mapKey) {
     _fogBaseColor.setHex(WORLD.SKY_COLOR); // T-V-04: base do fog default (scene.js)
   }
   // Atualiza estado ANTES de criar aeroporto/respawn (ambos leem game.activeMap)
+  const prevMap = game.activeMap;
   game.activeMap = mapKey;
-  // Todo mapa tem aeroporto (WS-2) — e o jato nasce na zona de serviço dele
+  if (isDefenseMapKey(prevMap) && !isDefenseMapKey(mapKey)) {
+    disposeDefenseMode({ scene, jet }); // T-D-03: restaura jato/mira ao sair do modo
+  }
+  if (isDefenseMapKey(mapKey)) {
+    // T-D-01..D-03 (inhauma-defense-v1): modo jogado DO CHÃO — sem aeroporto,
+    // sem jato, sem wingmen/aliados, sem missões/campanha. O orquestrador do
+    // modo ancora o artilheiro no morro e instala a câmera do turret.
+    createDefenseMode({ scene, jet });
+    showOverlay(
+      'BATERIA ANTIAÉREA — DEFESA DE INHAÚMA',
+      'Você é o artilheiro da bateria no morro sobre Inhaúma.\n' +
+      'Caças inimigos virão em ondas para bombardear a cidade — não deixe.\n\n' +
+      'CONTROLES:\n' +
+      'Mouse mira (clique para travar a mira)   Botão esquerdo: .50   Botão direito: zoom\n' +
+      'Scroll ou 1/2: troca de arma   Esc/P: pausa\n\n' +
+      'pressione Espaço para iniciar',
+      0,
+    );
+    return;
+  }
+  // Todo mapa de voo tem aeroporto (WS-2) — e o jato nasce na zona de serviço dele
   createAirportFor(mapKey, scene);
   respawnJet();
 
@@ -168,6 +199,25 @@ const _worldUp = new THREE.Vector3(0, 1, 0);
 const _camV = new THREE.Vector3();
 
 function updateCamera(dt) {
+  // T-D-03 (inhauma-defense-v1): switch dirigido por game.activeMap — o modo
+  // defesa usa a câmera do turret (gimbal/mouse); os modos de voo seguem no rig.
+  if (isDefenseMapKey(game.activeMap)) {
+    const fwd = updateDefenseCamera(dt, camera);
+    if (fwd) {
+      audio.updateListener(
+        camera.position.x, camera.position.y, camera.position.z,
+        fwd.x, fwd.y, fwd.z, 0, 1, 0,
+      );
+    }
+    const t = game.defense?.turret;
+    if (t) {
+      const _sunD = getSunData();
+      dirLight.position.set(t.x + _sunD.direction.x * 300, t.y + Math.max(50, _sunD.direction.y * 300), t.z + _sunD.direction.z * 300);
+      dirLight.target.position.set(t.x, 0, t.z);
+      dirLight.target.updateMatrixWorld();
+    }
+    return;
+  }
   if (game.missionRealism?.enabled) {
     const shake = game.flags.cameraShake?.intensity || 0;
     updateCameraRig(game.missionRealism.camera, dt, camera, jet, shake);
@@ -252,45 +302,53 @@ function fireCannon() {
   audio.cannon();
 }
 
-// ─── Disparo de míssil leve (X) — exige lock-on ──────────────────────────────
+// ─── Disparo de míssil leve (X) — exige lock-on; cadência 5/s ────────────────
 function fireMissile() {
-  if (!game.running || game.flags.paused || game.player.missiles <= 0) return;
+  // 2026-08-11: munição infinita, limitada por cooldown (weapon-cooldowns.js).
+  // O cooldown só arma quando o míssil de fato sai (com lock).
+  if (!game.running || game.flags.paused) return;
+  if (!weaponReady(game.player.weaponCooldowns, 'light')) return;
   const locked = missileLockedTarget();
   if (!locked) { audio.hit(); return; }
-  // CONTRATO: writer de game.player.missiles
-  game.player.missiles -= 1;
+  tryConsume(game.player.weaponCooldowns, 'light');
   firePosition(_fOrig, 1.5);
   spawnMissile(_fOrig.clone(), locked, jet.quaternion, 'light');
 }
 
-// ─── Disparo de míssil pesado (B) — exige lock-on, dano 5x, supply 10 ────────
+// ─── Disparo de míssil pesado (B) — exige lock-on, dano 5x; cadência 1/s ─────
 function fireHeavyMissile() {
-  if (!game.running || game.flags.paused || game.player.heavyMissiles <= 0) return;
+  if (!game.running || game.flags.paused) return;
+  if (!weaponReady(game.player.weaponCooldowns, 'heavy')) return;
   const locked = missileLockedTarget();
   if (!locked) { audio.hit(); return; }
-  // CONTRATO: writer de game.player.heavyMissiles
-  game.player.heavyMissiles -= 1;
+  tryConsume(game.player.weaponCooldowns, 'heavy');
   firePosition(_fOrig, 1.5);
   spawnMissile(_fOrig.clone(), locked, jet.quaternion, 'heavy');
 }
 
-// ─── Disparo de míssil nuclear (T) — devastador, supply 3 ────────────────────
+// ─── Disparo de míssil nuclear (T) — devastador; cadência 1/min ──────────────
 function fireNuclearMissile() {
-  if (!game.running || game.flags.paused || game.player.nuclearMissiles <= 0) return;
+  if (!game.running || game.flags.paused) return;
+  if (!weaponReady(game.player.weaponCooldowns, 'nuclear')) return;
   const locked = missileLockedTarget();
+  tryConsume(game.player.weaponCooldowns, 'nuclear');
   firePosition(_fOrig, 1.5);
   // Nuclear dispara mesmo sem lock (atinge terreno se não houver alvo)
   spawnNuclearMissile(_fOrig.clone(), locked, jet.quaternion);
 }
 
-// ─── Disparo de rod cinético (R) — supply 4, perfura até 3 alvos em cadeia ───
+// ─── Disparo de rod cinético (R) — perfura até 3 alvos; cadência 1/5s ────────
 function fireRodMissile() {
-  if (!game.running || game.flags.paused || game.player.rodMissiles <= 0) return;
+  if (!game.running || game.flags.paused) return;
+  if (!weaponReady(game.player.weaponCooldowns, 'rod')) return;
   const locked = missileLockedTarget();
   firePosition(_fOrig, 1.5);
   // Rod dispara sem exigir lock: seeda no alvo travado se houver, senão no mais
   // próximo válido dentro do raio de ação (D-3) — spawnRodMissile resolve isso.
-  spawnRodMissile(_fOrig.clone(), locked, jet.quaternion);
+  // Sem alvo válido no raio ele NÃO dispara (retorna false) e o cooldown não arma.
+  if (spawnRodMissile(_fOrig.clone(), locked, jet.quaternion)) {
+    tryConsume(game.player.weaponCooldowns, 'rod');
+  }
 }
 
 // ─── Listeners de ação ───────────────────────────────────────────────────────
@@ -298,6 +356,12 @@ installListeners();
 
 function handleStartOrFire() {
   audio.init();
+  // T-D-02/D-03: no modo defesa o Espaço inicia a partida do chão (sem jato,
+  // sem spawnMission/campanha — o orquestrador do modo é o dono do fluxo).
+  if (isDefenseMapKey(game.activeMap)) {
+    startDefenseRun();
+    return;
+  }
   // O loop de solo automático (auto-taxi) já recoloca para a próxima surtida;
   // se ele estiver ativo, o Espaço não força avanço (evita duplo-avanço).
   if (game.missionRealism?.enabled && game.missionRealism.sortie.state === SortieState.NEXT_SORTIE_READY) {
@@ -351,8 +415,15 @@ onAction('pause',   () => {
   audio.init();
   if (game.running) {
     game.flags.paused = !game.flags.paused;
-    if (game.flags.paused) showOverlay('PAUSADO', 'pressione P para continuar', 0);
-    else hideOverlay();
+    if (game.flags.paused) {
+      showOverlay('PAUSADO', 'pressione P para continuar', 0);
+      // T-D-03: no modo defesa a pausa libera o cursor (sai do pointer lock)
+      if (isDefenseMapKey(game.activeMap)) exitPointerLock();
+    } else {
+      hideOverlay();
+      // ...e ao voltar, re-trava a mira (P é gesto do usuário)
+      if (isDefenseMapKey(game.activeMap)) requestPointerLock(document.body);
+    }
   }
 });
 onAction('mute', () => {
@@ -398,11 +469,14 @@ function tick() {
 
   if (game.running && !game.flags.paused && !game.flags.missionFailed) {
     cannonCooldown -= dt;
+    tickWeaponCooldowns(game.player.weaponCooldowns, dt);
     game.flags.rollTimer    -= dt;
     game.flags.rollCooldown -= dt;
     game.flags.invincibility -= dt;
 
-    if (input.fireHeld) fireCannon();
+    // T-D-02/D-03: modo defesa (chão) — sem canhão do jato, sem física de voo.
+    const inDefense = isDefenseMapKey(game.activeMap);
+    if (!inDefense && input.fireHeld) fireCannon();
 
     if (game.missionRealism?.sortie?.state === SortieState.SERVICE_SCENE && !game.missionRealism.service.active && game.missionRealism.service.phase !== 'complete') {
       startService(game.missionRealism.service);
@@ -415,7 +489,11 @@ function tick() {
         showOverlay('SERVIÇO COMPLETO', 'armamento completo — próxima surtida pronta', 1800);
       }
     }
-    if (!servicing) {
+    if (inDefense) {
+      // T-D-03: o orquestrador do modo roda no lugar de updatePlayer/auto-taxi —
+      // sem voo, sem stall, sem crash, sem decolagem.
+      updateDefenseMode(dt);
+    } else if (!servicing) {
       // Após pousar, o loop de solo é automático (taxi + reabastecimento +
       // recolocação para decolagem). Fora dele, controle manual normal.
       if (isAutoTaxiActive()) updateAutoTaxi(dt);
@@ -450,9 +528,12 @@ function tick() {
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
     updatePropFires(dt);
+    updateFirestorm(dt);
     updateSpeedLines();
-    _activeMapUpdate(dt, jet.position);
-    updateAmbientFlak(dt, jet.position, jet.quaternion);
+    // T-D-01: no modo defesa o terreno recentra no SOLDADO (âncora do morro),
+    // não no jato escondido. Flak ambiente é do teatro de voo — fora da defesa.
+    _activeMapUpdate(dt, inDefense ? defenseAnchor() : jet.position);
+    if (!inDefense) updateAmbientFlak(dt, jet.position, jet.quaternion);
 
     // Ambient audio: radio chatter + distant booms
     _radioTimer -= dt;
@@ -462,6 +543,10 @@ function tick() {
     audio.setWindLevel(game.player.y);
 
     checkMissionComplete();
+    // T-C-06: diretor de campanha (só Inhaúma — game.campaign é null nos outros
+    // mapas). Roda no MAIN TICK (não no update do mapa): o relógio da campanha só
+    // avança com game.running, e o mundo segue vivo durante o serviço no aeroporto.
+    if (game.campaign) updateCampaign(dt, game);
 
     if (game.player.lives <= 0 && !game.flags.missionFailed) gameOver();
     if (game.player.dead && !game.flags.missionFailed) gameOver();
@@ -489,15 +574,17 @@ function tick() {
     // T-V-08: cor/emissive das nuvens a cada frame em TODOS os mapas — antes ficava
     // dentro de updateWorld (só rodava no mapa ilhas) e em 3 degraus com timer de 2 s.
     updateCloudColors();
-    jet.visible = game.flags.invincibility > 0 ? Math.floor(game.flags.invincibility * 12) % 2 === 0 : true;
+    if (!inDefense) jet.visible = game.flags.invincibility > 0 ? Math.floor(game.flags.invincibility * 12) % 2 === 0 : true;
   } else {
     if (game.flags.crashFreezeTime > 0) game.flags.crashFreezeTime -= dt;
     updateParticles(dt, jet.position);
     tickSmokeEmitters(dt);
     tickFactoryParticles(dt);
     updatePropFires(dt);
+    updateFirestorm(dt);
     updateNuclearFx(dt);
-    _activeMapUpdate(dt, jet.position);
+    // T-D-01: mesma âncora do soldado fora do running (tela de entrada do modo)
+    _activeMapUpdate(dt, isDefenseMapKey(game.activeMap) ? defenseAnchor() : jet.position);
   }
 
   updateCamera(dt);

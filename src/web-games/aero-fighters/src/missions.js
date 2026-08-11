@@ -11,9 +11,19 @@ import { getTargetLayout, getMapHeightFn } from './maps/index.js';
 import { clearMissiles, clearPickups, recycleBullet } from './projectiles.js';
 import { megaExplosion, scheduleDelayed, spawnScorchMark, spawnWaterSplash } from './fx.js';
 import { jet, respawnJet } from './player.js';
+import { resetWeaponCooldowns } from './weapon-cooldowns.js';
 import { audio } from './audio.js';
 import { showOverlay, hideOverlay } from './hud.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
+import { initCampaign, resetCampaign, setCampaignHooks } from './campaign.js';
+
+// T-C-06/T-C-07 (inhauma-campaign-v1): no mapa Inhaúma o DIRETOR é a campanha
+// (campaign.js) — sem waves, sem boss. Os hooks de UI/falha são injetados aqui
+// (campaign.js é Node-safe e não importa hud/missions — sem ciclo de imports).
+setCampaignHooks({
+  showOverlay,
+  onFailure: () => gameOver('INHAÚMA CAIU\nA INVASÃO DOMINOU A CIDADE'),
+});
 
 /** Quantos alvos a missão N tem. Missão 1=8, 2=12, 3+=16. */
 export function targetCountForMission(m) {
@@ -24,6 +34,10 @@ export function targetCountForMission(m) {
 
 /** Spawna todos os alvos da missão N e mostra overlay. */
 export function spawnMission(missionNum) {
+  // T-C-07: em Inhaúma a CAMPANHA é dona do ciclo de vida dos alvos — spawnMission
+  // é no-op (clearTargets aqui varreria a guarnição/formações, que carregam
+  // formationId). Também blinda a chamada do auto-taxi (auto-taxi.js#await_service).
+  if (game.activeMap === 'inhauma') return;
   clearTargets();
   clearBoss();
   game.flags.bossSpawned = false;
@@ -60,14 +74,23 @@ export function startGame() {
   }
   hideOverlay();
   audio.startEngine();
-  if (game.targets.length === 0) spawnMission(game.cycle);
+  // T-C-06/T-C-07: Inhaúma não tem waves — a campanha (já inicializada no create
+  // do mapa, maps/inhauma.js) é o diretor; initCampaign é idempotente (garantia).
+  if (game.activeMap === 'inhauma') initCampaign(game);
+  else if (game.targets.length === 0) spawnMission(game.cycle);
 }
 
 /** Reinicia tudo do zero (após gameOver). */
 export function restartGame() {
-  clearTargets();
-  clearBoss();
-  game.flags.bossSpawned = false;
+  // T-C-06/T-C-07: em Inhaúma NÃO clearTargets/clearBoss — guarnição e formações
+  // (formationId) pertencem à campanha; o restart só reseta o Ato 1 (as formações
+  // da campanha saem da cena; a guarnição de Cachoeira permanece intacta).
+  if (game.activeMap === 'inhauma') resetCampaign(game);
+  else {
+    clearTargets();
+    clearBoss();
+    game.flags.bossSpawned = false;
+  }
   for (const p of game.projectiles) recycleBullet(p);
   game.projectiles.length = 0;
   clearMissiles();
@@ -81,6 +104,7 @@ export function restartGame() {
   game.player.hp = 3;
   game.player.missiles = 100;
   game.player.heavyMissiles = 10;
+  if (game.player.weaponCooldowns) resetWeaponCooldowns(game.player.weaponCooldowns);
   game.player.dead = false;
   game.flags.missionFailed = false;
   game.flags.missionCompleteShown = false;
@@ -108,7 +132,7 @@ export function restartGame() {
   game.running = true;
   hideOverlay();
   audio.startEngine();
-  spawnMission(1);
+  if (game.activeMap !== 'inhauma') spawnMission(1); // T-C-07: Inhaúma = campanha (resetCampaign acima)
 }
 
 /** Encerra o jogo com overlay de derrota. */
@@ -164,6 +188,9 @@ export function nextMission() {
 
 /** Detecta missão completa (todos alvos destruídos). Chamar a cada tick. */
 export function checkMissionComplete() {
+  // T-C-07: em Inhaúma a progressão é por ATOS (campaign.js#updateCampaign) —
+  // sem boss, sem flags.bossSpawned/bossActive, sem overlay de monstro.
+  if (game.activeMap === 'inhauma') return;
   if (!game.running || game.flags.missionCompleteShown) return;
   // Já anunciado e em retorno à base — não reanuncia (anti-flash).
   if (game.flags.rtbAnnounced) return;
