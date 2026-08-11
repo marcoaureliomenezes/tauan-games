@@ -14,6 +14,7 @@ import { getPortalMounds } from './inhauma-road-defs.js';
 import { updateRoadTraffic } from './inhauma-traffic.js';
 import { updateWaterSurfaces } from '../environment/water-surface.js';
 import { loadInhaumaDem, sampleDemHeight, demSlopeAt } from './heightmap-sampler.js';
+import { AA_DEFENSE } from '../config.js';
 import { createInhaumaBackdrop, updateInhaumaBackdrop } from './inhauma-backdrop.js';
 import { createInhaumaTerrainTextures } from './inhauma-terrain-texture.js';
 import { buildInhaumaRiver } from './inhauma-river-ribbon.js';
@@ -26,7 +27,10 @@ import {
 import { bridgeDeckHeightAt, buildInhaumaBridges } from './inhauma-bridges.js';
 import { mergeGeometries } from '../../../vendor/jsm/utils/BufferGeometryUtils.js';
 // T-V-12/T-V-13 (inhauma-visual-uplift-v1): tipologias/fachadas da cidade.
-import { buildCityMeshes, updateInhaumaCityLights } from './inhauma-city.js';
+// T-C-04 (inhauma-campaign-v1): placement genérico das duas cidades (buildTownCluster).
+import { buildCityMeshes, updateInhaumaCityLights, buildTownCluster, makeInhaumaTypology, makeCachoeiraTypology } from './inhauma-city.js';
+// T-C-05 (inhauma-campaign-v1): driver por frame da guarnição de ocupação.
+import { updateFormations } from '../formations/formation.js';
 
 // sky.js importa scene.js (que toca window no escopo de módulo) — carga LAZY para
 // este módulo continuar importável em Node (validate:aero-map).
@@ -45,7 +49,7 @@ if (typeof window !== 'undefined') {
 const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
 
 // DEM vendorizado (T-01/T-02) — verdade de superfície de base do vale
-// (aero-fighters-inhauma-serra-v1). Top-level await: qualquer módulo que importe
+// (v0.2.11). Top-level await: qualquer módulo que importe
 // (direta ou transitivamente) este arquivo só termina de avaliar depois que o asset
 // estiver carregado — inhaumaBaseHeight/inhaumaContinuousHeight nunca são chamadas
 // antes disso (create() dos mapas é síncrono hoje; ver maps/index.js). Sem
@@ -59,7 +63,7 @@ export const WATER_LEVEL = 4.5;     // m — cota "genérica" (represa/praia/bio
                                      // usa sua própria cota local via riverWaterLevelAt
                                      // (o vale real tem desnível de centenas de metros
                                      // ao longo do traçado — uma cota global não serve).
-// RIO (aero-fighters-inhauma-serra-v1 T-05): o polyline autoral RIVER da era FBM
+// RIO (v0.2.11 T-05): o polyline autoral RIVER da era FBM
 // (v0.2.0) foi APOSENTADO — o traçado agora vem da drenagem do DEM real
 // (maps/inhauma-river.js#getInhaumaRiverPolyline, T-05). Nenhuma coordenada de rio é
 // digitada à mão aqui; ver o cabeçalho daquele módulo para o algoritmo de traçado.
@@ -86,7 +90,7 @@ export const WATER_LEVEL = 4.5;     // m — cota "genérica" (represa/praia/bio
 const structures = [];
 
 // Features nomeadas — v0.2.0 FBM: geravam relevo (featureContribution). A partir de
-// aero-fighters-inhauma-serra-v1 o relevo vem do DEM (sampleDemHeight) — a lista NÃO
+// v0.2.11 o relevo vem do DEM (sampleDemHeight) — a lista NÃO
 // contribui mais para a altura (D-2: "INHAUMA_FEATURES contribution removed"). Mantida
 // (neutralizada) só como metadado de posição/rótulo para os diagnostics existentes
 // (game.missionRealism.inhaumaMap.terrainRegions, consumidos por inhauma.js/testes de
@@ -97,7 +101,8 @@ export const INHAUMA_FEATURES = [
   { id: 'morros-oeste-inhauma', cx: -380, cz: 40, radius: 300, peakHeight: 58, type: 'roundedHill' },
   { id: 'morro-norte-inhauma', cx: -40, cz: -330, radius: 250, peakHeight: 50, type: 'roundedHill' },
   { id: 'serra-sete-lagoas', cx: 760, cz: -300, radius: 460, peakHeight: 96, type: 'ridge' },
-  { id: 'vale-cachoeira-prata', cx: -940, cz: 520, radius: 260, peakHeight: 16, type: 'valley' },
+  // 2026-08-11: move junto com CACHOEIRA_TOWN_CENTER (distância +50%).
+  { id: 'vale-cachoeira-prata', cx: -1300, cz: 2950, radius: 260, peakHeight: 16, type: 'valley' },
   { id: 'morros-sudeste-inhauma', cx: 330, cz: 330, radius: 240, peakHeight: 44, type: 'roundedHill' },
   { id: 'serra-leste-inhauma', cx: 1300, cz: 120, radius: 380, peakHeight: 70, type: 'ridge' },
 ].map((d, index) => ({ ...d, index }));
@@ -112,6 +117,26 @@ function portalMoundContribution(x, z) {
     if (t < 1) h += m.peak * Math.max(0, 1 - t * t * 1.3); // mesma curva de roundedHill
   }
   return h;
+}
+
+// T-D-01 (release v0.3.10): o MORRO DA BATERIA —
+// "a colina do meio da cidade deve ter elevação 2.5x maior" (operador 2026-07-20).
+// Perfil COSENO elíptico (RX 340 × RZ 540 m, alongado no eixo do vale) centrado
+// em AA_DEFENSE.HILL_POS, com topo largo e bordas suaves — a MG-060 margeia a
+// encosta e a curva quadrática das portal mounds cravava nela um degrau >13 m
+// (guard ROAD_BED_P99 ≤ 8 do validate:aero-map); com o cosseno o p99 medido é
+// 6,6 (probe 2026-07-20). Topo ~250 m ≈ 2,5× a proeminência anterior (~96 m
+// sobre o piso da cidade → ~242 m). A cidade fica intacta: o ponto da
+// TOWN_SHELF mais próximo do centro fica a ~434 m — além do zero da curva no
+// flanco leste (~298 m) — e o keep-out HILL_TOWN_KEEPOUT_M em buildTown é a
+// trava de segurança para crescimentos futuros do shelf.
+function hillContribution(x, z) {
+  const t = Math.hypot(
+    (x - AA_DEFENSE.HILL_POS.x) / AA_DEFENSE.HILL_RADIUS_X_M,
+    (z - AA_DEFENSE.HILL_POS.z) / AA_DEFENSE.HILL_RADIUS_Z_M,
+  );
+  if (t >= 1) return 0;
+  return AA_DEFENSE.HILL_PEAK_M * (1 + Math.cos(Math.PI * t)) / 2;
 }
 
 // Ruído de detalhe de alta frequência sobre o DEM (13 m/px) — evita o look "liso de
@@ -163,6 +188,50 @@ function ridgedCrestDetailAt(x, z, demH) {
   return ramp * (ridge * CREST_MAX_AMP_M + ridge2 * CREST_DETAIL2_AMP_M);
 }
 
+// ─── Cachoeira da Prata — shelf urbano (T-C-04, release v0.3.4) ──
+// A segunda cidade fica no vale sudoeste, na continuação do corredor da osm-mg-060
+// (a estrada termina em (-688,1556), ~560 m a nordeste — o trecho final é vicinal).
+// T-D-04 (release v0.3.10, operador 2026-07-20:
+// "cachoeira da prata e inhauma estão muito próximos"): REPOSICIONADA de
+// (-1080,530) para (-950,2050) — 876 m → 1931 m centro-a-centro com Inhaúma
+// (2,2×). O retângulo foi escolhido por varredura do heightmap (probe Node,
+// 2026-07-20): seco (DEM 53-85 m, média ~71 m, longe do traçado do rio), sem
+// estrada dentro nem na penumbra, e com morros de 85-145 m no anel leste
+// (300-800 m) para os ninhos de AA da guarnição. O shelf é NIVELADO na cadeia de
+// altura (mesmo padrão applyAirportClearing): interior plano em CACHOEIRA_SHELF_H
+// e penumbra smoothstep de CACHOEIRA_FEATHER_M emendando com o relevo natural.
+// A rota de invasão/campanha desce o vale até a ponte da osm-mg-060 em
+// (-1275,870) e contorna a TOWN_SHELF pelo norte — ver CAMPAIGN em config.js.
+// 2026-08-11 (operador: "coloque a distância pelo menos 50% maior"):
+// REPOSICIONADA de (-950,2050) para (-1300,2950), no prolongamento do MESMO
+// eixo do vale sudoeste — 1931 m → 2897 m centro-a-centro com Inhaúma (+50%).
+// O aterro urbano (CACHOEIRA_SHELF_H + penumbra) nivela o shelf onde quer que
+// ele esteja; a contribuição autoral 'vale-cachoeira-prata' move junto.
+export const CACHOEIRA_SHELF = { minX: -1420, maxX: -1180, minZ: 2860, maxZ: 3040 };
+export const CACHOEIRA_TOWN_CENTER = { x: -1300, z: 2950 }; // centro do shelf
+export const CACHOEIRA_CHURCH = { x: -1278, z: 2918 };      // igrejinha (marco)
+export const CACHOEIRA_PRACA = { x: -1312, z: 2972 };       // praça (marco)
+const CACHOEIRA_SHELF_H = 71;   // cota do aterro urbano (= média DEM sondada ~71,4 m)
+const CACHOEIRA_FEATHER_M = 45; // penumbra de emenda com o relevo
+const CACHOEIRA_SHELF_KEEP_MARGIN = 20; // margem extra p/ floresta não invadir a cidade
+
+function cachoeiraShelfLevel(x, z, h) {
+  const dx = Math.max(CACHOEIRA_SHELF.minX - x, 0, x - CACHOEIRA_SHELF.maxX);
+  const dz = Math.max(CACHOEIRA_SHELF.minZ - z, 0, z - CACHOEIRA_SHELF.maxZ);
+  const d = Math.hypot(dx, dz);
+  if (d >= CACHOEIRA_FEATHER_M) return h;
+  const t = 1 - d / CACHOEIRA_FEATHER_M;
+  const s = t * t * (3 - 2 * t); // smoothstep — sem dobra na borda da penumbra
+  return h + (CACHOEIRA_SHELF_H - h) * s;
+}
+
+/** Verdadeiro dentro do shelf de Cachoeira (+margem) — keep-out de floresta (T-C-04). */
+function insideCachoeiraShelf(x, z) {
+  const m = CACHOEIRA_SHELF_KEEP_MARGIN;
+  return x >= CACHOEIRA_SHELF.minX - m && x <= CACHOEIRA_SHELF.maxX + m &&
+    z >= CACHOEIRA_SHELF.minZ - m && z <= CACHOEIRA_SHELF.maxZ + m;
+}
+
 /** Altura base do terreno em coords de mundo, antes de cortes de estrada. */
 function inhaumaBaseHeight(x, z) {
   // DEM real (Chamonix U-valley, T-01/T-02) + micro-relevo de alta frequência.
@@ -175,6 +244,9 @@ function inhaumaBaseHeight(x, z) {
   // Colinas de portal de túnel (WS-2) — encostas onde as estradas entram em túnel.
   h += portalMoundContribution(x, z);
 
+  // Morro da bateria AA (T-D-01) — a colina da cidade, 2.5× (ver nota acima).
+  h += hillContribution(x, z);
+
   // Entalhe do rio (T-05): canal derivado da drenagem real do DEM, com margens
   // suaves — substitui o carve autoral acima (mesma posição na cadeia: depois dos
   // portais, antes da bacia do reservatório e da clareira do aeroporto).
@@ -186,6 +258,10 @@ function inhaumaBaseHeight(x, z) {
   // Piso em 0: leito do rio/lago fica em 0 e a lâmina d'água (WATER_LEVEL) cobre.
   // Mantém colisão (max(0,h)) idêntica ao diagnostics (alvos sempre aterrados).
   h = Math.max(h, 0);
+  // T-C-04: aterro nivelado do shelf urbano de Cachoeira da Prata (ver a nota da
+  // constante acima) — depois do entalhe do rio (o shelf fica >55 m fora da margem,
+  // não interfere no canal) e antes da clareira do aeroporto (regiões disjuntas).
+  h = cachoeiraShelfLevel(x, z, h);
   // Clareira do aeroporto (pista plana, sem morro)
   return applyAirportClearing(h, x, z, 'inhauma');
 }
@@ -380,8 +456,13 @@ const TERRAIN_COLLISION_RADIUS = 1e9;
 // constante sem duplicar a fórmula.
 const TERR_STEP = TERR.chunkSize / TERR.seg;
 
-function registerStructure(id, x, z, halfX, halfZ, topY) {
-  structures.push({ id, x, z, halfX, halfZ, topY });
+// T-N-03: `extra` opcional carrega ponteiros de renderização para a carbonização
+// do firestorm (firestorm.js): { block } nos quarteirões (buildTownCluster anexa
+// charRefs de instância nele) ou { charRoot: Object3D } nos marcos construídos
+// como Meshes soltos (usina, fábricas, igrejas — materiais lmat são
+// COMPARTILHADOS via cache _mc: o firestorm clona antes de escurecer).
+function registerStructure(id, x, z, halfX, halfZ, topY, extra = null) {
+  structures.push({ id, x, z, halfX, halfZ, topY, ...(extra || {}) });
 }
 
 // T-05: `world.js#surfaceInfoAt` já chama esta função (única "verdade de superfície"
@@ -402,7 +483,9 @@ export function inhaumaStructureInfoAt(x, z) {
 }
 
 // Lista de estruturas (casas/prédios/fábricas) em coords de mundo — exposto para a nuke
-// incendiar cenário (WS-5). Cada item: {id, x, z, halfX, halfZ, topY}.
+// incendiar cenário (WS-5) e para o firestorm carbonizar (T-N-03). Cada item:
+// {id, x, z, halfX, halfZ, topY, block?, charRoot?} — block.charRefs (quarteirões
+// instanciados) ou charRoot (Meshes soltos) são os ponteiros de carbonização.
 export function getInhaumaStructures() {
   return structures;
 }
@@ -615,20 +698,20 @@ export function buildNuclearPlant(scene) {
     tower.position.set(px + ox, baseY, pz);
     tower.castShadow = false; tower.receiveShadow = true;
     g.add(tower);
-    registerStructure(`torre-resfriamento-${ox}`, px + ox, pz, 34, 34, baseY + 70);
+    registerStructure(`torre-resfriamento-${ox}`, px + ox, pz, 34, 34, baseY + 70, { charRoot: tower });
     steamEmitters.push({ x: px + ox, y: baseY + 70, z: pz });
   }
   // Cúpula do reator
   const dome = new THREE.Mesh(new THREE.SphereGeometry(20, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), smat(0xcfd3d6, { metalness: 0.3, roughness: 0.5 }));
   dome.position.set(px, baseY, pz - 80); g.add(dome);
-  registerStructure('cupula-reator-inhauma', px, pz - 80, 24, 24, baseY + 22);
+  registerStructure('cupula-reator-inhauma', px, pz - 80, 24, 24, baseY + 22, { charRoot: dome });
   const reactorBase = new THREE.Mesh(new THREE.CylinderGeometry(22, 22, 14, 16), towerMat);
   reactorBase.position.set(px, baseY + 7, pz - 80); g.add(reactorBase);
   // Prédios auxiliares
   for (const [bx, bz, w] of [[px - 90, pz - 30, 30], [px + 95, pz - 40, 26], [px, pz + 70, 40]]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, 16, w * 0.7), smat(0x9aa0a6));
     b.position.set(bx, baseY + 8, bz); b.castShadow = false; g.add(b);
-    registerStructure('predio-usina-inhauma', bx, bz, w / 2, w * 0.35, baseY + 16);
+    registerStructure('predio-usina-inhauma', bx, bz, w / 2, w * 0.35, baseY + 16, { charRoot: b });
   }
   scene.add(g);
   return { group: g, steamEmitters };
@@ -643,20 +726,20 @@ export function buildFactories(scene) {
     const by = inhaumaContinuousHeight(zx, zz);
     const shed = new THREE.Mesh(new THREE.BoxGeometry(70, 22, 44), smat(0x7d7468));
     shed.position.set(zx, by + 11, zz); shed.castShadow = false; g.add(shed);
-    registerStructure('fabrica-inhauma', zx, zz, 35, 22, by + 24);
+    registerStructure('fabrica-inhauma', zx, zz, 35, 22, by + 24, { charRoot: shed });
     const roof = new THREE.Mesh(new THREE.BoxGeometry(74, 3, 48), smat(0x4a4640));
     roof.position.set(zx, by + 23, zz); g.add(roof);
     for (let i = -1; i <= 1; i++) {
       const ch = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4, 30, 10), smat(0x8a3b2a));
       ch.position.set(zx + i * 14, by + 30, zz - 16); ch.castShadow = false; g.add(ch);
-      registerStructure('chamine-inhauma', zx + i * 14, zz - 16, 5, 5, by + 45);
+      registerStructure('chamine-inhauma', zx + i * 14, zz - 16, 5, 5, by + 45, { charRoot: ch });
       smoke.push({ x: zx + i * 14, y: by + 46, z: zz - 16 });
     }
     // tanques
     for (const [tx, tz] of [[zx - 44, zz + 10], [zx - 44, zz - 14]]) {
       const tank = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 16, 14), smat(0xc8ccce, { metalness: 0.3 }));
       tank.position.set(tx, by + 8, tz); g.add(tank);
-      registerStructure('tanque-industrial-inhauma', tx, tz, 10, 10, by + 16);
+      registerStructure('tanque-industrial-inhauma', tx, tz, 10, 10, by + 16, { charRoot: tank });
     }
   }
   scene.add(g);
@@ -664,7 +747,10 @@ export function buildFactories(scene) {
 }
 
 // ─── Florestas (árvores instanciadas por cota + inclinação + proximidade do rio) ──
-// Posições de árvore em coords de mundo — exposto para a nuke incendiar cenário (WS-5).
+// Fichas de árvore em coords de mundo — exposto para a nuke/firestorm (WS-5/T-N-03).
+// Cada item: {x, y, z, crown?, trunk?, ci?} — crown/trunk são os InstancedMesh da
+// espécie e ci o índice da instância (ponteiros de carbonização, preenchidos ao
+// fim de buildForests; ausentes se buildForests ainda não rodou).
 export const inhaumaTrees = [];
 
 // T-08 (AC-05): linha de árvore ABAIXO da linha de neve (SNOW_LINE_M=800, T-07) — em
@@ -684,7 +770,8 @@ const RIVER_DENSITY_BOOST_MULT = 1.6;
 // aeródromo (-560,320). Compartilhada com buildTown (T-09) para as duas tarefas
 // concordarem sobre onde NÃO plantar árvore / onde construir. Retângulo generoso de
 // propósito (mais barato manter árvore fora de mais terreno do que arriscar overlap).
-const TOWN_SHELF = { minX: -650, maxX: 150, minZ: -60, maxZ: 560 };
+// T-C-05: exportada — exclusão DURA das formações da campanha (formation.js).
+export const TOWN_SHELF = { minX: -650, maxX: 150, minZ: -60, maxZ: 560 };
 function insideTownShelf(x, z) {
   return x >= TOWN_SHELF.minX && x <= TOWN_SHELF.maxX && z >= TOWN_SHELF.minZ && z <= TOWN_SHELF.maxZ;
 }
@@ -779,6 +866,10 @@ export function buildForests(scene) {
     if (demSlopeAt(x, z) > MAX_TREE_SLOPE) continue;            // sem mata fechada em encosta muito íngreme
     if (Math.abs(x + 560) < 360 && Math.abs(z - 320) < 360) continue; // longe do aeroporto
     if (insideTownShelf(x, z)) continue;                        // longe da prateleira da cidade (T-09)
+    if (insideCachoeiraShelf(x, z)) continue;                   // longe da prateleira de Cachoeira (T-C-04)
+    // T-D-01: sem árvore no topo do morro da bateria — a visada do artilheiro
+    // (horizonte em 2 direções + horda no vale) fica desobstruída.
+    if (Math.hypot(x - AA_DEFENSE.HILL_POS.x, z - AA_DEFENSE.HILL_POS.z) < AA_DEFENSE.HILL_FOREST_KEEPOUT_M) continue;
     const riverDist = distanceToRiver(x, z);
     if (riverDist < RIVER_HALF_WIDTH_M + 10) continue;          // nunca dentro do canal/margem molhada
     if (nearAnyRoad(x, z, 14)) continue;                        // sem árvore sobre a rodovia
@@ -797,8 +888,12 @@ export function buildForests(scene) {
     let si = candidates[Math.floor(game.rng.random() * candidates.length)];
     if (game.rng.random() < 0.12) si = 3; // dry
     const sc = game.rng.range(TREE_SPECIES[si].sMin, TREE_SPECIES[si].sMax);
-    buckets[si].push({ x, y: h, z, s: sc });
-    inhaumaTrees.push({ x, y: h, z });
+    // T-N-03: rec é a ficha pública da árvore (inhaumaTrees); após os meshes
+    // instanciados serem criados ela ganha os ponteiros de carbonização
+    // (crown/trunk InstancedMesh + índice de instância ci) para o firestorm.
+    const rec = { x, y: h, z };
+    inhaumaTrees.push(rec);
+    buckets[si].push({ x, y: h, z, s: sc, rec });
   }
   const dummy = new THREE.Object3D();
   const col = new THREE.Color();
@@ -816,6 +911,9 @@ export function buildForests(scene) {
       trunkMesh.frustumCulled = false; trunkMesh.castShadow = false;
     }
     items.forEach((t, i) => {
+      // T-N-03: ponteiros de carbonização na ficha pública da árvore.
+      t.rec.crown = crownMesh; t.rec.ci = i;
+      if (trunkMesh) t.rec.trunk = trunkMesh;
       if (trunkMesh) {
         dummy.position.set(t.x, t.y + trunkH * 0.5 * t.s, t.z);
         dummy.scale.set(t.s, t.s, t.s); dummy.rotation.set(0, 0, 0);
@@ -872,9 +970,6 @@ const PLAZA = { x: -390, z: 0 };
 // prédio só precisa ficar fora da clareira nivelada em si).
 const AIRPORT_CENTER = { x: -560, z: 320 };
 const AIRPORT_TOWN_KEEPOUT_M = 220;
-const SHELF_FLAT_SLOPE_MAX_DENSITY = 0.12; // abaixo disso, densidade máxima de quarteirão
-const SHELF_MAX_SLOPE = 0.35;              // acima disso, nenhum quarteirão (afinando morro acima)
-const TERRACE_CUT_M = 0.35; // m — quanto a base do quarteirão afunda abaixo da média dos 4 cantos
 
 function nearAnyLandmark(x, z) {
   if (Math.hypot(x - CHURCH.x, z - CHURCH.z) < 55) return true;
@@ -884,61 +979,28 @@ function nearAnyLandmark(x, z) {
   return false;
 }
 
-/** Amostra os 4 cantos do footprint (w×d, sem rotação — aproximação AABB, mesma
- *  simplificação que registerStructure já usa em todo o mapa) e devolve a base
- *  nivelada (média dos cantos, levemente afundada — T-09 terraceamento). */
-function terracedPadHeight(x, z, w, d) {
-  const hx = w / 2, hz = d / 2;
-  const corners = [
-    inhaumaContinuousHeight(x - hx, z - hz), inhaumaContinuousHeight(x + hx, z - hz),
-    inhaumaContinuousHeight(x - hx, z + hz), inhaumaContinuousHeight(x + hx, z + hz),
-  ];
-  const avg = corners.reduce((a, b) => a + b, 0) / corners.length;
-  return avg - TERRACE_CUT_M;
-}
-
+// T-C-04: o placement dos quarteirões (grade + keep-outs + terraceamento) vive em
+// buildTownCluster (inhauma-city.js) — mesma ordem de checagens e mesmo consumo de
+// rng do loop histórico que ficava aqui, então a saída de Inhaúma não muda.
 export function buildTown(scene) {
   const g = new THREE.Group();
-  // Quarteirões: prédios variados, mais altos perto do centro do downtown, seguindo
-  // o contorno do terreno (linhas ao longo de x dentro da prateleira do vale).
-  const blocks = [];
-  for (let x = TOWN_SHELF.minX; x <= TOWN_SHELF.maxX; x += 30) {
-    for (let z = TOWN_SHELF.minZ; z <= TOWN_SHELF.maxZ; z += 26) {
-      if (Math.hypot(x - AIRPORT_CENTER.x, z - AIRPORT_CENTER.z) < AIRPORT_TOWN_KEEPOUT_M) continue;
-      if (nearAnyLandmark(x, z)) continue;
-      if (nearAnyRoad(x, z, 12)) continue;                  // não construir sobre a rodovia
-      if (distanceToRiver(x, z) < RIVER_HALF_WIDTH_M + 15) continue; // não construir no canal/margem do rio
-      const gh0 = inhaumaContinuousHeight(x, z);
-      if (gh0 < WATER_LEVEL + 1) continue;                  // terreno baixo/alagado demais
-      const slope = demSlopeAt(x, z);
-      if (slope > SHELF_MAX_SLOPE) continue;                // encosta íngreme demais p/ terracear
-      if ((x * 7 + z * 13) % 5 === 0) continue;              // lotes vazios (variedade visual)
-      // Afina a densidade conforme a inclinação sobe acima do patamar "prateleira plana".
-      if (slope > SHELF_FLAT_SLOPE_MAX_DENSITY) {
-        const thinT = (slope - SHELF_FLAT_SLOPE_MAX_DENSITY) / (SHELF_MAX_SLOPE - SHELF_FLAT_SLOPE_MAX_DENSITY);
-        if (game.rng.random() < thinT) continue;
-      }
-      const rrDowntown = Math.hypot(x - DOWNTOWN_CENTER.x, z - DOWNTOWN_CENTER.z);
-      const downtown = rrDowntown < DOWNTOWN_RADIUS_M;
-      // T-V-13: tipologia por posição no distrito — posições/rotações da grade
-      // INALTERADAS (landmarks e exclusões de spawn dependem delas); só altura e
-      // uso mudam. Núcleo do downtown: torres 9+ pavimentos; resto do downtown:
-      // mid-rise 4-8; periferia: low-rise 2-3 (com telhado inclinado, inhauma-city).
-      let kind, hgt;
-      if (downtown && rrDowntown < 110 && Math.abs(x * 5 + z * 3) % 3 === 0) {
-        kind = 'tower'; hgt = 30 + (Math.abs(x * 5 + z * 3) % 17);
-      } else if (downtown) {
-        kind = 'mid'; hgt = 15 + (Math.abs(x * 5 + z * 3) % 12);
-      } else {
-        kind = 'low'; hgt = 6.5 + (Math.abs(x * 3 + z) % 5);
-      }
-      const w = 11 + Math.abs(x % 6);
-      const d = 9 + Math.abs(z % 5);
-      const padY = terracedPadHeight(x, z, w, d);
-      blocks.push({ x, z, gh: padY, h: hgt, w, d, downtown, kind });
-      registerStructure('predio-inhauma', x, z, w / 2, d / 2, padY + hgt);
-    }
-  }
+  const blocks = buildTownCluster({
+    shelf: TOWN_SHELF, stepX: 30, stepZ: 26,
+    typology: makeInhaumaTypology(DOWNTOWN_CENTER, DOWNTOWN_RADIUS_M),
+    // T-D-01: keep-out do morro da bateria — nenhum quarteirão no topo/encosta
+    // íngreme (hoje o shelf nem alcança a base; a trava protege crescimentos).
+    circles: [
+      { x: AIRPORT_CENTER.x, z: AIRPORT_CENTER.z, r: AIRPORT_TOWN_KEEPOUT_M },
+      { x: AA_DEFENSE.HILL_POS.x, z: AA_DEFENSE.HILL_POS.z, r: AA_DEFENSE.HILL_TOWN_KEEPOUT_M },
+    ],
+    keepOut: nearAnyLandmark,
+    deps: {
+      rng: game.rng, heightAt: inhaumaContinuousHeight, slopeAt: demSlopeAt,
+      nearRoad: nearAnyRoad, riverDist: distanceToRiver,
+      riverKeepOut: RIVER_HALF_WIDTH_M + 15, minH: WATER_LEVEL + 1,
+      registerStructure, structureId: 'predio-inhauma',
+    },
+  });
   // T-V-12/T-V-13: a cidade virou batches instanciados por tipologia (low/mid/torre
   // com setback + telhados de 2 águas) com textura canvas de janelas, emissiveMap
   // noturno e castShadow — era UM InstancedMesh de BoxGeometry(1,1,1) liso em 2 cores.
@@ -948,11 +1010,11 @@ export function buildTown(scene) {
   const ghCh = inhaumaContinuousHeight(CHURCH.x, CHURCH.z);
   const church = new THREE.Mesh(new THREE.BoxGeometry(32, 14, 46), lmat(0xece3c8));
   church.position.set(CHURCH.x, ghCh + 7, CHURCH.z); g.add(church);
-  registerStructure('igreja-inhauma', CHURCH.x, CHURCH.z, 16, 23, ghCh + 14);
+  registerStructure('igreja-inhauma', CHURCH.x, CHURCH.z, 16, 23, ghCh + 14, { charRoot: church });
   const ghTower = inhaumaContinuousHeight(CHURCH_TOWER.x, CHURCH_TOWER.z);
   const tower = new THREE.Mesh(new THREE.BoxGeometry(12, 22, 12), lmat(0xe2d8b8));
   tower.position.set(CHURCH_TOWER.x, ghTower + 11, CHURCH_TOWER.z); g.add(tower);
-  registerStructure('torre-igreja-inhauma', CHURCH_TOWER.x, CHURCH_TOWER.z, 6, 6, ghTower + 29);
+  registerStructure('torre-igreja-inhauma', CHURCH_TOWER.x, CHURCH_TOWER.z, 6, 6, ghTower + 29, { charRoot: tower });
   const spire = new THREE.Mesh(new THREE.ConeGeometry(8, 14, 4), lmat(0xb04a30));
   spire.position.set(CHURCH_TOWER.x, ghTower + 29, CHURCH_TOWER.z); spire.rotation.y = Math.PI / 4; g.add(spire);
 
@@ -975,6 +1037,64 @@ export function buildTown(scene) {
   return g;
 }
 
+// ─── Cachoeira da Prata — a segunda cidade, ocupada (T-C-04) ─────────────────
+// Mesma pipeline de Inhaúma: buildTownCluster (placement) + buildCityMeshes
+// (batches com fachada/telhado) + marcos (igrejinha + praça + ruas no padrão dos
+// planos PLAZA/FIELDS de buildTown). O shelf é nivelado na cadeia de altura
+// (CACHOEIRA_SHELF, nota no topo do arquivo) — as ruas/praça assentam planas.
+const CACHOEIRA_STREET_W = 9; // largura das duas ruas centrais (asfalto)
+
+export function buildCachoeira(scene) {
+  const g = new THREE.Group();
+  const blocks = buildTownCluster({
+    shelf: CACHOEIRA_SHELF, stepX: 22, stepZ: 20,
+    typology: makeCachoeiraTypology(CACHOEIRA_TOWN_CENTER),
+    circles: [
+      { x: CACHOEIRA_CHURCH.x, z: CACHOEIRA_CHURCH.z, r: 30 },
+      { x: CACHOEIRA_PRACA.x, z: CACHOEIRA_PRACA.z, r: 26 },
+    ],
+    // Nenhum lote sobre as duas ruas centrais (mesmo traçado dos planos abaixo).
+    keepOut: (x, z) => Math.abs(x - CACHOEIRA_TOWN_CENTER.x) < 8 || Math.abs(z - CACHOEIRA_PRACA.z) < 8,
+    deps: {
+      rng: game.rng, heightAt: inhaumaContinuousHeight, slopeAt: demSlopeAt,
+      nearRoad: nearAnyRoad, riverDist: distanceToRiver,
+      riverKeepOut: RIVER_HALF_WIDTH_M + 15, minH: WATER_LEVEL + 1,
+      registerStructure, structureId: 'predio-cachoeira',
+    },
+  });
+  g.add(buildCityMeshes(blocks));
+
+  // Igrejinha (corpo + torre + pináculo — versão miúda da igreja de Inhaúma).
+  const ghCh = inhaumaContinuousHeight(CACHOEIRA_CHURCH.x, CACHOEIRA_CHURCH.z);
+  const church = new THREE.Mesh(new THREE.BoxGeometry(18, 8, 26), lmat(0xece3c8));
+  church.position.set(CACHOEIRA_CHURCH.x, ghCh + 4, CACHOEIRA_CHURCH.z); g.add(church);
+  registerStructure('igreja-cachoeira', CACHOEIRA_CHURCH.x, CACHOEIRA_CHURCH.z, 9, 13, ghCh + 8, { charRoot: church });
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(7, 14, 7), lmat(0xe2d8b8));
+  tower.position.set(CACHOEIRA_CHURCH.x, ghCh + 7, CACHOEIRA_CHURCH.z - 17); g.add(tower);
+  registerStructure('torre-igreja-cachoeira', CACHOEIRA_CHURCH.x, CACHOEIRA_CHURCH.z - 17, 3.5, 3.5, ghCh + 18, { charRoot: tower });
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(4.5, 8, 4), lmat(0xb04a30));
+  spire.position.set(CACHOEIRA_CHURCH.x, ghCh + 18, CACHOEIRA_CHURCH.z - 17);
+  spire.rotation.y = Math.PI / 4; g.add(spire);
+
+  // Chão urbano: praça + duas ruas centrais cruzando o shelf (planos pavimentados,
+  // mesma abordagem dos planos PLAZA/FIELDS de buildTown — leem como quarteirões).
+  const pracaY = inhaumaContinuousHeight(CACHOEIRA_PRACA.x, CACHOEIRA_PRACA.z) + 0.22;
+  const praca = new THREE.Mesh(new THREE.PlaneGeometry(40, 32), lmat(0x6f8d62));
+  praca.rotation.x = -Math.PI / 2; praca.position.set(CACHOEIRA_PRACA.x, pracaY, CACHOEIRA_PRACA.z); g.add(praca);
+  const streetMat = lmat(0x4a4a48);
+  const cx = CACHOEIRA_TOWN_CENTER.x, cz = CACHOEIRA_TOWN_CENTER.z;
+  const streetY = inhaumaContinuousHeight(cx, cz) + 0.18;
+  const streetNS = new THREE.Mesh(
+    new THREE.PlaneGeometry(CACHOEIRA_STREET_W, CACHOEIRA_SHELF.maxZ - CACHOEIRA_SHELF.minZ - 12), streetMat);
+  streetNS.rotation.x = -Math.PI / 2; streetNS.position.set(cx, streetY, cz); g.add(streetNS);
+  const streetEW = new THREE.Mesh(
+    new THREE.PlaneGeometry(CACHOEIRA_SHELF.maxX - CACHOEIRA_SHELF.minX - 12, CACHOEIRA_STREET_W), streetMat);
+  streetEW.rotation.x = -Math.PI / 2; streetEW.position.set(cx, streetY, CACHOEIRA_PRACA.z); g.add(streetEW);
+
+  scene.add(g);
+  return { group: g, blocks, center: CACHOEIRA_TOWN_CENTER };
+}
+
 // ─── Update (água + carros + vapor/fumaça + backdrop) ────────────────────────
 export function updateInhaumaScene(dt, refs, playerPos) {
   updateInfiniteTerrain(playerPos, refs.terrain);
@@ -982,6 +1102,8 @@ export function updateInhaumaScene(dt, refs, playerPos) {
   if (refs.terrain?.backdrop) updateInhaumaBackdrop(refs.terrain.backdrop, playerPos);
   // T-V-12: janelas da cidade acendem à noite (mesmo nightFactor do sky.js).
   updateInhaumaCityLights(game.timeOfDay);
+  // T-C-05: guarnição de ocupação de Cachoeira — patrulhas/colunas em movimento.
+  if (refs.garrison) updateFormations(dt, refs.garrison.formations, refs.garrison.formationDeps);
   if (refs.water) updateWaterSurfaces(dt, _getSunData ? _getSunData().direction : undefined);
   if (refs.cars) {
     updateRoadTraffic(dt, refs.cars, inhaumaContinuousHeight);

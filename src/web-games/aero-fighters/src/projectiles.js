@@ -21,6 +21,7 @@ import { deformTerrainNuclear, surfaceInfoAt } from './world.js';
 import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { transitionSortie, SortieEvent } from './sortie-state.js';
 import { shaveCooldown } from './weapon-cooldowns.js';
+import { damageAllyEnemy } from './ally-war.js';
 import { rollMissileHit } from './weapons-core.js';
 import { mgStepBullet, pnStep } from './defense/turret-weapons.js'; // T-D-04/T-D-05
 import { pickRetarget, stepRod, stepNukeArc, stepNukeGuided, nightFactor } from './defense/weapons-v1.js'; // WEAPONS-V1
@@ -29,6 +30,11 @@ import { pickRetarget, stepRod, stepNukeArc, stepNukeGuided, nightFactor } from 
 // Tracer estilo M61 Vulcan: cilindro alongado amarelo brilhante, trilhando atrás da bala
 const BULLET_GEOM = new THREE.CylinderGeometry(0.06, 0.06, 2.0, 6);
 BULLET_GEOM.rotateX(Math.PI / 2);
+// 2026-08-11: tracer INIMIGO bem maior que o do jogador — o contrato de design
+// é "tiro em linha reta VISÍVEL para o jogador desviar" (doutrina 300/200).
+// NormalBlending de propósito: additive + log-depth + bloom gera NaN mips.
+const ENEMY_B_GEOM = new THREE.CylinderGeometry(0.18, 0.18, 6.0, 6);
+ENEMY_B_GEOM.rotateX(Math.PI / 2);
 const BULLET_MAT  = new THREE.MeshBasicMaterial({ color: 0xfff080 });
 const ENEMY_B_MAT = new THREE.MeshBasicMaterial({ color: COLORS.bulletEnemy });
 
@@ -40,7 +46,7 @@ const bulletPoolPlayer = [], bulletPoolEnemy = [];
 export function spawnBullet(orig, dir, isEnemy = false, opts = null) {
   const pool = isEnemy ? bulletPoolEnemy : bulletPoolPlayer;
   let mesh = pool.pop();
-  if (!mesh) mesh = new THREE.Mesh(BULLET_GEOM, isEnemy ? ENEMY_B_MAT : BULLET_MAT);
+  if (!mesh) mesh = new THREE.Mesh(isEnemy ? ENEMY_B_GEOM : BULLET_GEOM, isEnemy ? ENEMY_B_MAT : BULLET_MAT);
   mesh.position.copy(orig);
   // Aponta o tracer ao longo da direção de voo (cilindro estende-se atrás da bala)
   mesh.lookAt(orig.x + dir.x * 10, orig.y + dir.y * 10, orig.z + dir.z * 10);
@@ -75,6 +81,16 @@ export function updateBullets(dt, jetPos, onPlayerHit, wingmen = []) {
         if (e.dead) continue;
         if (p.mesh.position.distanceToSquared(e.mesh.position) < e.hr2) {
           damageTarget(e, 1); consumed = true; break;
+        }
+      }
+      // 2026-08-11: o jogador PODE derrubar os caças inimigos da ally-war
+      // (eles não nos atacam, mas são abatíveis — queda cinematográfica).
+      if (!consumed) {
+        for (const e of game.allyEnemies) {
+          if (e.dead || e.falling) continue;
+          if (p.mesh.position.distanceToSquared(e.mesh.position) < 30) {
+            damageAllyEnemy(e, 1); audio.hit(); consumed = true; break;
+          }
         }
       }
     } else if (game.flags.invincibility <= 0 && game.flags.rollTimer <= 0) {

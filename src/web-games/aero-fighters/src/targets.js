@@ -13,6 +13,7 @@ import { addSmokeEmitter, removeSmokeEmittersOf } from './factory-fx.js';
 import { spawnBullet, spawnPickup } from './projectiles.js';
 import { updateFormationFire } from './formations/formation.js';
 import { shaveCooldown } from './weapon-cooldowns.js';
+import { AIR_KILL_TYPES, beginAirKillFall } from './air-kills.js';
 import { getActiveHeightFn } from './world.js';
 import { airportSurface } from './landing-zones.js';
 import { INHAUMA_ROADS } from './maps/inhauma-roads.js';
@@ -569,13 +570,20 @@ export function killTarget(t) {
     if (t.onDeath) t.onDeath();
     return;
   }
-  if (t.type === 'base' || t.type === 'factory') {
+  // 2026-08-11: inimigos AÉREOS não evaporam — entram em queda cinematográfica
+  // (air-kills.js reusa a física de defense/enemy-fighters.js). O mesh continua
+  // vivo na cena/formação durante a queda; o FX de morte vem no IMPACTO.
+  const airFall = AIR_KILL_TYPES.has(t.type);
+  if (airFall) {
+    explosion(t.mesh.position, 0.8); // flash do golpe fatal — a queda vem depois
+    beginAirKillFall(t);
+  } else if (t.type === 'base' || t.type === 'factory') {
     megaExplosion(t.mesh.position, 'target');
-  } else if (t.type === 'building' || t.type === 'convoy' || t.type === 'armedConvoy' || t.type === 'helicopter' || t.type === 'tank' || t.type === 'patrolAir') {
+  } else if (t.type === 'building' || t.type === 'convoy' || t.type === 'armedConvoy' || t.type === 'tank') {
     explosion(t.mesh.position, 2.0);
     spawnShockwave(t.mesh.position, 22);
     audio.explosion(1.0, t.mesh.position);
-  } else if (t.type === 'fTank' || t.type === 'fApc' || t.type === 'fTruck' || t.type === 'fArtillery' || t.type === 'fSam' || t.type === 'fHelicopter' || t.type === 'fZeppelin') {
+  } else if (t.type === 'fTank' || t.type === 'fApc' || t.type === 'fTruck' || t.type === 'fArtillery' || t.type === 'fSam') {
     // Unidades de formação (T-C-02, campanha Inhaúma): veículos/artilharia/SAM —
     // mesmo FX dos veículos legados acima. fTroops/fAaGun caem no else (FX pequeno).
     explosion(t.mesh.position, 2.0);
@@ -596,7 +604,8 @@ export function killTarget(t) {
   if (!game.missionRealism?.enabled && game.targetsDestroyed % 5 === 0) {
     shaveCooldown(game.player.weaponCooldowns, 'nuclear', 10);
   }
-  scene.remove(t.mesh);
+  // Alvos aéreos ficam na cena até o impacto (air-kills remove/preserva o wreck).
+  if (!airFall) scene.remove(t.mesh);
 }
 
 const _aaDir = new THREE.Vector3();

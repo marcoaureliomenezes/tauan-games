@@ -19,6 +19,7 @@ import { updateTargets, damageTarget } from './targets.js';
 import { spawnBullet, updateBullets, spawnMissile, updateMissiles, updatePickups, spawnNuclearMissile, updateNuclears } from './projectiles.js';
 import { spawnRodMissile, updateRodMissiles } from './rod-missiles.js';
 import { tickWeaponCooldowns, weaponReady, tryConsume } from './weapon-cooldowns.js';
+import { updateAirKills, clearAirKills } from './air-kills.js';
 import { updateHUD, showOverlay, hideOverlay, tickOverlayTimer, setSoundIcon } from './hud.js';
 import { startGame, restartGame, crashAndDie, checkMissionComplete, gameOver, spawnMission } from './missions.js';
 import { updateCampaign } from './campaign.js';
@@ -381,6 +382,7 @@ function handleStartOrFire() {
     if (game.flags.missionFailed || game.player.dead) {
       if (game.flags.crashFreezeTime <= 0) {
         restartGame();
+        clearAirKills();
         clearWingmen(scene);
         spawnWingmen(scene, jet);
         clearAllyEnemies(scene);
@@ -522,6 +524,7 @@ function tick() {
     updateRodMissiles(dt);
     updateNuclearFx(dt);
     updateTargets(dt, jet.position);
+    updateAirKills(dt); // quedas cinematográficas dos aéreos abatidos
     updateBoss(dt, jet.position, playerHit);
     updatePickups(dt, jet.position);
     updateParticles(dt, jet.position);
