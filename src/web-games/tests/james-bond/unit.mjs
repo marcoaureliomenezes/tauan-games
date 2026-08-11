@@ -3,10 +3,15 @@ import { MISSIONS } from '../../james-bond/src/content/missions.js';
 import { WEAPONS, freshAmmo } from '../../james-bond/src/content/weapons.js';
 import { createRandom, hashSeed } from '../../james-bond/src/random.js';
 import { createPhysics } from '../../james-bond/src/engine/physics.js';
-import { CONFIG } from '../../james-bond/src/config.js';
+import { CONFIG, SENSITIVITY, clampSensitivity } from '../../james-bond/src/config.js';
 import { slabCells, stairDirection, STAIR_STEPS } from '../../james-bond/src/upper-floor.js';
 import { isSolid, SOLID_TILES, GROUND_TILES, MARKERS } from '../../james-bond/src/content/tiles.js';
 import { stepProjectile } from '../../james-bond/src/gameplay/ballistics.js';
+import { isPrecisionShot, computeSpread } from '../../james-bond/src/gameplay/spread.js';
+import {
+  spawnIntervalSeconds, createSpawnScheduler, pickSpawnCell, groundPoolSize, validateSpawnConfig,
+  DEFAULT_SPAWN_RATE, DEFAULT_MAX_ALIVE, SPAWN_MIN_DISTANCE,
+} from '../../james-bond/src/gameplay/spawner.js';
 import { game, resetRun, STARTING_WEAPON } from '../../james-bond/src/state.js';
 
 assert.equal(MISSIONS.length, 6, 'campaign must have six missions');
@@ -43,6 +48,16 @@ for (const mission of MISSIONS) {
     assert.ok(reachable.has(findMarker(mission.grid, marker).join(',')), `${mission.code} cannot reach ${marker}`);
   }
   assert.equal(Object.keys(mission.objectives).length, 3, `${mission.code} objectives`);
+
+  // --- F3: config de reforço contínuo ---------------------------------------
+  assert.deepEqual(validateSpawnConfig(mission), [], `${mission.code} spawner config`);
+  // A guarnição inicial (tiles G + upper.guards) nunca pode já estourar o
+  // teto de vivos — senão o "reforço" nasceria morto: sem folga nenhuma para
+  // repor quem morre.
+  const groundGuardCount = mission.grid.join('').split('').filter((char) => char === 'G').length;
+  const initialGarrison = groundGuardCount + (mission.upper.guards || []).length;
+  assert.ok(initialGarrison <= mission.maxAlive,
+    `${mission.code} guarnição inicial (${initialGarrison}) não pode passar do teto maxAlive (${mission.maxAlive})`);
 
   // --- Invariantes de andar (o operador ficou preso: nunca mais) -----------
   const chars = mission.grid.map((row) => row.split(''));
@@ -125,6 +140,14 @@ for (const [id, weapon] of Object.entries(WEAPONS)) {
 assert.equal(WEAPONS.rpg.cadence, 5, 'launcher fires once every 5s');
 assert.equal(WEAPONS.knife.kind, 'melee', 'knife is a melee weapon');
 assert.ok(WEAPONS.knife.range > 0 && WEAPONS.knife.range < 4, 'knife is short range');
+
+// F2 — alcance de mapa inteiro: o raycast do tiro (combat.js fireRay) usa
+// `weapon.range`, não mais um corte fixo de 90 m que truncava a rua principal
+// (diagonal do maior quarteirão medida em ~139 m) antes de alcançar a outra
+// ponta. Só as duas armas hitscan (pistola/rifle) precisam disso.
+for (const id of ['deagle', 'ak47']) {
+  assert.ok(WEAPONS[id].range >= 140, `${id} precisa de alcance de mapa inteiro (>=140m), tem ${WEAPONS[id].range}`);
+}
 
 // BUG (relatado): mudar de fase portando a AK-47 deixava o jogador com
 // APARÊNCIA de pistola e COMPORTAMENTO de metralhadora — `resetRun` zerava
@@ -287,6 +310,90 @@ assert.ok(noChao.passos < 20, `e em poucos quadros (foram ${noChao?.passos})`);
 //    sobe, bate na base da laje e volta para o chão.
 const belowSlab = drop({ x: 0, y: 1.2, z: 0 }, { x: 0, y: 6, z: 0 });
 assert.ok(belowSlab.y < 0.3, `granada lançada para cima sob a laje volta ao chão (y=${belowSlab.y})`);
+
+// ---------------------------------------------------------------------------
+// F1 — SENSIBILIDADE DO MOUSE
+// ---------------------------------------------------------------------------
+assert.equal(clampSensitivity(1), 1, 'valor dentro da faixa passa direto');
+assert.equal(clampSensitivity(SENSITIVITY.min - 1), SENSITIVITY.min, 'abaixo do mínimo trava no mínimo');
+assert.equal(clampSensitivity(SENSITIVITY.max + 5), SENSITIVITY.max, 'acima do máximo trava no máximo');
+assert.equal(clampSensitivity(NaN), SENSITIVITY.default, 'NaN cai no padrão');
+assert.equal(clampSensitivity(undefined), SENSITIVITY.default, 'ausente (save antigo) cai no padrão');
+assert.equal(clampSensitivity('2.5'), 2.5, 'string numérica (valor de <input type=range>) é aceita');
+assert.ok(SENSITIVITY.default >= SENSITIVITY.min && SENSITIVITY.default <= SENSITIVITY.max,
+  'o padrão tem de estar dentro da própria faixa');
+
+// ---------------------------------------------------------------------------
+// F2 — PRECISÃO DE PRIMEIRO TIRO (modelo de espalhamento)
+// ---------------------------------------------------------------------------
+const gun = { spread: 0.01 };
+assert.equal(isPrecisionShot(Infinity, gun), true, 'primeiro tiro de uma missão nova é sempre preciso');
+assert.equal(isPrecisionShot(0, gun), false, 'tiro imediatamente em seguida do anterior não é preciso');
+assert.equal(isPrecisionShot(CONFIG.firstShotWindow, gun), true, 'no limiar exato já conta como preciso');
+assert.equal(isPrecisionShot(CONFIG.firstShotWindow - 0.01, gun), false, 'um instante antes do limiar ainda não conta');
+assert.equal(isPrecisionShot(1, { spread: 0.01, firstShotWindow: 2 }), false,
+  'arma pode declarar sua própria janela, sobrepondo o padrão global');
+
+const bloomedSpread = computeSpread(gun, { bloom: 2, moveFactor: 1, crouchFactor: 1, adsFactor: 1, precise: false });
+const preciseSpread = computeSpread(gun, { bloom: 2, moveFactor: 1, crouchFactor: 1, adsFactor: 1, precise: true });
+assert.ok(preciseSpread < bloomedSpread * 0.2,
+  `tiro preciso tem de espalhar bem menos que rajada aquecida (preciso=${preciseSpread}, aquecido=${bloomedSpread})`);
+assert.ok(preciseSpread < gun.spread,
+  'mesmo o espalhamento BASE da arma (bloom=0) é maior que o do tiro preciso');
+assert.equal(computeSpread(gun, {}), gun.spread, 'sem estado nenhum informado, cai no espalhamento base da arma');
+// Movimento/agachamento/ADS continuam valendo por cima do bônus de precisão —
+// só o multiplicador de aquecimento (bloom) é ignorado.
+const preciseMoving = computeSpread(gun, { precise: true, moveFactor: 2 });
+const preciseStill = computeSpread(gun, { precise: true, moveFactor: 1 });
+assert.ok(preciseMoving > preciseStill, 'tiro preciso em movimento ainda espalha mais que parado');
+
+// ---------------------------------------------------------------------------
+// F3 — REFORÇO CONTÍNUO (agendamento + escolha de célula, puro)
+// ---------------------------------------------------------------------------
+assert.equal(spawnIntervalSeconds(5), 12, '5 reforços/minuto = um a cada 12s');
+assert.equal(spawnIntervalSeconds(60), 1, '60/min = um por segundo');
+assert.equal(spawnIntervalSeconds(0), Infinity, 'taxa zero nunca dispara');
+assert.equal(spawnIntervalSeconds(-3), Infinity, 'taxa negativa nunca dispara');
+assert.equal(spawnIntervalSeconds(undefined), Infinity, 'taxa ausente nunca dispara');
+
+const scheduler = createSpawnScheduler(60); // 1 por segundo — fácil de raciocinar
+assert.equal(scheduler.tick(0.5), false, 'meio segundo não completa o intervalo de 1s');
+assert.equal(scheduler.tick(0.5), true, 'somado, 1s completa o intervalo');
+scheduler.schedule(60);
+assert.ok(scheduler.remaining > 0.99 && scheduler.remaining <= 1, 'schedule() reagenda o intervalo cheio');
+scheduler.retry(0.25);
+assert.equal(scheduler.remaining, 0.25, 'retry() agenda uma nova tentativa curta, não o intervalo cheio');
+// Relógio de JOGO: nunca setTimeout — a única forma de o tempo passar aqui é
+// chamando tick(dt) explicitamente, exatamente como main.js chama fixedUpdate.
+assert.equal(typeof scheduler.tick, 'function');
+
+const farVisible = { x: 0, z: 0, interior: false, edgeDistance: 10, distanceToPlayer: 50, visible: true };
+const farHidden = { x: 1, z: 1, interior: false, edgeDistance: 10, distanceToPlayer: 50, visible: false };
+const nearHidden = { x: 2, z: 2, interior: false, edgeDistance: 10, distanceToPlayer: 5, visible: false };
+const interiorHidden = { x: 3, z: 3, interior: true, edgeDistance: 1, distanceToPlayer: 40, visible: false };
+assert.equal(pickSpawnCell([], () => 0), null, 'sem candidatas, não há onde nascer');
+assert.equal(pickSpawnCell([farVisible], () => 0), farVisible,
+  'única candidata, mesmo visível: o spawner nunca trava por falta de opção perfeita');
+const picked = pickSpawnCell([farVisible, nearHidden, interiorHidden], () => 0);
+assert.notEqual(picked, farVisible, 'candidata VISÍVEL nunca é escolhida quando há alternativa fora de LOS');
+assert.ok(picked === nearHidden || picked === interiorHidden, 'a escolha fica entre as candidatas fora de LOS');
+// Interior de construção pontua mais que borda simples a igual distância —
+// prefere nascer "dentro" quando as demais condições empatam.
+const edgeHidden = { x: 4, z: 4, interior: false, edgeDistance: 0, distanceToPlayer: 40, visible: false };
+const insideHidden = { x: 5, z: 5, interior: true, edgeDistance: 10, distanceToPlayer: 40, visible: false };
+assert.equal(pickSpawnCell([edgeHidden, insideHidden], () => 0), insideHidden,
+  'a preferência por interior de construção pesa na pontuação');
+assert.ok(SPAWN_MIN_DISTANCE > 0, 'distância mínima do jogador é positiva');
+
+assert.equal(groundPoolSize(12, 16), 16 + 3, 'pool cobre o maior entre guarnição e teto, mais a folga de margem');
+assert.equal(groundPoolSize(20, 16), 20 + 3, 'guarnição maior que o teto ainda dá folga de margem');
+
+assert.deepEqual(validateSpawnConfig({ spawnRate: 5, maxAlive: 16 }), [], 'config válida não reporta erro');
+assert.ok(validateSpawnConfig({ spawnRate: 0, maxAlive: 16 }).length > 0, 'taxa zero é inválida');
+assert.ok(validateSpawnConfig({ spawnRate: 5, maxAlive: 0 }).length > 0, 'teto zero é inválido');
+assert.ok(validateSpawnConfig({ spawnRate: 5, maxAlive: 3.5 }).length > 0, 'teto tem de ser inteiro');
+assert.ok(validateSpawnConfig({ spawnRate: -1, maxAlive: 16 }).length > 0, 'taxa negativa é inválida');
+assert.ok(DEFAULT_SPAWN_RATE > 0 && DEFAULT_MAX_ALIVE > 0, 'os padrões (usados quando a missão omite o campo) são válidos');
 
 console.log(`James Bond unit checks passed: ${MISSIONS.length} missions, ${Object.keys(WEAPONS).length} weapons`);
 

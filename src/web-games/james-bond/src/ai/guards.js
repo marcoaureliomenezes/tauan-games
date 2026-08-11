@@ -7,6 +7,10 @@ import { buildSoldier } from './soldier-model.js';
 import { buildNavGraph, nearestWalkableCell } from './nav-graph.js';
 import { fireWeapon, meleeAttack } from './engage.js';
 import { spawnEnemyModel, buildHitBoxes, hasEnemyModel } from './enemy-assets.js';
+import {
+  DEFAULT_SPAWN_RATE, DEFAULT_MAX_ALIVE, CORPSE_LINGER, groundPoolSize,
+  createSpawnScheduler, pickSpawnCell,
+} from '../gameplay/spawner.js';
 
 const tempA = new THREE.Vector3();
 const tempB = new THREE.Vector3();
@@ -131,7 +135,24 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
   const accents = [0x2b3547, 0x303a44, 0x27313d, 0x343b47];
   let bossTaken = false;
 
-  const enemies = world.guards.map((position, id) => {
+  // F3 — POOL fixo, nunca cresce depois daqui. `world.guards` é a guarnição
+  // inicial de sempre (tiles `G` do grid + `upper.guards`); a ela somamos
+  // slots de RESERVA — inimigos criados (rig, hitboxes, luz de aura) mas
+  // invisíveis e inativos até o spawner de reforço os ativar. Reforço só
+  // nasce no térreo (ver `trySpawnReinforcement`), então a reserva só
+  // precisa cobrir o nível 'ground': o mezanino nunca repõe quem morre lá —
+  // é uma postura defensiva fixa da missão, não um front de reforço.
+  const spawnRate = Number.isFinite(mission.spawnRate) && mission.spawnRate > 0 ? mission.spawnRate : DEFAULT_SPAWN_RATE;
+  const maxAlive = Number.isInteger(mission.maxAlive) && mission.maxAlive > 0 ? mission.maxAlive : DEFAULT_MAX_ALIVE;
+  const groundInitialCount = world.guards.filter((position) => position.y <= CONFIG.floorHeight - 1).length;
+  const groundTarget = groundPoolSize(groundInitialCount, maxAlive);
+  const reserveCount = Math.max(0, groundTarget - groundInitialCount);
+  // `world.start` como posição-placeholder: a reserva nasce escondida e só
+  // recebe uma posição de verdade quando o spawner a ativa pela primeira vez.
+  const poolPositions = [...world.guards, ...Array.from({ length: reserveCount }, () => world.start.clone())];
+
+  const enemies = poolPositions.map((position, id) => {
+    const spawned = id < world.guards.length;
     let type = resolveType(mission, id);
     let stats = TYPE_STATS[type] || TYPE_STATS.human;
     // Chefes são únicos: o segundo T-Rex vira a espécie comum do mapa.
@@ -147,16 +168,20 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
     const visual = buildVisual(type, stats, elite, accents[id % accents.length]);
     visual.root.position.copy(position);
     if (stats.float) visual.root.position.y += stats.float;
+    visual.root.visible = spawned;
     scene.add(visual.root);
 
     // Luz própria da espécie (brasa do demônio, frio do fantasma): pool fixo
     // pré-criado em createFx(), nunca uma PointLight nova por inimigo — ver o
     // comentário de topo de fx.js. Mesma condição de antes: só o caminho de
-    // modelo animado ganhava aura.
+    // modelo animado ganhava aura. Slots de reserva também recebem a aura
+    // (se a espécie tiver e o orçamento permitir) — ela fica com intensidade
+    // 0 (apagada) até o inimigo nascer de verdade, exatamente como um
+    // cadáver recém-morto continua com a própria aura acesa.
     const auraLight = stats.aura && visual.rig ? fx.borrowAuraLight() : null;
     if (auraLight) {
       auraLight.color.set(stats.aura.color);
-      auraLight.intensity = stats.aura.intensity;
+      auraLight.intensity = spawned ? stats.aura.intensity : 0;
       auraLight.distance = stats.aura.distance;
       auraLight.decay = 2;
     }
@@ -172,9 +197,15 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
       meleeDamage: Math.round((difficulty.damage + 2) * (stats.damageMul || 1)),
       home: position.clone(), target: position.clone(), lastKnown: new YUKA.Vector3(),
       path: [], pathIndex: 0, repath: 0, fireCooldown: 1, burstLeft: 0, strafeDir: id % 2 ? 1 : -1,
-      facing: new THREE.Vector3(0, 0, 1), alive: true, revealedUntil: 0, sightTime: 0,
+      facing: new THREE.Vector3(0, 0, 1), alive: spawned, revealedUntil: 0, sightTime: 0,
       flinch: 0, deathT: -1, flashT: 0, attackT: 0, moving: false, knockVel: new THREE.Vector3(),
       clip: null, voiceT: 1 + Math.random() * 4, stepClock: 0,
+      // F3 — pool/reciclagem: `spawned` marca um slot já ativado ALGUMA vez
+      // (elegível a virar cadáver-reciclável); `corpseTimer`/`reclaimable`
+      // controlam o tempo de assentamento de um cadáver de verdade (ver
+      // `updateCorpse`). Reserva nunca usada (`spawned=false`, `deathT=-1`)
+      // é reclamável IMEDIATAMENTE — não é cadáver, não precisa assentar.
+      spawned, corpseTimer: 0, reclaimable: false,
     };
     visual.root.userData.enemy = enemy;
     visual.hitMeshes.forEach((part) => { part.userData.enemy = enemy; });
@@ -183,6 +214,97 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
   game.enemies = enemies;
   game.telemetry.yukaReady = true;
   game.telemetry.animatedEnemies = enemies.filter((enemy) => enemy.rig).length;
+
+  // --- F3: reforço contínuo -------------------------------------------------
+  // Candidatas ESTÁTICAS de nascimento: toda célula andável do térreo, com o
+  // que não muda entre reforços (interior/borda). Distância e visibilidade
+  // dependem da posição do jogador e são recalculadas a cada tentativa de
+  // spawn — mas a tentativa em si só roda a cada `spawnInterval` segundos
+  // (relógio de jogo), então isto nunca custa por frame.
+  const groundCells = [];
+  for (let z = 0; z < world.height; z += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      if (!world.groundWalkable(x, z)) continue;
+      groundCells.push({
+        x, z,
+        interior: world.chars[z][x] === '.',
+        edgeDistance: Math.min(x, world.width - 1 - x, z, world.height - 1 - z),
+        world: world.toWorld({ x, z }),
+      });
+    }
+  }
+  const scheduler = createSpawnScheduler(spawnRate);
+
+  /** Slot elegível para reciclagem: reserva virgem primeiro, cadáver de térreo
+   * mais antigo (já assentado) como próximo recurso. */
+  function reclaimableSlot() {
+    const virgin = enemies.find((enemy) => enemy.level === 'ground' && !enemy.spawned);
+    if (virgin) return virgin;
+    let oldest = null;
+    for (const enemy of enemies) {
+      if (enemy.level !== 'ground' || enemy.alive || !enemy.reclaimable) continue;
+      if (!oldest || enemy.corpseTimer > oldest.corpseTimer) oldest = enemy;
+    }
+    return oldest;
+  }
+
+  /** Reativa um slot da pool no lugar escolhido — NUNCA cria rig/luz/mesh novos. */
+  function resetToAlive(enemy, position) {
+    enemy.root.visible = true;
+    enemy.root.position.copy(position);
+    if (enemy.floatY) enemy.root.position.y += enemy.floatY;
+    enemy.root.rotation.set(0, 0, 0);
+    enemy.home.copy(position);
+    enemy.target.copy(position);
+    enemy.lastKnown.set(position.x, position.y, position.z);
+    enemy.health = difficulty.enemyHealth * enemy.stats.healthMul * (enemy.elite ? 1.6 : 1);
+    enemy.state = 'patrol';
+    enemy.stateTime = 0;
+    enemy.path = [];
+    enemy.pathIndex = 0;
+    enemy.repath = 0;
+    enemy.fireCooldown = 1;
+    enemy.burstLeft = 0;
+    enemy.facing.set(0, 0, 1);
+    enemy.alive = true;
+    enemy.revealedUntil = 0;
+    enemy.sightTime = 0;
+    enemy.flinch = 0;
+    enemy.deathT = -1;
+    enemy.flashT = 0;
+    enemy.attackT = 0;
+    enemy.moving = false;
+    enemy.knockVel.set(0, 0, 0);
+    enemy.corpseTimer = 0;
+    enemy.reclaimable = false;
+    enemy.spawned = true;
+    enemy.ring.material.opacity = 0;
+    if (enemy.flash) enemy.flash.material.opacity = 0;
+    if (enemy.auraLight) enemy.auraLight.intensity = enemy.stats.aura?.intensity ?? 0;
+    if (enemy.rig) {
+      enemy.rig.mixer.stopAllAction();
+      playClip(enemy, ['idle', 'flying_idle'], { fade: 0 });
+    }
+  }
+
+  /** @returns {boolean} true quando um reforço nasceu de verdade. */
+  function trySpawnReinforcement(playerPosition) {
+    const aliveCount = enemies.reduce((total, enemy) => total + (enemy.alive ? 1 : 0), 0);
+    if (aliveCount >= maxAlive) return false;
+    const slot = reclaimableSlot();
+    if (!slot || !groundCells.length) return false;
+    const candidates = groundCells.map((cell) => ({
+      x: cell.x, z: cell.z, interior: cell.interior, edgeDistance: cell.edgeDistance,
+      distanceToPlayer: cell.world.distanceTo(playerPosition),
+      visible: hasLineOfSight(world, playerPosition, cell.world),
+      worldPosition: cell.world,
+    }));
+    const chosen = pickSpawnCell(candidates, Math.random);
+    if (!chosen) return false;
+    resetToAlive(slot, chosen.worldPosition);
+    game.telemetry.spawns = (game.telemetry.spawns || 0) + 1;
+    return true;
+  }
 
   /** Monta o visual: GLB animado quando disponível, senão procedural. */
   function buildVisual(type, stats, elite, accent) {
@@ -352,6 +474,15 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
       emitSounds(enemy, dt, distance);
     });
     game.alertLevel = Math.min(1, alertCount / 2);
+
+    // F3 — relógio FIXO de jogo (nunca setTimeout/relógio de parede): dispara
+    // quando o intervalo estoura; sucesso reagenda o intervalo cheio, falha
+    // (teto de vivos atingido) tenta de novo em breve — "pausa no teto,
+    // retoma ao morrer alguém" sem acumular um backlog de spawns atrasados.
+    if (scheduler.tick(dt)) {
+      if (trySpawnReinforcement(playerPosition)) scheduler.schedule(spawnRate);
+      else scheduler.retry();
+    }
   }
 
   /** A luz de aura não é mais filha de `root` (ela vive no pool fixo de fx.js,
@@ -441,7 +572,16 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
   function updateCorpse(enemy, dt) {
     applyKnockback(enemy, dt);
     syncAuraLight(enemy);
+    // deathT < 0 é um slot de RESERVA nunca ativado (nunca passou por
+    // `damage()`) — não é cadáver, não tem tempo de assentamento a contar.
+    // `reclaimableSlot()` já sabe reciclar isto de imediato via `!spawned`.
     if (enemy.deathT < 0) return;
+    // F3 — cadáver de verdade: conta o tempo de assentamento (relógio de
+    // jogo) independente do estado da animação de queda, para o spawner
+    // saber quando pode reciclar este slot. Só o térreo recicla — ver o
+    // comentário de topo de `createGuards`.
+    enemy.corpseTimer += dt;
+    if (enemy.level === 'ground' && !enemy.reclaimable && enemy.corpseTimer >= CORPSE_LINGER) enemy.reclaimable = true;
     // PERF: uma vez assentado, NUNCA MAIS chame mixer.update nem raycast este
     // cadáver — antes disto todo inimigo morto animava (skinning por vértice)
     // para sempre, e ficava para sempre no raycast de cada tiro. `alive` já
@@ -527,6 +667,19 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
     update,
     notifyNoise,
     damage,
+    // F3 — gancho de teste/telemetria: prova a cadência, o teto de vivos e o
+    // tamanho FIXO do pool (nenhum rig criado depois do deploy).
+    spawnerStats: () => ({
+      alive: enemies.reduce((total, enemy) => total + (enemy.alive ? 1 : 0), 0),
+      maxAlive,
+      spawnRate,
+      poolSize: enemies.length,
+      spawns: game.telemetry.spawns || 0,
+      // Estado interno exposto para diagnóstico de cadência nos specs.
+      reclaimable: enemies.reduce((total, enemy) => total + (!enemy.alive && enemy.reclaimable && enemy.level === 'ground' ? 1 : 0), 0),
+      virgin: enemies.reduce((total, enemy) => total + (enemy.level === 'ground' && !enemy.spawned ? 1 : 0), 0),
+      schedulerRemaining: scheduler.remaining,
+    }),
     dispose: () => enemies.forEach((enemy) => {
       // Devolve a luz de aura ao pool fixo ANTES de qualquer outra coisa —
       // nunca é removida da cena, só apagada e liberada para o próximo deploy.

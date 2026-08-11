@@ -37,9 +37,30 @@ export const CONFIG = Object.freeze({
   recoilRecover: 6.5,
   bloomPerShot: 0.6,
   bloomDecay: 3.4,
+  // Precisão de primeiro tiro (F2): um tiro só, disparado depois de ficar
+  // este tempo sem atirar, ignora quase todo o espalhamento da arma — é o
+  // "tiro só, bem mirado" que precisa conectar a distância de mapa inteiro.
+  // Rajada sustentada continua espalhando pelo acumulador `bloom` normal
+  // (ver combat.js).
+  firstShotWindow: 0.5,
+  precisionSpreadFactor: 0.06,
   hudRefresh: 0.1,
   saveKey: 'james-bond-progress-v1',
 });
+
+// Sensibilidade do mouse (F1): multiplicador aplicado por cima do
+// `pointerSpeed` base (normal ou modo criança — ver KIDS/LOOK abaixo).
+// 1.0 preserva a sensação atual do jogo; a faixa cobre de "bem lento" a
+// "bem rápido" sem inverter o eixo nem sair do que o PointerLockControls
+// aceita como escala linear.
+export const SENSITIVITY = Object.freeze({ min: 0.3, max: 3, default: 1, step: 0.1 });
+
+/** Converte qualquer entrada (slider, localStorage, teste) num valor válido. */
+export function clampSensitivity(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return SENSITIVITY.default;
+  return Math.min(SENSITIVITY.max, Math.max(SENSITIVITY.min, number));
+}
 
 // Modo criança: a mira fica presa a um cone estreito à frente, para quem ainda
 // está aprendendo a usar o mouse não acabar olhando para o chão ou para o céu.

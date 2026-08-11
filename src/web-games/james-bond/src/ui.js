@@ -175,6 +175,12 @@ export function createUi(game) {
     game.kidsMode = event.target.checked;
     callbacks.kidsMode?.(game.kidsMode);
   });
+  // 'input' (não 'change'): a leitura na tela acompanha o arraste do slider,
+  // não só o valor final ao soltar — mesmo idioma de feedback imediato do
+  // resto do HUD (crosshair, barras de vida/colete).
+  $('#sensitivity').addEventListener('input', (event) => {
+    callbacks.sensitivity?.(event.target.value);
+  });
   $('#start-button').addEventListener('click', () => { game.difficulty = $('#difficulty').value; showBriefing(); });
   $('#deploy-button').addEventListener('click', () => callbacks.deploy?.(selected));
   $('#resume-button').addEventListener('click', () => callbacks.resume?.());
@@ -188,7 +194,11 @@ export function createUi(game) {
   return {
     setCallbacks(value) { callbacks = value; },
     screen, selectMission, showBriefing, updateHud, crosshair, hitmarker, prompt, showResult, drawRadar, toggleMap,
-    syncSettings() { $('#kids-mode').checked = Boolean(game.kidsMode); },
+    syncSettings() {
+      $('#kids-mode').checked = Boolean(game.kidsMode);
+      $('#sensitivity').value = String(game.sensitivity);
+      $('#sensitivity-value').textContent = `${game.sensitivity.toFixed(1)}x`;
+    },
     refresh: renderSelector,
     get selected() { return selected; },
     get mapOpen() { return mapOpen; },

@@ -1,11 +1,12 @@
 // Web game package: james-bond.
-import { CONFIG } from './config.js';
+import { CONFIG, SENSITIVITY, clampSensitivity } from './config.js';
 
 export const game = {
   phase: 'menu',
   missionIndex: 0,
   difficulty: 'agent',
   kidsMode: false,
+  sensitivity: SENSITIVITY.default,
   unlocked: 1,
   health: CONFIG.maxHealth,
   armor: CONFIG.startingArmor,
@@ -40,13 +41,18 @@ export function loadProgress() {
     const value = JSON.parse(localStorage.getItem(CONFIG.saveKey) || '{}');
     game.unlocked = Math.max(1, Math.min(6, Number(value.unlocked) || 1));
     game.kidsMode = Boolean(value.kidsMode);
+    // Sensibilidade ausente no save antigo (versão 1) cai no padrão — nunca
+    // Infinity/NaN vazando de um localStorage adulterado à mão.
+    game.sensitivity = clampSensitivity(value.sensitivity ?? SENSITIVITY.default);
   } catch {
     localStorage.removeItem(CONFIG.saveKey);
   }
 }
 
 export function saveProgress() {
-  localStorage.setItem(CONFIG.saveKey, JSON.stringify({ version: 1, unlocked: game.unlocked, kidsMode: game.kidsMode }));
+  localStorage.setItem(CONFIG.saveKey, JSON.stringify({
+    version: 1, unlocked: game.unlocked, kidsMode: game.kidsMode, sensitivity: game.sensitivity,
+  }));
 }
 
 /** Arma com que toda missão começa. Uma constante, não um literal solto. */

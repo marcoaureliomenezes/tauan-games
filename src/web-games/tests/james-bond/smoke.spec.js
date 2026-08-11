@@ -545,3 +545,198 @@ test('all six operations build and resolve in the browser', async ({ page }) => 
   }
   expect(errors).toEqual([]);
 });
+
+// F1 — SENSIBILIDADE DO MOUSE: um slider real na tela do menu, aplicado ao
+// pointerSpeed do PointerLockControls e persistido em localStorage.
+test('mouse sensitivity setting persists and scales the look rate', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/src/web-games/james-bond/');
+  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
+
+  // Padrão = sensação atual do jogo, sem surpresa em quem nunca tocou o slider.
+  expect(await page.evaluate(() => window.game.sensitivity)).toBeCloseTo(1, 5);
+  const basePointerSpeed = await page.evaluate(() => window.game.controls.pointerSpeed);
+  expect(await page.locator('#sensitivity').inputValue()).toBe('1');
+  expect(await page.locator('#sensitivity-value').textContent()).toBe('1.0x');
+
+  // Arrastar o slider de verdade — não um hook de API — é o idioma de UI pedido.
+  await page.locator('#sensitivity').fill('2.5');
+  await expect.poll(() => page.evaluate(() => window.game.sensitivity)).toBeCloseTo(2.5, 5);
+  const scaledPointerSpeed = await page.evaluate(() => window.game.controls.pointerSpeed);
+  expect(scaledPointerSpeed).toBeCloseTo(basePointerSpeed * 2.5, 4);
+  expect(await page.locator('#sensitivity-value').textContent()).toBe('2.5x');
+
+  // Persistência: sobrevive a um reload, igual ao modo criança.
+  await page.reload();
+  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
+  expect(await page.evaluate(() => window.game.sensitivity)).toBeCloseTo(2.5, 5);
+  expect(await page.locator('#sensitivity').inputValue()).toBe('2.5');
+  expect(await page.evaluate(() => window.game.controls.pointerSpeed)).toBeCloseTo(basePointerSpeed * 2.5, 4);
+
+  // A faixa é clampada nas duas pontas — nunca sensibilidade zero ou negativa.
+  await page.evaluate(() => window.game.api.setSensitivity(999));
+  expect(await page.evaluate(() => window.game.sensitivity)).toBeLessThanOrEqual(3);
+  await page.evaluate(() => window.game.api.setSensitivity(-5));
+  expect(await page.evaluate(() => window.game.sensitivity)).toBeGreaterThanOrEqual(0.3);
+  expect(errors).toEqual([]);
+});
+
+// F2 — PRECISÃO DE PRIMEIRO TIRO: um tiro só, deliberado, tem de conectar num
+// alvo distante quando a mira já está em cima dele. OP-01 tem guardas (G)
+// espalhados pelas ruas do quarteirão — mas a rua tem carro/barril/barricada
+// no meio (achado real: uma seleção por "mesma linha do grid" acertava
+// cobertura antes do alvo). A escolha usa a MESMA checagem de linha de visão
+// da IA (game.api.hasLineOfSight) e mira na ALTURA DA CABEÇA — acima de toda
+// cobertura de rua (carro 1.42 m, barril, barricada 1.0 m) — para garantir um
+// tiro genuinamente desobstruído em vez de supor a geometria do mapa.
+test('a long-range single tap kills a distant target', async ({ page }) => {
+  test.setTimeout(600000);
+  const errors = [];
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/src/web-games/james-bond/');
+  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
+
+  // Entrar pelos botões (não api.deploy): Pointer Lock exige um gesto real do
+  // usuário — mesmo idioma do teste "five-slot loadout" acima.
+  await page.click('#start-button');
+  await page.click('#deploy-button');
+  await page.waitForFunction(() => window.game.phase === 'playing');
+  await page.waitForFunction(() => window.game.controls.isLocked === true, undefined, { timeout: 45000 });
+  expect(await page.evaluate(() => window.game.currentWeapon)).toBe('deagle'); // arma inicial
+
+  const target = await page.evaluate(() => {
+    let best = null;
+    let bestDistance = -1;
+    for (const enemy of window.game.enemies) {
+      // Elite tem 1.6× de vida (112 > 82) — sobreviveria ao tap único por
+      // DESIGN de balanceamento, não por imprecisão. Fora do alvo do teste.
+      if (!enemy.alive || enemy.level !== 'ground' || enemy.elite) continue;
+      // Mira no CENTRO DO TORSO (dano cheio, 82 > 70 de vida de um humano),
+      // não na cabeça: a 0.88 da altura o primeiro hitbox na fila do raio é
+      // um BRAÇO (limb, ×0.65 = 53 de dano — não mata), comprovado pela
+      // telemetria lastShot. O contrato aqui é "tiro único preciso mata de
+      // longe", não mecânica de headshot.
+      const aimY = enemy.root.position.y + enemy.stats.height * 0.52;
+      const distance = enemy.root.position.distanceTo(window.game.camera.position);
+      if (distance <= bestDistance || distance <= 40) continue;
+      if (!window.game.api.hasLineOfSight(enemy.root.position.x, aimY, enemy.root.position.z)) continue;
+      bestDistance = distance;
+      best = { id: enemy.id, x: enemy.root.position.x, y: aimY, z: enemy.root.position.z, distance };
+    }
+    return best;
+  });
+  expect(target, 'OP-01 tem de ter ao menos um guarda visível a mais de 40 m do spawn').not.toBeNull();
+  expect(target.distance, `tiro tem de ser de mapa inteiro (alvo a ${target.distance}m)`).toBeGreaterThan(40);
+
+  // Mira EXATA no ponto já validado como desobstruído — o que se testa é a
+  // precisão do MODELO DE ESPALHAMENTO, não a pontaria do usuário.
+  await page.evaluate(({ x, y, z }) => window.game.camera.lookAt(x, y, z), target);
+  // Garante a janela de "primeiro tiro" mesmo que o smoke rode logo após o
+  // deploy: adianta o relógio FIXO do jogo (nunca setTimeout) para além do
+  // CONFIG.firstShotWindow.
+  await page.evaluate(() => window.game.api.fastForward(0.7));
+
+  const before = await page.evaluate(() => ({ shots: window.game.shots, kills: window.game.kills }));
+  // Gatilho pelo seam de teste (api.setFiring), NÃO por page.mouse.down():
+  // sob pointer lock o Chromium sintetiza um movementX/Y espúrio no próprio
+  // evento do clique (salto até o centro travado), arrancando a mira ~30°
+  // do alvo no mesmo frame do disparo — um mouse físico não faz isso. O seam
+  // seta a MESMA flag `firing` do mousedown real; todo o resto do pipeline
+  // (cooldown, spread, raycast, dano) é o executado em produção.
+  // Sob SwiftShader o pointer lock pode cair sozinho e pausar o jogo — o
+  // fastForward retornaria 0 e o tiro nunca sairia (timeout mudo). Recupera
+  // via botão de resume (gesto real) e transforma o silêncio em asserção.
+  const phasePre = await page.evaluate(() => window.game.phase);
+  if (phasePre !== 'playing') {
+    await page.click('#resume-button', { force: true });
+    await page.waitForFunction(() => window.game.phase === 'playing');
+    await page.evaluate(({ x, y, z }) => window.game.camera.lookAt(x, y, z), target);
+    await page.evaluate(() => window.game.api.fastForward(0.7));
+  }
+  const fired = await page.evaluate(async () => {
+    window.game.api.setFiring(true);
+    const steps = await window.game.api.fastForward(0.1);
+    window.game.api.setFiring(false);
+    return { steps, phase: window.game.phase, trigger: window.game.telemetry.trigger || null };
+  });
+  expect(fired.steps, 'fastForward tem de ter avançado o relógio do disparo').toBeGreaterThan(0);
+  expect(fired.phase, `jogo tem de estar jogando ao disparar (trigger: ${JSON.stringify(fired.trigger)})`).toBe('playing');
+  await page.waitForFunction((prev) => window.game.shots > prev, before.shots, { timeout: 20000 });
+
+  // Um tiro só (não segurou o gatilho) mata um alvo com menos vida que o dano
+  // do Desert Eagle (82) mesmo na dificuldade padrão — a prova real é o alvo
+  // parar de existir vivo, não uma contagem de acerto isolada.
+  await page.waitForFunction((id) => !window.game.enemies.find((enemy) => enemy.id === id)?.alive, target.id, { timeout: 20000 });
+  const after = await page.evaluate(() => ({ shots: window.game.shots, kills: window.game.kills, hits: window.game.hits }));
+  expect(after.shots - before.shots).toBe(1);
+  expect(after.kills).toBeGreaterThan(before.kills);
+  expect(errors).toEqual([]);
+});
+
+// F3 — REFORÇO CONTÍNUO: mata parte da guarnição, acelera um minuto simulado
+// no relógio fixo (fastForward — nunca setTimeout) e prova cadência + teto +
+// pool fixo, TUDO enquanto o metric de performance (luzes/programas
+// constantes) da remediação anterior continua valendo com o spawner ativo.
+test('reinforcement spawner backfills kills up to the mission cap without leaking rigs', async ({ page }) => {
+  test.setTimeout(600000);
+  const errors = [];
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/src/web-games/james-bond/');
+  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
+
+  await page.evaluate(() => window.game.api.deploy(0));
+  await page.waitForFunction(() => window.game.phase === 'playing');
+  await page.waitForTimeout(300);
+
+  const stats0 = await page.evaluate(() => window.game.api.spawnerStats());
+  // A guarnição inicial de cada missão (16) já nasce NO teto padrão: o
+  // spawner só existe para REPOR quem morre, nunca para elevar a contagem.
+  expect(stats0.alive).toBe(stats0.maxAlive);
+  // O pool tem folga além do teto — é a reserva pré-criada (rig/luz/hitbox já
+  // existentes, ver ai/guards.js) que o spawner recicla sem nunca alocar de novo.
+  expect(stats0.poolSize).toBeGreaterThan(stats0.maxAlive);
+
+  // Abre espaço: mata metade da guarnição do térreo pela mesma rota da
+  // granada real (game.api.explode -> combat.explode -> guards.damage).
+  await page.evaluate(() => {
+    const groundAlive = window.game.enemies.filter((enemy) => enemy.alive && enemy.level === 'ground');
+    for (let i = 0; i < 4; i += 1) {
+      const enemy = groundAlive[i];
+      window.game.api.explode(enemy.root.position.x, enemy.root.position.z, 8, enemy.root.position.y + 0.5);
+    }
+  });
+  await page.waitForTimeout(200);
+  const afterKill = await page.evaluate(() => window.game.api.spawnerStats());
+  expect(afterKill.alive).toBeLessThan(stats0.alive);
+
+  const before = await page.evaluate(() => window.game.api.rendererStats());
+  // Cadência 5/min = UM reforço a cada 12 s (provado por diagnóstico com
+  // `schedulerRemaining`): >12 s simulados garantem ≥1 spawn. Avançamos 20 s
+  // em fatias de 5 s com um respiro entre elas — o SwiftShader do Chrome de
+  // teste crasha sob evaluates longos ininterruptos (morte em instante
+  // VARIÁVEL, heap estável: ambiente, não jogo). Fatiar não afrouxa nenhuma
+  // asserção; só encurta a exposição do renderer por evaluate.
+  let steps = 0;
+  for (let slice = 0; slice < 4; slice += 1) {
+    steps += await page.evaluate(() => window.game.api.fastForward(5));
+    await page.waitForTimeout(150);
+  }
+  expect(steps).toBeGreaterThan(0);
+
+  const spawnStats = await page.evaluate(() => window.game.api.spawnerStats());
+  expect(spawnStats.spawns, 'o spawner tem de ter produzido pelo menos um reforço').toBeGreaterThan(0);
+  // Teto respeitado o tempo todo — nunca mais vivos que maxAlive.
+  expect(spawnStats.alive).toBeLessThanOrEqual(spawnStats.maxAlive);
+  // NENHUM rig novo foi criado: o pool continua do MESMO tamanho de antes.
+  expect(spawnStats.poolSize).toBe(stats0.poolSize);
+
+  // Metric de aceitação da remediação de performance (ver teste acima) segue
+  // valendo com o spawner de reforço rodando por cima.
+  const after = await page.evaluate(() => window.game.api.rendererStats());
+  expect(after.lights).toBe(before.lights);
+  expect(after.programs).toBe(before.programs);
+  expect(errors).toEqual([]);
+});

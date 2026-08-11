@@ -25,12 +25,20 @@
 //
 // `enemyMix` dá a cada missão DUAS espécies, com peso — nunca uma só. Ver
 // TYPE_STATS em ai/guards.js para o que cada nome significa em cor e andar.
+//
+// F3 — reforço contínuo: cada missão declara `spawnRate` (reforços por
+// minuto) e `maxAlive` (teto de vivos simultâneos). A guarnição inicial (os
+// tiles `G` do grid + `upper.guards`) já soma 16 em toda missão hoje — o
+// spawner só REPÕE quem morre até o teto, nunca eleva a contagem acima dele.
+// Vitória continua 100% por objetivo (ver gameplay/mission-rules.js);
+// spawning é pressão constante, não condição de fim de jogo. Ver
+// gameplay/spawner.js para o modelo puro (agendamento + escolha de célula).
 const map = (...rows) => rows;
 
 export const MISSIONS = [
   {
     code: 'OP-01', title: 'BARRAGEM ALPINA', location: 'Vila de Orlov, sob a barragem, 05:40',
-    enemyMix: { human: 3, wraith: 2 },
+    enemyMix: { human: 3, wraith: 2 }, spawnRate: 5, maxAlive: 16,
     brief: 'Atravesse a vila, recupere os dados da instalação e alcance a crista da barragem.',
     palette: { sky: 0x7f98a0, fog: 0x72868a, wall: 0x8a8177, floor: 0x565b58, accent: 0xf1bc58 },
     objectives: { A: 'Copiar dados de vigilância', B: 'Instalar relay clandestino', C: 'Desativar alarme da barragem' },
@@ -59,7 +67,7 @@ export const MISSIONS = [
   },
   {
     code: 'OP-02', title: 'COMPLEXO QUÍMICO', location: 'Distrito industrial K-7, 23:10',
-    enemyMix: { vampire: 3, ghoul: 3 },
+    enemyMix: { vampire: 3, ghoul: 3 }, spawnRate: 5, maxAlive: 16,
     brief: 'Encontre o contato nos galpões, sabote a linha e saia antes da detonação.',
     palette: { sky: 0x17221d, fog: 0x1e2b25, wall: 0x6b7168, floor: 0x363a34, accent: 0x50e29a },
     objectives: { A: 'Encontrar o informante', B: 'Plantar cargas na linha', C: 'Recuperar o dossiê químico' },
@@ -88,7 +96,7 @@ export const MISSIONS = [
   },
   {
     code: 'OP-03', title: 'RELAY CONGELADO', location: 'Povoado polar de Vetrny, 02:25',
-    enemyMix: { phantom: 3, brute: 2 },
+    enemyMix: { phantom: 3, brute: 2 }, spawnRate: 5, maxAlive: 16,
     brief: 'Corte as comunicações do povoado e copie a chave criptográfica do bunker.',
     palette: { sky: 0x9fb9c7, fog: 0xb8c9ce, wall: 0x93a1a7, floor: 0xc6d1d2, accent: 0x3b7b95 },
     objectives: { A: 'Desligar antena primária', B: 'Fotografar tela de controle', C: 'Copiar chave criptográfica' },
@@ -117,7 +125,7 @@ export const MISSIONS = [
   },
   {
     code: 'OP-04', title: 'SILO DE MÍSSEIS', location: 'Base de Karak, praça central, 18:50',
-    enemyMix: { brute: 2, demon: 3 },
+    enemyMix: { brute: 2, demon: 3 }, spawnRate: 5, maxAlive: 16,
     brief: 'Documente os lançadores, arme as cargas e escape da base pelo portão leste.',
     palette: { sky: 0x2a211d, fog: 0x3b2e28, wall: 0x7d6f63, floor: 0x4a413a, accent: 0xee5b55 },
     objectives: { A: 'Fotografar ogivas', B: 'Coletar cartões de lançamento', C: 'Armar cargas do silo' },
@@ -146,7 +154,7 @@ export const MISSIONS = [
   },
   {
     code: 'OP-05', title: 'DOCA SEQUESTRADA', location: 'Porto de Ligúria, cais 4, 21:15',
-    enemyMix: { demon: 3, witch: 2 },
+    enemyMix: { demon: 3, witch: 2 }, spawnRate: 5, maxAlive: 16,
     brief: 'Desarme os explosivos do cais, liberte a tripulação e marque o helicóptero.',
     palette: { sky: 0x35536a, fog: 0x315064, wall: 0x78838a, floor: 0x3c464b, accent: 0x56bde4 },
     objectives: { A: 'Desarmar carga do armazém', B: 'Libertar tripulação', C: 'Marcar helicóptero furtivo' },
@@ -175,7 +183,7 @@ export const MISSIONS = [
   },
   {
     code: 'OP-06', title: 'POVOADO NA SELVA', location: 'Santa Aurelia, praça da igreja, 04:05',
-    enemyMix: { raptor: 5, trex: 1 },
+    enemyMix: { raptor: 5, trex: 1 }, spawnRate: 5, maxAlive: 16,
     brief: 'Tome o povoado, proteja a técnica e destrua o núcleo de controle na central.',
     palette: { sky: 0x274131, fog: 0x304c39, wall: 0x6a7360, floor: 0x2f3a2e, accent: 0xe6a04b },
     objectives: { A: 'Neutralizar comandante de elite', B: 'Proteger hack do sistema', C: 'Destruir núcleo de controle' },

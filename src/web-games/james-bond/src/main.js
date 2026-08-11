@@ -1,11 +1,11 @@
 import * as THREE from '../../vendor/three.module.min.js';
-import { CONFIG } from './config.js';
+import { CONFIG, clampSensitivity } from './config.js';
 import { MISSIONS } from './content/missions.js';
 import { game, loadProgress, resetRun, saveProgress } from './state.js';
 import { createPhysics } from './engine/physics.js';
 import { createInput } from './engine/input.js';
 import { createAudio } from './engine/audio.js';
-import { createWorld, disposeWorld } from './world.js';
+import { createWorld, disposeWorld, hasLineOfSight } from './world.js';
 import { createPlayer } from './player.js';
 import { createGuards } from './ai/guards.js';
 import { loadEnemyModels } from './ai/enemy-assets.js';
@@ -62,8 +62,15 @@ loadProgress();
 ui.refresh();
 ui.syncSettings();
 input.setKidsMode(game.kidsMode);
+input.setSensitivity(game.sensitivity);
 ui.setCallbacks({
   kidsMode: (enabled) => { input.setKidsMode(enabled); saveProgress(); },
+  sensitivity: (value) => {
+    game.sensitivity = clampSensitivity(value);
+    input.setSensitivity(game.sensitivity);
+    saveProgress();
+    ui.syncSettings();
+  },
   preview: (index) => loadPreview(index),
   deploy: (index) => deploy(index),
   resume: resume,
@@ -327,12 +334,57 @@ game.api = {
     saveProgress();
     ui.syncSettings();
   },
+  // Espelha o callback da UI (F1): usado por testes e por qualquer chamador
+  // que precise ajustar a sensibilidade sem depender do slider do DOM.
+  setSensitivity(value) {
+    game.sensitivity = clampSensitivity(value);
+    input.setSensitivity(game.sensitivity);
+    saveProgress();
+    ui.syncSettings();
+  },
   lookLimits: () => ({ min: input.controls.minPolarAngle, max: input.controls.maxPolarAngle, kids: input.kidsMode }),
   selectWeapon: (id) => combat?.switchWeapon(id),
   projectilesInFlight: () => combat?.inFlight ?? 0,
   // Gancho de teste: detona no ponto pedido, pela MESMA rota da granada
   // (efeito, som, dano, e a onda que desloca e destrói o cenário).
   explode: (x, z, radius = 6.5, y = 0.6) => combat?.explode(new THREE.Vector3(x, y, z), radius),
+  debugRay: (range) => combat?.debugRay(range) ?? [],
+  setFiring: (value) => input.setFiring(value),
+  // Estatísticas do spawner de reforço (F3): usado por testes para provar a
+  // cadência, o teto de vivos e o tamanho FIXO do pool (nenhum rig novo).
+  spawnerStats: () => guards?.spawnerStats() ?? null,
+  // Gancho de teste: mesma linha de visão que a IA usa para mirar/perseguir
+  // (ai/guards.js) e que a explosão usa para ferir (gameplay/explosives.js) —
+  // permite a um teste confirmar ANTES de atirar que não há parede/cobertura
+  // no caminho, em vez de adivinhar geometria de mapa lendo o grid.
+  hasLineOfSight: (x, y, z) => (world ? hasLineOfSight(world, camera.position, new THREE.Vector3(x, y, z)) : false),
+  /**
+   * Adianta o relógio FIXO do jogo `seconds` segundos, chamando o mesmo
+   * `fixedUpdate` do loop real repetidas vezes — nunca `setTimeout`/relógio de
+   * parede para a SIMULAÇÃO em si (o passo continua sempre `CONFIG.fixedStep`,
+   * qualquer que seja o tempo real decorrido). Gancho de teste: prova o
+   * spawner de reforço (F3) e o modelo de precisão de primeiro tiro (F2) num
+   * "minuto simulado" sem depender de tempo real, que sob carga de máquina
+   * compartilhada é não-determinístico (mesmo motivo documentado em vários
+   * `waitForFunction` de smoke.spec.js).
+   *
+   * BUG (achado real, reproduzido no smoke de aceitação do spawner): rodar
+   * milhares de `fixedUpdate` num laço 100% síncrono, sem nunca devolver o
+   * controle ao event loop, faz o Chromium headless matar a aba por "página
+   * sem resposta" antes de terminar um minuto simulado inteiro (~3600 passos).
+   * A cessão periódica abaixo usa `setTimeout(0)` só como TÉCNICA de
+   * escalonamento cooperativo — não é o relógio da simulação, que segue 100%
+   * determinístico em `dt` fixo.
+   */
+  async fastForward(seconds = 1) {
+    if (game.phase !== 'playing') return 0;
+    const steps = Math.max(0, Math.min(20000, Math.round(seconds / CONFIG.fixedStep)));
+    for (let i = 0; i < steps; i += 1) {
+      fixedUpdate(CONFIG.fixedStep);
+      if (i % 50 === 49) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return steps;
+  },
   // Ganchos de teste: reposicionam o jogador e expõem o estado dos andares.
   teleport(x, z, y = 1) {
     physics.createPlayer({ x, y, z });
