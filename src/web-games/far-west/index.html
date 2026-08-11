@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Far West — Open-World Western</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="hud">
+    <span id="title">FAR WEST</span>
+    <div class="bar"><span class="bar-label">HP</span><div class="bar-track"><div id="hp-fill" class="bar-fill hp"></div></div></div>
+    <div class="bar"><span class="bar-label">STA</span><div class="bar-track"><div id="stamina-fill" class="bar-fill stamina"></div></div></div>
+    <div class="bar"><span class="bar-label">FOOD</span><div class="bar-track"><div id="food-fill" class="bar-fill food"></div></div></div>
+    <span id="ammo">AMMO 6 / 36</span>
+    <span id="bandits" style="color:#ff8866">BANDIDOS: 0/5</span>
+    <span id="carrying" style="color:#aaffaa"></span>
+    <span id="gait">STOP</span>
+    <span id="cam-mode">3RD</span>
+    <button id="sound-toggle" type="button">&#128266; SOM</button>
+    <span id="hint">WASD move &middot; Shift gallop &middot; V camera &middot; F aim &middot; Space shoot &middot; R reload &middot; M map &middot; E interact</span>
+  </div>
+  <div id="prompt" class="hidden"></div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="crosshair" class="hidden"></div>
+  <div id="damage-flash"></div>
+  <div id="map-overlay" class="hidden">
+    <canvas id="map-canvas"></canvas>
+  </div>
+  <div id="start-overlay">
+    <h1>FAR WEST</h1>
+    <p>CLICK TO START</p>
+  </div>
+  <!-- Relative path: works served from repo root (dev) AND under /tauan-games/ (GitHub Pages) -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

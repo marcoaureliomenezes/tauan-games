@@ -1,9 +1,9 @@
 # aero-fighters-v2 — Godot CI (lint-only, GH-hosted)
 #
 # What this workflow does:
-#   1. gdscript-lint   — gdtoolkit gdlint on all .gd files under aero-fighters-v2/
+#   1. gdscript-lint   — gdtoolkit gdlint on all .gd files under src/godot/aero-fighters-v2/
 #   2. scene-validity  — Godot 4.4 headless --quit: verifies project.godot + scenes parse
-#   3. python-lint     — flake8 + black --check on aero-fighters-v2/Tools/
+#   3. python-lint     — flake8 + black --check on src/godot/aero-fighters-v2/Tools/
 #   4. lfs-verify      — confirms Git LFS pointers resolve (no dangling pointer-only files)
 #
 # Why no perf/visual gate:
@@ -20,14 +20,14 @@ on:
   push:
     branches: [main]
     paths:
-      - "aero-fighters-v2/**"
-      - "!aero-fighters-v2/docs/**"
+      - "src/godot/aero-fighters-v2/**"
+      - "!src/godot/aero-fighters-v2/docs/**"
       - ".github/workflows/aero-v2-godot-ci.yml"
   pull_request:
     branches: [main]
     paths:
-      - "aero-fighters-v2/**"
-      - "!aero-fighters-v2/docs/**"
+      - "src/godot/aero-fighters-v2/**"
+      - "!src/godot/aero-fighters-v2/docs/**"
       - ".github/workflows/aero-v2-godot-ci.yml"
 
 concurrency:
@@ -66,7 +66,7 @@ jobs:
       - name: Find .gd files
         id: find-gd
         run: |
-          count=$(find aero-fighters-v2 -name "*.gd" -not -path "*/addons/*" 2>/dev/null | wc -l)
+          count=$(find src/godot/aero-fighters-v2 -name "*.gd" -not -path "*/addons/*" 2>/dev/null | wc -l)
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - name: Run gdlint
@@ -75,14 +75,14 @@ jobs:
           # addons/ é código de TERCEIROS vendorado (terrain_3d) — não é nosso para
           # lintar, e o ui.gd dele nem PARSEIA no gdtoolkit 4.3.3 (o job nunca
           # poderia ficar verde com ele incluído). Lint só no código do projeto.
-          find aero-fighters-v2 -name "*.gd" -not -path "*/addons/*" -print0 \
+          find src/godot/aero-fighters-v2 -name "*.gd" -not -path "*/addons/*" -print0 \
             | xargs -0 gdlint
         # continue-on-error is NOT set — lint errors fail the job.
         # Warnings are allowed; only errors (exit code != 0) block the PR.
 
       - name: No .gd files yet (skip)
         if: steps.find-gd.outputs.count == '0'
-        run: echo "No .gd files found under aero-fighters-v2/ — skipping gdlint."
+        run: echo "No .gd files found under src/godot/aero-fighters-v2/ — skipping gdlint."
 
   # ---------------------------------------------------------------------------
   # Job 2 — Scene validity: Godot 4.4 headless --quit
@@ -101,7 +101,7 @@ jobs:
       - name: Check for project.godot
         id: has-project
         run: |
-          if [ -f "aero-fighters-v2/project.godot" ]; then
+          if [ -f "src/godot/aero-fighters-v2/project.godot" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
@@ -140,12 +140,12 @@ jobs:
           ~/.local/bin/godot \
             --headless \
             --quit \
-            --path aero-fighters-v2/
+            --path src/godot/aero-fighters-v2/
         # Godot may emit non-fatal stderr lines; we only care about exit code.
 
       - name: No project.godot yet (skip)
         if: steps.has-project.outputs.present != 'true'
-        run: echo "aero-fighters-v2/project.godot not committed yet — skipping scene validity."
+        run: echo "src/godot/aero-fighters-v2/project.godot not committed yet — skipping scene validity."
 
   # ---------------------------------------------------------------------------
   # Job 3 — Python lint: flake8 + black --check on Tools/
@@ -178,24 +178,24 @@ jobs:
       - name: Check for Python files in Tools/
         id: has-tools
         run: |
-          count=$(find aero-fighters-v2/Tools -name "*.py" 2>/dev/null | wc -l)
+          count=$(find src/godot/aero-fighters-v2/Tools -name "*.py" 2>/dev/null | wc -l)
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - name: Run flake8
         if: steps.has-tools.outputs.count != '0'
         run: |
-          flake8 aero-fighters-v2/Tools/ \
+          flake8 src/godot/aero-fighters-v2/Tools/ \
             --max-line-length=100 \
             --extend-ignore=E203
 
       - name: Run black (check mode)
         if: steps.has-tools.outputs.count != '0'
         run: |
-          black --check --line-length=100 aero-fighters-v2/Tools/
+          black --check --line-length=100 src/godot/aero-fighters-v2/Tools/
 
       - name: No Python files in Tools/ (skip)
         if: steps.has-tools.outputs.count == '0'
-        run: echo "No .py files found under aero-fighters-v2/Tools/ — skipping python-lint."
+        run: echo "No .py files found under src/godot/aero-fighters-v2/Tools/ — skipping python-lint."
 
   # ---------------------------------------------------------------------------
   # Job 4 — LFS verify: confirm all LFS pointers resolve

@@ -2,35 +2,42 @@
 slug: games-catalog
 title: Catálogo de jogos
 category: product
-tldr: Jogos/experimentos ativos do tauan-games e seus status de release.
-summary: Lista cada projeto do repo (tauan-trex, aero-fighters/Aero Strike, space-war, testing-infra, aero-fighters-v2) com pasta, descrição e status. Inclui a nota de nomenclatura codename vs nome visível. Portado do HTML legado em 2026-06-12.
-tags:
-  - product
-  - catalog
-  - games
+tldr: Todos os jogos do tauan-games por grupo de tecnologia (src/web-games e src/godot) com status.
+summary: Lista canônica dos 9 jogos do portfólio, pasta, tecnologia, descrição e status. Reescrito 2026-07-18 na reestruturação src/.
+tags: [product, catalog, games]
 token_estimate: 0
-last_updated: "2026-07-03"
-release_origin: space-war-ballistic-war-v1
+last_updated: "2026-07-18"
+release_origin: repo-restructure-src-20260718
 ---
 
 ## Propósito
 
-Registrar os jogos/experimentos ativos e seu status de release, para que qualquer agente
-saiba o que existe e o que está em jogo antes de tocar no produto.
+Registrar TODOS os jogos e seu status, por grupo de tecnologia, para que
+qualquer agente saiba o que existe antes de tocar no produto. Detalhes de cada
+jogo: atoms em `product/web-games/<jogo>/` e `product/godot/<jogo>/`.
 
-## Catálogo de features
+## Web games (`src/web-games/`)
 
-| Projeto | Pasta | Descrição | Status |
-|---------|-------|-----------|--------|
-| Tauan T-Rex | `tauan-trex/` | Chrome Dino clone personalizado para Tauan — pixel art, high score, day/night. | Implementado (release `tauan-trex-v1` arquivada) |
-| Aero Fighters (nome visível: **Aero Strike**) | `aero-fighters/` | F-35 Lightning II Ground Strike em Three.js — ataque a alvos militares. | Implementado (`aero-fighters-v1`, `aero-fighters-qa-hardening-v1` arquivadas; `aero-fighters-inhauma-map-v1` e `aero-fighters-mission-realism-v1` entregues pré-migração). **Uplift em definição: `aero-fighters-uplift-v1`.** |
-| Space War | `space-war/` | Simulador de combate espacial Three.js: 6 sistemas estelares sobre a biblioteca de componentes celestes (`src/celestial/`, taxonomia NASA parametrizada por massa; sistemas como dados em `universe.js`), gravidade patched-conics, campanha em 5 fases (Solar → Betelgeuse → Binário → Caótico → Sgr A✦) com **caçada sequencial** (5/7/9/11/13 alvos/fase em luas distintas ou naves capitais orbitantes, escoltas), **solução de tiro balística no C** (arco curvado pelo campo gravitacional via `ballistics.js`, HUD com trajetória prevista + impacto, nuke `aimed` sob gravidade pura), bases de anatomia legível, cogumelo nuclear em superfícies / duplo flash no vácuo, bombas inimigas balísticas, nukes recarregáveis e skybox com galeria de galáxias (jatos, edge-on com faixa de poeira, espirais) + 9k estrelas. | Implementado (`space-war-v1` entregue; `space-war-celestial-components-v1`, `space-war-campaign-v1` e `space-war-ballistic-war-v1` arquivadas 2026-07-03; backlog space-war zerado) |
-| Aero Fighters V2 | `aero-fighters-v2/` | Reimplementação em Godot 4 (release `aero-fighters-v2-godot-stylized-inhauma-v1`, Aprovado). | **PAUSADO 2026-06-12** — retomar após o uplift do jogo web. |
-| Testing Infrastructure | `tests/` | Playwright smoke + AC quality gate compartilhado por todos os jogos. | Implementado (release `testing-infra-v1` arquivada) |
+| Jogo | Pasta | Tecnologia | Status |
+|---|---|---|---|
+| Aero Strike (aero-fighters) | `src/web-games/aero-fighters/` | Three.js r165 | Jogável; mapas incl. Inhaúma GIS |
+| Far West | `src/web-games/far-west/` | Three.js r165 | Em desenvolvimento (far-west-character-v1) |
+| James Bond Operações | `src/web-games/james-bond/` | Three.js r165 | Jogável; 6 operações |
+| Memória dos Bichos | `src/web-games/memoria-bichos/` | HTML/CSS/JS puro | Jogável |
+| Speed Run (web) | `src/web-games/speed-run/` | Three.js r165 | Jogável; 3 pistas, 5 carros |
+| Tauan T-Rex | `src/web-games/tauan-trex/` | Phaser 3 (vendor) | Jogável |
+| Space War | `space-war/` ⚠ raiz | Three.js r165 | Jogável; MIGRAÇÃO p/ src/web-games pendente |
 
-## Diferencial
+## Godot games (`src/godot/`)
 
-Nota de nomenclatura: o codename de pasta (`aero-fighters/`) e o nome visível ao jogador
-(**Aero Strike**) divergem por escolha deliberada do operador. Toda referência interna
-(specs, paths, comandos npm) usa o codename; toda referência visível ao jogador usa o
-nome comercial. Não renomear pastas sem decisão explícita.
+| Jogo | Pasta | Tecnologia | Status |
+|---|---|---|---|
+| Speed Run (Godot) | `src/godot/speed-run/` | Godot 4.7 | Jogável v1 (circuito único, 3 IA) |
+| Aero Fighters v2 | `src/godot/aero-fighters-v2/` | Godot 4.x | Wave 1 completa; Wave 2 em progresso |
+
+## Nomenclatura
+
+Codename da pasta ≠ nome visível: `aero-fighters` exibe "Aero Strike";
+`speed-run` exibe "Cruis'n Tauan". O hub `index.html` na raiz é a vitrine
+pública dos jogos web (GitHub Pages); jogos Godot são distribuídos como binário
+desktop (GitHub Releases).

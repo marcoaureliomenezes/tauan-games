@@ -29,13 +29,15 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b  # v5
 
-      # Site = landing (index.html) + os jogos jogáveis + vendor compartilhado.
-      # Os jogos usam caminhos RELATIVOS, então funcionam sob /tauan-games/.
+      # Site = landing (index.html) + src/ (todos os web-games + vendor
+      # compartilhado em src/web-games/vendor). Espelha a estrutura do repo
+      # (src/web-games/<jogo>) para que os caminhos relativos (ex.:
+      # ../../../vendor) resolvam igual em produção.
       - name: Build site directory
         run: |
           mkdir _site
           cp index.html _site/
-          cp -r aero-fighters space-war tauan-trex memoria-bichos vendor _site/
+          cp -r src _site/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3

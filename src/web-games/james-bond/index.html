@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090b0a">
+  <title>James Bond - Operações</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="game-shell">
+    <div id="viewport" aria-label="Área do jogo"></div>
+    <div id="damage-vignette"></div>
+    <canvas id="radar" class="is-hidden" width="180" height="180" aria-label="Radar tático"></canvas>
+
+    <section id="hud" class="is-hidden" aria-live="polite">
+      <div class="hud-top">
+        <div class="mission-chip"><span id="mission-code">OP-01</span><strong id="mission-name">BARRAGEM</strong></div>
+        <div id="alert-state" class="alert-state">OCULTO</div>
+      </div>
+      <div id="objective-list" class="objective-list"></div>
+      <div id="interaction-prompt" class="interaction-prompt is-hidden"><kbd>E</kbd><span></span></div>
+      <div id="crosshair" class="crosshair" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
+      <div id="hitmarker" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="hud-bottom">
+        <div class="vitals">
+          <span>VIDA</span><meter id="health" min="0" max="100" value="100"></meter>
+          <span>COLETE</span><meter id="armor" min="0" max="100" value="50"></meter>
+        </div>
+        <div class="weapon-readout">
+          <span id="weapon-name">P7</span>
+          <strong><span id="ammo-mag">8</span><small>/</small><span id="ammo-reserve">40</span></strong>
+        </div>
+      </div>
+    </section>
+
+    <section id="menu" class="screen screen-active">
+      <header class="brand-lockup">
+        <span>ARQUIVO CONFIDENCIAL</span>
+        <h1>JAMES BOND</h1>
+        <p>OPERAÇÕES ESPECIAIS</p>
+      </header>
+      <div class="menu-band">
+        <div class="operation-copy">
+          <span id="menu-code">OPERAÇÃO 01</span>
+          <h2 id="menu-title">BARRAGEM ALPINA</h2>
+          <p id="menu-brief">Intercepte os dados e alcance a extração.</p>
+        </div>
+        <div id="mission-selector" class="mission-selector" role="tablist"></div>
+        <div class="menu-actions">
+          <label>DIFICULDADE
+            <select id="difficulty">
+              <option value="agent">AGENT</option>
+              <option value="secret">SECRET AGENT</option>
+              <option value="double">00 AGENT</option>
+            </select>
+          </label>
+          <button id="start-button" type="button">INICIAR OPERAÇÃO</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="briefing" class="screen">
+      <div class="briefing-panel">
+        <span id="brief-code">OP-01</span>
+        <h2 id="brief-title">BARRAGEM ALPINA</h2>
+        <p id="brief-location"></p>
+        <ol id="brief-objectives"></ol>
+        <button id="deploy-button" type="button">ENTRAR EM CAMPO</button>
+      </div>
+    </section>
+
+    <section id="pause" class="screen">
+      <div class="pause-panel">
+        <span>OPERAÇÃO SUSPENSA</span>
+        <h2>MISSÃO PAUSADA</h2>
+        <button id="resume-button" type="button">CONTINUAR</button>
+        <button id="abort-button" class="secondary" type="button">ABORTAR MISSÃO</button>
+      </div>
+    </section>
+
+    <section id="result" class="screen">
+      <div class="result-panel">
+        <span id="result-kicker">MISSÃO CONCLUÍDA</span>
+        <h2 id="result-title">EXTRAÇÃO CONFIRMADA</h2>
+        <div id="result-stats" class="result-stats"></div>
+        <button id="next-button" type="button">PRÓXIMA OPERAÇÃO</button>
+        <button id="menu-button" class="secondary" type="button">MENU DE OPERAÇÕES</button>
+      </div>
+    </section>
+
+    <section id="tactical-map" class="map-overlay is-hidden">
+      <canvas id="map-canvas" width="900" height="600"></canvas>
+      <button id="close-map" type="button" title="Fechar mapa" aria-label="Fechar mapa">×</button>
+    </section>
+  </main>
+
+  <script src="../vendor/james-bond/howler-2.2.4.min.js"></script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

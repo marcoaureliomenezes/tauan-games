@@ -1,0 +1,81 @@
+{
+  "attempt": 0,
+  "declared_consumers": [],
+  "output_schema": "backlog-item-v1",
+  "payload": {
+    "result": {
+      "handoff_required": [
+        "handoff"
+      ],
+      "open_release_decisions_for_operator": [
+        "Confirmar nome e fic\u00e7\u00e3o vis\u00edveis antes da publica\u00e7\u00e3o (manter apenas `james-bond/` como codinome interno).",
+        "Confirmar corte inicial de escopo: seis miss\u00f5es completas (vertical campaign) vs vers\u00e3o m\u00ednima de tr\u00eas miss\u00f5es para first playable."
+      ],
+      "produced_backlog_entry": {
+        "frontmatter": {
+          "description": "Standalone offline 3D browser FPS with mission-first progression, stealth/alert systems, destructible environments, weapon depth, and tactical map inspired by GoldenEye-era mission structure, with original story/characters/assets and no runtime network access.",
+          "intents": [
+            {
+              "change": "Autorizar novo jogo isolado em `james-bond/` com stack Three.js/Vendor-First + Rapier + Yuka + Howler, mantendo separa\u00e7\u00e3o por m\u00f3dulos (`src`, `src/world`, `src/ai`, `src/missions`, `src/weapons`, `src/audio`, `src/hud`) para campanhas e assets locais.",
+              "subject": {
+                "kind": "doc",
+                "ref": "memory/architecture.md#Arquitetura geral do produto"
+              }
+            },
+            {
+              "change": "Viabilizar pacote offline com builds vendorizados e manifestos de licen\u00e7a rastre\u00e1veis para Three.js r165, Rapier (Apache-2.0), Yuka (MIT), Howler 2.2.x (MIT), sem CDN e sem chamadas externas.",
+              "subject": {
+                "kind": "doc",
+                "ref": "memory/tech-stack.md#Stack comprometida por jogo"
+              }
+            },
+            {
+              "change": "Imp\u00f5e contrato de qualidade inicial: 60 FPS alvo / n\u00e3o abaixo de 30 FPS em refer\u00eancia de hardware, f\u00edsica determin\u00edstica com seed, pooling de transientes, Playwright de boot/foco/tiro/reload/IA/resposta sonora/sem-request, save/versioned localStorage e sem erros de console.",
+              "subject": {
+                "kind": "doc",
+                "ref": "memory/product/quality-bar.md#Diferencial"
+              }
+            },
+            {
+              "change": "Definir schema de miss\u00e3o/mapa data-driven com geometrias modulares, navmesh/ac\u00fastica/portas/destrut\u00edveis/rotas de patrulha/objetivos/objetos de checkpoint/extraction/seed determin\u00edstica e suporte a modos de dificuldade com overrides.",
+              "subject": {
+                "kind": "code",
+                "ref": "james-bond/src/world/map-schema.md#MissionMapContract"
+              }
+            },
+            {
+              "change": "Criar cat\u00e1logo V1 de 14 armas originais (labels originais) com campos t\u00e9cnicos: ammo/magazine/cad\u00eancia/alcance/queda/danos por zona de impacto/recall de recaida/recarga/loudness/recoil/spread/patamares de penetra\u00e7\u00e3o/explos\u00e3o e bancos de som.",
+              "subject": {
+                "kind": "code",
+                "ref": "james-bond/src/weapons/weapon-definitions.md#WeaponDefinition"
+              }
+            },
+            {
+              "change": "Implementar IA h\u00edbrida state-goal com estados: idle, patrol, suspicious, investigate, alert, take-cover, engage, flank, pursue, search-LKP, operate-alarm, retreat, surrender, return-to-post; percep\u00e7\u00e3o por vis\u00e3o/LOS/ru\u00eddo/lembran\u00e7a/equipe/porta/alarme.",
+              "subject": {
+                "kind": "code",
+                "ref": "james-bond/src/ai/guard-fsm.md#GuardStateMachine"
+              }
+            }
+          ],
+          "opened": "2026-07-18",
+          "release": "james-bond-browser-fps-v1",
+          "status": "candidate",
+          "title": "James Bond-inspired standalone browser FPS (standalone codename: james-bond)"
+        },
+        "path": "repos/tauan-games/specs/backlog/james-bond-browser-fps-v1.md",
+        "scope": "Criar a linha de base de produto para um FPS stealth/FPS-t\u00e1tico de campanha com 6 miss\u00f5es originais (Dam/Facility/Relay/Silo/Frigate/Jungle Control), sem depend\u00eancia de assets/ROM GoldenEye e com sistemas principais de miss\u00e3o, combate, IA, \u00e1udio e HUD."
+      },
+      "result_note": "Backlog item j\u00e1 est\u00e1 definido com status/camadas/intents e escopo \u00fanico; falta persist\u00eancia f\u00edsica no disco devido limita\u00e7\u00e3o de escrita read-only no sandbox atual.",
+      "task_id": "james-bond-research-20260718:backlog_author",
+      "write_error": "Read-only file system: could not create/update the requested artifact files.",
+      "write_status": "blocked-readonly-filesystem"
+    },
+    "summary": "codex exec completed"
+  },
+  "produced_at": "2026-07-18T04:36:54Z",
+  "producer_step": "backlog_author",
+  "retention_mode": "promote_to_evidence",
+  "run_id": "james-bond-research-20260718",
+  "schema_version": "workflow-step-payload-v1"
+}
