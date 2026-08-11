@@ -2,14 +2,16 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { WEAPONS } from './content/weapons.js';
 import { buildWeaponModel } from './content/weapon-models.js';
 
-const HIP_POS = new THREE.Vector3(0.26, -0.27, -0.52);
+// Pose padrão de quadril; cada arma pode sobrepô-la com `hip` (ver weapons.js).
+const HIP_ARRAY = [0.26, -0.27, -0.52];
 const ADS_POS = new THREE.Vector3(0, -0.152, -0.42);
+const hipPose = new THREE.Vector3();
 const muzzleLocal = new THREE.Vector3();
 const temp = new THREE.Vector3();
 
 // First-person weapon rig: bob, look-sway, recoil kick, reload dip, sprint tilt, ADS pose,
 // plus an additive muzzle-flash card at the barrel tip.
-export function createViewModel(camera) {
+export function createViewModel(camera, initialWeapon = 'deagle') {
   const rig = new THREE.Group();
   rig.scale.setScalar(0.85);
   camera.add(rig);
@@ -18,6 +20,10 @@ export function createViewModel(camera) {
   let weaponId = null;
   let model = null;
   let kick = 0;
+  // Golpe de faca: 1 → 0 ao longo do movimento; `swingDir` alterna o sentido do
+  // arco a cada golpe, para não parecer o mesmo frame repetido.
+  let swing = 0;
+  let swingDir = 1;
   let flashLife = 0;
   let swayX = 0;
   let swayY = 0;
@@ -42,7 +48,16 @@ export function createViewModel(camera) {
 
   function onShoot() {
     const weapon = WEAPONS[weaponId];
+    // Corpo a corpo não tem coice nem clarão de boca: tem GOLPE. O que a faca
+    // precisava não era de outro modelo apenas — era de um movimento próprio,
+    // um arco de fora para dentro que cruza a tela e volta.
+    if (weapon.kind === 'melee') {
+      swing = 1;
+      swingDir = -swingDir;
+      return;
+    }
     kick = weapon.kick;
+    if (weapon.kind === 'throwable') return;
     if (!weapon.suppressed) {
       flashLife = 0.05;
       flash.visible = true;
@@ -64,7 +79,8 @@ export function createViewModel(camera) {
     const bobY = moving ? Math.sin(bobPhase * 2) * 0.0075 * bobScale : 0;
     const bobX = moving ? Math.cos(bobPhase) * 0.005 * bobScale : 0;
 
-    rig.position.lerpVectors(HIP_POS, ADS_POS, adsT);
+    hipPose.fromArray(WEAPONS[weaponId]?.hip || HIP_ARRAY);
+    rig.position.lerpVectors(hipPose, ADS_POS, adsT);
     rig.position.x += bobX + swayX * 0.35;
     rig.position.y += bobY + swayY * 0.3;
     rig.position.z += kick * 0.9;
@@ -81,6 +97,24 @@ export function createViewModel(camera) {
       rig.rotation.x += dip * 0.35;
       rig.rotation.z += dip * 0.3;
     }
+    // --- Golpe de faca ------------------------------------------------------
+    // Três tempos num só parâmetro: recuo de armar (swing alto), varredura
+    // rápida cruzando a tela e retorno suave à guarda. O arco vai de fora para
+    // dentro, com a lâmina girando junto — é o giro que faz o golpe cortar em
+    // vez de empurrar.
+    if (swing > 0) {
+      swing = Math.max(0, swing - dt * 5.2);
+      const t = 1 - swing;                       // 0 = início, 1 = fim
+      const windUp = Math.max(0, 1 - t * 4);      // arma o braço nos primeiros 25%
+      const sweep = Math.sin(Math.min(1, t * 1.35) * Math.PI);
+      rig.position.x += swingDir * (windUp * 0.16 - sweep * 0.3);
+      rig.position.y += windUp * 0.1 - sweep * 0.09;
+      rig.position.z += windUp * 0.12 + sweep * 0.24;
+      rig.rotation.z += swingDir * (windUp * 0.5 - sweep * 1.25);
+      rig.rotation.y += swingDir * sweep * 0.85;
+      rig.rotation.x += windUp * 0.35 - sweep * 0.5;
+    }
+
     if (flashLife > 0) {
       flashLife -= dt;
       flash.material.opacity = Math.max(0, flashLife / 0.05) * 0.95;
@@ -106,7 +140,9 @@ export function createViewModel(camera) {
     camera.remove(rig);
   }
 
-  setWeapon('p7');
+  // A arma exibida vem de fora (estado da partida). Assumir um padrão aqui foi
+  // exatamente o que dessincronizou aparência e comportamento entre missões.
+  setWeapon(WEAPONS[initialWeapon] ? initialWeapon : 'deagle');
   return { rig, setWeapon, onShoot, update, muzzleWorld, dispose, get weaponId() { return weaponId; } };
 }
 

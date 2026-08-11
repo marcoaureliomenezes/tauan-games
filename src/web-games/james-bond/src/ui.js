@@ -11,7 +11,7 @@ export function createUi(game) {
   let selected = game.missionIndex;
   let mapOpen = false;
   let hitTimer = 0;
-  const hudCache = { health: -1, armor: -1, mag: -1, reserve: -1, weapon: '', alert: null, objectives: '', code: '' };
+  const hudCache = { health: -1, armor: -1, mag: -1, reserve: -1, weapon: '', alert: null, objectives: '', code: '', grenades: -1 };
 
   function screen(id) {
     mapOpen = false;
@@ -75,15 +75,21 @@ export function createUi(game) {
     if (hudCache.weapon !== weapon.name) { hudCache.weapon = weapon.name; $('#weapon-name').textContent = weapon.name; }
     const mag = ammo?.mag ?? 0;
     const reserve = ammo?.reserve ?? 0;
-    if (hudCache.mag !== mag) { hudCache.mag = mag; $('#ammo-mag').textContent = mag; }
-    if (hudCache.reserve !== reserve) { hudCache.reserve = reserve; $('#ammo-reserve').textContent = reserve; }
+    // Faca e explosivos têm carregador infinito: o HUD mostra ∞, não a palavra
+    // "Infinity" que o Number vira ao virar texto.
+    if (hudCache.mag !== mag) { hudCache.mag = mag; $('#ammo-mag').textContent = mag === Infinity ? '∞' : mag; }
+    if (hudCache.reserve !== reserve) { hudCache.reserve = reserve; $('#ammo-reserve').textContent = reserve === Infinity ? '∞' : reserve; }
+    if (hudCache.grenades !== game.grenades) { hudCache.grenades = game.grenades; $('#grenade-count').textContent = game.grenades === Infinity ? '∞' : game.grenades; }
     const alert = game.alertLevel > 0.05;
     if (hudCache.alert !== alert) {
       hudCache.alert = alert;
       $('#alert-state').textContent = alert ? 'ALERTA' : 'OCULTO';
       $('#alert-state').classList.toggle('alert', alert);
     }
-    const signature = game.objectives.map((objective) => `${objective.key}${objective.done ? 1 : 0}`).join('');
+    // A assinatura inclui o código da missão: sem isso, trocar de operação com
+    // os objetivos no mesmo estado (todos abertos, A0B0C0) bate no cache e a
+    // lista continua exibindo os rótulos da missão anterior.
+    const signature = `${mission.code}|${game.objectives.map((objective) => `${objective.key}${objective.done ? 1 : 0}`).join('')}`;
     if (hudCache.objectives !== signature) {
       hudCache.objectives = signature;
       $('#objective-list').replaceChildren(...game.objectives.map((objective) => {
@@ -144,7 +150,7 @@ export function createUi(game) {
     const playerY = large ? centerY + camera.position.z / CONFIG.cellSize * scale : centerY;
     drawPoint(ctx, playerX, playerY, '#50e29a', 4);
     game.enemies.forEach((enemy) => {
-      if (!enemy.alive || (!large && enemy.revealedUntil < game.time && enemy.state === 'patrol')) return;
+      if (!enemy.alive) return;
       const x = large ? centerX + enemy.root.position.x / CONFIG.cellSize * scale : centerX + (enemy.root.position.x - camera.position.x) * scale;
       const y = large ? centerY + enemy.root.position.z / CONFIG.cellSize * scale : centerY + (enemy.root.position.z - camera.position.z) * scale;
       if (x > 2 && y > 2 && x < canvas.width - 2 && y < canvas.height - 2) drawPoint(ctx, x, y, '#ee5b55', 3);
@@ -165,6 +171,10 @@ export function createUi(game) {
     return mapOpen;
   }
 
+  $('#kids-mode').addEventListener('change', (event) => {
+    game.kidsMode = event.target.checked;
+    callbacks.kidsMode?.(game.kidsMode);
+  });
   $('#start-button').addEventListener('click', () => { game.difficulty = $('#difficulty').value; showBriefing(); });
   $('#deploy-button').addEventListener('click', () => callbacks.deploy?.(selected));
   $('#resume-button').addEventListener('click', () => callbacks.resume?.());
@@ -178,6 +188,7 @@ export function createUi(game) {
   return {
     setCallbacks(value) { callbacks = value; },
     screen, selectMission, showBriefing, updateHud, crosshair, hitmarker, prompt, showResult, drawRadar, toggleMap,
+    syncSettings() { $('#kids-mode').checked = Boolean(game.kidsMode); },
     refresh: renderSelector,
     get selected() { return selected; },
     get mapOpen() { return mapOpen; },

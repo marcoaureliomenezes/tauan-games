@@ -1,30 +1,50 @@
 // Web game package: james-bond.
-// View-model params: muzzle = barrel tip in view space, ads = centered aim pose.
+// Loadout inspirado no CS 1.6, em 5 slots:
+//   1 faca · 2 Desert Eagle · 3 AK-47 · 4 lança-granadas · 5 granada de mão
+//
+// `kind` decide como o disparo é resolvido em combat.js:
+//   hitscan   — raycast instantâneo (pistola, rifle)
+//   melee     — raycast curto de golpe, sem munição nem ruído de tiro
+//   launcher  — projétil visível que explode no impacto (lança-granadas)
+//   throwable — granada de mão arremessada com pavio
+//
+// knock = impulso de energia transferido ao inimigo no impacto (proporcional ao calibre).
+// View-model params: muzzle = ponta do cano em espaço de view, adsFov = FOV ao mirar.
 export const WEAPONS = Object.freeze({
-  p7: {
-    name: 'P7 SERVICE', slot: 1, mag: 8, reserve: 48, damage: 34, cadence: 0.28, reload: 1.25,
-    spread: 0.009, recoil: 0.021, noise: 17, color: 0xd7d9d5, adsFov: 60,
-    muzzle: [0, 0.02, -0.86], kick: 0.09, pitch: 220,
+  knife: {
+    name: 'FACA', slot: 1, kind: 'melee', mag: Infinity, reserve: Infinity,
+    damage: 85, cadence: 0.55, reload: 0, range: 2.4, spread: 0, recoil: 0.012,
+    noise: 4, color: 0xb9c0c4, adsFov: 66, knock: 0.9,
+    // `hip` sobrepõe a pose padrão do view-model: a faca é levada erguida e
+    // mais para dentro da tela, em guarda, não pendurada como um cano.
+    hip: [0.2, -0.19, -0.4],
+    muzzle: [0, 0.02, -0.5], kick: 0.14, pitch: 0,
   },
-  p7s: {
-    name: 'P7 SUPPRESSED', slot: 2, mag: 8, reserve: 40, damage: 30, cadence: 0.3, reload: 1.3,
-    spread: 0.007, recoil: 0.015, noise: 5, color: 0x4f5650, adsFov: 60,
-    muzzle: [0, 0.02, -1.12], kick: 0.06, pitch: 300, suppressed: true,
+  deagle: {
+    name: 'DESERT EAGLE', slot: 2, kind: 'hitscan', mag: 7, reserve: Infinity, damage: 82, cadence: 0.32, reload: 3.0,
+    spread: 0.006, recoil: 0.048, noise: 28, color: 0xd7d9d5, adsFov: 58, knock: 1.5,
+    muzzle: [0, 0.03, -0.92], kick: 0.17, pitch: 150,
   },
-  smg: {
-    name: 'VX-9 SMG', slot: 3, mag: 24, reserve: 96, damage: 18, cadence: 0.082, reload: 1.75,
-    spread: 0.02, recoil: 0.011, noise: 22, auto: true, color: 0x272b2c, adsFov: 56,
-    muzzle: [0, 0.04, -1.06], kick: 0.05, pitch: 320,
+  ak47: {
+    name: 'AK-47', slot: 3, kind: 'hitscan', mag: 30, reserve: Infinity, damage: 50, cadence: 0.1, reload: 3.0,
+    spread: 0.009, recoil: 0.023, noise: 32, auto: true, color: 0x283128, adsFov: 50, penetration: 1, knock: 0.85,
+    muzzle: [0, 0.05, -1.42], kick: 0.1, pitch: 180,
   },
-  rifle: {
-    name: 'AR-21 RIFLE', slot: 4, mag: 30, reserve: 90, damage: 27, cadence: 0.11, reload: 2.05,
-    spread: 0.012, recoil: 0.016, noise: 28, auto: true, penetration: 1, color: 0x283128, adsFov: 50,
-    muzzle: [0, 0.05, -1.42], kick: 0.07, pitch: 180,
+  rpg: {
+    // Munição infinita: a cadência de 5 s é o único limite. O projétil é
+    // visível em voo e detona com o mesmo raio da granada de mão.
+    name: 'LANÇA-GRANADAS', slot: 4, kind: 'launcher', mag: Infinity, reserve: Infinity,
+    damage: 0, cadence: 5.0, reload: 0, spread: 0.002, recoil: 0.075, noise: 46,
+    color: 0x3d4238, adsFov: 60, knock: 0, blastRadius: 6.5, muzzleSpeed: 34,
+    // Apoiado no ombro: mais alto e deslocado para a direita da tela.
+    hip: [0.3, -0.2, -0.42],
+    muzzle: [0, 0.04, -1.42], kick: 0.26, pitch: 90,
   },
-  shotgun: {
-    name: 'M12 SHOTGUN', slot: 5, mag: 6, reserve: 30, damage: 13, pellets: 8, cadence: 0.85, reload: 2.3,
-    spread: 0.07, recoil: 0.05, noise: 34, color: 0x49392b, adsFov: 58,
-    muzzle: [0, 0.05, -1.28], kick: 0.16, pitch: 120,
+  grenade: {
+    name: 'GRANADA', slot: 5, kind: 'throwable', mag: Infinity, reserve: Infinity,
+    damage: 0, cadence: 1.0, reload: 0, spread: 0, recoil: 0.01, noise: 8,
+    color: 0x334036, adsFov: 68, knock: 0, blastRadius: 6.5,
+    muzzle: [0, 0.02, -0.36], kick: 0.12, pitch: 0,
   },
 });
 

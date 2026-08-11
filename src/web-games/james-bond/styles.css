@@ -42,6 +42,9 @@ select { min-height: 44px; border: 1px solid var(--line); border-radius: 4px; ba
 .mission-tab.locked { opacity: .25; }
 .menu-actions { display: grid; gap: 10px; min-width: 190px; }
 .menu-actions label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 800; }
+/* O label genérico acima empilha em grid; o toggle precisa ficar em linha. */
+.menu-actions label.toggle-option { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.toggle-option input { width: 14px; height: 14px; accent-color: var(--green); cursor: pointer; }
 
 .briefing-panel, .pause-panel, .result-panel { margin: auto; width: min(620px, calc(100% - 32px)); padding: 34px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
 .briefing-panel h2, .pause-panel h2, .result-panel h2 { margin: 8px 0 4px; font-size: clamp(28px, 5vw, 48px); }
@@ -79,7 +82,7 @@ kbd { min-width: 28px; padding: 5px; border-radius: 3px; background: var(--paper
 #hitmarker i:nth-child(3) { transform: translate(-14px, 3px) rotate(-45deg); }
 #hitmarker i:nth-child(4) { transform: translate(3px, 3px) rotate(45deg); }
 #hitmarker.kill i { background: #ff4b3e; }
-.hud-bottom { position: absolute; left: 24px; right: 24px; bottom: 22px; display: flex; justify-content: space-between; align-items: end; }
+.hud-bottom { position: absolute; left: 24px; right: 196px; bottom: 22px; display: flex; justify-content: space-between; align-items: end; }
 .vitals { width: min(300px, 48vw); display: grid; grid-template-columns: 52px 1fr; gap: 5px 9px; align-items: center; font-size: 9px; font-weight: 800; }
 meter { width: 100%; height: 8px; border: 0; background: rgba(255,255,255,.16); }
 meter::-webkit-meter-bar { background: rgba(255,255,255,.16); border: 0; }
@@ -89,7 +92,9 @@ meter::-webkit-meter-optimum-value { background: var(--green); }
 .weapon-readout strong { font-size: 38px; }
 .weapon-readout small { margin: 0 6px; color: var(--muted); }
 
-#radar { position: fixed; right: 22px; top: 72px; z-index: 11; width: 150px; height: 150px; border: 1px solid var(--line); border-radius: 50%; background: rgba(4, 8, 6, .66); pointer-events: none; }
+#radar { position: fixed; right: 22px; bottom: 22px; z-index: 11; width: 150px; height: 150px; border: 1px solid var(--line); border-radius: 50%; background: rgba(4, 8, 6, .66); pointer-events: none; }
+.grenade-readout { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 800; }
+.grenade-readout b { color: var(--amber); font-size: 16px; }
 .map-overlay { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(2, 4, 3, .9); }
 #map-canvas { width: min(900px, 92vw); height: auto; max-height: 82vh; border: 1px solid var(--line); background: #0a0f0c; }
 #close-map { position: absolute; top: 24px; right: 24px; width: 44px; padding: 0; font-size: 26px; }
@@ -100,9 +105,10 @@ meter::-webkit-meter-optimum-value { background: var(--green); }
   .operation-copy p { display: none; }
   .mission-selector { order: -1; }
   .menu-actions { grid-template-columns: 1fr 1.2fr; min-width: 0; }
+  .menu-actions label.toggle-option { grid-column: 1 / -1; }
   .brand-lockup { top: 24px; left: 20px; }
-  #radar { width: 108px; height: 108px; right: 14px; top: 66px; }
+  #radar { width: 108px; height: 108px; right: 14px; bottom: 14px; }
   .objective-list { left: 14px; top: 78px; width: 54vw; }
   .hud-top { left: 14px; right: 14px; top: 14px; }
-  .hud-bottom { left: 14px; right: 14px; bottom: 14px; }
+  .hud-bottom { left: 14px; right: 136px; bottom: 14px; }
 }
