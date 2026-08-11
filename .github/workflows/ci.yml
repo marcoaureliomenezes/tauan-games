@@ -52,6 +52,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Run demolition-ball tests (dedicated GL config)
+        run: npm run test:demolition-ball
+
       - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4

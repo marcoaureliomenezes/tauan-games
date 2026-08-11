@@ -2,6 +2,9 @@ const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
   testDir: '.',
+  // demolition-ball has its own config (GL flags + long timeouts for the
+  // from-scratch WebGL2 renderer) — running it under this one always times out.
+  testIgnore: 'demolition-ball/**',
   outputDir: './screenshots',
   timeout: 30000,
   retries: 1,
