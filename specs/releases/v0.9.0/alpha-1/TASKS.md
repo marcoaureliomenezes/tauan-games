@@ -76,7 +76,13 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
     `specs/memory/product/web-games/demolition-ball-opus-5/`; README do jogo e raiz
     coerentes; `dadaia backlog doctor` sem erros novos.
 
-- [ ] T11 - Fecho: suíte completa + screenshots finais + aceitação
+- [-] T11 - Fecho: suíte completa + screenshots finais + aceitação
   - **Owner:** qa-engineer
   - **Acceptance:** AC-1..AC-8; `node tests/demolition-ball-opus-5/unit.mjs` e
     Playwright do jogo verdes; relatório de QA + handoff; operador (e filho) jogam.
+  - **Estado (2026-08-11):** 30 unit verdes; e2e 8/9 verdes — a exceção é SÓ o
+    teste de fps sob loadavg ~31 na máquina (A/B provou: baseline 15,5 fps vs
+    v0.9.0 13,9 fps no mesmo ambiente → custo próprio da release ~10%; o gate
+    de 20 fps passa em máquina ociosa). Screenshots de evidência capturados
+    (modos, fachadas, praça, rio/pontes, pedestres, cones, operador).
+    **Pendente: re-rodar suíte com a máquina calma + operador (e filho) jogarem.**
