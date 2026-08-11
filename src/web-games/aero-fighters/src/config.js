@@ -165,18 +165,18 @@ export const TARGETS = {
 /** Stats das unidades de formação da campanha Inhaúma (T-C-01,
  *  release v0.3.4). Tipos `f*` — os meshes são os
  *  builders de `src/formations/units.js`; o fluxo de dano é o de `targets.js`.
- *  range = engajamento contra o player (m; unidades de chão 200-220, AA 300);
+ *  range = engajamento contra o player (m; doutrina 2026-08-11: AA/SAM 300, resto 200);
  *  speed = deslocamento (m/s); fire = tipo de fogo ('none' = desarmada);
  *  altitude = altura de voo acima do terreno (unidades aéreas). */
 export const TARGET_STATS = {
-  fTank:       { hp: 22, score: 550, hr2: 44,  dropChance: 0.4,  range: 220, speed: 6,   fire: 'cannon',   fireInterval: 2.6 },
+  fTank:       { hp: 22, score: 550, hr2: 44,  dropChance: 0.4,  range: 200, speed: 6,   fire: 'cannon',   fireInterval: 2.6 },
   fApc:        { hp: 16, score: 480, hr2: 40,  dropChance: 0.35, range: 200, speed: 9,   fire: 'mg',       fireInterval: 1.9 },
   fTruck:      { hp: 10, score: 320, hr2: 36,  dropChance: 0.45, range: 0,   speed: 10,  fire: 'none',     fireInterval: Infinity },
   fTroops:     { hp: 8,  score: 260, hr2: 30,  dropChance: 0.3,  range: 200, speed: 3.5, fire: 'mg',       fireInterval: 2.2 },
   fArtillery:  { hp: 14, score: 600, hr2: 42,  dropChance: 0.4,  range: 0,   speed: 7,   fire: 'howitzer', fireInterval: 6.0 },
   fSam:        { hp: 18, score: 900, hr2: 55,  dropChance: 0.4,  range: 300, speed: 0,   fire: 'missile',  fireInterval: 4.0 },
   fAaGun:      { hp: 6,  score: 250, hr2: 9,   dropChance: 0.1,  range: 300, speed: 0,   fire: 'aa',       fireInterval: 1.7 },
-  fHelicopter: { hp: 10, score: 650, hr2: 120, dropChance: 0.35, range: 220, speed: 14,  fire: 'mg',       fireInterval: 2.3, altitude: 46 },
+  fHelicopter: { hp: 10, score: 650, hr2: 120, dropChance: 0.35, range: 200, speed: 14,  fire: 'mg',       fireInterval: 2.3, altitude: 46 },
   fZeppelin:   { hp: 16, score: 720, hr2: 150, dropChance: 0.4,  range: 0,   speed: 5,   fire: 'none',     fireInterval: Infinity, altitude: 95 },
 };
 
@@ -186,7 +186,7 @@ export const TARGET_STATS = {
  *  Projéteis SEMPRE em linha reta, sem lead (lead factor 0), velocidade desviável.
  *  Acerto por distância: p = clamp(pNear - max(0, dist/NEAR_M - 1) * decay, floor, pNear).
  *    AA:    80% a <50 m, ~50% a 150 m, piso 5% (range 300 m)
- *    GROUND: 50% a <50 m, ~36% a 150 m, piso 3% (range 200-220 m)
+ *    GROUND: 50% a <50 m, ~36% a 150 m, piso 3% (range 200 m)
  *  No roll de MISS a mira recebe um offset angular seedado de 2-6° (tracers passam
  *  raspando — o jogador vê o fogo e consegue desviar). */
 export const ENEMY_FIRE = {
@@ -219,11 +219,15 @@ export const WINGMEN = {
 export const CACHOEIRA_GARRISON = {
   armorColumns: 2,         // colunas blindadas circulando nos segmentos de estrada da cidade
   armorSize: 6,            // unidades por coluna
-  heliPatrols: 2,          // helicópteros em patrulha baixa sobre a cidade
+  heliPatrols: 4,          // 2026-08-11: 2 → 4 helicópteros em patrulha baixa ("mais helicópteros")
   zeppelinPatrols: 1,      // zepelim em patrulha alta
   aaNests: 3,              // ninhos de AA nos morros ao redor (mín. 2 garantido)
   aaAnnulus: [300, 800],   // anel de busca dos morros (m do centro do shelf)
   aaMinSeparation: 250,    // separação mínima entre ninhos (m)
+  // 2026-08-11 (doutrina 300/200): baterias AA DENTRO da cidade — nas clareiras
+  // reais (praça e largo da igreja). Alcance 300 m via TARGET_STATS.fAaGun.
+  townAaBatteries: 2,      // baterias urbanas (praça + largo da igreja)
+  townAaSize: 3,           // canhões por bateria urbana
   hqTroops: 8,             // tamanho do encampment do QG (objetivo final do Ato 2)
   samSize: 6,              // tamanho do samSite do QG
 };
@@ -253,9 +257,15 @@ export const CAMPAIGN = {
   // contornam a TOWN_SHELF pela borda leste/norte (longe do morro da bateria a NW)
   // e terminam a ~140 m da borda do shelf: chegar ao fim do path ('arrived') =
   // invasão bem-sucedida = Inhaúma cai.
+  // 2026-08-11: Cachoeira foi para (-1300,2950) (+50% de distância) — todas as
+  // rotas ganharam o PREFIXO de descida do novo vale até o antigo ponto de
+  // partida (-950,1890), preservando os corredores validados dali em diante.
+  // valleyPrefix é também usado por roadRoute() em campaign.js para as colunas
+  // de estrada PARTIREM de Cachoeira antes de pegar a osm-mg-060.
+  valleyPrefix: [[-1300, 2790], [-1150, 2350], [-950, 1890]],
   columnRoutes: {
-    north: [[-950, 1890], [-800, 1600], [-350, 1150], [-150, 650], [150, 600], [290, 420], [290, 300]],
-    farNorth: [[-950, 1890], [-600, 1500], [-100, 1100], [350, 800], [550, 550], [500, 300], [350, 100], [290, -50]],
+    north: [[-1300, 2790], [-1150, 2350], [-950, 1890], [-800, 1600], [-350, 1150], [-150, 650], [150, 600], [290, 420], [290, 300]],
+    farNorth: [[-1300, 2790], [-1150, 2350], [-950, 1890], [-600, 1500], [-100, 1100], [350, 800], [550, 550], [500, 300], [350, 100], [290, -50]],
     // 'road' é montada em runtime: trecho da osm-mg-060 (do fim SE da estrada,
     // atravessando a ponte sobre o rio em (-1275,870)) + saída de terreno a
     // noroeste, contornando o MORRO DA BATERIA pelo norte e fechando na borda
@@ -265,9 +275,9 @@ export const CAMPAIGN = {
   // Rotas das baterias: partem do vale e terminam no ponto de deploy (600-1200 m
   // da TOWN_SHELF) — deploys=true → estado 'deployed' no fim (Onda 4 as faz atirar).
   artilleryRoutes: [
-    [[-950, 1890], [-850, 1600], [-750, 1250]],                 // deploy 697 m sudoeste
-    [[-950, 1890], [-600, 1500], [-200, 1150], [100, 1200]],    // deploy 640 m sul
-    [[-950, 1890], [-500, 1500], [0, 1150], [600, 1000]],       // deploy 629 m sudeste
+    [[-1300, 2790], [-1150, 2350], [-950, 1890], [-850, 1600], [-750, 1250]],              // deploy 697 m sudoeste
+    [[-1300, 2790], [-1150, 2350], [-950, 1890], [-600, 1500], [-200, 1150], [100, 1200]], // deploy 640 m sul
+    [[-1300, 2790], [-1150, 2350], [-950, 1890], [-500, 1500], [0, 1150], [600, 1000]],    // deploy 629 m sudeste
   ],
   // Trecho da osm-mg-060 usado como prefixo da rota 'road': a estrada INTEIRA do
   // fim SE (perto do novo vale) ao fim NW (de onde o roadTail sai por terreno).
@@ -507,9 +517,12 @@ export const AA_DEFENSE = {
   NUKE_COOLDOWN: 1.0,                // s entre lançamentos (anti key-repeat)
 };
 
-/** Canhões antiaéreos (única defesa hostil) */
+/** Canhões antiaéreos — baterias AA.
+ * Doutrina de alcance (operador, 2026-08-11): baterias antiaéreas (AA/SAM)
+ * acertam até 300 m; TODOS os demais atiradores até 200 m. Tiros em linha
+ * reta visíveis — o jogador desvia. */
 export const AA = {
-  RANGE: 220,         // m
+  RANGE: 300,         // m — bateria antiaérea (doutrina 300/200)
   BASE_INTERVAL: 1.7, // s entre tiros (mission 1)
   CYCLE_SPEEDUP: 0.15,// s a menos por missão
   MAX_SPEEDUP: 0.7,   // limite de aceleração
@@ -517,7 +530,7 @@ export const AA = {
 
 /** Navios de guerra */
 export const WARSHIP = {
-  RANGE: 1200,        // m — engaja bem antes que o player chegue perto
+  RANGE: 200,         // m — doutrina 300/200: atirador comum engaja a 200 m
   INTERVAL: 1.0,      // s entre rajadas (burst de 2 balas)
 };
 
@@ -525,19 +538,19 @@ export const WARSHIP = {
 export const SLOW_TARGETS = {
   HELI_ALTITUDE: 46,
   HELI_SPEED: 14,
-  HELI_RANGE: 620,
+  HELI_RANGE: 200,   // doutrina 300/200
   HELI_INTERVAL: 2.3,
   CONVOY_SPEED: 9,
-  CONVOY_RANGE: 420,
+  CONVOY_RANGE: 200, // doutrina 300/200
   CONVOY_INTERVAL: 1.9,
   // Tanque de solo lento (WS-4)
   TANK_SPEED: 6,
-  TANK_RANGE: 470,
+  TANK_RANGE: 200,   // doutrina 300/200
   TANK_INTERVAL: 2.6,
   // Dirigível de patrulha lento no ar (WS-4)
   PATROLAIR_SPEED: 7,
   PATROLAIR_ALTITUDE: 95,
-  PATROLAIR_RANGE: 700,
+  PATROLAIR_RANGE: 200, // doutrina 300/200
   PATROLAIR_INTERVAL: 3.0,
 };
 
