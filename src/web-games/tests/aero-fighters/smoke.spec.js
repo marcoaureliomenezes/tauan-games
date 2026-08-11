@@ -44,17 +44,20 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     expect(errors).toHaveLength(0);
   });
 
-  // AC-3 (T-C-14, release v0.3.4 — SPEC §C/F): o míssil
-  // leve passou a ser INFINITO (T-C-08) — o HUD mostra ∞ e player.missiles virou um
-  // valor fixo de exibição (100), nunca decrementado nem recarregado
-  // (main.js#fireMissile sem guard/decremento; service-scene.js não o repõe).
-  test('AC-3: light missiles are infinite — HUD shows ∞ and the display value stays 100', async ({ page }) => {
+  // AC-3 (2026-08-11, armas por CADÊNCIA): o míssil leve segue infinito, mas o
+  // contrato do HUD mudou — mostra o estado de recarga ("X MSL: ✓" pronto, ou a
+  // contagem em segundos). player.missiles continua um valor fixo de exibição
+  // (100), nunca decrementado; a cadência vem de weapon-cooldowns.js (X 0.2 s).
+  test('AC-3: light missiles are infinite — HUD shows cooldown state and display value stays 100', async ({ page }) => {
     await page.goto('/src/web-games/aero-fighters/index.html');
     await page.waitForTimeout(600);
     const missiles = await page.evaluate(() => window.game?.player?.missiles);
-    expect(missiles).toBe(100); // valor fixo de exibição — o contrato é o ∞ do HUD
+    expect(missiles).toBe(100); // valor fixo de exibição — cadência limita, não munição
+    const cd = await page.evaluate(() => window.game?.player?.weaponCooldowns);
+    expect(cd).toBeTruthy();
+    expect(cd.light).toBe(0); // nasce pronta
     const hud = await page.evaluate(() => document.getElementById('missiles').textContent);
-    expect(hud).toContain('∞');
+    expect(hud).toContain('X MSL:');
   });
 
   // AC-4: ArrowDown rotates after takeoff speed — jet lifts from runway
