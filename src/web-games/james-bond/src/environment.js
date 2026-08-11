@@ -1,20 +1,33 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { CONFIG } from './config.js';
 import { createRandom, hashSeed } from './random.js';
+import { addProps } from './props.js';
 
-const INDOOR = new Set(['OP-02', 'OP-04', 'OP-05']);
+// Todas as missões passaram a ser QUARTEIRÕES a céu aberto: rua, calçada e
+// prédios em que se entra. O teto que cobria o mapa inteiro (herança dos mapas
+// "interiores") não faz mais sentido — ele tampava a rua. A iluminação interna
+// vem das luminárias de props.js e dos postes de city.js.
+const INDOOR = new Set();
 const dummy = new THREE.Object3D();
 
 export function addEnvironment(group, mission, world, materials) {
-  addWallTrim(group, world.walls, materials.trim);
+  // O embasamento das fachadas passou a ser desenhado face a face em city.js
+  // (só onde a parede é VISTA), então o antigo rodapé em toda parede saiu:
+  // eram duas peças ocupando o mesmo lugar.
   addFloorGuides(group, mission, world);
   if (INDOOR.has(mission.code)) addInterior(group, mission, world, materials);
   else addExterior(group, mission, world, materials);
   addMissionProps(group, mission, world, materials);
+  addProps(group, mission, world, materials);
 }
 
+// Faixas de sinalização — só DENTRO das construções: pintar guia no asfalto da
+// rua brigaria com a faixa central desenhada em city.js.
 function addFloorGuides(group, mission, world) {
-  const cells = openCells(world).filter(({ x, z }) => (x * 3 + z * 5) % 13 === 0);
+  const cells = openCells(world)
+    .filter(({ x, z }) => world.chars[z][x] === '.')
+    .filter(({ x, z }) => (x * 3 + z * 5) % 13 === 0);
+  if (!cells.length) return;
   const material = new THREE.MeshBasicMaterial({ color: mission.palette.accent, transparent: true, opacity: 0.48 });
   const guides = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.2, 0.07), material, cells.length);
   const matrix = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
@@ -29,26 +42,16 @@ function addFloorGuides(group, mission, world) {
   group.add(guides);
 }
 
-function addWallTrim(group, walls, material) {
-  const geometry = new THREE.BoxGeometry(CONFIG.cellSize * 1.01, 0.22, CONFIG.cellSize * 1.01);
-  const trim = new THREE.InstancedMesh(geometry, material, walls.length);
-  const matrix = new THREE.Matrix4();
-  walls.forEach((position, index) => {
-    matrix.makeTranslation(position.x, 0.22, position.z);
-    trim.setMatrixAt(index, matrix);
-  });
-  trim.instanceMatrix.needsUpdate = true;
-  trim.userData.noRay = true;
-  group.add(trim);
-}
-
 function addInterior(group, mission, world, materials) {
   const ceiling = new THREE.Mesh(
     new THREE.PlaneGeometry(world.width * CONFIG.cellSize, world.height * CONFIG.cellSize),
     new THREE.MeshStandardMaterial({ color: 0x202825, roughness: 0.72, metalness: 0.32, side: THREE.DoubleSide }),
   );
   ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.y = CONFIG.wallHeight + 0.04;
+  // O teto sobe acima do segundo andar, senão o mezanino nasce dentro dele.
+  ceiling.position.y = world.upper?.cells?.size
+    ? CONFIG.floorHeight + CONFIG.upperWallHeight
+    : CONFIG.wallHeight + 0.04;
   group.add(ceiling);
   const cells = openCells(world).filter(({ x, z }) => x % 5 === 2 && z % 4 === 1).slice(0, 14);
   const lightMaterial = new THREE.MeshStandardMaterial({ color: 0xdff7e8, emissive: 0xcfffe3, emissiveIntensity: 3 });
