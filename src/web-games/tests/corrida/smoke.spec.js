@@ -13,10 +13,11 @@ async function start(page, trackArrows = 0) {
 }
 
 test.describe('Cruis\'n Tauan — smoke', () => {
-  test('menu: 3 pistas e 5 carros, Idea Adventure presente', async ({ page }) => {
+  test('menu: 4 pistas e 5 carros, Idea Adventure presente', async ({ page }) => {
     await page.goto(URL);
     await page.waitForFunction(() => window.__corridaReady === true, { timeout: 15000 });
-    await expect(page.locator('#menuTracks .opt')).toHaveCount(3);
+    await expect(page.locator('#menuTracks .opt')).toHaveCount(4);
+    await expect(page.locator('#menuTracks')).toContainText('Serra do Tauan');
     await expect(page.locator('#menuCars .opt')).toHaveCount(5);
     await expect(page.locator('#menuCars')).toContainText('Idea Adventure 2013 Dual Logic');
   });

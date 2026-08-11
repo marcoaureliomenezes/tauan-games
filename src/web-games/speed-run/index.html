@@ -33,9 +33,35 @@
     #hud .tr { position: absolute; top: 12px; right: 16px; text-align: right; text-shadow: 0 2px 3px #000; }
     #speed { position: absolute; bottom: 18px; right: 22px; font-size: 42px; font-weight: bold; color: #ffd24a; text-shadow: 0 3px 4px #000; }
     #surface { position: absolute; bottom: 70px; right: 22px; font-size: 16px; color: #ffb060; text-shadow: 0 2px 3px #000; }
+    /* NITRO (v0.8.0): barra cyan 180×14 ao lado do velocímetro + flash de seco */
+    #nitro {
+      position: absolute; bottom: 24px; right: 190px; width: 180px; height: 14px;
+      border: 2px solid #7fd8ff; border-radius: 4px; background: #101418aa;
+    }
+    #nitroFill { height: 100%; width: 100%; background: #1f8fe0; }
+    #nitroLabel {
+      position: absolute; bottom: 42px; right: 190px; font-size: 12px;
+      font-weight: bold; color: #7fd8ff; text-shadow: 0 2px 3px #000; letter-spacing: 2px;
+    }
+    #nitroMsg {
+      position: absolute; bottom: 90px; right: 22px; display: none; font-size: 20px;
+      font-weight: bold; color: #7fd8ff; text-shadow: 0 2px 3px #000;
+      animation: nitroBlink 0.18s steps(2) infinite;
+    }
+    @keyframes nitroBlink { 50% { opacity: 0.25; } }
     #count {
       position: absolute; top: 30%; left: 0; right: 0; text-align: center; font-size: 110px;
       font-weight: bold; color: #ffd24a; text-shadow: 0 6px 0 #7a3010; display: none;
+    }
+    /* WS-5 Fuga: barra de vida 260×22 (verde → vermelha abaixo de 40) + aviso */
+    #life {
+      position: absolute; bottom: 18px; left: 22px; width: 260px; height: 22px;
+      border: 2px solid #e8e8f0; border-radius: 4px; background: #101418aa;
+    }
+    #lifeFill { height: 100%; width: 100%; background: #3cd060; }
+    #msg {
+      position: absolute; top: 22%; left: 0; right: 0; text-align: center;
+      font-size: 34px; font-weight: bold; color: #ff5040; text-shadow: 0 3px 4px #000;
     }
     #finish {
       position: fixed; inset: 0; display: none; flex-direction: column; align-items: center;
@@ -54,13 +80,20 @@
     <div class="row" id="menuTracks"></div>
     <div class="rowLabel">CARRO</div>
     <div class="row" id="menuCars"></div>
-    <div class="help">← → escolhe · ↑ ↓ muda linha · [Enter] CORRER · W/S acelera/freia · A/D vira · R reinicia</div>
+    <div class="rowLabel" id="menuModesLabel" style="display:none">MODO</div>
+    <div class="row" id="menuModes" style="display:none"></div>
+    <div class="help">← → escolhe · ↑ ↓ muda linha · [Enter] CORRER · W/S acelera/freia · A/D vira · Shift NITRO · R reinicia</div>
   </div>
   <div id="hud">
     <div class="tl"><span id="trackName"></span><br><span id="lap"></span> · <span id="pos"></span></div>
     <div class="tr"><span id="time"></span></div>
     <div id="surface"></div>
     <div id="speed"></div>
+    <div id="nitroLabel">NITRO</div>
+    <div id="nitro"><div id="nitroFill"></div></div>
+    <div id="nitroMsg">SEM NITRO</div>
+    <div id="life" style="display:none"><div id="lifeFill"></div></div>
+    <div id="msg"></div>
     <div id="count"></div>
   </div>
   <div id="finish">
