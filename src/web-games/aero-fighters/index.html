@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
   <title>Aero Strike — F-35 Ground Strike</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -70,21 +71,52 @@
 </head>
 <body>
   <div id="hud">
-    <span id="mission">MISSÃO 1</span>
-    <span id="lives">&#9829;&#9829;&#9829;</span>
-    <span id="damage-bar" style="color:#44ff88;font-size:16px;letter-spacing:2px">&#9632;&#9632;&#9632;</span>
-    <span id="score">SCORE: 000000</span>
-    <span id="missiles">MSLS: 100</span>
-    <span id="heavy-missiles">HVY: 10</span>
-    <span id="nuclear-missiles" style="color:#00ff44">&#9762; NUK: 3</span>
-    <span id="rod-missiles" style="color:#dddddd">R ROD: 4</span>
-    <span id="speed">SPD: 0</span>
-    <span id="throttle">THR: 50%</span>
-    <span id="altitude">ALT: 0m</span>
-    <span id="targets">ALVOS: 0/0</span>
-    <span id="stall-warn">&#9888; STALL</span>
-    <span id="approach" style="color:#66ddff;display:none"></span>
+    <span id="flight-hud" style="display:contents">
+      <span id="mission">MISSÃO 1</span>
+      <span id="lives">&#9829;&#9829;&#9829;</span>
+      <span id="damage-bar" style="color:#44ff88;font-size:16px;letter-spacing:2px">&#9632;&#9632;&#9632;</span>
+      <span id="score">SCORE: 000000</span>
+      <span id="missiles">X MSL: ✓</span>
+      <span id="heavy-missiles">B HVY: ✓</span>
+      <span id="nuclear-missiles" style="color:#00ff44">T NUK: ✓</span>
+      <span id="rod-missiles" style="color:#dddddd">R ROD: ✓</span>
+      <span id="speed">SPD: 0</span>
+      <span id="throttle">THR: 50%</span>
+      <span id="altitude">ALT: 0m</span>
+      <span id="targets">ALVOS: 0/0</span>
+      <span id="stall-warn">&#9888; STALL</span>
+      <span id="approach" style="color:#66ddff;display:none"></span>
+    </span>
     <button id="sound-toggle" type="button">&#128266; SOM</button>
+  </div>
+  <!-- T-D-03 (inhauma-defense-v1): HUD do modo defesa — display:none fora dele.
+       Populado por hud.js no padrão diff-render a partir de game.defense. -->
+  <div id="defense-hud" style="display:none;position:fixed;inset:0;pointer-events:none;
+    z-index:11;font-family:monospace;color:#e8f4e8;text-shadow:1px 1px 2px #000;">
+    <div id="def-reticle" style="position:fixed;left:50%;top:50%;width:44px;height:44px;
+      transform:translate(-50%,-50%);">
+      <div style="position:absolute;left:50%;top:50%;width:4px;height:4px;background:#7dff8a;
+        border-radius:50%;transform:translate(-50%,-50%);"></div>
+      <div style="position:absolute;inset:0;border:2px solid rgba(125,255,138,0.85);border-radius:50%;"></div>
+      <div style="position:absolute;left:50%;top:-12px;width:2px;height:10px;background:#7dff8a;transform:translateX(-50%);"></div>
+      <div style="position:absolute;left:50%;bottom:-12px;width:2px;height:10px;background:#7dff8a;transform:translateX(-50%);"></div>
+      <div style="position:absolute;top:50%;left:-12px;width:10px;height:2px;background:#7dff8a;transform:translateY(-50%);"></div>
+      <div style="position:absolute;top:50%;right:-12px;width:10px;height:2px;background:#7dff8a;transform:translateY(-50%);"></div>
+    </div>
+    <div style="position:fixed;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;font-size:14px;">
+      <span id="def-score" style="color:#ffe08a">SCORE: 000000</span>
+      <span id="def-city" style="color:#7dd7ff">INHAÚMA: 100%</span>
+      <span id="def-heat" style="color:#ffab5e">HEAT: ░░░░░░░░</span>
+      <span id="def-missiles" style="color:#9dff9d">AA: 8</span>
+      <span id="def-weapon" style="color:#e8f4e8">ARMA: .50</span>
+      <span id="def-arsenal" style="color:#c8d8ff">X ● · B ● · T ×3 · R ●</span>
+    </div>
+    <span id="def-horde" style="display:none;position:fixed;top:84px;left:50%;
+      transform:translateX(-50%);color:#ffaa33;font-weight:bold;font-size:17px;
+      letter-spacing:2px;">&#9888; HORDA NO HORIZONTE</span>
+    <span id="def-alert" style="display:none;position:fixed;top:60px;left:50%;
+      transform:translateX(-50%);color:#ff5544;font-weight:bold;font-size:18px;
+      letter-spacing:2px;">&#9888; MÍSSIL INCOMING</span>
   </div>
   <div id="boss-hud" style="position:fixed;top:42px;left:50%;transform:translateX(-50%);
     z-index:12;display:none;flex-direction:column;align-items:center;font-family:monospace;
@@ -115,6 +147,10 @@
       <button onclick="window.selectMap('inhauma')"
         style="background:#111;border:1px solid #0af;color:#0af;padding:14px 28px;cursor:pointer;font-size:14px;letter-spacing:2px;font-family:monospace">
         INHAUMA
+      </button>
+      <button onclick="window.selectMap('inhauma-defense')"
+        style="background:#111;border:1px solid #fa4;color:#fa4;padding:14px 28px;cursor:pointer;font-size:14px;letter-spacing:2px;font-family:monospace">
+        INHAUMA — DEFESA AA
       </button>
     </div>
   </div>

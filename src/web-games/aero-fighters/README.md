@@ -21,13 +21,46 @@ python3 -m http.server 8080
 | S | Throttle down / airbrake |
 | Q / E | Rudder (yaw left/right) |
 | Space or Z | Vulcan cannon (12.5 r/s) |
-| X | Homing missile (uses 1 of `player.missiles`) |
+| X | Homing missile — todas as armas são infinitas, limitadas por cadência (X 5/s, B 1/s, R 1/5s, T 1/min) |
 | Shift | Barrel roll (invincible 0.5s, 1.5s cooldown) |
 | P or Esc | Pause |
 | M | Toggle sound |
 | Space / Enter (title) | Start / restart |
 
 > ⚠️ Watch your altitude. **Crashing into the sea or a mountain is instant death** — no second chances, regardless of remaining lives.
+
+## Mapa Inhaúma — campanha ("Salvar Inhaúma → Libertar Cachoeira")
+
+No mapa **Inhaúma** o jogo é uma campanha em 2 atos (sem waves e sem chefe):
+Cachoeira da Prata foi **ocupada** (zeppelins, helicópteros, ninhos AA nas colinas,
+colunas blindadas, QG) e Inhaúma está **sob ataque** — colunas de tanques/
+blindados/tropas/caminhões avançam de Cachoeira pela MG-060 e baterias de
+artilharia **bombardeiam os prédios da cidade** (fogo e fumaça persistentes até a
+bateria cair). O Ato 1 é destruir o ataque; o Ato 2 é libertar Cachoeira. O
+aeroporto rearma a qualquer momento — voltar é decisão sua, não de wave.
+Armas por cooldown (2026-08-11): X 0.2 s, B 1 s, R 5 s, T nuclear 60 s; pickups zeram recargas.
+
+## Modo Inhaúma — Bateria Antiaérea (Defesa)
+
+O modo **`inhauma-defense`** é jogado **do chão**: você é o soldado de uma bateria
+antiaérea no alto de uma colina com vista para Inhaúma. Caças inimigos chegam em
+**esquadrilhas infinitas** (a taxa cresce com seus abates) para bombardear a
+cidade, a base e as baterias aliadas. Segure a barra **INHAÚMA** acima de 0%.
+
+| Input | Action |
+|-------|--------|
+| Clique | Pointer lock (trava a mira) |
+| Mouse | Mira (yaw/pitch do gimbal) |
+| LMB (segurar) | Metralhadora .50 (tracers, heat com histerese) |
+| X | Míssil AA homing (lock no retículo; pode errar se o caça manobrar) |
+| RMB | Zoom |
+| Scroll / 1 / 2 | Alternar arma |
+| Esc | Sair do pointer lock / pausa |
+
+Caças abatidos caem em espiral/glide/pique com fumaça preta até explodirem no
+chão (20% ejetam de paraquedas). Mísseis inimigos que miram você têm alerta e
+podem ser **interceptados no ar** pela .50 (bônus de score).
+
 
 ## Targets
 
