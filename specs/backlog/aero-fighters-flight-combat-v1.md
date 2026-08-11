@@ -1,9 +1,29 @@
 ---
-name: aero-fighters-flight-combat-v1
-status: OPEN
-created: 2026-07-15
+title: "Aero Fighters: flight, combat & FX experience overhaul"
+status: picked
+opened: 2026-07-15
 origin: operator demand 2026-07-15 (post-serra session — flight/combat/FX experience)
-target_release: aero-fighters-flight-combat-v1
+target_release: v0.2.12
+description: >-
+  Operator demand, verbatim scope (6 points, all mandatory): landing experience +
+  airport design; player plane design + propulsion + turbine sound; takeoff
+  experience; missile flight experience + range-independent 80% hit rule; nuclear
+  explosion overhaul; new rod kinetic missiles. Final acceptance = operator plays
+  the game locally with all improvements.
+intents:
+  - subject:
+      kind: catalog
+      ref: aero-strike-flight
+    change: >-
+      Flight/combat/FX overhaul (6 mandatory points): (1) clear runway + taxiway
+      layout with natural touchdown → roll-out → taxi flow on paved surfaces; (2)
+      better player jet model, finer throttle staging, improved propulsion
+      jet/afterburner, turbine (not propeller) engine sound; (3) smooth realistic
+      takeoff (acceleration, rotation, climb-out); (4) visible curved missile
+      pursuit trajectories + always-80% hit chance regardless of launch range; (5)
+      nuclear fireball overhaul (flash, growth, buoyant rise, mushroom, shockwave)
+      + larger destruction radius; (6) new rod kinetic missiles (2× speed, pierce
+      and continue, maneuvering, 3-kill guarantee within nuke action radius).
 ---
 
 # Backlog — Aero Fighters: flight, combat & FX experience overhaul
@@ -58,5 +78,12 @@ to the nuclear bomb's action radius.
   operator validates by playing locally (dev server up + registered at the end).
 
 ## Disposition
-To be promoted to release `aero-fighters-flight-combat-v1` after the serra
+To be promoted to release `v0.2.12` after the serra
 release ships (operator mandate 2026-07-15: full autonomous execution).
+
+## Curadoria (2026-08-11, project-manager)
+
+Normalização BL-SCHEMA: frontmatter canônico, status `OPEN` → `picked` (a release
+`specs/releases/aero-fighters-flight-combat-v1/` existe — promovido; sem CLOSURE, logo
+não marcado `delivered`), e `intents[]` retro-vinculado à âncora de catálogo
+`aero-strike-flight`. Conteúdo original preservado.

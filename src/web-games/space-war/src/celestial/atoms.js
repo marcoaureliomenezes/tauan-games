@@ -1,5 +1,5 @@
 // celestial/atoms.js — Átomos VISUAIS reutilizáveis da biblioteca de corpos celestes.
-// Extraídos verbatim de bodies.js (release space-war-celestial-components-v1, AC-06):
+// Extraídos verbatim de bodies.js (release v0.2.4, AC-06):
 // shaders de estrela/disco/remanescente, sprites radiais, texturas procedurais de
 // planeta, atmosfera fresnel, anéis e a esfera padrão. Nada é carregado de fora:
 // tudo pintado em canvas ou gerado em GLSL.

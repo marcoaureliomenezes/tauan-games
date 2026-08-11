@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-// Suite da release space-war-interstellar-journey-v1.
+// Suite da release v0.2.6.
 // AC-01 fluxo T/O/Z + abort · AC-03 corredor galáctico · AC-04 relatividade
 // · AC-05 bulbo galáctico · AC-06 nave visível. (AC-02 perfil = unit node.)
 

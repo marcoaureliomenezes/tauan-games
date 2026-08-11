@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-// Suite da release space-war-photometric-stars-v1.
+// Suite da release v0.2.7.
 // AC-01 starfield fotométrico em quads · AC-02 LOD ponto↔disco · AC-03 corona/
 // flare honestos · AC-04 pulsar visível (operador) · AC-05 glows de sistema.
 // Asserts por DIAGNÓSTICO (game.starLod/sysGlow — R-4 do PLAN): imunes ao

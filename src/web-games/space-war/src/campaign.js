@@ -1,4 +1,4 @@
-// campaign.js — A CAMPANHA em 5 fases do Space War (release space-war-campaign-v1).
+// campaign.js — A CAMPANHA em 5 fases do Space War (release v0.2.3).
 //
 // Fases ordenadas sobre os sistemas: Solar → Betelgeuse → Binário BN+Pulsar →
 // Binário Caótico → Núcleo da Galáxia. Cada fase é DADOS (missões bomb|clear|visit);

@@ -7,11 +7,14 @@ Jogos web do Tauan — jogáveis direto no navegador, sem build step.
 | Jogo | Engine | URL |
 |---|---|---|
 | 🌌 **Space War** — simulador de universo com 5 sistemas estelares, física orbital real, buraco negro, pulsar e núcleo galáctico | Three.js r165 (vendorado) | [/src/web-games/space-war/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/space-war/) |
-| ✈️ **Aero Strike** — ataque ao solo com F-35: 4 mapas, decolagem/pouso, canhão, mísseis e NUKE com cogumelo volumétrico | Three.js r165 (vendorado) | [/src/web-games/aero-fighters/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/aero-fighters/) |
+| ✈️ **Aero Strike** — ataque ao solo com F-35: 4 mapas (incl. Inhaúma realista), decolagem/pouso, canhão, mísseis, NUKE com cogumelo volumétrico e firestorm | Three.js r165 (vendorado) | [/src/web-games/aero-fighters/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/aero-fighters/) |
 | 🦖 **Tauan T-Rex** — corrida infinita do dinossauro | Phaser 3 | [/src/web-games/tauan-trex/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/tauan-trex/) |
+| 🕵️ **James Bond: Operações** — FPS de espionagem com 6 operações | Three.js r165 | [/src/web-games/james-bond/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/james-bond/) |
+| 🏁 **Cruis'n Tauan** — corrida arcade estilo Cruis'n World | Three.js r165 | [/src/web-games/speed-run/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/speed-run/) |
 | 🏗️ **Demolition Ball** — trator-guindaste com bola de demolição numa cidade viva (rio, pontes, pedestres, equipe de cones); Modo Tauan para os pequenos | WebGL2 puro (zero libs) | [/src/web-games/demolition-ball/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/demolition-ball/) |
 
-`aero-fighters-v2/` é o remake em Godot 4.4 (pausado — só CI de lint/validade de cena).
+Jogos desktop Godot 4 vivem em `src/godot/` (speed-run, james-bond, space-war) —
+status em `specs/memory/product/games-catalog.md`.
 
 ## Rodar localmente
 
@@ -50,11 +53,10 @@ O fluxo completo, do código ao ar:
 3. **Push + PR** para `main`:
    `git push -u origin feature/minha-mudanca && gh pr create --base main`
 4. **CI do PR toda verde** — obrigatório, sem exceção:
-   - `CI / Playwright Tests` — suíte e2e dos 3 jogos;
+   - `CI / Playwright Tests` — suíte e2e dos jogos web;
    - `GitGuardian` — vazamento de segredos;
-   - `aero-fighters-v2 Godot CI` (só dispara se tocar `aero-fighters-v2/**`) —
-     gdlint (sem `addons/` vendorado), validade de cena Godot 4.4 headless,
-     flake8/black em `Tools/`, LFS.
+   - `godot-ci` (só dispara se tocar `src/godot/**`) — gdlint, import headless
+     Godot 4.7 e gdUnit4 quando o projeto tem testes.
    Se algum job falhar: `gh run view <id> --log-failed`, corrigir a causa raiz,
    push de novo e esperar verde. **Nunca fazer merge com job vermelho ou pendente.**
 5. **Merge do PR** (merge commit): `gh pr merge <n> --merge`

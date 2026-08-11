@@ -7,7 +7,9 @@ import { game } from './state.js';
 import { createSkybox } from './skybox.js';
 import { buildSolarSystem, updateSOIView, updateBodyFX } from './bodies.js';
 import { initOrbits, updateOrbits } from './orbits.js';
-import { buildShip, updateShip, shipMesh, toggleObservationCamera } from './ship.js';
+import { buildShip, updateShip, shipMesh, toggleObservationCamera, launchState, cancelLaunch } from './ship.js';
+import { LAUNCH_STAGE, entrySpeed } from './launch.js';
+import { buildLaunchPad, updateLaunchPad } from './launchpad.js';
 import { input, installListeners, onAction } from './input.js';
 import { fireLaser, launchNuke, launchGravBomb, launchHiggs, updateProjectiles, enemyBomb } from './weapons.js';
 import { journeyToggle, journeyEligible, journeyWarp } from './journey.js';
@@ -31,6 +33,7 @@ initOrbits();
 updateOrbits(0.0001);
 buildPlanetarySystems();   // registra os sistemas planetários (modo ORBIT)
 buildShip();
+buildLaunchPad();
 buildStarfield();
 buildFarStars();
 spawnEnemies();
@@ -70,7 +73,10 @@ showOverlay(`<div style="color:#7df;font-size:34px;letter-spacing:6px">SPACE WAR
 // --- Ações discretas ---
 onAction('start', () => {
   if (game.phase === 'menu') { game.phase = 'briefing'; startMissions(); }
-  else if (game.phase === 'briefing') { game.phase = 'flight'; beginFlight(); hideOverlay(); }
+  else if (game.phase === 'briefing') {
+    game.phase = 'flight'; beginFlight(); hideOverlay();
+    if (game.ship.landed) showToast('🛰 Plataforma de lançamento — SEGURE W para decolar', 4200);
+  }
   else if (game.phase === 'win' || game.phase === 'gameover') { location.reload(); }
 });
 onAction('nuke', () => { if (game.phase === 'flight') { if (!launchNuke()) showToast('Sem nukes ou nave pousada', 1500); } });
@@ -112,6 +118,32 @@ onAction('assist', () => {
 });
 onAction('pause', () => { if (game.phase === 'flight') { game.paused = !game.paused; showToast(game.paused ? '⏸ PAUSA' : '', game.paused ? 99999 : 1); } });
 
+// --- DECOLAGEM (launch.js): eventos da subida → toasts/FX + plataforma ---
+const _earthBody = game.bodies.find((b) => b.def.key === 'earth');
+const _padUp = new THREE.Vector3();
+function updateLaunchFlow() {
+  const s = game.ship;
+  // plataforma segue o ponto de pouso (gira com a Terra); some na subida
+  _padUp.copy(s.pos).sub(_earthBody.worldPos).normalize();
+  const alt = s.pos.distanceTo(_earthBody.worldPos) - _earthBody.def.radius;
+  updateLaunchPad(_earthBody, _padUp, s.landed ? 0 : alt);
+  const L = launchState();
+  for (const e of L.events) {
+    if (e.type === 'liftoff') showToast('🚀 DECOLAGEM — segure W até a órbita', 3000);
+    else if (e.type === 'turn') showToast('CURVA GRAVITACIONAL — o bico inclina para ganhar velocidade horizontal', 3200);
+    else if (e.type === 'atmo') showToast('Saímos da atmosfera — sem ar, o céu fica escuro mesmo de dia', 3200);
+    else if (e.type === 'booster') {
+      showToast(`Estágio ${e.idx + 1} separado`, 2200);
+      explosion(shipMesh().position.clone().addScaledVector(_padUp, -3), 0.35, 0xd8c9a8);
+    } else if (e.type === 'inserted') {
+      showToast(`◎ ÓRBITA ALCANÇADA — 27.000 km/h (v_circ ${Math.round(entrySpeed(_earthBody))} u/s)`, 3600);
+    } else if (e.type === 'abort') {
+      showToast('Pousado de volta na plataforma — segure W para decolar', 3000);
+    }
+  }
+  L.events.length = 0;
+}
+
 // --- Loop ---
 const clock = new THREE.Clock();
 const _back = new THREE.Vector3();
@@ -138,6 +170,7 @@ function loop() {
     updateBodyFX(dt);
     updateMode(dt, { toast: showToast });   // máquina ORBIT/CRUISE/JOURNEY
     updateShip(dt);
+    updateLaunchFlow();
     if (input.fire) fireLaser(dt);
     // trilha do motor
     _back.set(0, 0, 1).applyQuaternion(game.ship.quat);
@@ -268,7 +301,7 @@ if (typeof window !== 'undefined') {
       if (!b) return false;
       game.phase = 'flight';
       const s = game.ship;
-      s.landed = false; s.vel.set(0, 0, 0); s.throttle = 0;
+      s.landed = false; s.vel.set(0, 0, 0); s.throttle = 0; cancelLaunch();
       const r = b.def.radius;
       // Direção do Sol (corpo → origem) para enquadrar o hemisfério iluminado.
       const toSun = new THREE.Vector3().copy(b.worldPos).multiplyScalar(-1);
@@ -290,7 +323,7 @@ if (typeof window !== 'undefined') {
       if (!t || t.destroyed) return false;
       game.phase = 'flight';
       const s = game.ship;
-      s.landed = false; s.throttle = 0;
+      s.landed = false; s.throttle = 0; cancelLaunch();
       // CO-MÓVEL com o corpo do alvo: sem isto a nave deriva ~250 u/s em relação
       // à base (a Lua anda!) e cai do encontro durante a espera do teste.
       if (t.body.worldVel) s.vel.copy(t.body.worldVel); else s.vel.set(0, 0, 0);
@@ -325,6 +358,40 @@ if (typeof window !== 'undefined') {
         bodyNdcY: +ndc.y.toFixed(3),
         bodyNdcZ: +ndc.z.toFixed(3),
       };
+    },
+    // Decolagem (QA): telemetria da sequência LANDED→ASCENT→GRAVITY_TURN→INSERTED.
+    launchReport() {
+      const s = game.ship;
+      const L = launchState();
+      const stage = ['LANDED', 'ASCENT', 'GRAVITY_TURN', 'INSERTED'][L.stage] || String(L.stage);
+      return {
+        stage, t: +L.t.toFixed(2), landed: !!s.landed,
+        boostersDropped: L.boostersDropped,
+        altitude: +(+s.altitude).toFixed(2),
+        vTan: +(+s.vTangential || 0).toFixed(2),
+        vRad: +(+s.vRadial || 0).toFixed(2),
+        circVel: +(+s.circVel || 0).toFixed(2),
+        mode: game.mode,
+        inOrbit: !!s.inOrbit,
+        insert: s.launchInsert || null,   // snapshot terra-relativo da inserção
+      };
+    },
+    // Decolagem (QA): segura o W virtualmente (pilotagem determinística).
+    holdW(on = true) { input.throttleUp = !!on; return input.throttleUp; },
+    // Decolagem (QA): avança a SIMULAÇÃO síncrona em passos de 1/60 s (sem
+    // render) — o headless roda a ~1 fps e a subida pilotada leva ~35 s de
+    // tempo de jogo; mesmo padrão do journeyWarp. Devolve o launchReport.
+    launchWarp(seconds = 1) {
+      const dt = 1 / 60;
+      const steps = Math.min(Math.ceil(seconds / dt), 7200);
+      for (let i = 0; i < steps; i++) {
+        game.time += dt;
+        updateOrbits(dt);
+        updateMode(dt, {});
+        updateShip(dt);
+        updateLaunchFlow();
+      }
+      return this.launchReport();
     },
     // Campanha (QA): força a conclusão da missão ativa (gating/unlock testável).
     winMission() { return debugCompleteMission(); },

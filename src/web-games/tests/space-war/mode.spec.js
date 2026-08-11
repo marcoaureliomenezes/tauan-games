@@ -91,7 +91,7 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
 
   // AC-04: engatar a jornada promove a máquina a JOURNEY; chegada devolve CRUISE.
   test('AC-04: JOURNEY durante a queima; chegada em CRUISE', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(150000);   // 60s estourava só com o boot (~45s) sob carga
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('terra', 4));
     await page.evaluate(() => window.__swDebug.target('betelgeuse'));
@@ -119,11 +119,14 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
   test('AC-06: planeta como referencial fixo embaixo (frame aero-fighters)', async ({ page }) => {
     await startFlight(page);
     await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 15000 });
-    // decola e deixa o nível automático assentar a atitude no frame local
+    // decola e engata o ASSISTENTE DE ÓRBITA ([O]) — circulariza em volta da
+    // Terra: é a experiência exata do frame (planeta embaixo, asas niveladas)
     await page.keyboard.down('KeyW');
     await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 20000 });
     await page.keyboard.up('KeyW');
-    await page.waitForTimeout(4000);
+    await page.keyboard.press('KeyO');
+    await page.waitForFunction(() => window.__spaceWar.ship.inOrbit === true, { timeout: 40000 });
+    await page.waitForTimeout(1500);
     const fr = await page.evaluate(() => window.__swDebug.frameReport());
     expect(fr).not.toBe(null);
     expect(fr.body).toBe('earth');

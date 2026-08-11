@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-// Suite da release space-war-physics-fidelity-v1.
+// Suite da release v0.2.8.
 // AC-01 pulsar BRILHA · AC-02 massas físicas · AC-05 arsenal gravitacional
 // (traçadora [G] + bomba de Higgs [H] + poço em computeGravity + supernova)
 // · AC-06 escala de parede.
@@ -137,7 +137,7 @@ test.describe('Space War — Fidelidade Física', () => {
     await page.waitForFunction(() => (window.__spaceWar.supernovaCount || 0) >= 1, { timeout: 90000 });
   });
 
-  // AC-06 (SUPERSEDED por space-war-true-proportions-v1): a inflação estática
+  // AC-06 (SUPERSEDED por v0.2.9): a inflação estática
   // de raios foi retificada pelo operador — a Terra é grande vs a NAVE (2200 =
   // 275 naves) e a "parede" vem de CHEGAR PERTO (θ = 2R/d honesto); luas
   // coerentes (dentro da SOI, fora de 2·R) continuam LEI.

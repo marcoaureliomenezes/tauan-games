@@ -4,7 +4,7 @@
 #   2. project-validate — Godot 4.7.1 headless --import --quit por projeto (parse de cenas/scripts)
 #   3. gdunit4-tests — gdUnit4-action por projeto, somente quando o projeto tem test/ com testes
 #
-# O aero-fighters-v2 mantém seu workflow dedicado (aero-v2-godot-ci.yml); este cobre os demais.
+# Cobre todos os projetos Godot em src/godot/ (aero-v2-godot-ci.yml removido em v0.6.0).
 
 name: Godot CI
 
@@ -69,7 +69,7 @@ jobs:
           status=0
           for proj in $(find src/godot -maxdepth 2 -name project.godot | sort); do
             dir=$(dirname "$proj")
-            case "$dir" in *aero-fighters-v2*) continue ;; esac
+            # (sem exclusões — v2 removido em v0.6.0)
             echo "::group::Import $dir"
             if ! (cd "$dir" && godot --headless --import --quit); then
               echo "::error::Import failed for $dir"

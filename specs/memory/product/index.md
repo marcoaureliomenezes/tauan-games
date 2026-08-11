@@ -41,6 +41,7 @@
 
 | slug | title | tldr |
 |------|-------|------|
+| `james-bond-godot-jogo` | James Bond (Godot) — o jogo | Port falho do FPS web — código perdido (nunca commitado); rebuild do zero pelo contrato web. |
 | `james-bond-jogo` | James Bond Operações — o jogo | FPS de espionagem no browser com 6 operações, IA de guardas com A*, tudo procedural — nenhum asset do GoldenEye. |
 
 ### memoria-bichos
@@ -68,7 +69,7 @@
 | slug | title | tldr |
 |------|-------|------|
 | `speed-run-godot-jogo` | Speed Run (Godot) — o jogo | Corrida desktop Godot 4 com VehicleBody3D real — circuito com aterro, guard-rails e 3 IA. |
-| `speed-run-web-jogo` | Speed Run (web) — o jogo | Corrida arcade estilo Cruis'n World no browser — 3 pistas, 5 carros GLB (incl. Fiat Idea Adventure 2013), tráfego civil, capotamento. |
+| `speed-run-web-jogo` | Speed Run (web) — o jogo | Corrida arcade estilo Cruis'n World no browser — 3 circuitos + pista sprint A→B com modo Fuga, réplica do Idea Adventure 2013, nitro, música Top Gear, fixed timestep. |
 
 ### tauan-trex
 

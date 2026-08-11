@@ -1,7 +1,7 @@
 # Vendored model licenses
 
 All models in this directory are **CC0 1.0 (Public Domain)**. No attribution
-required. Downloaded on **2026-07-18** for the far-west-open-world-v1 release
+required. Downloaded on **2026-07-18** for the v0.3.1 release
 (task T-FW-01). Everything is vendored locally — the game never fetches models
 at runtime.
 
@@ -54,6 +54,41 @@ CDN) at build time only.
   Mind, https://poly.pizza/m/vrdJP4oV26) is fully static. The animated one was
   kept.
 - All other bird/train/character candidates found were CC-BY and were skipped.
+
+## Inimigos animados (`enemies/` — james-bond), vendorizados 2026-07-24
+
+Todos Quaternius (CC0 1.0), servidos por `static.poly.pizza` em build-time — o
+jogo nunca busca modelos em runtime. Manifesto próprio em `enemies/manifest.json`
+para que os demais jogos não carreguem estes arquivos.
+
+Verificação de licença (2026-07-24): cada página de modelo em poly.pizza lista
+`Quaternius` como autor e `CC0 1.0 / Public Domain`; os pacotes de origem são
+"Animated Dinosaurs" (https://poly.pizza/bundle/Animated-Dinosaur-Bundle-SmoLdBLO2K)
+e "Ultimate Monsters" (https://poly.pizza/bundle/Ultimate-Monsters-Bundle-5oyGWAmOB6),
+ambos declarados CC0 pelo autor.
+
+| File | Model | Source page | License |
+|---|---|---|---|
+| enemies/Velociraptor.glb | Velociraptor (6 clips: Idle/Walk/Run/Attack/Jump/Death) | https://poly.pizza/m/cnlGH2UcDd | CC0 1.0 |
+| enemies/TRex.glb | T-Rex (6 clips: Idle/Walk/Run/Attack/Jump/Death) | https://poly.pizza/m/UYtneO5FpF | CC0 1.0 |
+| enemies/Ghost.glb | Ghost (8 clips incl. Flying_Idle/Fast_Flying/Death) | https://poly.pizza/m/Iip30bDHmu | CC0 1.0 |
+| enemies/Yeti.glb | Yeti (14 clips incl. Walk/Run/Punch/Death) | https://poly.pizza/m/ceRHrn8HHE | CC0 1.0 |
+| enemies/Wizard.glb | Wizard (9 clips incl. Walk/Bite_Front/Death) | https://poly.pizza/m/o87Upt5uHX | CC0 1.0 |
+| enemies/Demon.glb | Demon (14 clips incl. Walk/Run/Punch/Death) | https://poly.pizza/m/LnfIziKv4o | CC0 1.0 |
+
+### Notas / candidatos descartados
+
+- **Vampiro:** o pacote Ultimate Monsters não tem um vampiro literal. Os 44
+  modelos foram enumerados e o `Wizard` (humanoide esguio de manto) foi o mais
+  próximo; é retingido em runtime para leitura de vampiro. Nenhum vampiro CC0
+  melhor foi encontrado.
+- **Mixamo foi deliberadamente evitado.** O EULA da Adobe permite uso comercial
+  do resultado, mas **proíbe a redistribuição dos arquivos** de personagem/animação
+  — incompatível com vendorizar num repositório público. Nada de Mixamo entrou aqui.
+- **Freesound / sons de criatura:** licença é por arquivo (muitos CC-BY, não CC0),
+  então nenhum sample foi vendorizado. Os sons de inimigo do james-bond continuam
+  100% sintetizados em Web Audio (`src/engine/audio.js`), o que também preserva
+  a regra de "sem tela de loading".
 
 ## Carros (corrida/ — Cruis'n Tauan), vendorizados 2026-07-18
 

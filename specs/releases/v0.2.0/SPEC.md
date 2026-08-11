@@ -5,7 +5,7 @@
 > **Author:** Codex / product-engineer
 > **Created:** 2026-06-30
 > **Release ID:** v0.2.0
-> **Supersedes:** `aero-fighters-inhauma-map-v1` map-generation approach
+> **Supersedes:** `v0.0.6` map-generation approach
 > **Consumes:** aero-fighters-inhauma-gis-map-v1
 
 ---

@@ -9,14 +9,14 @@ tags:
   - identity
 token_estimate: 0
 last_updated: "2026-06-12"
-release_origin: aero-fighters-uplift-v1
+release_origin: v0.1.0
 ---
 
 ## O que é
 
 Repositório de jogos e experimentos interativos — espaço pessoal de aprendizado e
-criação. Hoje hospeda dois jogos web jogáveis (`tauan-trex` e `aero-fighters`) e a
-infraestrutura compartilhada de testes Playwright.
+criação. O catálogo vivo está em [[games-catalog]]; a infraestrutura compartilhada
+de testes Playwright vive em `src/web-games/tests/`.
 
 ## Propósito
 

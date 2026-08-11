@@ -10,7 +10,7 @@ tags:
   - gameplay
 token_estimate: 0
 last_updated: "2026-07-01"
-release_origin: aero-fighters-world-realism-v1
+release_origin: v0.2.1
 ---
 
 ## O que é
@@ -81,3 +81,11 @@ portfólio (~50 módulos ES, ~9,8k linhas).
 - [[aero-strike-combat]] — inimigos, boss, ally-war, armas, lock-on.
 - [[aero-strike-fx]] — explosões, nuke, câmera, áudio, HUD.
 - [[games-catalog]] — status de release; [[quality-bar]] — critérios de entrega.
+
+## Unificação 2026-08-10 (v0.6.0) — aero-fighters ÚNICO na web
+
+Esta versão web é o ÚNICO aero-fighters do portfólio. Removidos: `aero-fighters-v2`
+(Godot, esqueleto parado) e o port Godot de 2026-07-19..22 — restaurado e commitado
+(74b2108) para avaliação do operador, que o reprovou ao jogar e ordenou a deleção
+("pure trash", 2026-08-10; recuperável via git history). Pipeline geográfico
+OSM+SRTM do v2 transferido para `assets/geo/` + `tools/inhauma-data-fetch.py`.

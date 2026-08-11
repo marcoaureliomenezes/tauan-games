@@ -1,13 +1,13 @@
 ---
 title: Memoria dos Bichos
-status: candidate
+status: rejected
 opened: 2026-07-12
-release: memoria-bichos-v1
+release: v0.2.10
 description: Criar Memoria dos Bichos como jogo infantil standalone de memoria com cartas de animais, tres niveis, feedback alegre e operacao estatica/offline.
 intents:
   - subject:
       kind: doc
-      ref: memory/architecture.md#Regras de dependência
+      ref: memory/architecture.md#requisitos-de-desenvolvimento-ambos-os-grupos
     change: "Manter Memoria dos Bichos como jogo isolado em pasta propria, sem dependencia horizontal de tauan-trex, aero-fighters/Aero Strike, space-war ou corrida."
   - subject:
       kind: doc
@@ -27,7 +27,7 @@ intents:
 
 ## Description
 
-Criar `memoria-bichos-v1`: um jogo infantil novo e standalone para Tauan, chamado
+Criar `v0.2.10`: um jogo infantil novo e standalone para Tauan, chamado
 **Memoria dos Bichos**, em Vanilla HTML/CSS/JS estatico. O jogo apresenta uma grade de
 cartas viradas para baixo; a crianca vira 2 cartas por vez; pares de animais iguais
 ficam abertos com som e animacao alegre; erro vira as cartas de volta apos feedback
@@ -81,3 +81,14 @@ itens listados pertencem a Aero/Space War/orquestracao.
   par aberto e concluir uma partida deterministica.
 - A implementacao fica isolada na pasta do novo jogo e nao importa codigo de outros
   jogos; compartilhamento permitido limita-se a infraestrutura transversal do repo.
+
+> **REJEITADO pelo operador em 2026-08-10** (release v0.6.0): jogo deletado do
+> catálogo (código, testes, memória). Release v0.2.10 arquivada em
+> `specs/releases/legacy/`.
+
+## Curadoria (2026-08-11, project-manager)
+
+Normalização BL-SCHEMA: a âncora `memory/architecture.md#Regras de dependência` deixou
+de existir após a reescrita da memória de arquitetura; ref corrigida para
+`memory/architecture.md#requisitos-de-desenvolvimento-ambos-os-grupos` (mesma semântica:
+regras de isolamento/dependência entre jogos). Demais intents inalterados.

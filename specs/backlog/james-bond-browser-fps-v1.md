@@ -2,7 +2,7 @@
 title: James Bond - FPS de espionagem para browser inspirado em GoldenEye 007
 status: idea
 opened: 2026-07-18
-release: james-bond-browser-fps-v1
+release: v0.3.0
 description: "Novo FPS 3D standalone e offline para browser, com controles WASD + mouse, campanha por missões, furtividade, IA por percepção, arsenal variado, explosões, áudio espacial e mapas originais inspirados na estrutura de GoldenEye 007 (N64)."
 ---
 
@@ -237,8 +237,9 @@ pointer lock. Progresso e opções usam `localStorage` versionado.
 
 ## Decisões abertas para release-definition
 
-- Promover este item para `candidate` e vincular intents somente após o fechamento de
-  `far-west-open-world-v1`, que hoje reserva as mesmas âncoras de catálogo e stack.
+- Promover este item para `candidate` e vincular intents — desbloqueado em 2026-08-10:
+  `v0.3.1` foi rejeitado e o jogo deletado (release
+  `v0.4.0`), liberando as âncoras de catálogo e stack.
 - Confirmar o título e a ficção originais antes de qualquer publicação pública.
 - Confirmar o corte inicial recomendado de seis missões completas; se o risco de prazo
   for dominante, entregar três primeiro e manter as outras três na release seguinte.

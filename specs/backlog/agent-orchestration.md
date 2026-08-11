@@ -1,3 +1,13 @@
+---
+title: "Agent Orchestration — notas vivas de coordenação"
+status: idea
+opened: 2026-08-11
+description: >-
+  Documento vivo (não é spec nem feature) para registrar atritos, decisões de
+  orquestração e ajustes de matriz de autoridade dos agentes game-* observados
+  durante releases deste repositório.
+---
+
 # Backlog — Agent Orchestration
 
 Notas sobre coordenação dos agentes que atuam neste repositório. Não é spec — é um
@@ -28,3 +38,9 @@ editar specs/PLAN/TASKS deste repo, sem tocar em código de jogo.
 ## Atritos registrados
 
 (vazio — popular conforme ocorrer)
+
+## Curadoria (2026-08-11, project-manager)
+
+Normalização BL-SCHEMA: arquivo de notas sem frontmatter falhava o doctor; adicionado
+frontmatter canônico com `status: idea` (notas não-vinculadas, isentas de intents).
+Conteúdo original preservado.

@@ -51,7 +51,10 @@ export const SHIP = {
 // Atmosfera padrão (espessura acima da superfície, fração do raio). Reentrada queima.
 export const ATMO = {
   thicknessFactor: 0.28,  // espessura da atmosfera = raio × isto
-  drag: 1.6,              // arrasto atmosférico (desacelera + esquenta)
+  drag: 0.45,             // arrasto atmosférico (era 1.6: com as gravidades de
+                          // fase (μ derivado do ritmo) ele vencia o assistente
+                          // de órbita — equilíbrio travado em vT<vCirc, órbita
+                          // impossível dentro da atmosfera)
   burnSpeed: 900,         // acima desta velocidade dentro da atmosfera, o casco esquenta
   burnDamage: 14,         // dano/s ao casco quando超 superaquece
 };
@@ -500,6 +503,15 @@ for (const p of [...PLANETS, ...BETELGEUSE.planets]) {
   const cruise = Math.max(sysRadius / ORBIT_CROSS_S_CFG, 120);
   p.mu = (0.8 * cruise) ** 2 * p.radius;
   p.soi = Math.max(p.soi, outermost * 1.65);
+  // SOI de lua ≤ esfera de LAPLACE real (orbit × (μm/μp)^0.4): os dois passes de
+  // escala inflavam a SOI da Lua a 2,4× o raio de Hill — ela reivindicava
+  // dominância onde o PLANETA domina de fato, e cada travessia espúria da borda
+  // trocava o frame patched-conics (saltos de worldAcc de ~50 u/s²) BOMBEANDO
+  // qualquer órbita baixa (a órbita de entrada da decolagem decaía/escapava).
+  for (const m of p.moons || []) {
+    const laplace = m.orbit * (m.mu / p.mu) ** 0.4;
+    m.soi = Math.max(Math.min(m.soi, laplace), m.radius * 1.2);
+  }
   for (const st of p.stations || []) st.radius = (st.radius ?? 8) * 4;
 }
 

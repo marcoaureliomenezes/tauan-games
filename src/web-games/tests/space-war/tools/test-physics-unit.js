@@ -1,5 +1,5 @@
 // test-physics-unit.js — Fidelidade física dos corpos compactos (release
-// space-war-physics-fidelity-v1). Roda em node puro:
+// v0.2.8). Roda em node puro:
 //   node --experimental-default-type=module tests/space-war/tools/test-physics-unit.js
 //
 // Prova as leis da literatura no código REAL do jogo:

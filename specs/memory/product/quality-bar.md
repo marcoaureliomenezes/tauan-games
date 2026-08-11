@@ -9,7 +9,7 @@ tags:
   - quality
 token_estimate: 0
 last_updated: "2026-06-12"
-release_origin: aero-fighters-uplift-v1
+release_origin: v0.1.0
 ---
 
 ## Propósito
@@ -29,7 +29,7 @@ Critérios de qualidade não-negociáveis:
 - **Smoke Playwright passando** — todo jogo tem ao menos um smoke em `tests/<jogo>/`
   validando boot sem console errors.
 - **Operação offline** — vendor local de libs, sem CDN/rede em runtime (NFR-02 de
-  `testing-infra-v1`).
+  `v0.0.3`).
 - **Sem regressão entre releases** — toda release roda a suíte do jogo afetado
   (`npm run test:aero:qa` ou equivalente) antes de fechar.
 

@@ -1,0 +1,57 @@
+{
+  "_comment": "Inimigos animados do james-bond. Manifesto próprio (não o de vendor/models/) para que os outros jogos não carreguem estes GLBs. Todos Quaternius, CC0 1.0 — ver ../LICENSES.md.",
+  "models": {
+    "raptor": {
+      "file": "Velociraptor.glb",
+      "pack": "Quaternius Animated Dinosaurs (model: Velociraptor)",
+      "source": "https://poly.pizza/m/cnlGH2UcDd",
+      "license": "CC0",
+      "animated": true,
+      "clipPrefix": "Velociraptor_",
+      "animations": ["Idle", "Walk", "Run", "Attack", "Jump", "Death"]
+    },
+    "trex": {
+      "file": "TRex.glb",
+      "pack": "Quaternius Animated Dinosaurs (model: T-Rex)",
+      "source": "https://poly.pizza/m/UYtneO5FpF",
+      "license": "CC0",
+      "animated": true,
+      "clipPrefix": "TRex_",
+      "animations": ["Idle", "Walk", "Run", "Attack", "Jump", "Death"]
+    },
+    "phantom": {
+      "file": "Ghost.glb",
+      "pack": "Quaternius Ultimate Monsters (model: Ghost)",
+      "source": "https://poly.pizza/m/Iip30bDHmu",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Flying_Idle", "Fast_Flying", "Punch", "Headbutt", "HitReact", "Death"],
+      "note": "Fantasma branco clássico; flutua (sem clipes de caminhada, só de voo)."
+    },
+    "monster": {
+      "file": "Yeti.glb",
+      "pack": "Quaternius Ultimate Monsters (model: Yeti)",
+      "source": "https://poly.pizza/m/ceRHrn8HHE",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Idle", "Walk", "Run", "Punch", "HitReact", "Death"]
+    },
+    "vampire": {
+      "file": "Wizard.glb",
+      "pack": "Quaternius Ultimate Monsters (model: Wizard)",
+      "source": "https://poly.pizza/m/o87Upt5uHX",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Idle", "Walk", "Bite_Front", "HitRecieve", "Death"],
+      "note": "Humanoide esguio de manto — reaproveitado como vampiro (o pacote não tem um vampiro literal). Tingido de pálido/carmesim em runtime."
+    },
+    "demon": {
+      "file": "Demon.glb",
+      "pack": "Quaternius Ultimate Monsters (model: Demon)",
+      "source": "https://poly.pizza/m/LnfIziKv4o",
+      "license": "CC0",
+      "animated": true,
+      "animations": ["Idle", "Walk", "Run", "Punch", "HitReact", "Death"]
+    }
+  }
+}

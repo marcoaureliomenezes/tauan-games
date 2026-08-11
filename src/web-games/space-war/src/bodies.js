@@ -1,4 +1,4 @@
-// bodies.js — FACHADA da montagem do universo (release space-war-celestial-components-v1).
+// bodies.js — FACHADA da montagem do universo (release v0.2.4).
 //
 // A construção bespoke que vivia aqui (1.193 linhas, 5 funções de sistema)
 // virou a biblioteca de componentes `celestial/` + o mapa declarativo

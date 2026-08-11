@@ -1,9 +1,27 @@
 ---
-name: aero-fighters-inhauma-serra-v1
-status: PROMOTED
-created: 2026-07-14
+title: "Aero Fighters: Inhaúma \"Serra\" mountain-chain concept"
+status: picked
+opened: 2026-07-14
 origin: operator demand 2026-07-14 (deep-research session — maps concept change)
-target_release: aero-fighters-inhauma-serra-v1
+target_release: v0.2.11
+description: >-
+  Change of concept for the Inhaúma map: terreno acidentado — connected mountain
+  chains with carved valleys as flight corridors, a river following the terrain's
+  drainage, rock/snow biomes by altitude+slope, altitude-driven forests, bridges
+  at road×river crossings, and a city terraced into the valley/slopes. All layers
+  derive from ONE coherent terrain model. Promoted to release v0.2.11.
+intents:
+  - subject:
+      kind: catalog
+      ref: aero-strike
+    change: >-
+      Inhaúma serra concept (promoted to v0.2.11): bake offline from a real
+      mountain-chain DEM (AWS Terrain Tiles / Copernicus GLO-30) → vendor as local
+      asset → sample in inhaumaBaseHeight behind the single surface-truth seam →
+      altitude+slope biome colors (rock/snow) → river carved along the valley floor
+      → bridges at road×river crossings → city on a flattened valley shelf; keep no
+      build step, no runtime external fetches, Node-importable terrain math,
+      infinite chunk streaming.
 ---
 
 # Backlog — Aero Fighters: Inhaúma "Serra" mountain-chain concept
@@ -55,5 +73,12 @@ bridges follow road×river crossings, biomes follow altitude+slope).
 
 ## Disposition
 
-Promoted to release `aero-fighters-inhauma-serra-v1` (same-day operator mandate:
+Promoted to release `v0.2.11` (same-day operator mandate:
 "go ahead through release definition and implementation full").
+
+## Curadoria (2026-08-11, project-manager)
+
+Normalização BL-SCHEMA: frontmatter canônico, status `PROMOTED` (fora do vocabulário) →
+`picked` (a release `specs/releases/aero-fighters-inhauma-serra-v1/` existe; sem
+CLOSURE, logo não marcado `delivered`), e `intents[]` retro-vinculado à âncora de
+catálogo `aero-strike`. Conteúdo original preservado.
