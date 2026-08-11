@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-// Suite da CAMPANHA (release space-war-campaign-v1).
+// Suite da CAMPANHA (release v0.2.3).
 // Cobre os ACs do SPEC §7: gating de fase (AC-01), desbloqueio (AC-02), bomba
 // inimiga sob gravidade (AC-04), recarga de nuke (AC-05), teto de pegada de base
 // (AC-08) e a regressão do flare solar (AC-10 — bug

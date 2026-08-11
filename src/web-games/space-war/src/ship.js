@@ -12,6 +12,7 @@ import { modeParams, couplingBrake, orbitCruiseOf } from './mode.js';
 import { input, consumeMouse } from './input.js';
 import { currentTarget } from './nav.js';
 import { solveBallistic } from './ballistics.js';
+import { createLaunch, launchTick, LAUNCH_STAGE } from './launch.js';
 
 // ── SOLUÇÃO DE TIRO (operador 2026-07-03): C aponta para ONDE LANÇAR — o solver
 // simula a nuke sob o computeGravity real e devolve a direção cujo ARCO curvo
@@ -83,6 +84,16 @@ const lastEarthPos = new THREE.Vector3();
 const _earthVel = new THREE.Vector3();
 let earthBody = null;
 let launchAngle = 0;
+// SEQUÊNCIA DE DECOLAGEM (launch.js — backport do space-war Godot): estado da
+// subida pilotada LANDED → ASCENT → GRAVITY_TURN → INSERTED. A subida integra
+// no frame PLANETA-PINADO (conceito PhaseWorld) e converte ao mundo por frame.
+let launchSeq = createLaunch();
+const _relPos = { x: 0, y: 0, z: 0 };
+const _relVel = { x: 0, y: 0, z: 0 };
+export function launchStage() { return launchSeq.stage; }
+export function launchState() { return launchSeq; }
+// Cancela a sequência (teleport de QA/debug, respawn): estado inerte.
+export function cancelLaunch() { launchSeq = createLaunch(); }
 
 // Câmera de OBSERVAÇÃO ([V]): OrbitControls (three r165 vendorado) orbitando a
 // nave em movimento — arrasta com o mouse para OLHAR/RODAR ao redor e ver os
@@ -212,6 +223,13 @@ export function buildShip() {
   game.ship.landed = true;
   game.ship.throttle = 0;
   earthBody = game.bodies.find((b) => b.def.key === 'earth');
+  // POSICIONA NA SUPERFÍCIE JÁ NO BOOT (bug 2026-07-18: pos nascia (0,0,0) —
+  // no centro do Sol — e o 1º updateMode lia CRUISE, disparando uma transição
+  // CRUISE→ORBIT espúria no início do voo com blend de 2.6s de regime errado).
+  launchAngle = 0;
+  _landedUp.set(Math.cos(launchAngle), 0.35, Math.sin(launchAngle)).normalize();
+  game.ship.pos.copy(earthBody.worldPos).addScaledVector(_landedUp, earthBody.def.radius + SHIP.startAltitude);
+  game.ship.quat.setFromUnitVectors(_noseAxis, _landedUp);
   lastEarthPos.copy(earthBody.worldPos);
   return mesh;
 }
@@ -260,6 +278,11 @@ export function updateShip(dt) {
   // (~10³× qualquer gravidade local) — o autopilot integra posição/velocidade/
   // atitude e o resto do voo é suspenso durante o corredor.
   if (game.journey && game.journey.active) {
+    // journey engatada no meio da subida: cancela o programa (sem isto a
+    // chegada no outro sistema retomava a "subida" presa ao frame da Terra)
+    if (launchSeq.stage === LAUNCH_STAGE.ASCENT || launchSeq.stage === LAUNCH_STAGE.GRAVITY_TURN) {
+      launchSeq = createLaunch();
+    }
     updateJourney(dt);
     mesh.position.copy(s.pos);
     mesh.quaternion.copy(s.quat);
@@ -268,9 +291,13 @@ export function updateShip(dt) {
     return;
   }
 
-  // --- Velocidade da Terra (diferença finita) p/ acompanhar a órbita ao decolar ---
-  _earthVel.copy(earthBody.worldPos).sub(lastEarthPos).multiplyScalar(dt > 0 ? 1 / dt : 0);
-  const earthVel = _earthVel;
+  // --- Velocidade da Terra: o worldVel DO TRILHO (orbits.js), não diferença
+  // finita — a diferença finita espicava no 1º frame de voo (o briefing avança
+  // as órbitas sem updateShip; o delta acumulado ÷ dt virava ~milhares de u/s
+  // exatamente no frame do liftoff e a nave "escapava" da Terra na subida).
+  const earthVel = earthBody.worldVel
+    ? _earthVel.copy(earthBody.worldVel)
+    : _earthVel.copy(earthBody.worldPos).sub(lastEarthPos).multiplyScalar(dt > 0 ? 1 / dt : 0);
   lastEarthPos.copy(earthBody.worldPos);
 
   // --- Throttle ---
@@ -280,6 +307,8 @@ export function updateShip(dt) {
 
   if (s.landed) {
     updateLanded(s, dt, earthVel);
+  } else if (launchSeq.stage === LAUNCH_STAGE.ASCENT || launchSeq.stage === LAUNCH_STAGE.GRAVITY_TURN) {
+    updateLaunchAscent(s, dt, earthVel);
   } else {
     updateFlight(s, dt);
   }
@@ -310,11 +339,108 @@ function updateLanded(s, dt, earthVel) {
   s.dominant = earthBody;
   s.gravMag = 0;
 
-  // Decolar quando throttle passa do limiar.
-  if (s.throttle > 0.45) {
+  // DECOLAGEM PILOTADA (backport Godot): W MANTIDO inicia a SUBIDA — nada de
+  // chute instantâneo de v_esc; o programa de arfagem (launch.js) conduz a
+  // nave até a órbita de entrada com física real o tempo todo.
+  if (input.throttleUp) {
     s.landed = false;
     s.spawnGrace = 6;                                 // 6s de proteção pós-decolagem
-    s.vel.copy(earthVel).addScaledVector(up, 300);    // empurrão inicial para sair do solo
+    s.throttle = 1;
+    launchSeq = createLaunch();
+    launchSeq.stage = LAUNCH_STAGE.ASCENT;
+    launchSeq.events.push({ type: 'liftoff' });
+    // estado PINADO da subida (autoritativo até a inserção): rel = pad, vel 0
+    // no frame do planeta — "planeta pinado: mundo = local" (Godot)
+    _relPos.x = s.pos.x - earthBody.worldPos.x;
+    _relPos.y = s.pos.y - earthBody.worldPos.y;
+    _relPos.z = s.pos.z - earthBody.worldPos.z;
+    _relVel.x = 0; _relVel.y = 0; _relVel.z = 0;
+    s.vel.copy(earthVel);                             // parte do repouso co-móvel
+  }
+}
+
+// ── SUBIDA PILOTADA (ASCENT/GRAVITY_TURN) — frame PLANETA-PINADO ─────────────
+// O estado integrado é RELATIVO à Terra (pos−worldPos, vel−earthVel): a
+// translação do planeta no sistema solar não perturba a malha fechada — o
+// conceito PhaseWorld do Godot trazido ao mundo único do web.
+function updateLaunchAscent(s, dt, earthVel) {
+  // OVERRIDE DO PILOTO: qualquer comando de voo manual (manche, freio, [O]
+  // assistente de órbita, [N] aproximação, [C] mira) CANCELA o programa de
+  // arfagem e entrega o voo livre — W sozinho mantém a subida pilotada. Sem
+  // isto o [O] pós-decolagem era ignorado (a experiência clássica quebrava).
+  if (s.orbitAssist || s.approach || s.aligning || input.brake ||
+      input.pitchUp || input.pitchDown || input.yawLeft || input.yawRight) {
+    launchSeq = createLaunch();
+    updateFlight(s, dt);
+    return;
+  }
+  if (s.spawnGrace > 0) s.spawnGrace -= dt;
+  const body = earthBody;
+  // O estado PINADO (_relPos/_relVel, semeado no liftoff) é AUTORITATIVO: nunca
+  // re-derivar de s.pos − worldPos por frame — a ordem órbitas→nave faz o
+  // deslocamento do trilho da Terra VAZAR para o frame relativo a cada passo
+  // (a nave "afundava" a ~380 u/s sem velocidade radial correspondente).
+  const wHeld = input.throttleUp;
+  const out = launchTick(launchSeq, { pos: _relPos, vel: _relVel }, body, wHeld, dt);
+
+  // física do frame pinado: empuxo do programa + gravidade SÓ do planeta
+  // (escopo da decolagem — na subida baixa a Lua não pode puxar a nave)
+  const r = Math.hypot(_relPos.x, _relPos.y, _relPos.z);
+  const g = body.mu / (r * r);
+  _relVel.x += (out.ax - (_relPos.x / r) * g) * dt;
+  _relVel.y += (out.ay - (_relPos.y / r) * g) * dt;
+  _relVel.z += (out.az - (_relPos.z / r) * g) * dt;
+  // arrasto atmosférico CO-MÓVEL (a atmosfera gira com o planeta)
+  const atmoThick = body.def.radius * ATMO.thicknessFactor;
+  const alt = r - body.def.radius;
+  if (alt < atmoThick) {
+    const depth = Math.max(0, Math.min(1, 1 - alt / atmoThick));
+    const f = Math.max(0, 1 - ATMO.drag * depth * dt);
+    _relVel.x *= f; _relVel.y *= f; _relVel.z *= f;
+  }
+  s.inAtmosphere = alt < atmoThick;
+  if (!s.inAtmosphere && !launchSeq.atmoToasted) {
+    launchSeq.atmoToasted = true;
+    launchSeq.events.push({ type: 'atmo' });
+  }
+  _relPos.x += _relVel.x * dt; _relPos.y += _relVel.y * dt; _relPos.z += _relVel.z * dt;
+
+  // de volta ao frame de MUNDO
+  s.pos.set(body.worldPos.x + _relPos.x, body.worldPos.y + _relPos.y, body.worldPos.z + _relPos.z);
+  s.vel.set(earthVel.x + _relVel.x, earthVel.y + _relVel.y, earthVel.z + _relVel.z);
+  s.speed = s.vel.length();
+  s.throttle = wHeld ? Math.min(1, s.throttle + dt * 1.5) : Math.max(0.05, s.throttle - dt * 1.2);
+
+  // HUD coerente durante a subida
+  s.dominant = body; s.altitude = alt; s.gravMag = g;
+  s.circVel = out.vCircHere; s.vTangential = out.vTan; s.vRadial = out.vRad;
+  s.escapeVel = out.vCircHere * Math.SQRT2; s.canEscape = true; s.interstellar = false;
+
+  // atitude: nariz ao longo do programa de arfagem (suave)
+  tmp.set(out.dirX, out.dirY, out.dirZ);
+  if (tmp.lengthSq() > 1e-9) {
+    _m.lookAt(s.pos, camTarget.copy(s.pos).add(tmp), _upLocal.copy(s.pos).sub(body.worldPos).normalize());
+    _q.setFromRotationMatrix(_m);
+    s.quat.slerp(_q, Math.min(1, 5 * dt));
+  }
+
+  if (launchSeq.stage === LAUNCH_STAGE.INSERTED) {
+    // órbita alcançada: entrega ao voo normal em COAST (lei do jogo: "entre em
+    // órbita, corte o motor e ela FECHA") — a velocidade JÁ é v_circ tangencial;
+    // throttle > 0 aqui faria o assist LAVAR a co-moção com a Terra
+    s.throttle = 0;
+    // snapshot TERRA-relativo do instante da inserção (QA/HUD): depois disso o
+    // dominante pode ser a Lua e os s.vTangential/vRadial mudam de referência
+    s.launchInsert = { alt, vTan: out.vTan, vRad: out.vRad, vCirc: out.vCircHere, t: launchSeq.t };
+    return;
+  }
+  // subida abortada caiu de volta: RE-POUSA na plataforma (nunca afunda no
+  // planeta, nunca fica presa — segure W para decolar de novo, como no Godot)
+  if (alt <= SHIP.startAltitude * 1.2 && out.vRad <= 0 && launchSeq.t > 1.5) {
+    s.landed = true;
+    launchAngle = Math.atan2(_relPos.z, _relPos.x);
+    launchSeq = createLaunch();
+    launchSeq.events.push({ type: 'abort' });
   }
 }
 
@@ -405,12 +531,16 @@ function updateFlight(s, dt) {
     // as asas acompanham o horizonte suavemente (o planeta nunca "sobe" na tela).
     fwd.set(0, 0, -1).applyQuaternion(s.quat);
     _head.copy(fwd).addScaledVector(fUp, -fwd.dot(fUp));
-    if (_head.lengthSq() > 1e-8) {
-      _head.normalize();
-      _m.lookAt(s.pos, camTarget.copy(s.pos).add(_head), fUp);
-      _q.setFromRotationMatrix(_m);
-      s.quat.slerp(_q, Math.min(1, 1.6 * dt));
+    if (_head.lengthSq() < 1e-8) {
+      // nariz vertical (pós-decolagem): adota um rumo perpendicular estável —
+      // sem isto a atitude travava no vertical e a velocidade nunca nivelava
+      _head.set(1, 0, 0).addScaledVector(fUp, -fUp.x);
+      if (_head.lengthSq() < 1e-8) _head.set(0, 0, 1).addScaledVector(fUp, -fUp.z);
     }
+    _head.normalize();
+    _m.lookAt(s.pos, camTarget.copy(s.pos).add(_head), fUp);
+    _q.setFromRotationMatrix(_m);
+    s.quat.slerp(_q, Math.min(1, 1.6 * dt));
   }
   s.quat.normalize();
   game.nav.aligning = s.aligning;
@@ -645,7 +775,13 @@ function updateFlight(s, dt) {
   if (s.inAtmosphere) {
     const depth = Math.max(0, Math.min(1, 1 - g.altitude / atmoThick));   // 0 borda → 1 chão
     const dragF = ATMO.drag * depth;
-    s.vel.multiplyScalar(Math.max(0, 1 - dragF * dt));
+    // Arrasto no FRAME CO-MÓVEL (bug 2026-07-18): a atmosfera GIRA com o
+    // planeta — aplicar o arrasto na velocidade de MUNDO roubava o rail do
+    // planeta (~24 u/s por tick), inflando a velocidade relativa e impedindo
+    // a inserção orbital perto da superfície.
+    _relV.copy(s.vel); if (dom.worldVel) _relV.sub(dom.worldVel);
+    _relV.multiplyScalar(Math.max(0, 1 - dragF * dt));
+    s.vel.copy(_relV); if (dom.worldVel) s.vel.add(dom.worldVel);
     s.speed = s.vel.length();
     // aquecimento: quanto mais rápido + denso, mais o casco esquenta (reentrada)
     const heating = Math.max(0, (s.speed - ATMO.burnSpeed) / 2600) * (0.35 + depth);
@@ -741,6 +877,65 @@ function updateFlight(s, dt) {
 // só na ROTAÇÃO (slerp exponencial, independente de frame-rate).
 const _camQuat = new THREE.Quaternion();
 const _camUp = new THREE.Vector3(0, 1, 0);
+
+// ── CÂMERA DO LANÇAMENTO (port do follow_launch do CameraRig Godot) ──────────
+// Pousada: tracker de SOLO no continente, foguete de perfil contra o céu, com
+// deriva cinematográfica lenta. Subida: tracking de solo até TRACK_ALT (o
+// horizonte aparece RETO no início), depois chase AXIAL atrás do bocal — o
+// gravity turn aparece como o bico girando da vertical para a horizontal com o
+// arco do planeta ao fundo. O bico NUNCA aparece deitado de lado.
+const LCAM_TRACK_ALT = 6.5;    // u (~0,2×altT): até aqui a câmera é solo
+const LCAM_BLEND = 6.5;        // faixa de transição solo→chase
+const _lUp = new THREE.Vector3();
+const _lTang = new THREE.Vector3();
+const _lAnchor = new THREE.Vector3();
+const _lChase = new THREE.Vector3();
+const _lLook = new THREE.Vector3();
+const _lChaseLook = new THREE.Vector3();
+const _lSide = new THREE.Vector3();
+const _lFwd = new THREE.Vector3();
+const _lPos = new THREE.Vector3();
+let _padT = 0;
+function launchCamera(s, dt) {
+  const body = earthBody;
+  _lUp.copy(s.pos).sub(body.worldPos);
+  const r = _lUp.length();
+  _lUp.multiplyScalar(1 / Math.max(1e-6, r));
+  const alt = r - body.def.radius;
+  _lTang.crossVectors(_lUp, _up);                       // prograde (lado do oceano)
+  if (_lTang.lengthSq() < 1e-6) _lTang.set(1, 0, 0);
+  _lTang.normalize();
+  // âncora do tracker: no continente, olhando para o mar e para o céu
+  _lAnchor.copy(s.pos).addScaledVector(_lTang, -16).addScaledVector(_up, 5).addScaledVector(_lUp, 1.2);
+  if (s.landed) {
+    _padT += dt;
+    _lPos.copy(_lAnchor).sub(s.pos).applyAxisAngle(_lUp, Math.sin(_padT * 0.04) * 0.15).add(s.pos);
+    camera.position.copy(_lPos);
+    camera.up.copy(_lUp);
+    camera.lookAt(_lLook.copy(s.pos).addScaledVector(_lUp, 4));
+    return;
+  }
+  // chase didático: nave E planeta em frame o tempo todo; na subida vertical a
+  // câmera fica ao lado-trás quase no nível da nave; no gravity turn fecha atrás
+  _lFwd.set(0, 0, -1).applyQuaternion(s.quat);
+  _lSide.crossVectors(_lFwd, _lUp).normalize();
+  const vdot = Math.max(0, Math.min(1, _lFwd.dot(_lUp)));   // 1 vertical, 0 horizontal
+  const back = 13 + (6 - 13) * vdot;
+  const aside = 6 + (17 - 6) * vdot;
+  const rise = 2.6 + (-0.5 - 2.6) * vdot;
+  _lChase.copy(s.pos).addScaledVector(_lFwd, -back).addScaledVector(_lUp, rise).addScaledVector(_lSide, aside);
+  _lChaseLook.copy(s.pos).addScaledVector(_lFwd, 6 + (2 - 6) * vdot).addScaledVector(_lUp, -(6 + (12 - 6) * vdot));
+  // tracking de solo → chase conforme a subida
+  let w = Math.max(0, Math.min(1, (alt - LCAM_TRACK_ALT) / LCAM_BLEND));
+  w = w * w * (3 - 2 * w);
+  _lPos.copy(_lAnchor).lerp(_lChase, w);
+  _lLook.copy(s.pos).lerp(_lChaseLook, w);
+  if (camera.position.distanceTo(s.pos) > 120) camera.position.copy(_lPos);
+  else camera.position.lerp(_lPos, 1 - Math.exp(-11 * dt));
+  camera.up.copy(_lUp);
+  camera.lookAt(_lLook);
+}
+
 function updateCamera(s, dt) {
   if (s.obsMode && _obsControls) {
     // OBSERVAÇÃO: a câmera orbita a NAVE EM MOVIMENTO — translada junto com ela
@@ -752,6 +947,13 @@ function updateCamera(s, dt) {
     camera.up.set(0, 1, 0);
     _obsControls.update();
     _camQuat.copy(s.quat);   // ao voltar à perseguição, sem chicotada
+    return;
+  }
+  // DECOLAGEM: câmera própria (pad → tracking de solo → chase axial) enquanto
+  // pousada ou em subida; _camQuat acompanha para a entrega em órbita ser limpa.
+  if (s.landed || launchSeq.stage === LAUNCH_STAGE.ASCENT || launchSeq.stage === LAUNCH_STAGE.GRAVITY_TURN) {
+    launchCamera(s, dt);
+    _camQuat.copy(s.quat);
     return;
   }
   const k = 1 - Math.exp(-9 * dt);

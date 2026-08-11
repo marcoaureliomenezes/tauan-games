@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-// Smoke + AC suite para o jogo Space War (release space-war-v1).
+// Smoke + AC suite para o jogo Space War (release v0.1.1).
 // Cobre AC-01..AC-08 do SPEC: carrega sem build step, mundo construído,
 // decolagem, gravidade, combate/nuke, mapa, e diagnóstico via window.__spaceWar.
 

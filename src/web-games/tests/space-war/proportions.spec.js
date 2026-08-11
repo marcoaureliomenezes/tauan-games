@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-// Suite da release space-war-true-proportions-v1 (bugs operator-reported:
+// Suite da release v0.2.9 (bugs operator-reported:
 // fake-apparent-proportions, cross-system-visibility, blackhole/neutron-star
 // look-not-approved). Asserts por LEI (θ = 2R/d) e por diagnóstico — nunca por
 // número mágico de escala.

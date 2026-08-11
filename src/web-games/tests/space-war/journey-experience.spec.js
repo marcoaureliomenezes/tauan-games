@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-// Suite da release space-war-interstellar-experience-v1 (bug operator-reported
+// Suite da release v0.2.5 (bug operator-reported
 // space-war-interstellar-experience-flat): perfil 30/40/30, headlight forte,
 // crescimento na passagem + riscos (diagnósticos), imunidade a colisão.
 
