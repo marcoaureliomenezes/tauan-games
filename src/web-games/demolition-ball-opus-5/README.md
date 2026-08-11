@@ -17,8 +17,9 @@ diretório. Abrir `index.html` num servidor estático é tudo o que é preciso.
 | `Q` / `E` | girar a lança (slew) |
 | `R` / `F` | elevar / baixar a lança |
 | `Z` / `X` | encurtar / soltar cabo |
-| `ESPAÇO` | impulso no pêndulo (na direção da lança) |
+| `ESPAÇO` | **a bola busca o alvo** (servo de velocidade rumo à estrutura do contrato; sem alvo, o carro mais próximo) |
 | `SHIFT` | impulso reverso (freia ou inverte o balanço) |
+| `C` | chama a **equipe de isolamento** (a ≤30 m do alvo; também botão na tela) |
 | `M` | abre / fecha o mapa da cidade |
 | `V` | alterna câmera (trator / bola) |
 | `N` | muta o áudio |
@@ -27,7 +28,28 @@ diretório. Abrir `index.html` num servidor estático é tudo o que é preciso.
 A bola **não** é um cursor: é uma massa presa a um cabo inextensível. Para
 derrubar algo você precisa **construir o balanço** — acelerar, girar a lança,
 soltar cabo — e acertar a estrutura no ponto mais baixo do arco, onde a
-velocidade (e portanto a energia cinética) é máxima.
+velocidade (e portanto a energia cinética) é máxima. Com `ESPAÇO`, um servo
+de aceleração limitada embala o pêndulo em direção ao alvo — a lança (`Q/E`)
+e o cabo (`Z/X`) continuam 100% manuais.
+
+## Modos (v0.9.0)
+
+Na tela inicial:
+
+- **🧒 Modo Tauan** (padrão) — sem prazo, sem multa por dano colateral, um alvo
+  por vez, threshold 50%, dano ×2,5 e homing mais forte. Só demolir.
+- **💼 Modo Contratos** — o jogo original: prazos, multa por dano colateral,
+  salário e os thresholds de cada contrato.
+
+## Cidade viva (v0.9.0)
+
+Fachadas com janelas/portas por tipo de prédio, praças com árvores e canteiros
+de flores, um **rio de verdade com 3 pontes** (o trator só cruza por elas),
+pedestres que fogem da bola (e nunca se ferem), carros em 3 modelos com faróis,
+céu de manhã com nuvens procedurais (`snoise`, único vendor do jogo) e a
+**equipe de isolamento**: perto do alvo, chame pelo botão 🚧 (ou `C`) — um
+furgão chega, um ajudante cerca o quarteirão de cones e o trânsito para de
+entrar até o alvo cair.
 
 ## Mecânica
 

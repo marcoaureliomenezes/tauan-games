@@ -70,7 +70,7 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
   - **Acceptance:** AC-6 — figura com capacete/tronco/braços sentada na cab,
     acompanhando o slew; visível nas câmeras follow e ball (screenshots).
 
-- [ ] T10 - Memória SDD + docs (R-13, R-14, WS-8)
+- [x] T10 - Memória SDD + docs (R-13, R-14, WS-8)
   - **Owner:** product-engineer
   - **Acceptance:** AC-8 — games-catalog atualizado; atoms em
     `specs/memory/product/web-games/demolition-ball-opus-5/`; README do jogo e raiz
