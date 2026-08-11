@@ -3,6 +3,9 @@ import { CONFIG } from './config.js';
 import { createMissionMaterials } from './materials.js';
 import { addEnvironment } from './environment.js';
 import { addUpperFloor } from './upper-floor.js';
+import { addRoofLevel } from './roof.js';
+import { addTower } from './tower.js';
+import { addUndergroundLevel, undergroundEntranceCells } from './underground.js';
 import { isSolid, tileHeight, tileInset } from './content/tiles.js';
 import { addCity } from './city.js';
 import { createDestructibles } from './gameplay/destructibles.js';
@@ -44,14 +47,10 @@ export function createWorld(scene, physics, mission, fx, audio) {
     if (char === 'X') barrels.push(position.clone());
   }));
 
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(width * CONFIG.cellSize, height * CONFIG.cellSize),
-    materials.floor,
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  group.add(floor);
-  physics.addPlatform(0, 0, width * CONFIG.cellSize / 2, height * CONFIG.cellSize / 2, 0);
+  // M3 — bocas de visita da passagem subterrânea (ver underground.js) furam o
+  // piso térreo EXATAMENTE nessas células, antes de o piso ser construído.
+  const undergroundHoles = undergroundEntranceCells(mission);
+  buildGroundFloor(group, physics, width, height, materials, undergroundHoles);
 
   const wallGeometry = new THREE.BoxGeometry(CONFIG.cellSize, CONFIG.wallHeight, CONFIG.cellSize);
   const wallMesh = new THREE.InstancedMesh(wallGeometry, materials.wall, walls.length);
@@ -133,7 +132,7 @@ export function createWorld(scene, physics, mission, fx, audio) {
   const spawnLook = toWorld({ x: startCell.x + exitDirection[0], z: startCell.z + exitDirection[1] }).setY(start.y + 0.68);
 
   const world = { group, width, height, chars, walls, cover, props, guards, objectiveMeshes, barrelMeshes, start, spawnLook, extraction, extractionMesh, walkable, solidHeight, toCell, toWorld };
-  addCoverColliders(cover, physics, world);
+  addCoverColliders(cover, physics, world, undergroundHoles);
   world.upper = addUpperFloor(group, physics, mission, world, materials);
   // Navegação por nível: inimigo de cima só pisa em laje, inimigo do térreo
   // não entra na célula da escadaria (ele não sabe subir — e atravessá-la
@@ -144,6 +143,39 @@ export function createWorld(scene, physics, mission, fx, audio) {
   // Guardas do mezanino entram na mesma lista: createGuards já usa a posição y
   // de cada spawn, então um inimigo de cima nasce e patrulha lá em cima.
   world.upper.guards.forEach((position) => guards.push(position.clone()));
+
+  // M1/M2/M3 — telhado, torre e passagem subterrânea. Nenhum dos três entra
+  // no grafo de navegação dos inimigos (ai/nav-graph.js segue só
+  // térreo+mezanino) nem na lista de guarnição — são níveis só do jogador.
+  world.roof = addRoofLevel(group, physics, mission, world, materials);
+  world.tower = addTower(group, physics, mission, world, materials);
+  world.underground = addUndergroundLevel(group, physics, mission, world, materials);
+  // BUG (achado no smoke de aceitação): a escada do telhado ocupa a CÉLULA
+  // INTEIRA do mezanino onde nasce (mesma regra maciça da escada chão->
+  // mezanino — ver upper-floor.js addStairPhysics) — andar por ela NA
+  // HORIZONTAL, ao nível do mezanino, esbarra na própria escada, exatamente
+  // como esbarra numa escadaria comum vinda do lado errado (regressão já
+  // coberta em unit.mjs). Sem esta exclusão, `auditMap` reportava a célula
+  // como "célula de mezanino inalcançável" — a mesma razão pela qual
+  // `world.groundWalkable` já exclui `world.stairCells` (escada chão->
+  // mezanino) do piso térreo comum.
+  world.roofStairCells = new Set(world.roof.stairs.map(({ cell }) => `${cell.x},${cell.z}`));
+  world.upperWalkable = (x, z) => world.upper.cells.has(`${x},${z}`) && !isSolid(chars[z]?.[x])
+    && !world.roofStairCells.has(`${x},${z}`);
+  world.roofWalkable = (x, z) => world.roof.cells.has(`${x},${z}`);
+  world.undergroundWalkable = (x, z) => world.underground.cells.has(`${x},${z}`);
+  world.towerWalkable = (x, z) => Boolean(world.tower) && x === world.tower.base.x && z === world.tower.base.z;
+  // Células do térreo excluídas da navegação/reforço de inimigos: a base da
+  // torre (recinto de 3 paredes que a IA não sabe contornar) e cada boca de
+  // visita (perdeu o piso térreo — ver buildGroundFloor). Continuam
+  // ANDÁVEIS para o JOGADOR (world.groundWalkable não muda); só a IA e o
+  // spawner de reforço (ai/guards.js) evitam nascer/planejar caminho ali.
+  world.navExcluded = new Set([
+    ...(world.tower ? [world.tower.baseKey] : []),
+    ...world.underground.entrances.map(({ cell }) => `${cell.x},${cell.z}`),
+  ]);
+  world.groundNavWalkable = (x, z) => world.groundWalkable(x, z) && !world.navExcluded.has(`${x},${z}`);
+
   addEnvironment(group, mission, world, materials);
   // Camada urbana: asfalto, calçada, fachadas detalhadas, carcaças de carro,
   // escombros, barricadas e postes. Depois do ambiente para assentar por cima.
@@ -152,17 +184,85 @@ export function createWorld(scene, physics, mission, fx, audio) {
 }
 
 /**
+ * Piso térreo. Sem buracos (nenhuma missão com passagem subterrânea nesta
+ * célula), constrói a MESMA laje única de sempre — byte-a-byte o que este
+ * jogo sempre fez. Com buracos, fatia por LINHA (run merge), excluindo as
+ * células de boca de visita: o resto do piso continua visualmente contínuo
+ * (UV recalculado por trecho a partir da MESMA escala global de repetição —
+ * ver materials.js) e fisicamente idêntico a uma laje única onde não há
+ * buraco algum.
+ */
+function buildGroundFloor(group, physics, width, height, materials, holes) {
+  if (!holes.size) {
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(width * CONFIG.cellSize, height * CONFIG.cellSize),
+      materials.floor,
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    group.add(floor);
+    physics.addPlatform(0, 0, width * CONFIG.cellSize / 2, height * CONFIG.cellSize / 2, 0);
+    return;
+  }
+  // Dois lados são visíveis agora: por cima (rua) e por baixo (teto da
+  // passagem, ver underground.js) — o piso original só precisava do de cima.
+  materials.floor.side = THREE.DoubleSide;
+  for (let z = 0; z < height; z += 1) {
+    let x = 0;
+    while (x < width) {
+      if (holes.has(`${x},${z}`)) { x += 1; continue; }
+      let x1 = x;
+      while (x1 + 1 < width && !holes.has(`${x1 + 1},${z}`)) x1 += 1;
+      addFloorRun(group, physics, width, height, materials, x, x1, z);
+      x = x1 + 1;
+    }
+  }
+}
+
+/** Um trecho contíguo (mesma linha `z`, colunas `x0..x1`) do piso térreo. UV
+ * recalculado a partir da posição de grade — não 0..1 local — para que o
+ * MESMO material (mesmo `repeat`) pareça uma única textura contínua entre
+ * trechos vizinhos, exatamente como a laje única parecia. */
+function addFloorRun(group, physics, width, height, materials, x0, x1, z) {
+  const cellsWide = x1 - x0 + 1;
+  const geometry = new THREE.PlaneGeometry(cellsWide * CONFIG.cellSize, CONFIG.cellSize);
+  const uv = geometry.attributes.uv;
+  const u0 = x0 / width;
+  const u1 = (x1 + 1) / width;
+  const v0 = z / height;
+  const v1 = (z + 1) / height;
+  for (let i = 0; i < uv.count; i += 1) {
+    uv.setXY(i, uv.getX(i) === 0 ? u0 : u1, uv.getY(i) === 0 ? v0 : v1);
+  }
+  uv.needsUpdate = true;
+  const centre = worldPosition((x0 + x1) / 2, z, width, height);
+  const mesh = new THREE.Mesh(geometry, materials.floor);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(centre.x, 0, centre.z);
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  physics.addPlatform(centre.x, centre.z, cellsWide * CONFIG.cellSize / 2, CONFIG.cellSize / 2, 0);
+}
+
+/**
  * Colisores da cobertura baixa. Cada peça é uma caixa com a ALTURA do tile —
  * a mesma que o desenho usa e a mesma que a linha de visão consulta. O poste é
  * fino: ocupa um quarto da célula, senão vira um pilar intransponível.
  */
-function addCoverColliders(cover, physics, world) {
+function addCoverColliders(cover, physics, world, undergroundHoles = new Set()) {
   const half = CONFIG.cellSize / 2;
   // Calçada: plataforma de 0.13 m. Degrau, não obstáculo — o passo automático
   // do jogador (0.62 m) sobe nela sem pulo, e a granada repousa em cima.
+  //
+  // BUG (achado ao implementar a passagem subterrânea — M3): esta plataforma
+  // é construída célula a célula, INDEPENDENTE do piso térreo principal
+  // (buildGroundFloor) — furar o piso na boca de visita não bastava, porque
+  // uma boca em calçada (',') continuava ganhando a MESMA curva de 0.13 m
+  // aqui, escondendo a descida inteira atrás de um degrauzinho fantasma que
+  // `supportHeight` sempre achava primeiro.
   for (let z = 0; z < world.height; z += 1) {
     for (let x = 0; x < world.width; x += 1) {
-      if (world.chars[z][x] !== ',') continue;
+      if (world.chars[z][x] !== ',' || undergroundHoles.has(`${x},${z}`)) continue;
       const point = world.toWorld({ x, z });
       physics.addPlatform(point.x, point.z, half, half, 0.13);
     }
