@@ -327,11 +327,14 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
   });
 
   test('player can taxi straight from Inhauma aerodrome and take off', async ({ page }) => {
+    // Budgets em tempo de parede num sim frame-a-frame: em runner lento a
+    // aceleração real leva múltiplos do tempo interativo (flake 1ª tentativa).
+    test.slow();
     await openInhauma(page, 'inhauma-takeoff');
     await page.keyboard.down('KeyW');
-    await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 15000 });
+    await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 45000 });
     await page.keyboard.down('ArrowDown');
-    await page.waitForFunction(() => window.game.missionRealism.sortie.state === 'AIRBORNE', { timeout: 10000 });
+    await page.waitForFunction(() => window.game.missionRealism.sortie.state === 'AIRBORNE', { timeout: 30000 });
     await page.keyboard.up('ArrowDown');
     await page.keyboard.up('KeyW');
 

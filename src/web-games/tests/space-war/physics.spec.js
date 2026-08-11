@@ -7,27 +7,27 @@ const { test, expect } = require('@playwright/test');
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
 }
 
 async function startFlight(page) {
   await load(page);
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 test.describe('Space War — Fidelidade Física', () => {
   // Budgets largos (2026-07-18): CI compartilhada — boot software-GL >15s sob
   // carga estourava o teto de 30s por TEMPO, não por asserção.
-  test.setTimeout(90000);
+  test.setTimeout(180000);
 
   // AC-01: a estrela de nêutrons EMITE luz (def.light), o strobe óptico ~30 Hz
   // está vivo e apontar para ela produz pixels CLAROS (núcleo + corona + halo).
   test('AC-01: pulsar brilha — light def + strobe + pixels claros', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('neutron', 400));
     await page.waitForTimeout(200);       // 2-3 frames: strobe/fx rodam; queda ainda ínfima
@@ -78,7 +78,7 @@ test.describe('Space War — Fidelidade Física', () => {
 
   // AC-05a: traçadora [G] — infinita, balística, com trilha crescendo.
   test('AC-05a: bomba traçadora gravitacional — infinita + trilha', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('terra', 4));
     const ok = await page.evaluate(() => window.__swDebug.launchGravBomb());
@@ -86,7 +86,7 @@ test.describe('Space War — Fidelidade Física', () => {
     await page.waitForFunction(() => {
       const ts = window.__spaceWar.projectiles.filter((p) => p.isTracer);
       return ts.length >= 1 && ts[0].trailN > 4;   // trilha registrando o caminho
-    }, { timeout: 8000 });
+    }, { timeout: 45000 });
     // FLOOD (auto-repeat da tecla): munição infinita ≠ simultâneas ilimitadas —
     // debounce + FIFO seguram o teto de 6 ativas (achado LOW da QA).
     const flood = await page.evaluate(async () => {
@@ -103,7 +103,7 @@ test.describe('Space War — Fidelidade Física', () => {
   // AC-05b: bomba de Higgs — poço transiente entra em game.wells, puxa DE VERDADE
   // (computeGravity muda perto do poço) e expira sozinho.
   test('AC-05b: Higgs — poço gravitacional transiente sentido pelo campo', async ({ page }) => {
-    test.setTimeout(120000);   // headless slow-mo: 8 s de pulso ≈ 26+ s de parede
+    test.setTimeout(240000);   // headless slow-mo: 8 s de pulso ≈ 26+ s de parede
     await startFlight(page);
     // 8·R da Terra (176k, lado do Sol — goTo é heliocêntrico: 25·R cairia DENTRO
     // do Sol pós-escala!). Sem superfícies por perto o arrasto do poço (cap 600
@@ -111,7 +111,7 @@ test.describe('Space War — Fidelidade Física', () => {
     await page.evaluate(() => window.__swDebug.goTo('terra', 8));
     const launched = await page.evaluate(() => window.__swDebug.launchHiggs('plasma'));
     expect(launched).toBe(true);
-    await page.waitForFunction(() => window.__spaceWar.wells.length >= 1, { timeout: 20000 });
+    await page.waitForFunction(() => window.__spaceWar.wells.length >= 1, { timeout: 45000 });
     const well = await page.evaluate(() => {
       const sw = window.__spaceWar;
       const w = sw.wells[0];

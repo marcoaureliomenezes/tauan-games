@@ -8,22 +8,22 @@ const { test, expect } = require('@playwright/test');
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
 }
 
 async function startFlight(page) {
   await load(page);
   await page.keyboard.press('Enter');      // menu -> briefing (inicia a campanha)
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');      // briefing -> flight
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 test.describe('Space War — Campanha', () => {
   // Budgets largos (2026-07-18): CI compartilhada — boot software-GL >15s sob
   // carga estourava o teto de 30s por TEMPO, não por asserção.
-  test.setTimeout(90000);
+  test.setTimeout(180000);
 
   // AC-01: começa na fase Solar; fases futuras bloqueadas.
   test('AC-01: gating — fase 0 ativa, demais bloqueadas', async ({ page }) => {
@@ -39,10 +39,10 @@ test.describe('Space War — Campanha', () => {
   // AC-02 (+AC-03): completar as 5 missões solares (incl. a visita ao Halley)
   // desbloqueia Betelgeuse e ativa a fase 2.
   test('AC-02/03: cadeia solar completa desbloqueia BETELGEUSE', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(180000);
     await startFlight(page);
     for (let i = 0; i < 2; i++) {
-      await page.waitForFunction(() => !!window.__spaceWar.mission && !window.__spaceWar.mission._done, { timeout: 15000 });
+      await page.waitForFunction(() => !!window.__spaceWar.mission && !window.__spaceWar.mission._done, { timeout: 45000 });
       const t = await page.evaluate(() => ({ type: window.__spaceWar.mission.type, label: window.__spaceWar.mission.label }));
       if (i === 0) expect(t.type).toBe('hunt');
       if (i === 1) expect(t.label).toContain('HALLEY');          // AC-03: cometa com relevância de missão
@@ -51,13 +51,13 @@ test.describe('Space War — Campanha', () => {
         const sw = window.__spaceWar;
         if (idx < 1) return sw.missionIndex === idx + 1 && sw.mission && !sw.mission._done;
         return sw.campaign.phase === 1;
-      }, i, { timeout: 15000 });
+      }, i, { timeout: 45000 });
     }
     const c = await page.evaluate(() => window.__spaceWar.campaign);
     expect(c.done[0]).toBe(true);
     expect(c.unlocked[1]).toBe(true);
     expect(c.phase).toBe(1);
-    await page.waitForFunction(() => (window.__spaceWar.mission?.label || '').includes('FASE 2'), { timeout: 8000 });
+    await page.waitForFunction(() => (window.__spaceWar.mission?.label || '').includes('FASE 2'), { timeout: 45000 });
   });
 
   // CAÇADA (AC-03 da ballistic-war): destruir o alvo k spawna o k+1 em OUTRO corpo.
@@ -70,7 +70,7 @@ test.describe('Space War — Campanha', () => {
     expect(counts.total).toBe(5);
     const body0 = await page.evaluate(() => window.__spaceWar.mission.targets[0].body.def.name);
     await page.evaluate(() => window.__swDebug.killTarget());
-    await page.waitForFunction(() => window.__spaceWar.mission.killed === 1 && window.__spaceWar.mission.targets.length === 2, { timeout: 8000 });
+    await page.waitForFunction(() => window.__spaceWar.mission.killed === 1 && window.__spaceWar.mission.targets.length === 2, { timeout: 45000 });
     const body1 = await page.evaluate(() => {
       const m = window.__spaceWar.mission;
       return m.targets[m.targets.length - 1].body.def.name;
@@ -84,7 +84,7 @@ test.describe('Space War — Campanha', () => {
   // ~1/3 dos boots deixava o alvo fora do alcance balístico (flake pré-existente,
   // 4/6 falhas medidas na base journey; corrigido na photometric-stars rc-1).
   test('solução balística: solver acha arco e C alinha o nariz à direção de tiro', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goToObjective(7000));
     // NB: options são o 3º parâmetro de waitForFunction — passar {timeout} no 2º
@@ -93,7 +93,7 @@ test.describe('Space War — Campanha', () => {
     await page.waitForFunction(() => {
       const sw = window.__spaceWar;
       return sw.nav.solution && sw.nav.solution.ok === true;
-    }, undefined, { timeout: 15000 });
+    }, undefined, { timeout: 45000 });
     await page.keyboard.press('KeyC');
     await page.waitForFunction(() => {
       const sw = window.__spaceWar;
@@ -104,7 +104,7 @@ test.describe('Space War — Campanha', () => {
       const fy = -(2 * (q.y * q.z - q.w * q.x));
       const fz = -(1 - 2 * (q.x * q.x + q.y * q.y));
       return fx * sol.dir.x + fy * sol.dir.y + fz * sol.dir.z > 0.95;
-    }, undefined, { timeout: 12000 });
+    }, undefined, { timeout: 45000 });
   });
 
   // AC-04: bomba inimiga é BALÍSTICA — a gravidade muda a velocidade dela.
@@ -136,14 +136,14 @@ test.describe('Space War — Campanha', () => {
   test('AC-05: recarga de nuke repõe a reserva', async ({ page }) => {
     await startFlight(page);
     await page.keyboard.down('KeyW');
-    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 12000 });
+    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 45000 });
     await page.keyboard.up('KeyW');
     const nk0 = await page.evaluate(() => window.__spaceWar.ship.nukes);
     await page.keyboard.press('KeyF');
-    await page.waitForFunction((n) => window.__spaceWar.ship.nukes === n - 1, nk0, { timeout: 3000 });
+    await page.waitForFunction((n) => window.__spaceWar.ship.nukes === n - 1, nk0, { timeout: 30000 });
     // acelera o timer de recarga para não esperar 20 s reais
     await page.evaluate(() => { window.__spaceWar.ship.nukeRegen = 19.5; });
-    await page.waitForFunction((n) => window.__spaceWar.ship.nukes === n, nk0, { timeout: 6000 });
+    await page.waitForFunction((n) => window.__spaceWar.ship.nukes === n, nk0, { timeout: 45000 });
   });
 
   // AC-08: TODA base de missão respeita o teto de 3% da área de superfície.
@@ -167,13 +167,13 @@ test.describe('Space War — Campanha', () => {
   test('AC-10: flare solar local (regressão do bug)', async ({ page }) => {
     await startFlight(page);
     // perto da Terra (região solar): política de flare = visível
-    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 5000 });
+    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 45000 });
     // teleporta para o binário (≈2.7M u do Sol): flare precisa SUMIR
     await page.evaluate(() => window.__swDebug.goTo('blackhole'));
-    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === false, { timeout: 5000 });
+    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === false, { timeout: 45000 });
     // e voltar perto do Sol religa
     await page.evaluate(() => window.__swDebug.goTo('earth'));
-    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 5000 });
+    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 45000 });
   });
 
   // AC-06 (amostra): inimigos co-movem com o corpo-âncora (frame body-relativo).

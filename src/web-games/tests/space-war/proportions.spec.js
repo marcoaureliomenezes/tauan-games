@@ -7,18 +7,18 @@ const { test, expect } = require('@playwright/test');
 
 async function startFlight(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 test.describe('Space War — Proporções Verdadeiras', () => {
   // Budgets largos (2026-07-18): CI compartilhada — boot software-GL >15s sob
   // carga estourava o teto de 30s por TEMPO, não por asserção.
-  test.setTimeout(90000);
+  test.setTimeout(180000);
 
   // AC-01: honestidade angular AO VIVO — o Sol do céu da Terra é um SOL
   // (1.1°–8.6°), não um terço da tela; Saturno é uma joia, não um disco.
@@ -46,12 +46,12 @@ test.describe('Space War — Proporções Verdadeiras', () => {
   // AC-02: ANOS-LUZ — do sistema do buraco negro, NENHUMA malha do solar é
   // visível; o solar vira um glow fotométrico fraco (uma estrela como as outras).
   test('AC-02: de outro sistema, o solar é só um ponto de luz', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('neutron', 800));
     await page.waitForFunction(
       () => window.__spaceWar.sysGlow.binary && window.__spaceWar.sysGlow.binary.visible === false,
-      undefined, { timeout: 8000 },
+      undefined, { timeout: 45000 },
     );
     const far = await page.evaluate(() => {
       const sw = window.__spaceWar;
@@ -75,7 +75,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
   // AC-03: buraco negro das REFERÊNCIAS — disco domina (>30·rs), espiral de gás,
   // estrias espirais + aro quente no shader, jatos bipolares.
   test('AC-03: buraco negro por referência (3× horizonte, disco 5×, espiral, jatos)', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     const bh = await page.evaluate(() => {
       const sw = window.__spaceWar;
@@ -109,7 +109,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
   // AC-04: estrela de nêutrons das REFERÊNCIAS — core 3×, agulhas polares,
   // gaiola dipolo, halo, strobe vivo.
   test('AC-04: estrela de nêutrons por referência (R 90, needles, gaiola)', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('neutron', 400));
     await page.waitForTimeout(250);
@@ -140,7 +140,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
 
   // AC-05: a "bola de plasma" (remanescente) acende NA APROXIMAÇÃO — nada de pop.
   test('AC-05: remanescente com fade de distância (sem pop)', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     // longe (sistema solar): invisível
     const farFade = await page.evaluate(() => window.__spaceWar.remnantFade ?? 0);
@@ -149,7 +149,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     await page.evaluate(() => window.__swDebug.goTo('blackhole', 4000));
     await page.waitForFunction(
       () => (window.__spaceWar.remnantFade ?? 0) > 0.05,
-      undefined, { timeout: 8000 },
+      undefined, { timeout: 45000 },
     );
     const midFade = await page.evaluate(() => window.__spaceWar.remnantFade);
     expect(midFade).toBeGreaterThan(0.05);
@@ -157,7 +157,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     await page.evaluate(() => window.__swDebug.goTo('neutron', 800));
     await page.waitForFunction(
       () => (window.__spaceWar.remnantFade ?? 0) > 0.9,
-      undefined, { timeout: 8000 },
+      undefined, { timeout: 45000 },
     );
   });
 

@@ -6,12 +6,12 @@ const { test, expect } = require('@playwright/test');
 
 async function startFlight(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 async function engageJourney(page) {
@@ -19,14 +19,14 @@ async function engageJourney(page) {
   await page.waitForTimeout(120);
   await page.evaluate(() => window.__swDebug.target('betelgeuse'));
   await page.evaluate(() => window.__swDebug.journeyToggle());
-  await page.waitForFunction(() => window.__spaceWar.journey && window.__spaceWar.journey.active, { timeout: 5000 });
+  await page.waitForFunction(() => window.__spaceWar.journey && window.__spaceWar.journey.active, { timeout: 45000 });
 }
 
 test.describe('Space War — Experiência Interestelar', () => {
 
   // AC-01: perfil 30/40/30 AO VIVO — fases nos pontos certos, cruzeiro em v_max.
   test('AC-01: 30% acelera, 40% em v_max (CRUZEIRO), 30% freia', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(180000);
     await startFlight(page);
     await engageJourney(page);
     const probe = async (sNorm) => {
@@ -55,7 +55,7 @@ test.describe('Space War — Experiência Interestelar', () => {
   // Lei NOVA (operador 2026-07-17): pontos SÓLIDOS consistentes, nunca borrões
   // nem riscos — passagem rasante cresce com teto CONTIDO (~12px), sem streaks.
   test('AC-02/04: pontos sólidos com crescimento contido na passagem', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(180000);
     await startFlight(page);
     await engageJourney(page);
     await page.evaluate(() => window.__swDebug.journeyWarp(0.5));
@@ -74,7 +74,7 @@ test.describe('Space War — Experiência Interestelar', () => {
   // AC-05: IMUNIDADE — a queima atravessa o corredor inteiro sem abortar
   // (reverte o abort-por-impacto do rc-1 por ordem do operador).
   test('AC-05: sem colisão durante a viagem — queima nunca aborta no corredor', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(240000);
     await startFlight(page);
     await engageJourney(page);
     const immune = await page.evaluate(() => window.__spaceWar.journey.immune);
@@ -92,7 +92,7 @@ test.describe('Space War — Experiência Interestelar', () => {
     }
     // e a CHEGADA continua normal
     await page.evaluate(() => window.__swDebug.journeyWarp(0.999));
-    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 15000 });
+    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 45000 });
     const speed = await page.evaluate(() => window.__spaceWar.ship.speed);
     expect(speed).toBeLessThanOrEqual(1600);
   });

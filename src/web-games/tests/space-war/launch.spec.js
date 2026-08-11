@@ -17,7 +17,7 @@ async function startFlight(page) {
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 // Espera uma condição sobre o launchReport avançando a simulação em warp.

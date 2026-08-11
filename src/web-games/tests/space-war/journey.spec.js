@@ -6,16 +6,16 @@ const { test, expect } = require('@playwright/test');
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
 }
 
 async function startFlight(page) {
   await load(page);
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 // decola e mira Betelgeuse (outro sistema) — o pré-requisito do fluxo T/O/Z
@@ -30,11 +30,11 @@ test.describe('Space War — Viagem Interestelar', () => {
 
   // AC-01: alvo de OUTRO sistema + [Z] → engata; T no range 3:00–6:00; [Z] aborta.
   test('AC-01: T/O/Z engata a queima; Z de novo aborta com residual seguro', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(180000);
     await startFlight(page);
     await airborneWithCrossTarget(page);
     await page.keyboard.press('KeyZ');
-    await page.waitForFunction(() => window.__spaceWar.journey && window.__spaceWar.journey.active, { timeout: 5000 });
+    await page.waitForFunction(() => window.__spaceWar.journey && window.__spaceWar.journey.active, { timeout: 45000 });
     const j = await page.evaluate(() => {
       const jj = window.__spaceWar.journey;
       return { T: jj.T, target: jj.targetKey, D: jj.D };
@@ -45,7 +45,7 @@ test.describe('Space War — Viagem Interestelar', () => {
     expect(j.D).toBeGreaterThan(1_000_000);
     // [Z] de novo → aborta; velocidade residual clampada (≤ 9000)
     await page.keyboard.press('KeyZ');
-    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 5000 });
+    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 45000 });
     const speed = await page.evaluate(() => window.__spaceWar.ship.speed);
     expect(speed).toBeLessThanOrEqual(9200);
   });
@@ -70,7 +70,7 @@ test.describe('Space War — Viagem Interestelar', () => {
   // vivo no meio — fade alto, β≈0.995 no CRUZEIRO, caindo na frenagem (s>0.7);
   // chegada desliga a queima.
   test('AC-03/04: starfield + relatividade sobem até o meio e desfazem na chegada', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(240000);
     await startFlight(page);
     const field = await page.evaluate(() => window.__spaceWar.starfield);
     expect(field.stars).toBeGreaterThanOrEqual(2000);
@@ -79,7 +79,7 @@ test.describe('Space War — Viagem Interestelar', () => {
     const fadeHome = await page.evaluate(() => window.__spaceWar.starfieldFade);
     expect(fadeHome).toBeLessThanOrEqual(0.05);          // dentro do sistema: céu limpo
     await page.evaluate(() => window.__swDebug.journeyToggle());
-    await page.waitForFunction(() => window.__spaceWar.journey.active, { timeout: 5000 });
+    await page.waitForFunction(() => window.__spaceWar.journey.active, { timeout: 45000 });
     // meio da viagem = CRUZEIRO: β máximo (~0.995) e corredor pleno
     await page.evaluate(() => window.__swDebug.journeyWarp(0.5));
     await page.waitForTimeout(500);
@@ -97,7 +97,7 @@ test.describe('Space War — Viagem Interestelar', () => {
     expect(late).toBeLessThan(mid.beta * 0.6);
     // chegada: queima desliga, velocidade residual, perto do sistema alvo
     await page.evaluate(() => window.__swDebug.journeyWarp(0.999));
-    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 15000 });
+    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 45000 });
     const arrive = await page.evaluate(() => {
       const sw = window.__spaceWar;
       const bet = sw.bodies.find((b) => b.def.key === 'betelgeuse');
