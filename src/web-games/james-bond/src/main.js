@@ -455,12 +455,27 @@ game.api = {
     const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     const offsets = [-1.15, 0, 1.15];
 
-    // Um NÓ é (célula, nível). Nível térreo = qualquer célula andável que não
-    // seja a da escadaria (essa é maciça); nível mezanino = célula de laje que
-    // não seja parede. É o mesmo critério que a IA usa para navegar.
+    // Um NÓ é (célula, nível). térreo/mezanino usam EXATAMENTE a mesma fórmula
+    // de sempre (nada muda para eles); telhado/passagem/torre (M1/M2/M3)
+    // entram como níveis adicionais no MESMO dispatch, cada um com o seu
+    // predicado de andável (world.js) e a sua altura de pé.
+    const levelWalkable = {
+      ground: world.groundWalkable,
+      upper: world.upperWalkable,
+      roof: world.roofWalkable,
+      underground: world.undergroundWalkable,
+      tower: world.towerWalkable,
+    };
+    const levelFeet = {
+      ground: 0,
+      upper: CONFIG.floorHeight,
+      roof: CONFIG.roofHeight,
+      underground: -CONFIG.undergroundDepth,
+      tower: CONFIG.towerHeight,
+    };
     const nodeKey = (x, z, level) => `${level}:${x},${z}`;
-    const isNode = (x, z, level) => (level === 'upper' ? world.upperWalkable(x, z) : world.groundWalkable(x, z));
-    const feetOf = (level) => (level === 'upper' ? CONFIG.floorHeight : 0);
+    const isNode = (x, z, level) => Boolean(levelWalkable[level]?.(x, z));
+    const feetOf = (level) => levelFeet[level] ?? 0;
 
     // Passagem entre dois nós vizinhos: varre o segmento entre os centros e
     // exige que o jogador caiba em todo ponto do caminho. Um vão fino demais
@@ -543,6 +558,78 @@ game.api = {
     }
     const orphanUpper = [...upperCells].filter((key) => !upperSeen.has(key));
 
+    // --- Telhado (M1): saindo da escada do mezanino, toda a laje é transitável.
+    // Mesmo critério do mezanino, um nível acima — a IA não entra aqui (ver
+    // ai/nav-graph.js), só o jogador.
+    const roofIslands = [];
+    const roofCells = new Set(world.roof.cells);
+    const roofSeen = new Set();
+    for (const { cell: stairCell, direction: [dx, dz] } of world.roof.stairs || []) {
+      const landing = { x: stairCell.x + dx, z: stairCell.z + dz };
+      if (!isNode(landing.x, landing.z, 'roof')) { roofIslands.push(`saída da escada ${stairCell.x},${stairCell.z}`); continue; }
+      for (const key of reach(landing, 'roof')) roofSeen.add(key.slice(5));
+    }
+    const orphanRoof = [...roofCells].filter((key) => !roofSeen.has(key));
+
+    // --- Passagem subterrânea (M3): de cada boca de visita, toda a passagem é
+    // transitável — mesmo critério, um nível abaixo do chão.
+    const undergroundIslands = [];
+    const undergroundCells = new Set(world.underground.cells);
+    const undergroundSeen = new Set();
+    for (const { cell: entranceCell, direction: [dx, dz] } of world.underground.entrances || []) {
+      const landing = { x: entranceCell.x + dx, z: entranceCell.z + dz };
+      if (!isNode(landing.x, landing.z, 'underground')) { undergroundIslands.push(`saída da boca ${entranceCell.x},${entranceCell.z}`); continue; }
+      for (const key of reach(landing, 'underground')) undergroundSeen.add(key.slice(12));
+    }
+    const orphanUnderground = [...undergroundCells].filter((key) => !undergroundSeen.has(key));
+
+    // --- Escadaria/boca ANDANDO, nos dois sentidos: mesma técnica das
+    // escadarias do mezanino (passo automático + empurrão para baixo em Y),
+    // que não distingue subir de descer — só o `feetOf` de origem/destino
+    // muda. Reusado para telhado (mezanino->telhado) e passagem
+    // (rua->passagem, aqui de fato DESCENDO).
+    // 190 passos * 0.05 m = 9.5 m: cruza a célula de origem inteira + a
+    // escada/boca + a célula de pouso, sem sair vagando até esbarrar em
+    // outro relevo do mapa (uma calçada mais adiante, por exemplo, tem seu
+    // próprio degrau de 0.13 m — andar 13 m longe o bastante para alcançá-la
+    // faz o "chegou lá" oscilar por um relevo que nada tem a ver com ESTA
+    // escada/boca).
+    const walkLevel = (position, [dx, dz], fromFeet, toFeet) => {
+      physics.createPlayer({ x: position.x - dx * cell * 0.9, y: fromFeet + 1, z: position.z - dz * cell * 0.9 });
+      for (let i = 0; i < 190; i += 1) physics.movePlayer({ x: dx * 0.05, y: -0.12, z: dz * 0.05 });
+      return physics.position();
+    };
+    const roofStairs = (world.roof.stairs || []).map(({ cell: stairCell, position, direction: [dx, dz] }) => {
+      const forward = walkLevel(position, [dx, dz], CONFIG.floorHeight, CONFIG.roofHeight);
+      const backward = walkLevel(position, [-dx, -dz], CONFIG.roofHeight, CONFIG.floorHeight);
+      const base = { x: stairCell.x - dx, z: stairCell.z - dz };
+      return {
+        cell: `${stairCell.x},${stairCell.z}`,
+        climbed: Math.abs(forward.y - (CONFIG.roofHeight + 1)) < 0.1,
+        descended: Math.abs(backward.y - (CONFIG.floorHeight + 1)) < 0.1,
+        reachable: upperSeen.has(`${base.x},${base.z}`),
+        top: forward.y,
+        bottom: backward.y,
+      };
+    });
+    const undergroundStairs = (world.underground.entrances || []).map(({ cell: entranceCell, position, direction: [dx, dz] }) => {
+      const forward = walkLevel(position, [dx, dz], 0, -CONFIG.undergroundDepth);
+      const backward = walkLevel(position, [-dx, -dz], -CONFIG.undergroundDepth, 0);
+      const base = { x: entranceCell.x - dx, z: entranceCell.z - dz };
+      return {
+        cell: `${entranceCell.x},${entranceCell.z}`,
+        climbed: Math.abs(forward.y - (-CONFIG.undergroundDepth + 1)) < 0.1,
+        // Faixa, não igualdade exata: a boca pode desembocar numa célula de
+        // calçada (degrau de 0.13 m, ver world.js addCoverColliders) — 1.0
+        // (asfalto) e 1.13 (calçada) são AMBOS "chegou na rua"; -2 (ainda na
+        // passagem) ou qualquer coisa fora dessa faixa não é.
+        descended: backward.y >= 0.95 && backward.y <= 1.2,
+        reachable: groundReach.has(nodeKey(base.x, base.z, 'ground')),
+        top: forward.y,
+        bottom: backward.y,
+      };
+    });
+
     // --- Nenhum ponto ALCANÇÁVEL pode estar dentro de sólido ou sem saída ---
     const inside = [];
     const trapped = [];
@@ -582,17 +669,38 @@ game.api = {
       const [x, z] = key.split(',').map(Number);
       checkNode(x, z, 'upper', 'mezanino');
     }
+    for (const key of roofSeen) {
+      const [x, z] = key.split(',').map(Number);
+      checkNode(x, z, 'roof', 'telhado');
+    }
+    for (const key of undergroundSeen) {
+      const [x, z] = key.split(',').map(Number);
+      checkNode(x, z, 'underground', 'passagem');
+    }
+    // Torre (M2): plataforma de UMA célula só — o mesmo teste de dentro/preso
+    // do resto do mapa, aplicado ao topo. A subida em si (escada de mão) usa
+    // um mecanismo diferente de "andar" (physics.onLadder/climbSpeed — ver
+    // player.js) e é validada por teleporte no smoke, não aqui.
+    if (world.tower) checkNode(world.tower.base.x, world.tower.base.z, 'tower', 'topo da torre');
 
     return {
       groundCells: groundReach.size,
       upperCells: upperCells.size,
       upperReached: upperSeen.size,
+      roofCells: roofCells.size,
+      roofReached: roofSeen.size,
+      undergroundCells: undergroundCells.size,
+      undergroundReached: undergroundSeen.size,
       unreachable,
       orphanUpper,
       upperIslands,
+      orphanRoof,
+      roofIslands,
+      orphanUnderground,
+      undergroundIslands,
       inside: [...new Set(inside)],
       trapped: [...new Set(trapped)],
-      stairs,
+      stairs: [...stairs, ...roofStairs, ...undergroundStairs],
     };
   },
   floors: () => ({

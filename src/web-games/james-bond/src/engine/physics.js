@@ -171,9 +171,22 @@ export async function createPhysics() {
    * Topos de caixa (paredes, obstáculos) também sustentam: toda estrutura
    * sólida visível é pisável. Sem isto, cair sobre uma parede atravessava o
    * volume dela até o térreo e deixava o jogador preso DENTRO da parede.
+   *
+   * BUG (achado ao implementar a passagem subterrânea — M3): o `best`
+   * partia de `0` como se houvesse sempre um chão absoluto em y=0. Isso
+   * nunca aparecia antes porque toda missão tinha uma plataforma REAL em
+   * y=0 cobrindo o mapa inteiro, que sempre vencia o `0` por empate/maior. A
+   * passagem subterrânea introduziu o primeiro piso genuinamente ABAIXO de
+   * y=0 (o piso da própria passagem) — e o `0` default, mais alto, vencia
+   * incondicionalmente mesmo quando NENHUMA plataforma em y=0 existe naquela
+   * coluna (célula de boca de visita, cujo piso térreo foi removido de
+   * propósito — ver world.js `buildGroundFloor`). Resultado: o jogador
+   * "flutuava" sobre um chão fantasma em y=1 em vez de descer para a
+   * passagem. Sentinela `-Infinity` (mesmo padrão de `surfaceBelow` abaixo)
+   * resolve: só cai de volta a `0` quando NENHUMA plataforma real é achada.
    */
   function supportHeight(x, z, feetY) {
-    let best = 0;
+    let best = -Infinity;
     for (const platform of platformIndex.query(x, z)) {
       if (platform.topY > feetY + STEP_UP) continue;
       if (platform.topY <= best) continue;
@@ -185,7 +198,7 @@ export async function createPhysics() {
       if (topY <= best) continue;
       if (insideColumn(box, x, z)) best = topY;
     }
-    return best;
+    return best === -Infinity ? 0 : best;
   }
 
   /** True quando (x, z, feetY) está dentro de um volume de escada. */
