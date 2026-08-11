@@ -128,8 +128,11 @@ export class Rig {
     this.speed = clamp(this.speed, -REVERSE_SPEED, MAX_SPEED);
 
     // Steering authority falls off at crawl speed, like a tracked machine.
+    // Sign: with the camera settled BEHIND the rig (screen-right = -(cos yaw,
+    // 0, -sin yaw)), D must turn the nose screen-right, i.e. DECREASE yaw —
+    // the 1-shot had this inverted (operator report 2026-08-11).
     const steerRate = 1.15 * clamp(Math.abs(this.speed) / 4.5, 0, 1);
-    this.yaw += input.steer * steerRate * dt * Math.sign(this.speed || 1);
+    this.yaw -= input.steer * steerRate * dt * Math.sign(this.speed || 1);
     this.yaw = wrapAngle(this.yaw);
 
     const fwd = this.forward;
@@ -177,7 +180,9 @@ export class Rig {
 
     // Suspension-ish body attitude from acceleration and rope pull.
     const lateral = vdot(v3(this.ropeTension.x, 0, this.ropeTension.z), vcross(v3(0, 1, 0), fwd)) / 90000;
-    this.bodyRoll = lerp(this.bodyRoll, clamp(-lateral - input.steer * this.speed * 0.012, -0.13, 0.13), 5 * dt);
+    // Roll flipped together with the steering sign so the hull still leans
+    // with the turn.
+    this.bodyRoll = lerp(this.bodyRoll, clamp(-lateral + input.steer * this.speed * 0.012, -0.13, 0.13), 5 * dt);
     this.bodyPitch = lerp(this.bodyPitch, clamp(-target * 0.05, -0.06, 0.06), 4 * dt);
   }
 

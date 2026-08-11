@@ -359,6 +359,30 @@ test('rio: tráfego só cruza a água nas pontes e nunca trava (R-07)', () => {
   assert.ok(travelled > 5000, `fleet only travelled ${travelled.toFixed(0)} m in 60 s`);
 });
 
+// ---------------------------------------------------------- direção (fix 2026-08-11)
+
+test('trator: D vira para a DIREITA da tela (yaw diminui), A para a esquerda', () => {
+  // Câmera assenta atrás do rig: screen-right em mundo = -(cos yaw, 0, -sin yaw),
+  // então virar à direita = yaw DIMINUI. O 1-shot tinha o sinal invertido.
+  const { world, rig } = (() => {
+    const s = new Structure({ x: 500, z: 500, w: 8, d: 8, h: 6, type: 'house', name: 'H', color: [1, 1, 1] });
+    return {
+      world: { structures: [s], index: new StructureIndex([s]), debris: new DebrisField(), bounds: { half: 800 }, onCollapse: () => {} },
+      rig: new Rig(0, 0, 0),
+    };
+  })();
+  const NO = { throttle: 1, steer: 1, brake: false, slew: 0, pitch: 0, rope: 0, pump: 0 };
+  rig.speed = 6;
+  const yaw0 = rig.yaw;
+  for (let i = 0; i < 40; i++) rig.update(0.0125, NO, world);
+  assert.ok(rig.yaw < yaw0, `steer=+1 (D) must decrease yaw (got ${rig.yaw.toFixed(3)} from ${yaw0})`);
+
+  const rig2 = new Rig(0, 0, 0);
+  rig2.speed = 6;
+  for (let i = 0; i < 40; i++) rig2.update(0.0125, { ...NO, steer: -1 }, world);
+  assert.ok(rig2.yaw > 0, 'steer=-1 (A) must increase yaw');
+});
+
 // ---------------------------------------------------------- v0.9.0 (R-10)
 
 test('carros: frota tem pelo menos 3 modelos e todos dirigem (R-10)', () => {
