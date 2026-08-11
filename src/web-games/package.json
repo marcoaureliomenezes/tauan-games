@@ -34,8 +34,8 @@
     "test:aero:defense-fighters": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-defense-fighters.mjs",
     "test:aero:defense-director": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-defense-director.mjs",
     "test:aero:visual": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-visual.mjs",
-    "test:demolition-ball:unit": "node tests/demolition-ball-opus-5/unit.mjs",
-    "test:demolition-ball:e2e": "playwright test --config=tests/demolition-ball-opus-5/playwright.config.js",
+    "test:demolition-ball:unit": "node tests/demolition-ball/unit.mjs",
+    "test:demolition-ball:e2e": "playwright test --config=tests/demolition-ball/playwright.config.js",
     "test:demolition-ball": "npm run test:demolition-ball:unit && npm run test:demolition-ball:e2e"
   },
   "devDependencies": {

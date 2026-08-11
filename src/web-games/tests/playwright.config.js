@@ -13,9 +13,9 @@ const GL_ARGS = [
 
 module.exports = defineConfig({
   testDir: '.',
-  // v0.10.0 T-03: diretórios com config dedicado rodam em jobs de CI próprios
-  // (james-bond-ci.yml / demolition-ball-ci.yml) — fora do run raiz.
-  testIgnore: ['**/james-bond/**', '**/demolition-ball-opus-5/**'],
+  // v0.10.0 T-03 + PR#27: dirs com config dedicado rodam em jobs próprios —
+  // fora do run raiz (james-bond, demolition-ball renomeado e o legado opus-5).
+  testIgnore: ['**/james-bond/**', '**/demolition-ball-opus-5/**', '**/demolition-ball/**'],
   outputDir: './screenshots',
   timeout: 30000,
   retries: 1,

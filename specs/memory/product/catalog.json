@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-18T18:15:58Z",
-  "context": "tauan-games",
+  "generated_at": "2026-08-11T19:30:45Z",
+  "context": "db-worktree",
   "features": [
     {
       "rank": 1,
@@ -9,7 +9,7 @@
       "category": "product",
       "area": "product",
       "tldr": "Todos os jogos do tauan-games por grupo de tecnologia (src/web-games e src/godot) com status.",
-      "summary": "Lista canônica dos 9 jogos do portfólio, pasta, tecnologia, descrição e status. Reescrito 2026-07-18 na reestruturação src/.",
+      "summary": "Lista canônica dos 10 jogos do portfólio, pasta, tecnologia, descrição e status. Reescrito 2026-07-18 na reestruturação src/; Demolition Ball adicionado na v0.9.0.",
       "path": "specs/memory/product/games-catalog.md",
       "tags": [
         "product",
@@ -209,6 +209,82 @@
     },
     {
       "rank": 11,
+      "slug": "demolition-ball-cidade-viva",
+      "title": "Demolition Ball — cidade viva",
+      "category": "product",
+      "area": "demolition-ball",
+      "tldr": "Grade 7x7 determinística com rio+3 pontes (arestas cortadas do grafo), fachadas por estilo no shader, praças/flores, 56 pedestres imunes, 3 modelos de carro, equipe de cones.",
+      "summary": "Como a cidade da v0.9.0 é gerada e animada — city.js, traffic.js (severed/closedEdges), pedestrians.js, crew.js, fachadas/céu em shaders.js.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-cidade-viva.md",
+      "tags": [
+        "product",
+        "demolition-ball",
+        "cidade",
+        "trafego",
+        "pedestres"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 12,
+      "slug": "demolition-ball-fisica-controles",
+      "title": "Demolition Ball — física e controles",
+      "category": "product",
+      "area": "demolition-ball",
+      "tldr": "Pêndulo com cabo inextensível em sub-passos de 12,5 ms; destruição E=½mv² em células de 2,5 m com flood-fill de colapso; WASD/QE/RF/ZX/ESPAÇO/C.",
+      "summary": "As leis físicas do rig e da destruição, o spawn seguro da bola e o mapa de teclas — o que NÃO pode ser refeito (identidade do jogo).",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-fisica-controles.md",
+      "tags": [
+        "product",
+        "demolition-ball",
+        "fisica",
+        "controles"
+      ],
+      "token_estimate": 0,
+      "depends_on": [
+        "demolition-ball-cidade-viva"
+      ]
+    },
+    {
+      "rank": 13,
+      "slug": "demolition-ball-jogo",
+      "title": "Demolition Ball — o jogo",
+      "category": "product",
+      "area": "demolition-ball",
+      "tldr": "Trator-guindaste com bola de demolição de 4,2 t numa cidade procedural viva; contratos de destruição; WebGL2 100% próprio (zero libs, só snoise MIT).",
+      "summary": "Identidade, intuito e leis do demolition-ball (src/web-games/demolition-ball). Construído em 1 shot, memorializado e expandido na v0.9.0.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-jogo.md",
+      "tags": [
+        "product",
+        "demolition-ball",
+        "demolicao"
+      ],
+      "token_estimate": 0,
+      "depends_on": [
+        "demolition-ball-modos"
+      ]
+    },
+    {
+      "rank": 14,
+      "slug": "demolition-ball-modos",
+      "title": "Demolition Ball — modos de jogo",
+      "category": "product",
+      "area": "demolition-ball",
+      "tldr": "Modo Tauan (sem prazo/multa, 1 alvo, threshold 0.5, dano x2.5, homing forte) vs Modo Contratos (jogo original); seleção no overlay, trava ao começar.",
+      "summary": "Os dois modos da v0.9.0 (ADR-1), como o MissionSystem é parametrizado e o que cada modo muda.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-modos.md",
+      "tags": [
+        "product",
+        "demolition-ball",
+        "modos",
+        "acessibilidade"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 15,
       "slug": "far-west-jogo",
       "title": "Far West — o jogo",
       "category": "product",
@@ -225,7 +301,7 @@
       "depends_on": []
     },
     {
-      "rank": 12,
+      "rank": 16,
       "slug": "james-bond-jogo",
       "title": "James Bond Operações — o jogo",
       "category": "product",
@@ -242,7 +318,7 @@
       "depends_on": []
     },
     {
-      "rank": 13,
+      "rank": 17,
       "slug": "memoria-bichos-jogo",
       "title": "Memória dos Bichos — o jogo",
       "category": "product",
@@ -259,7 +335,7 @@
       "depends_on": []
     },
     {
-      "rank": 14,
+      "rank": 18,
       "slug": "space-war-jogo",
       "title": "Space War — o jogo",
       "category": "product",
@@ -277,7 +353,7 @@
       "depends_on": []
     },
     {
-      "rank": 15,
+      "rank": 19,
       "slug": "speed-run-web-jogo",
       "title": "Speed Run (web) — o jogo",
       "category": "product",
@@ -294,7 +370,7 @@
       "depends_on": []
     },
     {
-      "rank": 16,
+      "rank": 20,
       "slug": "tauan-trex-jogo",
       "title": "Tauan T-Rex — o jogo",
       "category": "product",

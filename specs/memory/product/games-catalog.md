@@ -3,11 +3,11 @@ slug: games-catalog
 title: Catálogo de jogos
 category: product
 tldr: Todos os jogos do tauan-games por grupo de tecnologia (src/web-games e src/godot) com status.
-summary: Lista canônica dos 9 jogos do portfólio, pasta, tecnologia, descrição e status. Reescrito 2026-07-18 na reestruturação src/.
+summary: Lista canônica dos 10 jogos do portfólio, pasta, tecnologia, descrição e status. Reescrito 2026-07-18 na reestruturação src/; Demolition Ball adicionado na v0.9.0.
 tags: [product, catalog, games]
 token_estimate: 0
-last_updated: "2026-07-18"
-release_origin: repo-restructure-src-20260718
+last_updated: "2026-08-11"
+release_origin: v0.9.0
 ---
 
 ## Propósito
@@ -26,6 +26,7 @@ jogo: atoms em `product/web-games/<jogo>/` e `product/godot/<jogo>/`.
 | Memória dos Bichos | `src/web-games/memoria-bichos/` | HTML/CSS/JS puro | Jogável |
 | Speed Run (web) | `src/web-games/speed-run/` | Three.js r165 | Jogável; 3 pistas, 5 carros |
 | Tauan T-Rex | `src/web-games/tauan-trex/` | Phaser 3 (vendor) | Jogável |
+| Demolition Ball | `src/web-games/demolition-ball/` | WebGL2 puro (renderer/física/áudio do zero; só `snoise` MIT vendor) | Jogável; v0.9.0 cidade viva + Modo Tauan |
 | Space War | `space-war/` ⚠ raiz | Three.js r165 | Jogável; MIGRAÇÃO p/ src/web-games pendente |
 
 ## Godot games (`src/godot/`)
