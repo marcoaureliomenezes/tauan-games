@@ -38,10 +38,16 @@ test('carrega, renderiza em WebGL2 e roda sem erros de console', async ({ page }
 test('o trator dirige e a cidade continua consistente', async ({ page }) => {
   await boot(page);
   const start = await page.evaluate(() => ({ x: window.__demolition.rig.pos.x, z: window.__demolition.rig.pos.z }));
-  await page.evaluate(() => window.__demolition.begin());
-  await page.keyboard.down('w');
-  await page.waitForTimeout(1600);
-  await page.keyboard.up('w');
+  // Drive by SIM time, not wall time: on slow CI rasterizers 1.6 wall-seconds
+  // can be a handful of frames (~0.25 sim-s) and the rig barely moves.
+  const t0 = await page.evaluate(() => {
+    const d = window.__demolition;
+    d.begin();
+    d.press('KeyW');
+    return d.simTime;
+  });
+  await page.waitForFunction((t) => window.__demolition.simTime > t + 2.2, t0, { timeout: 90000 });
+  await page.evaluate(() => window.__demolition.release('KeyW'));
   const end = await page.evaluate(() => ({
     x: window.__demolition.rig.pos.x,
     z: window.__demolition.rig.pos.z,
@@ -81,6 +87,7 @@ test('a bola pendula: fica presa ao cabo e nunca escapa do comprimento', async (
 });
 
 test('impacto da bola demole a estrutura alvo e gera escombros', async ({ page }) => {
+  test.slow();   // frame-driven loop: at CI fps the full budget can near 26x22 RAFs
   await boot(page);
   const result = await page.evaluate(async () => {
     const d = window.__demolition;
@@ -90,6 +97,9 @@ test('impacto da bola demole a estrutura alvo e gera escombros', async ({ page }
     for (let hit = 0; hit < 26; hit++) {
       d.teleportBallTo(target, 5);
       for (let i = 0; i < 22; i++) await new Promise((r) => requestAnimationFrame(r));
+      // Early exit once the acceptance condition is met — keeps slow CI
+      // runners inside the timeout without weakening the assertion.
+      if (target.progress > 0.06 && d.debris.chunks.length > 0 && d.debris.dust.length > 0) break;
     }
     return {
       before,
