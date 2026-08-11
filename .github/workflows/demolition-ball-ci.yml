@@ -1,7 +1,7 @@
 # demolition-ball-ci — suíte dedicada do Demolition Ball (config próprio com as
 # 5 flags GL/ANGLE, v0.10.0 T-03). Roda só quando o jogo ou seus testes mudam;
 # em paralelo com o job principal (o config raiz ignora
-# tests/demolition-ball-opus-5/** desde v0.10.0).
+# tests/demolition-ball/** desde v0.10.0).
 
 name: Demolition Ball CI
 
@@ -9,14 +9,14 @@ on:
   push:
     branches: [main]
     paths:
-      - "src/web-games/demolition-ball-opus-5/**"
-      - "src/web-games/tests/demolition-ball-opus-5/**"
+      - "src/web-games/demolition-ball/**"
+      - "src/web-games/tests/demolition-ball/**"
       - ".github/workflows/demolition-ball-ci.yml"
   pull_request:
     branches: [main]
     paths:
-      - "src/web-games/demolition-ball-opus-5/**"
-      - "src/web-games/tests/demolition-ball-opus-5/**"
+      - "src/web-games/demolition-ball/**"
+      - "src/web-games/tests/demolition-ball/**"
       - ".github/workflows/demolition-ball-ci.yml"
   workflow_dispatch:
 
