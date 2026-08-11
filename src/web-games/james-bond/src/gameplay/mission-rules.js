@@ -35,7 +35,7 @@ export function createMissionRules(game, mission, world, input, audio, callbacks
     });
     if (nearest && distance <= CONFIG.interactRange) {
       prompt = mission.objectives[nearest.userData.key];
-      if (input.consume('KeyE')) complete(nearest.userData.key);
+      if (input.consume('KeyF')) complete(nearest.userData.key);
     }
     const extractionDistance = world.extraction.distanceTo(position);
     if (extractionDistance < 2.2) {
