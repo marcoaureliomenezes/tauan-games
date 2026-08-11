@@ -9,6 +9,7 @@ import { MissionSystem, CONTRACTS } from '../../demolition-ball-opus-5/src/missi
 import { Rig, safeBallPos } from '../../demolition-ball-opus-5/src/rig.js';
 import { Traffic } from '../../demolition-ball-opus-5/src/traffic.js';
 import { Pedestrians } from '../../demolition-ball-opus-5/src/pedestrians.js';
+import { Crew } from '../../demolition-ball-opus-5/src/crew.js';
 import { MODES } from '../../demolition-ball-opus-5/src/modes.js';
 import { v3, sphereVsBox, qIntegrate, mulberry32, vlen } from '../../demolition-ball-opus-5/src/math.js';
 
@@ -387,6 +388,58 @@ test('carros: freiam atrás do trator como antes (R-10 preserva fila/freio)', ()
   }
   assert.ok(car.speed < car.cruise * 0.6,
     `car should brake behind the rig (speed ${car.speed.toFixed(1)} vs cruise ${car.cruise.toFixed(1)})`);
+});
+
+// ---------------------------------------------------------- v0.9.0 (R-11)
+
+test('equipe: ciclo completo — botão a 30m, cones, quarteirão fechado, recolha, 1x por contrato (R-11)', () => {
+  const city = buildCity();
+  const missions = new MissionSystem(city.structures, 4242, {
+    singleTarget: true, thresholdOverride: 0.5, deadlines: false, collateralFines: false,
+  });
+  missions.start(0);
+  const target = missions.current.targets[0];
+  const traffic = new Traffic(20, 77, city.river);
+  const debrisStub = { spawnChunk() {}, spawnSparks() {}, spawnDust() {} };
+  const crew = new Crew();
+
+  const farRig = { pos: v3(target.center.x + 200, 0, target.center.z) };
+  const nearRig = { pos: v3(target.center.x + 18, 0, target.center.z) };
+  assert.equal(crew.available(missions, farRig), false, 'button must hide beyond 30 m');
+  assert.equal(crew.available(missions, nearRig), true, 'button must show within 30 m');
+  assert.equal(crew.call(missions, nearRig), true);
+  assert.equal(crew.available(missions, nearRig), false, 'no double call');
+
+  // Van drives in, helper places every cone, block closes.
+  let guard = 0;
+  while (crew.state !== 'holding' && guard++ < 20000) crew.update(0.05, missions, traffic);
+  assert.equal(crew.state, 'holding', 'crew must finish placing cones');
+  assert.equal(crew.cones.length, 28);
+  assert.equal(traffic.closedEdges.size, 4, 'the 4 edges around the block must close');
+
+  // While the cones are down, settled traffic never drives a closed edge.
+  const farRigBall = { pos: v3(4000, 0, 4000), ball: { pos: v3(4000, 0, 4000), vel: v3(), radius: 2.6 } };
+  for (let t = 0; t < 15; t += 0.05) traffic.update(0.05, farRigBall, debrisStub);
+  for (let t = 0; t < 10; t += 0.05) {
+    traffic.update(0.05, farRigBall, debrisStub);
+    for (const car of traffic.cars) {
+      if (!car.alive) continue;
+      assert.ok(!traffic.isBlocked(car.from, car.to), 'car entered a coned block');
+    }
+  }
+
+  // Knock the target past the threshold: the crew collects and leaves.
+  let killed = 0;
+  for (let i = 0; i < target.alive.length && target.progress < 0.55; i++) {
+    if (target.alive[i]) { target.kill(i); killed++; }
+  }
+  assert.ok(killed > 0);
+  guard = 0;
+  while (crew.state !== 'idle' && guard++ < 30000) crew.update(0.05, missions, traffic);
+  assert.equal(crew.state, 'idle', 'crew must pack up and leave');
+  assert.equal(crew.cones.length, 0, 'every cone collected');
+  assert.equal(traffic.closedEdges.size, 0, 'block reopened');
+  assert.equal(crew.available(missions, nearRig), false, 'same contract: still once only');
 });
 
 // ---------------------------------------------------------- v0.9.0 (R-09)

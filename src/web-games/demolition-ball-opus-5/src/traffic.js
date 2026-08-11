@@ -16,7 +16,7 @@ const CAR_COLORS = [
 
 function roadCoord(i) { return -CITY_HALF + i * SPAN; }
 
-function edgeKey(a, b) {
+export function edgeKey(a, b) {
   return a.i + a.j * 16 <= b.i + b.j * 16
     ? `${a.i},${a.j}-${b.i},${b.j}`
     : `${b.i},${b.j}-${a.i},${a.j}`;

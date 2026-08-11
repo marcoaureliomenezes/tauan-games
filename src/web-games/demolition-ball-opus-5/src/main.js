@@ -6,6 +6,7 @@ import { DebrisField } from './debris.js';
 import { Rig, safeBallPos } from './rig.js';
 import { Traffic } from './traffic.js';
 import { Pedestrians } from './pedestrians.js';
+import { Crew } from './crew.js';
 import { MissionSystem } from './missions.js';
 import { MODES, DEFAULT_MODE } from './modes.js';
 import { Minimap } from './minimap.js';
@@ -34,6 +35,7 @@ const hud = {
   targets: document.getElementById('target-list'),
   modeTauan: document.getElementById('mode-tauan'),
   modeContratos: document.getElementById('mode-contratos'),
+  crewBtn: document.getElementById('crew-btn'),
 };
 
 // ?quality=low trims shadow resolution and draw distance — used by the
@@ -55,6 +57,11 @@ const audio = new Audio();
 const rig = new Rig(-CITY_HALF + 8, -CITY_HALF + 40, 0);
 const traffic = new Traffic(34, 77, city.river);
 const pedestrians = new Pedestrians(city);
+const crew = new Crew();
+
+function callCrew() {
+  if (started && crew.call(missions, rig)) audio.chime(true);
+}
 
 let collapseEvents = [];
 const world = {
@@ -143,6 +150,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') minimap.toggle();
   if (e.code === 'KeyV') camera.mode = camera.mode === 'follow' ? 'ball' : 'follow';
   if (e.code === 'KeyN') audio.toggleMute();
+  if (e.code === 'KeyC') callCrew();
   if (['Space', 'KeyZ', 'KeyX', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
@@ -163,6 +171,7 @@ window.addEventListener('wheel', (e) => {
 canvas.addEventListener('click', begin);
 hud.modeTauan.addEventListener('click', () => selectMode('tauan'));
 hud.modeContratos.addEventListener('click', () => selectMode('contratos'));
+hud.crewBtn.addEventListener('click', callCrew);
 
 const minimap = new Minimap(mapCanvas);
 
@@ -356,6 +365,9 @@ function updateHud(now, dt, fps) {
   hud.swing.textContent = `${swing.toFixed(1)} m/s`;
   hud.swing.className = swing > 11 ? 'value hot' : 'value';
 
+  // Crew button (R-11): big and friendly, only when the crew can actually come.
+  hud.crewBtn.classList.toggle('hidden', !(started && crew.available(missions, rig)));
+
   if (missions.banner && now < missions.banner.until) {
     hud.banner.classList.add('show');
     hud.bannerText.textContent = missions.banner.text;
@@ -397,6 +409,7 @@ function frame(nowMs) {
 
   traffic.update(dt, rig, debris);
   pedestrians.update(dt, rig, world);
+  crew.update(dt, missions, traffic);
   debris.update(dt);
 
   for (const ev of rig.drainImpacts()) {
@@ -426,6 +439,7 @@ function frame(nowMs) {
   renderProps();
   traffic.render(renderer);
   pedestrians.render(renderer, camera.target, DRAW_DETAIL);
+  crew.render(renderer, camera.target, DRAW_MAX);
   rig.render(renderer, city.palette);
   debris.render(renderer);
   renderBeacon(dt);
@@ -446,7 +460,8 @@ window.__demolition = {
   get simTime() { return simTime; },
   get mode() { return mode; },
   get missions() { return missions; },
-  rig, world, city, debris, traffic, pedestrians, renderer, camera, minimap,
+  rig, world, city, debris, traffic, pedestrians, crew, renderer, camera, minimap,
+  callCrew,
   press: (code) => keys.add(code),
   release: (code) => keys.delete(code),
   begin,

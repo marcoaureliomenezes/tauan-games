@@ -58,7 +58,7 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
   - **Acceptance:** ≥3 modelos (carro, caminhonete, van/ônibus) com vidros, faróis e
     lanternas; fila/freio atuais preservados (unit de tráfego verde); screenshot.
 
-- [ ] T8 - Equipe de isolamento "CHAMAR EQUIPE 🚧" (R-11, WS-6)
+- [x] T8 - Equipe de isolamento "CHAMAR EQUIPE 🚧" (R-11, WS-6)
   - **Owner:** software-engineer
   - **Acceptance:** AC-5: botão a ≤30 m do alvo (também tecla `C`); furgão chega,
     ajudante de colete coloca cones no perímetro do quarteirão; tráfego para nas

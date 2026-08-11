@@ -51,6 +51,20 @@
   #controls b { color: #ffcf9a; font-weight: 700; }
   #stats { position: fixed; right: 18px; bottom: 4px; font-size: 9.5px; color: #4d5e70; }
 
+  /* ---- crew button (SPEC v0.9.0 R-11) */
+  #crew-btn {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    font-family: inherit; cursor: pointer; z-index: 30;
+    background: linear-gradient(180deg, #ff9a2a, #f07000);
+    color: #2b1500; border: 3px solid #ffd9a0; border-radius: 16px;
+    padding: 16px 30px; font-size: 22px; font-weight: 900; letter-spacing: 1px;
+    box-shadow: 0 6px 30px rgba(255,140,30,.45);
+    animation: crewpulse 1.4s ease-in-out infinite;
+  }
+  #crew-btn:active { transform: translateX(-50%) scale(.96); }
+  #crew-btn.hidden { display: none; }
+  @keyframes crewpulse { 0%,100% { box-shadow: 0 6px 26px rgba(255,140,30,.35) } 50% { box-shadow: 0 6px 44px rgba(255,150,40,.7) } }
+
   /* ---- banner */
   #banner {
     position: fixed; left: 50%; top: 22%; transform: translate(-50%, -14px);
@@ -123,6 +137,7 @@
 <div id="stats"></div>
 
 <div id="banner"><div id="banner-text"></div><div id="banner-sub"></div></div>
+<button type="button" id="crew-btn" class="hidden">🚧 CHAMAR EQUIPE</button>
 
 <div id="start-overlay">
   <h1>DEMOLITION BALL</h1>
@@ -140,6 +155,7 @@
     <span><b>W A S D</b> dirigir</span><span><b>Q E</b> girar lança</span>
     <span><b>R F</b> elevar lança</span><span><b>Z X</b> cabo</span>
     <span><b>ESPAÇO</b> bola busca o alvo</span><span><b>M</b> mapa da cidade</span>
+    <span><b>C</b> chamar equipe 🚧</span>
   </div>
   <div class="go">CLIQUE OU PRESSIONE UMA TECLA PARA COMEÇAR</div>
 </div>

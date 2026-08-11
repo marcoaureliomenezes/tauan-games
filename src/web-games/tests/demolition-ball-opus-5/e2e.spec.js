@@ -147,6 +147,50 @@ test('cidade viva mantém fps jogável em quality=low (T4)', async ({ page }) =>
   expect(fps).toBeGreaterThanOrEqual(20);
 });
 
+// ---------------------------------------------------------------- v0.9.0 (R-11)
+
+test('equipe de isolamento: botão a ≤30m, cones cercam o quarteirão, tráfego para, recolha (AC-5)', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => {
+    const d = window.__demolition;
+    d.begin();
+    d.teleportBallTo(d.missions.current.targets[0]);   // parks the rig ~20 m out
+    d.rig.ball.vel = { x: 0, y: 0, z: 0 };
+  });
+  await expect(page.locator('#crew-btn')).toBeVisible({ timeout: 15000 });
+  await page.click('#crew-btn');
+  const called = await page.evaluate(() => window.__demolition.crew.state);
+  expect(called).toBe('driving');
+  await expect(page.locator('#crew-btn')).toBeHidden();
+
+  // Fast-forward the crew clock (real-time would take minutes at CI fps).
+  const placed = await page.evaluate(() => {
+    const d = window.__demolition;
+    let guard = 0;
+    while (d.crew.state !== 'holding' && guard++ < 20000) d.crew.update(0.05, d.missions, d.traffic);
+    return { state: d.crew.state, cones: d.crew.cones.length, closed: d.traffic.closedEdges.size };
+  });
+  expect(placed.state).toBe('holding');
+  expect(placed.cones).toBe(28);
+  expect(placed.closed).toBe(4);
+  await page.screenshot({ path: 'screenshots/demolition-ball-crew.png' });
+
+  // Finish the target: the crew collects the cones and reopens the block.
+  const done = await page.evaluate(() => {
+    const d = window.__demolition;
+    const t = d.missions.current.targets[0];
+    for (let i = 0; i < t.alive.length && t.progress < 0.95; i++) {
+      if (t.alive[i]) t.kill(i);
+    }
+    let guard = 0;
+    while (d.crew.state !== 'idle' && guard++ < 30000) d.crew.update(0.05, d.missions, d.traffic);
+    return { state: d.crew.state, cones: d.crew.cones.length, closed: d.traffic.closedEdges.size };
+  });
+  expect(done.state).toBe('idle');
+  expect(done.cones).toBe(0);
+  expect(done.closed).toBe(0);
+});
+
 // ---------------------------------------------------------------- v0.9.0 (R-01)
 
 test('overlay oferece os dois modos e o Tauan é o padrão (AC-1)', async ({ page }) => {
