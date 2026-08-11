@@ -66,7 +66,10 @@ export const CANNON = {
   MUZZLE_OFFSET: 3.08, // distância para frente do nariz onde a bala spawn — 2.2 × 1.4 (scale)
 };
 
-/** Míssil leve (X) — dispara rápido, dano modesto, supply grande */
+/** Míssil leve (X) — dispara rápido, dano modesto.
+ * 2026-08-11: TODO míssil é infinito; a limitação é CADÊNCIA (cooldown por
+ * arma) — valores canônicos em weapon-cooldowns.js (WEAPON_COOLDOWN_S).
+ * Os campos MAX abaixo restaram para visuais de asa/debug, nunca como guard. */
 export const MISSILES_LIGHT = {
   MAX: 100,
   INITIAL_SPD: 80,
@@ -109,6 +112,21 @@ export const MISSILES_NUCLEAR = {
   PLAYER_DAMAGE_RADIUS: 680,   // perde 1 vida + shake forte até aqui
 };
 
+/** Firestorm pós-nuke (release nuke-firestorm-defense-v1, T-N-02) — incêndio
+ * generalizado no mapa Inhaúma após a detonação: todo inflamável (árvores,
+ * construções, alvos) dentro de RADIUS pega fogo por FIRE_S, depois só fumaça
+ * por SMOKE_S, e fica carbonizado (preto) permanentemente.
+ * RADIUS = 2 × FIREBALL_R_MAX (130 m) da bola de fogo em nuclear-fx.js — se o
+ * raio máximo do fireball mudar lá, atualizar aqui (260 = 2 × 130). */
+export const NUKE_FIRESTORM = {
+  RADIUS: 260,        // m — 2 × FIREBALL_R_MAX (130) de nuclear-fx.js
+  FIRE_S: 60,         // s — chamas após a explosão
+  SMOKE_S: 120,       // s — só fumaça após as chamas
+  MAX_EMITTERS: 64,   // cap de focos (prioridade: mais perto do epicentro)
+  FLAME_POOL: 160,    // puffs de chama reaproveitados (aditivos)
+  SMOKE_POOL: 120,    // puffs de fumaça reaproveitados
+};
+
 /** Alias mantido para compatibilidade — aponta para light */
 export const MISSILES = MISSILES_LIGHT;
 
@@ -145,7 +163,7 @@ export const TARGETS = {
 };
 
 /** Stats das unidades de formação da campanha Inhaúma (T-C-01,
- *  release aero-fighters-inhauma-campaign-v1). Tipos `f*` — os meshes são os
+ *  release v0.3.4). Tipos `f*` — os meshes são os
  *  builders de `src/formations/units.js`; o fluxo de dano é o de `targets.js`.
  *  range = engajamento contra o player (m; unidades de chão 200-220, AA 300);
  *  speed = deslocamento (m/s); fire = tipo de fogo ('none' = desarmada);
@@ -160,6 +178,333 @@ export const TARGET_STATS = {
   fAaGun:      { hp: 6,  score: 250, hr2: 9,   dropChance: 0.1,  range: 300, speed: 0,   fire: 'aa',       fireInterval: 1.7 },
   fHelicopter: { hp: 10, score: 650, hr2: 120, dropChance: 0.35, range: 220, speed: 14,  fire: 'mg',       fireInterval: 2.3, altitude: 46 },
   fZeppelin:   { hp: 16, score: 720, hr2: 150, dropChance: 0.4,  range: 0,   speed: 5,   fire: 'none',     fireInterval: Infinity, altitude: 95 },
+};
+
+/** T-C-10 (release v0.3.4): modelo de fogo inimigo das
+ *  unidades de FORMAÇÃO contra o jato do jogador (formation.js#updateFormationFire —
+ *  só Inhaúma/campanha; os inimigos legados dos outros mapas seguem com 56 m/s).
+ *  Projéteis SEMPRE em linha reta, sem lead (lead factor 0), velocidade desviável.
+ *  Acerto por distância: p = clamp(pNear - max(0, dist/NEAR_M - 1) * decay, floor, pNear).
+ *    AA:    80% a <50 m, ~50% a 150 m, piso 5% (range 300 m)
+ *    GROUND: 50% a <50 m, ~36% a 150 m, piso 3% (range 200-220 m)
+ *  No roll de MISS a mira recebe um offset angular seedado de 2-6° (tracers passam
+ *  raspando — o jogador vê o fogo e consegue desviar). */
+export const ENEMY_FIRE = {
+  BULLET_SPD: 80,          // m/s — banda desviável 70-90 (SPEC §D)
+  BULLET_LIFE: 4.5,        // s — cobre o range AA (300 m) com folga (80*4.5=360 m)
+  NEAR_M: 50,              // m — distância de referência do platô de acerto
+  MISS_DEG: [2, 6],        // offset angular do tiro errado (graus)
+  AA:     { pNear: 0.80, decay: 0.15, floor: 0.05, muzzleY: 1.8 },
+  GROUND: { pNear: 0.50, decay: 0.14, floor: 0.03, muzzleY: 2.0 },
+};
+
+/** T-C-13 (release v0.3.4): wingmen — voo em FORMAÇÃO
+ *  com o jogador + engajamento genérico de hostis aéreos próximos (wingmen.js).
+ *  Slots de ala em espaço local do jato: [x lateral, y acima, z atrás] (escalon
+ *  esquerdo/direito, ~25-40 m). O slot é rotacionado só pelo YAW do jato (nariz),
+ *  não por pitch/roll — a formação não "dança" quando o jogador banqueia. */
+export const WINGMEN = {
+  FORMATION_OFFSETS: [[-32, 7, 26], [32, 7, 26]], // escalon esq/dir atrás do líder
+  ENGAGE_RADIUS: 420,   // m — hostil aéreo a menos disto do PLAYER dispara o engajamento
+  RETURN_RADIUS: 560,   // m — histerese: sem hostil até aqui, o wingman volta à formação
+  CATCHUP_GAIN: 1.8,    // 1/s — ganho de perseguição do slot (converge em ~2-3 s)
+  MAX_SPD: 165,         // m/s — teto do wingman na perseguição (cruzeiro do player: 80)
+  VEL_LAG: 3.0,         // 1/s — suavização da velocidade (lag suave, sem rubber-band)
+  FIRE_RANGE: 1200,     // m — alcance do míssil aliado (como antes)
+  FIRE_INTERVAL: [2.6, 4.2], // s — intervalo seedado entre disparos (min, min+spread)
+};
+
+/** T-C-05 (release v0.3.4): composição da guarnição de
+ *  ocupação de Cachoeira da Prata (src/maps/inhauma-garrison.js). */
+export const CACHOEIRA_GARRISON = {
+  armorColumns: 2,         // colunas blindadas circulando nos segmentos de estrada da cidade
+  armorSize: 6,            // unidades por coluna
+  heliPatrols: 2,          // helicópteros em patrulha baixa sobre a cidade
+  zeppelinPatrols: 1,      // zepelim em patrulha alta
+  aaNests: 3,              // ninhos de AA nos morros ao redor (mín. 2 garantido)
+  aaAnnulus: [300, 800],   // anel de busca dos morros (m do centro do shelf)
+  aaMinSeparation: 250,    // separação mínima entre ninhos (m)
+  hqTroops: 8,             // tamanho do encampment do QG (objetivo final do Ato 2)
+  samSize: 6,              // tamanho do samSite do QG
+};
+
+/** T-C-06 (release v0.3.4): diretor de campanha do
+ *  mapa Inhaúma (src/campaign.js) — substitui o loop de waves SOMENTE em Inhaúma.
+ *  Ato 1 "SALVAR INHAÚMA": baterias de artilharia + colunas de invasão partem do
+ *  vale de Cachoeira em horários seedados (spawn-over-time, nunca tudo junto).
+ *  Ato 2 "LIBERTAR CACHOEIRA": destruir a guarnição de ocupação (T-C-05). */
+export const CAMPAIGN = {
+  FIRST_SPAWN_S: 5,          // s — primeira formação do Ato 1 após o início
+  SPAWN_GAP_S: [40, 75],     // s — intervalo seedado entre spawns (ato dura 10-15 min)
+  artilleryCount: 3,         // baterias de artilharia (2-3 pela SPEC; 3 cobre os pontos)
+  artillerySize: [5, 8],     // tamanho seedado por bateria
+  // Colunas de invasão (tipo, tamanho) — partem do vale de Cachoeira rumo a Inhaúma.
+  columns: [
+    ['supplyConvoy', 5],
+    ['troopColumn', 8],
+    ['armoredColumn', 10],
+    ['tankPlatoon', 12],
+  ],
+  // Templates de rota validados offline contra as exclusões REAIS (probe da Onda 3;
+  // o validador de formation.js re-clampa/rejeita no spawn — defesa em profundidade).
+  // T-D-04 (nuke-firestorm-defense-v1): Cachoeira mudou de (-1080,530) para
+  // (-950,2050) — rotas RE-TRAÇADAS a partir do novo vale (2026-07-20) e re-
+  // validadas com createFormation + exclusões reais. Elas descem o vale sudoeste,
+  // contornam a TOWN_SHELF pela borda leste/norte (longe do morro da bateria a NW)
+  // e terminam a ~140 m da borda do shelf: chegar ao fim do path ('arrived') =
+  // invasão bem-sucedida = Inhaúma cai.
+  columnRoutes: {
+    north: [[-950, 1890], [-800, 1600], [-350, 1150], [-150, 650], [150, 600], [290, 420], [290, 300]],
+    farNorth: [[-950, 1890], [-600, 1500], [-100, 1100], [350, 800], [550, 550], [500, 300], [350, 100], [290, -50]],
+    // 'road' é montada em runtime: trecho da osm-mg-060 (do fim SE da estrada,
+    // atravessando a ponte sobre o rio em (-1275,870)) + saída de terreno a
+    // noroeste, contornando o MORRO DA BATERIA pelo norte e fechando na borda
+    // norte da TOWN_SHELF.
+    roadTail: [[-1250, 250], [-1150, -100], [-1050, -500], [-900, -750], [-600, -820], [-350, -700], [-100, -450], [0, -200]],
+  },
+  // Rotas das baterias: partem do vale e terminam no ponto de deploy (600-1200 m
+  // da TOWN_SHELF) — deploys=true → estado 'deployed' no fim (Onda 4 as faz atirar).
+  artilleryRoutes: [
+    [[-950, 1890], [-850, 1600], [-750, 1250]],                 // deploy 697 m sudoeste
+    [[-950, 1890], [-600, 1500], [-200, 1150], [100, 1200]],    // deploy 640 m sul
+    [[-950, 1890], [-500, 1500], [0, 1150], [600, 1000]],       // deploy 629 m sudeste
+  ],
+  // Trecho da osm-mg-060 usado como prefixo da rota 'road': a estrada INTEIRA do
+  // fim SE (perto do novo vale) ao fim NW (de onde o roadTail sai por terreno).
+  roadWindow: { roadId: 'osm-mg-060', zMin: 380, zMax: 1560 },
+};
+
+/** T-D-01 (release v0.3.5): bateria antiaérea de Inhaúma —
+ *  modo 'inhauma-defense', jogado DO CHÃO (sem jato, sem física de voo).
+ *  SOLDIER_POS sondado no DEM real (probe da Onda D1, 2026-07-18): ombro de morro a
+ *  noroeste da TOWN_SHELF (434 m da borda), com linha de visada limpa para a
+ *  cidade inteira E para o aeroporto (a base militar).
+ *  T-D-01 (release v0.3.10, operador 2026-07-20):
+ *  "a colina do meio da cidade deve ter elevação 2.5x maior" — o MESMO ombro virou o
+ *  morro da bateria: contribuição autoral de +150 m (HILL_*) eleva o topo de ~101 m
+ *  para ~251 m (proeminência ~243 m sobre o piso da cidade ≈ 2,5×). Novo probe
+ *  (2026-07-20): horizonte LIMPO em 2 direções a partir do topo — corredor sul
+ *  (az 90-135°) e corredor norte (az 300-345°, elevação máxima do terreno < -0,3°
+ *  em 3 km) — e visada por cima da cidade para a borda do vale (horda a 2 km e
+ *  caças a 2,3 km ficam dentro do fog far 3400 do modo defesa).
+ *  Armas balanceadas na Onda D2 (T-D-04 .50 / T-D-05 míssil AA) — blocos abaixo. */
+export const AA_DEFENSE = {
+  // ── T-D-01 (release v0.3.10): MORRO 2.5× ──
+  // A "colina da cidade" é o ombro de DEM a NW da TOWN_SHELF onde a bateria já
+  // estava: HILL_POS alimenta a contribuição de relevo em inhaumaBaseHeight.
+  // Perfil COSENO alongado no eixo do vale (RX 340 × RZ 540 m) — DESVIO da curva
+  // 1−t²·1.3 das portal mounds: a curva quadrática tem gradiente máximo ~0,9 na
+  // borda, o que cravava a MG-060 (que margeia a encosta) num degrau de 13 m por
+  // amostra e reprovava o guard ROAD_BED_P99 ≤ 8 do validate:aero-map; o cosseno
+  // tem topo largo e bordas suaves (p99 medido 6,6, máx 7,2 — probe 2026-07-20).
+  // Cota medida no topo: ~101 m → ~250 m (piso da cidade ~8 m → proeminência
+  // ~242 m ≈ 2,5× os ~96 m anteriores). SOLDIER_POS = HILL_POS: bateria NO TOPO.
+  HILL_POS: { x: -760, z: -480 }, // centro do morro (ombro DEM, cota base ~115 m)
+  HILL_RADIUS_X_M: 340,           // m — semi-eixo E-W da contribuição (base ~300-400, SPEC)
+  HILL_RADIUS_Z_M: 540,           // m — semi-eixo N-S (alongado no eixo do vale)
+  HILL_PEAK_M: 136,               // m — pico da contribuição (115 + 136 ≈ 251 m)
+  HILL_TOWN_KEEPOUT_M: 280,       // m — keep-out de quarteirões no topo/encosta
+  HILL_FOREST_KEEPOUT_M: 120,     // m — keep-out de árvores no topo (visada limpa)
+  SOLDIER_POS: { x: -760, z: -480 }, // = HILL_POS — bateria no topo do morro 2.5×
+  LOOK_AT: { x: -250, z: 250 },      // centro da TOWN_SHELF (inhauma-scene.js)
+  EYE_HEIGHT: 1.7,                   // m — altura dos olhos do artilheiro
+  CAM_BACK: 3.2,                     // m — recuo da câmera over-shoulder
+  CAM_UP: 1.2,                       // m — elevação extra da câmera sobre os olhos
+  // T-D-01: depressão relaxada -10° → -20° — do topo a 250 m o artilheiro precisa
+  // olhar para BAIXO para ver a horda se formando e as tropas na cidade.
+  PITCH_MIN: -0.3491,                // rad (-20°) — depressão máxima do gimbal
+  PITCH_MAX: 1.4835,                 // rad (+85°) — quase vertical
+  MOUSE_SENS: 0.0023,                // rad por pixel de movimento do mouse
+  FOV: 62,                           // campo de visão normal
+  ZOOM_FOV: 32,                      // zoom com botão direito segurado
+  ZOOM_SPEED: 10,                    // 1/s — velocidade do lerp de zoom
+  HP: 3,                             // hits por vida (placeholder — D3)
+  LIVES: 3,                          // vidas do artilheiro (placeholder — D4)
+  AA_MISSILES: Infinity,              // estoque inicial de mísseis AA (= AA_STOCK)
+  // ── T-D-04: metralhadora .50 (LMB segurado) ──
+  // Upgrade de poder de fogo (operador 2026-07-19): 15 tiros/s retos, calibre
+  // +70% (geometria em projectiles.js), overheat só após ~1 min CONTÍNUO
+  // (15 rps × 60 s × 0.0011 ≈ 100%), resfrio total em ~30 s parada.
+  MG_RPS: 15,                         // tiros/s com LMB segurado
+  MG_SPEED: 450,                      // m/s — projétil REAL (não hitscan)
+  MG_GRAVITY: 0,                      // m/s² — tracers em LINHA RETA (pedido do operador)
+  MG_SPREAD: 0.0045,                  // rad — dispersão máxima no cano
+  MG_RANGE: 1200,                     // m — cap de alcance (a bala morre além)
+  MG_DAMAGE: 1,                       // dano por bala (HP dos caças: Onda D3)
+  MG_HEAT_PER_SHOT: 0.0011,           // fração de calor por tiro (~909 tiros = 100%)
+  MG_COOL_RATE: 0.0333,               // fração/s de dissipação (~30 s para zerar)
+  MG_RESUME: 0.55,                    // rearma após superaquecer (histerese)
+  // ── T-D-05: míssil AA homing (tecla X — RMB é o zoom do turret-camera) ──
+  // Upgrade (operador 2026-07-19): estoque INFINITO + cadência de até 2/s;
+  // lock persiste AA_LOCK_HOLD s após quebra de feixe ("identificação dura mais").
+  AA_STOCK: Infinity,                 // estoque máximo — INFINITO
+  AA_RECHARGE_S: 12,                  // s para recarregar 1 míssil (inerte com estoque ∞)
+  AA_FIRE_INTERVAL: 0.5,              // s entre lançamentos (máx 2 mísseis/s)
+  AA_LOCK_CONE: 0.2094,               // rad (±12°) — cone de aquisição no retículo
+  AA_LOCK_TIME: 1.2,                  // s de tracking contínuo até travar
+  AA_LOCK_HOLD: 2.5,                  // s de carência do lock após perder o feixe
+  AA_SPEED: 220,                     // m/s — velocidade de cruzeiro (> drone/caça)
+  AA_LAT_ACCEL: 55,                  // m/s² — cap de aceleração lateral da PN
+  AA_NAV_N: 3,                       // ganho da navegação proporcional
+  AA_LIFE: 8,                        // s — autodestruição (miss documentado)
+  AA_PROX_FUSE: 6,                   // m — espoleta de proximidade
+  AA_INITIAL_SPD: 60,                // m/s na saída do tubo
+  // ── T-D-05: drones de DEBUG (Onda D3 tirou do modo; utilitários puros de
+  // teste seguem em turret-weapons.js — cobertos por test-aero-defense-weapons) ──
+  DEBUG_DRONES: 3,
+  DRONE_SPEED: 55,                   // m/s — círculo lento
+  DRONE_ALT: [150, 210, 260],        // m — altitude por drone
+  DRONE_RADIUS: [320, 430, 540],     // m — raio do círculo por drone
+  DRONE_HP: 8,                       // 8-12 balas .50 derrubam (spec)
+  DRONE_RESPAWN_S: 8,                // s para respawnar após cair
+  // ── T-D-06: caças inimigos (Onda D3 — defense/enemy-fighters.js) ──
+  FIGHTER_COUNT: 3,                  // mínimo de caças vivos no céu (diretor infinito: D4)
+  FIGHTER_HP: [8, 12],               // faixa de HP (8-12 balas .50 ou 1 míssil AA)
+  FIGHTER_SPEED: [90, 140],          // m/s — cruzeiro seedado por caça
+  FIGHTER_SPAWN_DIST: 2300,          // m — spawn numa direção de bússola seedada
+  FIGHTER_SPAWN_ALT: [230, 330],     // m — altitude de ingresso
+  FIGHTER_TERRAIN_CLR: 15,           // m — clearance mínima fora do mergulho
+  FIGHTER_DIVE_CLR: 6,               // m — clearance mínima DURANTE o attack-run
+  FIGHTER_TURN_RATE: 1.4,            // rad/s — giro suave de heading
+  FIGHTER_PITCH_RATE: 1.1,           // rad/s
+  FIGHTER_ATTACK_DIST: 640,          // m — distância horizontal que abre o attack-run
+  FIGHTER_RELEASE_DIST: 330,         // m — entrada da janela de release
+  FIGHTER_ABORT_DIST: 120,           // m — perto demais: vira egress sem soltar mais
+  FIGHTER_RUNS_MAX: 2,               // corridas de ataque antes do despawn
+  FIGHTER_EGRESS_S: 5.5,             // s de egress com jinks antes do re-ingress
+  FIGHTER_JINK: 0.9,                 // rad — amplitude dos jinks seedados no egress
+  FIGHTER_EVADE_S: 2.4,              // s de manobra evasiva dura pós-lock (chaff/flare)
+  FIGHTER_EVADE_TURN: 2.6,           // rad/s — quebra de evasão (v·ω >> AA_LAT_ACCEL = miss da PN)
+  FIGHTER_HIT_R: 8,                  // m — raio de acerto (.50 / espoleta AA)
+  TARGET_WEIGHTS: [['city', 45], ['base', 30], ['battery', 15], ['player', 10]],
+  // ── T-D-07: ordenança inimiga (defense/enemy-ordnance.js) ──
+  AG_MISSILE_SPEED: 135,             // m/s — arco balístico + terminal dive
+  AG_ARC_GRAVITY: 12,                // m/s² — gravidade só na fase de arco
+  AG_TERMINAL_DIST: 260,             // m — início do mergulho terminal guiado
+  AG_TERMINAL_TURN: 3.2,             // rad/s — esterço terminal sobre o ponto alvo
+  AG_HIT_R: 9,                       // m — raio de impacto sobre o ponto alvo
+  AG_LIFE: 14,                       // s — cap de vida do míssil ar-solo
+  AG_BATT_DAMAGE: 8,                 // dano do impacto numa bateria aliada (HP 12)
+  CITY_DAMAGE: 5,                    // % de integridade de Inhaúma por impacto na cidade
+  PLAYER_HIT_R: 26,                  // m — raio de dano do míssil anti-jogador
+  INTERCEPT_R: 4,                    // m — proximidade da .50 que intercepta o míssil
+  INTERCEPT_BONUS: 250,              // score por interceptação no ar
+  FIGHTER_GUN_RPS: 11,               // tiros/s na rajada anti-jogador
+  FIGHTER_GUN_S: 1.2,                // s de rajada dentro da janela de release
+  FIGHTER_GUN_SPEED: 210,            // m/s — tracers inimigos
+  FIGHTER_GUN_SPREAD: 0.02,          // rad — dispersão da rajada
+  // ── T-D-08: baterias AA aliadas (defense/allied-batteries.js) ──
+  ALLY_BATTERIES: [3, 5],            // faixa seedada de baterias (morro + base)
+  ALLY_BATT_HP: 12,                  // HP por bateria (2 impactos AG derrubam)
+  ALLY_BATT_RANGE: 620,              // m — engajamento
+  ALLY_BATT_RPS: 2.4,                // tracers/s por bateria (rico visualmente)
+  ALLY_BATT_SPREAD: 0.05,            // rad — dispersão alta (eficácia baixa)
+  ALLY_BATT_HIT_P: 0.07,             // chance de acerto do míssil ocasional (5-10%)
+  ALLY_BATT_MSL_S: 5.5,              // s médios entre mísseis ocasionais
+  ALLY_BATT_MSL_DMG: 5,              // dano do míssil aliado que acerta
+  ALLY_BATT_MSL_SPEED: 170,          // m/s
+  // ── T-D-03 (nuke-firestorm-defense-v1): bateria da RETAGUARDA ──
+  // Bateria aliada DEDICADA no setor traseiro (lado oposto do morro em relação a
+  // LOOK_AT, a REAR_BATT_DIST m do soldado ao longo do eixo-traseiro). O operador:
+  // "minha retaguarda é protegida por outra bateria antiaérea" — hoje as aliadas
+  // são decorativas (7% de acerto) e o caça sempre entra pelas costas. Esta é
+  // EFETIVA: prioriza caças no setor traseiro (±60° do eixo reverso, medido a
+  // partir do SOLDIER_POS) ou mirando o jogador, com alcance longo, ciclo de
+  // míssil rápido e chance de acerto alta. Sem alvo prioritário, engaja o mais
+  // próximo no alcance (nunca fica ociosa). Mesma mesh das demais baterias.
+  REAR_BATT_DIST: 340,               // m atrás do soldado — ombro NW reverso (sondado:
+                                     //   (-955,-759), cota ~220 m, declive 0,25 — a
+                                     //   crista de 250 m a cobre da cidade)
+  REAR_BATT_RANGE: 900,              // m — cobre as aproximações traseiras longas
+  REAR_BATT_HIT_P: 0.55,             // chance de acerto do míssil (EFETIVA, ≥0.5)
+  REAR_BATT_MSL_S: 3.5,              // s médios entre mísseis (ciclo rápido)
+  REAR_BATT_RPS: 3.0,                // tracers/s
+  REAR_BATT_SPREAD: 0.03,            // rad — dispersão menor (bateria elite)
+  REAR_BATT_SECTOR_COS: 0.5,         // cos(60°) — meio-ângulo do setor traseiro
+  // ── T-D-09: diretor de spawn infinito (defense/defense-director.js) ──
+  DIR_BASE_INTERVAL: 6,              // s — intervalo base entre esquadrilhas
+  DIR_RATE: 0.93,                    // fator de aceleração por degrau de kills
+  DIR_KILLS_STEP: 5,                 // kills por degrau (intervalo ×0.93 a cada 5)
+  DIR_MIN_INTERVAL: 1.5,             // s — piso do intervalo
+  DIR_SQUAD_KILLS: [0, 12, 30, 60],  // degraus de kills p/ esquadrilha 1→4
+  DIR_MAX_ALIVE: 10,                 // cap de caças vivos (excesso espera na fila)
+  DIR_FIRST_DELAY: 2.0,              // s até a primeira esquadrilha
+  // ── T-D-02 (nuke-firestorm-defense-v1): 4 FRENTES quantizadas ──
+  // A direção de ingresso de cada esquadrilha é sorteada em 4 SETORES de 90°
+  // relativos ao eixo SOLDIER→LOOK_AT: 0=frente (sobre a cidade), 1, 2, 3
+  // (retaguarda — coberta pela bateria REAR_BATT_*). Dentro do setor há um
+  // jitter seedado de ±DIR_SECTOR_JITTER rad (< 45° — nunca invade o vizinho).
+  DIR_SECTORS: 4,                    // setores de 360/4 = 90°
+  DIR_SECTOR_JITTER: 0.6,            // rad (~±34°) — espalhamento dentro do setor
+  KILL_SCORE: 100,                   // score por caça abatido (.50, AA ou aliado)
+  STREAK_EVERY: 10,                  // overlay de streak a cada N abates
+  // ── T-D-10: queda cinematográfica (enemy-fighters.js#startDying/stepDying) ──
+  FALL_GRAVITY: 22,                  // m/s² — aceleração do sink da queda
+  FALL_SINK: { spiral: [34, 62], glide: [26, 40], dive: [78, 115] }, // m/s (ini→terminal)
+  FALL_EJECT_P: 0.2,                 // chance de ejeção com paraquedas
+  FALL_DEBRIS: [2, 4],               // sheds de debris por queda
+  FALL_TRAIL_S: 0.045,               // s entre puffs de fumaça+fogo da trilha
+  FALL_COLUMN_S: 20,                 // s da coluna de fumaça pós-impacto
+  FALL_MAX_TRAILS: 8,                // quedas simultâneas com trilha densa (pool próprio)
+  PARA_SINK: 9,                      // m/s — descida do paraquedas (ref ejection.js)
+  PARA_DRIFT: 5,                     // m/s — deriva horizontal seedada do paraquedas
+  // ── WEAPONS-V1 (release v0.3.9) ──
+  // T-W-01: lock vermelho dura 3 s OU 3 disparos no alvo (o que vier primeiro)
+  // — não é mais gasto no 1º tiro (AA_LOCK_HOLD, 2.5 s, segue sendo a carência
+  // de quebra de FEIXE no tracking; isto aqui é a persistência do lado do tiro).
+  // SUBSTITUÍDO pelo T-W-08 (ADENDO playtest-2): o modelo 3 s/3 tiros virou o
+  // ciclo de fases abaixo — LOCK_HOLD_S/LOCK_HOLD_SHOTS ficam só de referência.
+  LOCK_HOLD_S: 3.0,                  // (legado T-W-01 — ver T-W-08)
+  LOCK_HOLD_SHOTS: 3,                // (legado T-W-01 — ver T-W-08)
+  // ── T-W-08 (ADENDO 2026-07-19): mira por FASES + acerto estatístico ──
+  // Ao travar: amarelo 1,5 s (50%) → vermelho 1,5 s (80%) → amarelo 1,5 s (50%)
+  // — ciclo de 4,5 s e a mira solta (re-travar). Some antes: 5 mísseis no alvo.
+  // Quebra de feixe: o timer da fase CONGELA por até AA_LOCK_HOLD s de carência.
+  LOCK_PHASE_S: 1.5,                 // s por fase (3 fases = 4,5 s de ciclo)
+  LOCK_HIT_P: [0.5, 0.8, 0.5],       // chance de acerto por fase (amarela/vermelha/amarela)
+  LOCK_MAX_SHOTS: 5,                 // mísseis no mesmo alvo antes da mira soltar
+  LOCK_MISS_OFFSET: [4, 9],          // m — offset terminal seedado do míssil "miss"
+  AA_QUEUE_CAP: 4,                   // fila de disparos X pressionados na cadência
+  // T-W-02: dois tiers de míssil AA — X fraco (3 hits em FIGHTER_HP 8-12, 2/s,
+  // ∞) e B forte (1 hit kill, 1 a cada 2 s, ∞). Cadência do X = AA_FIRE_INTERVAL.
+  AA_X_DAMAGE: 4,                    // dano do X — 8 HP: 2 hits; 12 HP: 3 hits
+  AA_B_DAMAGE: 999,                  // dano do B — overkill garantido (1 hit kill)
+  AA_B_INTERVAL: 2.0,                // s entre lançamentos B (1 a cada 2 s)
+  // T-W-03: retargeting — míssil órfão busca o vivo mais próximo num cone
+  // generoso à frente do vetor velocidade (em vez de seguir balístico/morrer).
+  RETARGET_CONE: 1.05,               // rad (~60°) — semi-ângulo do cone de retarget
+  // T-W-04: rod cinético (R) — 1/5 s, 3× a velocidade do míssil fraco, perfura
+  // e encadeia até 3 kills (retarget ao vivo mais próximo após cada perfuração).
+  ROD_INTERVAL: 5.0,                 // s entre lançamentos do rod
+  ROD_SPEED_MULT: 3,                 // × AA_SPEED
+  ROD_LAT_MULT: 20,                  // × AA_LAT_ACCEL — esterço p/ encadear a 660 m/s
+  ROD_HIT_R: 10,                     // m — raio de perfuração (teste swept anti-túnel)
+  ROD_PIERCE: 3,                     // kills máximos por rod
+  ROD_LIFE: 8,                       // s de vida do rod
+  // T-W-05: boss — horda (formação de tropas reusando src/formations/) monta no
+  // horizonte (borda do vale, ~2 km) e marcha para Inhaúma; janela de tempo com
+  // contagem no HUD; chegada = −30% de integridade da cidade; ciclo seedado.
+  HORDE_FIRST_S: 40,                 // s até a primeira horda
+  HORDE_CYCLE_S: 110,                // s entre hordas (seedado)
+  HORDE_TYPE: 'mixedBattlegroup',    // composição (catálogo de formation.js)
+  HORDE_SIZE: 18,                    // unidades (15-20)
+  HORDE_DIST: 2000,                  // m — spawn na borda do vale (~2 km)
+  HORDE_SPEED: 24,                   // m/s de marcha — janela ≈ DIST/SPEED (~83 s)
+  HORDE_CITY_DAMAGE: 30,             // % de integridade perdida na chegada
+  HORDE_KILL_SCORE: 60,              // score por unidade da horda destruída
+  // T-W-05: nuke tática (T) — estoque 3, sem recarga; projétil pesado em arco
+  // alto; wipe por raio (a assassina de hordas).
+  NUKE_STOCK: 3,                     // nukes táticas por run
+  NUKE_RADIUS: 150,                  // m — raio do wipe
+  NUKE_SPEED: 190,                   // m/s de cruzeiro (alcança o horizonte ~2 km)
+  NUKE_ARC_LIFT: 0.55,               // componente vertical extra na saída
+  NUKE_ARC_S: 1.4,                   // s de arco balístico antes do glide guiado
+  NUKE_LAT_ACCEL: 90,                // m/s² — esterço do glide sobre o ponto de mira
+  NUKE_GRAVITY: 16,                  // m/s² — gravidade da fase de arco
+  NUKE_CRUISE_ALT: 130,              // m — altura de cruzeiro do glide sobre a mira
+  NUKE_TERMINAL_DIST: 260,           // m — distância que abre o mergulho terminal
+  NUKE_LIFE: 25,                     // s de vida (cap de segurança)
+  NUKE_COOLDOWN: 1.0,                // s entre lançamentos (anti key-repeat)
 };
 
 /** Canhões antiaéreos (única defesa hostil) */
@@ -339,7 +684,7 @@ export const TARGET_LAYOUT_RIO = [
 export const TARGET_LAYOUT_INHAUMA = [
   [-1,  760, -300, 'aaGun'],   // topo da serra de Sete Lagoas
   [-1, -560, -120, 'aaGun'],   // encosta dos morros oeste (fora do calçamento da praça pós-T-09)
-  [-1, -760,  430, 'armedConvoy'],  // MG-238 perto de Cachoeira da Prata
+  [-1, -780, 1460, 'armedConvoy'],  // osm-mg-060 rumo a Cachoeira da Prata
   [-1, -220,  210, 'helicopter'],   // patrulha baixa sobre a MG-238
   [-1,  840, -250, 'armedConvoy'],  // MG-238 rumo Sete Lagoas
   [-1, 1120, -330, 'factory'],
@@ -349,8 +694,8 @@ export const TARGET_LAYOUT_INHAUMA = [
   [-1,  820, -360, 'patrolAir'],    // dirigível de patrulha sobre a serra de Sete Lagoas
   [-1, -120,  420, 'patrolAir'],    // dirigível de patrulha sobre o reservatório
   [-1, 1020, -120, 'building'],
-  [-1, -980,  620, 'base'],
-  [-1, -850,  360, 'building'],
+  [-1, -700, 1900, 'base'],      // franja leste do novo vale de Cachoeira (T-D-04)
+  [-1, -1120, 1980, 'building'], // franja oeste do novo vale de Cachoeira (T-D-04)
   [-1,  330,  330, 'aaGun'],   // morros sudeste
   [-1, -520, -310, 'factory'],
   [-1,  320,  360, 'base'],
@@ -360,7 +705,7 @@ export const TARGET_LAYOUT_INHAUMA = [
   [-1,  680, -540, 'factory'],
   [-1, 1450, -260, 'building'],
   [-1, 1200, -760, 'aaGun'],
-  [-1, -1180, 460, 'factory'],
+  [-1, -1160, 2120, 'factory'],  // franja sudoeste do novo vale de Cachoeira (T-D-04)
 ];
 
 /** Definição fixa das 18 ilhas: [centerX, centerZ, radius, peakHeight] */

@@ -144,6 +144,7 @@ function snapshot() {
       missiles: game.player.missiles,
       heavyMissiles: game.player.heavyMissiles,
       nuclearMissiles: game.player.nuclearMissiles,
+      weaponCooldowns: { ...game.player.weaponCooldowns },
     },
     airportText: airport.airportText,
     criticalVideoCapture: mr.criticalVideoCapture ?? false,
@@ -189,6 +190,7 @@ export function getMapDiagnostics() {
     roads: inhauma.roads ?? [],
     roadGraph: inhauma.roadGraph ?? null,
     traffic: inhauma.traffic ?? null,
+    garrison: inhauma.garrison ?? null, // T-C-05 (campaign-v1) — aditivo
     terrainRegions: inhauma.terrainRegions ?? [],
     airport: getAirportDiagnostics(game.activeMap),
   };

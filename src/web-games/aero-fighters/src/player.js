@@ -14,6 +14,7 @@ import { PLAYER, ROLL, COLORS } from './config.js';
 import { explosion, megaExplosion, spawnMissileSmoke, spawnScorchMark } from './fx.js';
 import { checkTerrainCollision, surfaceInfoAt } from './world.js';
 import { classifyGroundContact, airportSurface } from './landing-zones.js';
+import { resetWeaponCooldowns } from './weapon-cooldowns.js';
 import { getAirportForMap } from './airport.js';
 import { syncFlightGroundDiagnostics, updateGroundRoll } from './ground-physics.js';
 import { SortieEvent, SortieState, GROUND_STATES, transitionSortie, relaunchSortie } from './sortie-state.js';
@@ -27,9 +28,6 @@ function buildJet() {
   const grey      = new THREE.MeshStandardMaterial({ color: COLORS.jetGrey, metalness: 0.55, roughness: 0.42 });
   const darkGrey  = new THREE.MeshStandardMaterial({ color: COLORS.jetDark, metalness: 0.55, roughness: 0.42 });
   const panel     = new THREE.MeshStandardMaterial({ color: COLORS.jetPanel, metalness: 0.65, roughness: 0.45 });
-  const canopy    = new THREE.MeshStandardMaterial({ color: COLORS.jetCanopy, metalness: 0.2, roughness: 0.15 });
-  // Vidro do canopy: ainda translúcido (Basic + opacidade)
-  const canopyR   = new THREE.MeshBasicMaterial({ color: COLORS.jetCanopyGlass, transparent: true, opacity: 0.85 });
   // Materiais emissivos do exhaust permanecem Basic (não respondem a luz)
   const exhaustO  = new THREE.MeshBasicMaterial({ color: COLORS.exhaustOrange, transparent: true, opacity: 0.9 });
   const flameY    = new THREE.MeshBasicMaterial({ color: COLORS.flameYellow, transparent: true, opacity: 0.95 });
@@ -39,22 +37,41 @@ function buildJet() {
 
   // T-07: nariz mais fino e comprido (perfil mais afiado — era 0.34 raio / 1.4
   // comprimento) — 8 lados para perfil facetado suave.
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.27, 1.65, 8), grey);
+  // T-C-13: ainda mais afilado (0.24 raio / 1.85 comprimento) — ponta de radome.
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.24, 1.85, 8), grey);
   nose.rotation.x = -Math.PI / 2;
-  nose.position.set(0, 0, -1.68); g.add(nose);
+  nose.position.set(0, 0, -1.78); g.add(nose);
 
   // T-07: fuselagem dianteira mais estreita (era 0.7×0.45 — silhueta mais afilada
   // entrando no nariz em vez de um degrau largo).
   const fwd = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.40, 1.2), panel);
   fwd.position.set(0, 0, -0.55); g.add(fwd);
 
-  // Canopy
+  // T-C-13: LERX/chines — filetes finos ligando a fuselagem dianteira à raiz
+  // da asa (a transição suave característica do F-35).
+  for (const sx of [-1, 1]) {
+    const chine = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.06, 1.35), wingDark);
+    chine.position.set(sx * 0.42, -0.04, -0.15);
+    chine.rotation.y = -sx * 0.32;
+    g.add(chine);
+    // DSI — bossas diverterless das entradas de ar laterais
+    const dsi = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), grey);
+    dsi.scale.set(0.8, 0.7, 1.2);
+    dsi.position.set(sx * 0.36, -0.08, -0.3);
+    g.add(dsi);
+  }
+
+  // Canopy — T-C-13: bolha única em vidro fumê brilhante (era pilha de 3 caixas)
   const canopyFrame = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.05, 0.78), darkGrey);
   canopyFrame.position.set(0, 0.18, -0.65); g.add(canopyFrame);
-  const canopyGlass = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.68), canopyR);
-  canopyGlass.position.set(0, 0.30, -0.65); g.add(canopyGlass);
-  const canopyDark = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.6), canopy);
-  canopyDark.position.set(0, 0.30, -0.65); g.add(canopyDark);
+  const canopyBubbleMat = new THREE.MeshStandardMaterial({ color: 0x2a4a6a, metalness: 0.9, roughness: 0.08, transparent: true, opacity: 0.92 });
+  const canopyBubble = new THREE.Mesh(new THREE.SphereGeometry(0.30, 10, 8), canopyBubbleMat);
+  canopyBubble.scale.set(0.72, 0.55, 1.35);
+  canopyBubble.position.set(0, 0.28, -0.63); g.add(canopyBubble);
+
+  // T-C-13: espinha dorsal ligando o canopy à seção central
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.14, 1.35), panel);
+  spine.position.set(0, 0.26, 0.35); g.add(spine);
 
   // Centro
   const mid = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.52, 1.4), grey);
@@ -119,6 +136,9 @@ function buildJet() {
   // Exhaust (referências expostas via userData para afterburner dinâmico)
   const exhRing = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.30, 0.45, 16), darkGrey);
   exhRing.rotation.x = Math.PI / 2; exhRing.position.set(0, 0, 2.05); g.add(exhRing);
+  // T-C-13: pétalas do nozzle (anel facetado convergente atrás do anel)
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.24, 0.28, 12), darkGrey);
+  nozzle.rotation.x = Math.PI / 2; nozzle.position.set(0, 0, 2.30); g.add(nozzle);
   const exhGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.35, 12), exhaustO);
   exhGlow.rotation.x = Math.PI / 2; exhGlow.position.set(0, 0, 2.1); g.add(exhGlow);
   const exhFlame = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.25, 8), flameY);
@@ -742,7 +762,8 @@ export function updatePlayer(dt, input, onCrash) {
       wep.light.forEach((m, i) => { m.visible = i < Math.ceil(lCount / 25); });
       const hCount = game.player.heavyMissiles;
       wep.heavy.forEach((m, i) => { m.visible = i < Math.ceil(hCount / 5); });
-      if (wep.nuclear) wep.nuclear.visible = game.player.nuclearMissiles > 0;
+      // Nuclear na asa some enquanto recarrega (cooldown 60 s) e reaparece pronta.
+      if (wep.nuclear) wep.nuclear.visible = (game.player.weaponCooldowns?.nuclear ?? 0) <= 0;
     }
   }
 
@@ -795,7 +816,9 @@ export function updatePlayer(dt, input, onCrash) {
       const settled = altitudeAboveGround < 1.05;
       const descending = (hadPrev && realVsp < -0.5) || settled;
       const landingSpeed = game.player.speed <= PLAYER.LAND_MAX_SPD; // não "pousa" num mergulho a 80 m/s
-      const bossBlocking = game.flags.bossActive === true; // monstro vivo trava o pouso
+      // T-C-07: Inhaúma não tem boss (campanha) — o gate de pouso do monstro só
+      // se aplica aos mapas legados (islands/desert/rio).
+      const bossBlocking = game.activeMap !== 'inhauma' && game.flags.bossActive === true; // monstro vivo trava o pouso
       const catastrophic = Math.abs(jet.rotation.z) > 1.4 || realVsp < PLAYER.SINK_HARD;
       if (altitudeAboveGround < PLAYER.FLARE_LO && descending && landingSpeed && !bossBlocking && debounceOk && !catastrophic) {
         // Touchdown suave: a altura ASSENTA nos próximos frames (ground settle) e o
@@ -867,6 +890,7 @@ export function respawnAndRelaunch() {
   game.player.missiles = 100;
   game.player.heavyMissiles = 10;
   game.player.nuclearMissiles = 3;
+  if (game.player.weaponCooldowns) resetWeaponCooldowns(game.player.weaponCooldowns);
   game.flags.mayday = false;
   game.flags.maydayTimer = 0;
   if (mr.autoTaxi) { mr.autoTaxi.active = true; mr.autoTaxi.phase = 'taxi_runway'; mr.autoTaxi.t = 0; }
