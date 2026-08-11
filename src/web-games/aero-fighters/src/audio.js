@@ -1,5 +1,7 @@
 // audio.js — Motor de áudio sintetizado via Web Audio API. Sem arquivos externos.
-// Exporta: `audio` (objeto com init, startEngine, cannon, missile, explosion, megaExplosion, aaFire, hit, toggle).
+// Exporta: `audio` (objeto com init, startEngine, cannon, fiftyCal, overheatClick,
+//   missile, explosion, megaExplosion, aaFire, hit, lockBeep, missileWhoosh,
+//   incomingAlarm, explosionFar, flyby, fallWhistle, hordeAlarm, toggle).
 // Para adicionar um novo som: adicione um método público aqui e chame de onde necessário.
 
 /** Motor de áudio. Lazy-init no primeiro gesto do usuário (autoplay policy). */
@@ -164,6 +166,49 @@ export const audio = {
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
     src.connect(f); f.connect(g); g.connect(this.master);
     src.start(now);
+  },
+
+  /** T-D-04 (inhauma-defense-v1): disparo da .50 — mesma escola do cannon(),
+   *  mas mais GRAVE (bandpass 420→140 Hz + thump do bolt a 95→45 Hz). Chamado
+   *  por tiro (8/s); a rajada "loop" emerge da cadência e para ao soltar o
+   *  gatilho ou superaquecer. */
+  fiftyCal() {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf(0.09);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass';
+    f.frequency.setValueAtTime(420, now);
+    f.frequency.exponentialRampToValueAtTime(140, now + 0.09);
+    f.Q.value = 1.1;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.34, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    src.connect(f); f.connect(g); g.connect(this.master);
+    src.start(now);
+    // thump grave do ciclo do bolt
+    const osc = ctx.createOscillator(); osc.type = 'square';
+    osc.frequency.setValueAtTime(95, now);
+    osc.frequency.exponentialRampToValueAtTime(45, now + 0.07);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.16, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    osc.connect(og); og.connect(this.master);
+    osc.start(now); osc.stop(now + 0.1);
+  },
+
+  /** T-D-04: clique seco de superaquecimento (tentativa de tiro travada) e
+   *  deny de disparo do míssil AA sem lock/estoque (T-D-05). */
+  overheatClick() {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator(); osc.type = 'square';
+    osc.frequency.setValueAtTime(2200, now);
+    osc.frequency.exponentialRampToValueAtTime(1400, now + 0.03);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.10, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+    osc.connect(g); g.connect(this.master);
+    osc.start(now); osc.stop(now + 0.05);
   },
 
   missile() {
@@ -379,6 +424,150 @@ export const audio = {
     ng.gain.setValueAtTime(0.04, now);
     ng.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
     src.connect(bp); bp.connect(ng); ng.connect(this.master);
+    src.start(now);
+  },
+
+  /** T-D-07 (inhauma-defense-v1): whoosh de lançamento de míssil inimigo —
+   *  ruído em varredura ascendente, espacializado na posição do caça. */
+  missileWhoosh(pos = null) {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf(0.45);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.6;
+    f.frequency.setValueAtTime(500, now);
+    f.frequency.exponentialRampToValueAtTime(2600, now + 0.4);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.24, now + 0.07);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    src.connect(f); f.connect(g);
+    if (pos) g.connect(this._makePanner(pos.x, pos.y, pos.z));
+    else g.connect(this.master);
+    src.start(now);
+  },
+
+  /** T-D-07: alarme de míssil anti-jogador inbound — bip hi/lo curto, chamado
+   *  em loop throttled pelo defense-mode enquanto o alerta estiver ativo. */
+  incomingAlarm() {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator(); osc.type = 'square';
+    const g = ctx.createGain(); g.gain.value = 0;
+    for (let i = 0; i < 2; i++) {
+      const t = now + i * 0.26;
+      osc.frequency.setValueAtTime(980, t);
+      osc.frequency.setValueAtTime(740, t + 0.13);
+      g.gain.setValueAtTime(0.12, t);
+      g.gain.setValueAtTime(0.12, t + 0.2);
+      g.gain.linearRampToValueAtTime(0, t + 0.24);
+    }
+    osc.connect(g); g.connect(this.master);
+    osc.start(now); osc.stop(now + 0.55);
+  },
+
+  /** WEAPONS-V1 (T-W-05): sirene grave da horda no horizonte — dois tons
+   *  ascendentes longos, chamado no spawn e em loop throttled (4.5 s) enquanto
+   *  a horda marcha. */
+  hordeAlarm() {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+    const g = ctx.createGain(); g.gain.value = 0;
+    for (let i = 0; i < 2; i++) {
+      const t = now + i * 0.55;
+      osc.frequency.setValueAtTime(196, t);
+      osc.frequency.linearRampToValueAtTime(294, t + 0.4);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.10, t + 0.08);
+      g.gain.setValueAtTime(0.10, t + 0.38);
+      g.gain.linearRampToValueAtTime(0, t + 0.5);
+    }
+    osc.connect(g); g.connect(this.master);
+    osc.start(now); osc.stop(now + 1.15);
+  },
+
+  /** T-D-07: explosão distante abafada (impactos longe do morro — cidade/base)
+   *  vs. a explosion() cheia de perto. Lowpass grave + sub-thud. */
+  explosionFar(pos = null) {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf(0.9);
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass';
+    f.frequency.setValueAtTime(320, now);
+    f.frequency.exponentialRampToValueAtTime(60, now + 0.8);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.16, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+    src.connect(f); f.connect(g);
+    if (pos) g.connect(this._makePanner(pos.x, pos.y, pos.z));
+    else g.connect(this.master);
+    src.start(now);
+    const osc = ctx.createOscillator(); osc.type = 'sine';
+    osc.frequency.setValueAtTime(58, now);
+    osc.frequency.exponentialRampToValueAtTime(26, now + 0.9);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.12, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+    osc.connect(og);
+    if (pos) og.connect(this._makePanner(pos.x, pos.y, pos.z));
+    else og.connect(this.master);
+    osc.start(now); osc.stop(now + 1.05);
+  },
+
+  /** T-D-07: flyby com doppler fake — varredura descendente de ruído + tom,
+   *  ganho cresce e some (passagem do caça perto do morro). */
+  flyby(pos = null) {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf(1.1);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.2;
+    f.frequency.setValueAtTime(1900, now);
+    f.frequency.exponentialRampToValueAtTime(320, now + 1.0);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.22, now + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 1.05);
+    src.connect(f); f.connect(g);
+    if (pos) g.connect(this._makePanner(pos.x, pos.y, pos.z));
+    else g.connect(this.master);
+    src.start(now);
+    const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(820, now);
+    osc.frequency.exponentialRampToValueAtTime(180, now + 1.0);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.001, now);
+    og.gain.exponentialRampToValueAtTime(0.05, now + 0.3);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+    osc.connect(og);
+    if (pos) og.connect(this._makePanner(pos.x, pos.y, pos.z));
+    else og.connect(this.master);
+    osc.start(now); osc.stop(now + 1.05);
+  },
+
+  /** T-D-10: assobio da queda — tom senoidal descendente longo (o "whistle"
+   *  clássico de caça em parafuso) + ruído de fogo, 2.2 s. Barato: 1 osc + 1 noise. */
+  fallWhistle(pos = null) {
+    if (!this.initialized || this.muted) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator(); osc.type = 'sine';
+    osc.frequency.setValueAtTime(1150, now);
+    osc.frequency.exponentialRampToValueAtTime(220, now + 2.1);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.001, now);
+    og.gain.exponentialRampToValueAtTime(0.10, now + 0.5);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 2.15);
+    osc.connect(og);
+    if (pos) og.connect(this._makePanner(pos.x, pos.y, pos.z));
+    else og.connect(this.master);
+    osc.start(now); osc.stop(now + 2.2);
+    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf(1.2);
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.05, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
+    src.connect(f); f.connect(g);
+    if (pos) g.connect(this._makePanner(pos.x, pos.y, pos.z));
+    else g.connect(this.master);
     src.start(now);
   },
 

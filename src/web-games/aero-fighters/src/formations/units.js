@@ -1,10 +1,14 @@
 // formations/units.js — builders reutilizáveis de unidades militares (mesh + stats)
-// da campanha Inhaúma (T-C-01, release aero-fighters-inhauma-campaign-v1).
+// da campanha Inhaúma (T-C-01, release v0.3.4).
 // Exporta: UNIT_TYPES, unitTargetType, unitStats, buildUnitParts, makeUnit,
 //   makeUnitInstanced. Node-safe (sem DOM/scene); rng sempre injetado (sem Math.random).
 // Para adicionar unidade nova: builder em PART_BUILDERS + entrada em TARGET_STATS (config.js).
 // Para RESTILIZAR uma unidade (Onda 5): edite só o builder dela — partes agrupadas,
 // nomeadas e com materiais nomeados (MAT_DEFS), sem cores aleatórias.
+// T-C-12 (Onda 5): redesign visual — silhuetas mais ricas (glacis inclinado, freio
+// de boca, saias de esteira, boom afunilado, janelas de gôndola, capacetes/mochas)
+// e marcações de unidade via partes 'accent' (cáqui) — footprints preservados
+// (±20% das dimensões de referência medidas no test-aero-visual.mjs).
 
 import * as THREE from '../../../vendor/three.module.min.js';
 import { TARGET_STATS } from '../config.js';
@@ -30,10 +34,12 @@ const MAT_DEFS = {
   tire:   0x101010,
   canvas: 0x6f7355, // lona de caminhão de suprimento
   glass:  0x7fd0ff, // cabine/janelas
+  glassDark: 0x2a3742, // vidro fumê (canoplas militares, pontes)
   skin:   0x9c8468, // rosto dos soldados
   cloth:  0x55603c, // uniforme
   rail:   0x5c5f62, // trilhos do lançador SAM
   blimp:  0x9a9f88, // envelope do zepelim
+  accent: 0x8f8a5e, // cáqui — marcações de unidade / detalhes (T-C-12)
 };
 const _mats = new Map();
 function mat(name) {
@@ -50,46 +56,79 @@ const sph = (n, m, radius, w, h, p, r, s) => part(n, m, 'sph', [radius, w, h], p
 const RX90 = [Math.PI / 2, 0, 0];   // cilindro (eixo Y) deitado para frente (Z)
 const RZ90 = [0, 0, Math.PI / 2];   // cilindro deitado para o lado (X) — rodas
 
+/** Par de rodas laterais (eixo X) em posições z — usado por apc/truck. */
+function wheelSet(prefix, xHalf, zs, r, w) {
+  const out = [];
+  for (const x of [-xHalf, xHalf]) for (const z of zs) {
+    out.push(cyl(`${prefix}${x < 0 ? 'L' : 'R'}${z}`, 'tire', r, r, w, 8, [x, r, z], RZ90));
+  }
+  return out;
+}
+
+/** Marcações laterais de unidade (T-C-12) — faixas cáqui finas coladas no casco. */
+function sideMarks(xHalf, y, z, h = 0.4, d = 1.0) {
+  return [
+    box('markL', 'accent', 0.02, h, d, [-xHalf, y, z]),
+    box('markR', 'accent', 0.02, h, d, [xHalf, y, z]),
+  ];
+}
+
 function tankParts() {
   return [
-    box('chassis', 'hull', 3.2, 1.1, 5.0, [0, 1.0, 0]),
     box('trackL', 'dark', 0.7, 0.9, 5.4, [-1.7, 0.55, 0]),
     box('trackR', 'dark', 0.7, 0.9, 5.4, [1.7, 0.55, 0]),
-    cyl('turret', 'armor', 1.2, 1.5, 0.9, 8, [0, 1.95, 0.2]),
-    cyl('barrel', 'dark', 0.16, 0.18, 3.4, 8, [0, 2.0, -2.2], RX90),
+    box('skirtL', 'armor', 0.78, 0.32, 5.2, [-1.7, 1.12, 0]), // saia sobre a esteira
+    box('skirtR', 'armor', 0.78, 0.32, 5.2, [1.7, 1.12, 0]),
+    box('hull', 'hull', 3.2, 0.75, 4.7, [0, 1.05, 0]),
+    box('glacis', 'hull', 3.2, 0.7, 1.5, [0, 1.02, -2.55], [0.42, 0, 0]), // chapéu inclinado
+    box('rearDeck', 'armor', 3.2, 0.35, 1.0, [0, 1.32, 2.1]), // convés do motor
+    cyl('turret', 'armor', 0.95, 1.35, 0.8, 8, [0, 1.8, 0.3]), // torre cônica
+    box('turretFace', 'armor', 1.5, 0.6, 0.9, [0, 1.8, -0.75]), // face angular
+    box('turretBasket', 'dark', 1.3, 0.5, 0.8, [0, 1.75, 1.35]), // cesto traseiro
+    cyl('barrel', 'dark', 0.13, 0.17, 3.5, 8, [0, 1.9, -2.55], RX90),
+    cyl('muzzle', 'dark', 0.23, 0.23, 0.55, 8, [0, 1.9, -4.15], RX90), // freio de boca
+    cyl('hatch', 'dark', 0.34, 0.34, 0.14, 8, [0.45, 2.25, 0.35]), // escotilha do comandante
+    cyl('antenna', 'dark', 0.02, 0.03, 0.7, 4, [-0.7, 2.5, 1.2]),
+    ...sideMarks(2.1, 1.35, -0.5),
   ];
 }
 
 function apcParts() {
-  const wheels = [];
-  for (const x of [-1.45, 1.45]) for (const z of [-1.8, 0, 1.8]) {
-    wheels.push(cyl(`wheel${x < 0 ? 'L' : 'R'}${z}`, 'tire', 0.45, 0.45, 0.3, 8, [x, 0.45, z], RZ90));
-  }
   return [
-    box('hull', 'hull', 2.8, 1.3, 5.6, [0, 1.15, 0]),
+    box('hull', 'hull', 2.8, 1.1, 5.4, [0, 1.2, 0]),
     box('glacis', 'armor', 2.6, 0.7, 1.2, [0, 1.5, -2.6], [0.4, 0, 0]),
-    box('cabin', 'armor', 2.2, 0.8, 2.0, [0, 2.1, -0.6]),
-    cyl('turret', 'dark', 0.5, 0.6, 0.5, 8, [0, 2.5, -0.6]),
-    cyl('gun', 'dark', 0.07, 0.08, 1.4, 6, [0, 2.55, -1.5], RX90),
-    ...wheels,
+    box('cabin', 'armor', 2.2, 0.8, 2.0, [0, 2.05, -0.6]),
+    cyl('turret', 'dark', 0.5, 0.6, 0.5, 8, [0, 2.55, -0.6]),
+    cyl('gun', 'dark', 0.07, 0.08, 1.4, 6, [0, 2.6, -1.5], RX90),
+    cyl('muzzle', 'dark', 0.11, 0.11, 0.25, 6, [0, 2.6, -2.15], RX90),
+    box('skirtL', 'armor', 0.15, 0.55, 4.6, [-1.42, 0.95, 0]),
+    box('skirtR', 'armor', 0.15, 0.55, 4.6, [1.42, 0.95, 0]),
+    cyl('hatch', 'dark', 0.3, 0.3, 0.1, 8, [0.5, 2.5, 0.6]),
+    box('trimVane', 'accent', 2.4, 0.5, 0.08, [0, 1.1, -3.15], [-0.3, 0, 0]), // prancha dianteira
+    ...wheelSet('wheel', 1.45, [-1.8, 0, 1.8], 0.45, 0.3),
+    ...sideMarks(1.51, 1.6, 1.2, 0.35, 0.8),
   ];
 }
 
 function truckParts() {
-  const wheels = [];
-  for (const x of [-1.15, 1.15]) for (const z of [-2.3, 0.7, 2.1]) {
-    wheels.push(cyl(`wheel${x < 0 ? 'L' : 'R'}${z}`, 'tire', 0.5, 0.5, 0.35, 8, [x, 0.5, z], RZ90));
-  }
   return [
     box('chassis', 'dark', 2.0, 0.5, 6.4, [0, 0.75, 0]),
-    box('cab', 'hull', 2.0, 1.5, 1.8, [0, 1.75, -2.3]),
-    box('windshield', 'glass', 1.8, 0.6, 0.1, [0, 2.05, -3.15]),
-    box('cargoCanvas', 'canvas', 2.2, 1.7, 3.8, [0, 1.85, 1.1]),
-    ...wheels,
+    box('hood', 'hull', 1.9, 0.85, 1.3, [0, 1.35, -2.95]), // capô do motor
+    box('cab', 'hull', 2.0, 1.5, 1.6, [0, 1.75, -1.95]),
+    box('windshield', 'glass', 1.8, 0.6, 0.08, [0, 2.05, -2.72]),
+    box('bumper', 'dark', 2.1, 0.25, 0.2, [0, 0.85, -3.6]),
+    box('cargoCanvas', 'canvas', 2.2, 1.7, 3.8, [0, 1.85, 0.95]),
+    box('rib0', 'accent', 2.3, 0.12, 0.12, [0, 2.72, -0.3]), // arcos da lona
+    box('rib1', 'accent', 2.3, 0.12, 0.12, [0, 2.72, 0.95]),
+    box('rib2', 'accent', 2.3, 0.12, 0.12, [0, 2.72, 2.2]),
+    cyl('fuelTank', 'dark', 0.3, 0.3, 1.1, 8, [1.05, 0.85, -0.6], RX90),
+    ...wheelSet('wheel', 1.15, [-2.3, 0.7, 2.1], 0.5, 0.35),
+    ...sideMarks(1.01, 1.7, -1.95, 0.5, 0.5), // porta da cabine
   ];
 }
 
-/** Pelotão de ~6 soldados — um lote de partes por squad (vira UMA geometria no merge). */
+/** Pelotão de ~6 soldados — um lote de partes por squad (vira UMA geometria no merge).
+ *  T-C-12: capacete + mochila por soldado (silhueta de infantaria, não "pininhos"). */
 function troopsParts() {
   const out = [];
   for (let i = 0; i < 6; i++) {
@@ -97,6 +136,8 @@ function troopsParts() {
     const z = (Math.floor(i / 2) - 1) * 1.4;
     out.push(cyl(`body${i}`, 'cloth', 0.22, 0.28, 0.95, 6, [x, 0.75, z]));
     out.push(sph(`head${i}`, 'skin', 0.17, 6, 5, [x, 1.42, z]));
+    out.push(sph(`helmet${i}`, 'armor', 0.19, 6, 3, [x, 1.5, z], null, [1, 0.75, 1]));
+    out.push(box(`pack${i}`, 'canvas', 0.3, 0.4, 0.15, [x, 1.0, z + 0.22]));
     out.push(box(`rifle${i}`, 'dark', 0.08, 0.08, 0.9, [x + 0.25, 1.0, z - 0.1]));
   }
   return out;
@@ -107,10 +148,16 @@ function artilleryParts() {
     cyl('basePlate', 'dark', 2.4, 2.8, 0.35, 8, [0, 0.18, 0]),
     box('cradle', 'armor', 1.2, 0.8, 1.6, [0, 1.0, 0]),
     cyl('barrel', 'dark', 0.22, 0.3, 6.5, 8, [0, 2.2, -2.4], [-Math.PI / 3, 0, 0]),
+    cyl('muzzle', 'dark', 0.34, 0.34, 0.5, 8, [0, 3.68, -4.99], [-Math.PI / 3, 0, 0]), // freio de boca
+    cyl('recoil', 'armor', 0.35, 0.35, 1.2, 8, [0, 1.55, -0.9], [-Math.PI / 3, 0, 0]), // recuperador
+    box('gunShield', 'armor', 2.2, 1.4, 0.12, [0, 1.6, -0.9], [-0.15, 0, 0]), // escudo do artilheiro
     cyl('wheelL', 'tire', 0.7, 0.7, 0.35, 10, [-1.5, 0.7, 0.6], RZ90),
     cyl('wheelR', 'tire', 0.7, 0.7, 0.35, 10, [1.5, 0.7, 0.6], RZ90),
     box('trailL', 'armor', 0.25, 0.25, 2.6, [-0.9, 0.4, 2.0], [0, 0.3, 0]),
     box('trailR', 'armor', 0.25, 0.25, 2.6, [0.9, 0.4, 2.0], [0, -0.3, 0]),
+    box('spadeL', 'dark', 0.5, 0.35, 0.3, [-1.23, 0.2, 3.15], [0, 0.3, 0]), // sapatas das alavancas
+    box('spadeR', 'dark', 0.5, 0.35, 0.3, [1.23, 0.2, 3.15], [0, -0.3, 0]),
+    box('ammoCrate', 'accent', 0.9, 0.6, 0.6, [1.6, 0.5, 1.8], [0, 0.4, 0]),
   ];
 }
 
@@ -118,36 +165,60 @@ function samParts() {
   const rails = [];
   for (const x of [-0.55, 0.55]) for (const y of [1.9, 2.4]) {
     rails.push(cyl(`rail${x < 0 ? 'L' : 'R'}${y}`, 'rail', 0.2, 0.2, 3.4, 8, [x, y, -0.2], [-Math.PI / 3, 0, 0]));
+    // Ogiva do míssil na ponta do trilho (mesma inclinação de -60°)
+    rails.push(cyl(`nose${x < 0 ? 'L' : 'R'}${y}`, 'accent', 0.02, 0.2, 0.6, 6, [x, y + 1.0, -1.93], [-Math.PI / 3, 0, 0]));
   }
   return [
     box('base', 'hull', 2.6, 0.9, 4.6, [0, 0.85, 0]),
+    box('cab', 'armor', 2.0, 0.8, 1.2, [0, 1.55, -1.6]), // cabine de controle
+    box('cabGlass', 'glassDark', 1.6, 0.4, 0.08, [0, 1.7, -2.18]),
     ...rails,
     cyl('mast', 'dark', 0.15, 0.2, 2.2, 6, [0, 1.6, 1.8]),
     cyl('radarDish', 'armor', 1.3, 0.15, 0.35, 12, [0, 2.9, 1.8], [0.5, 0, 0]),
+    cyl('antenna', 'dark', 0.02, 0.02, 1.2, 4, [1.0, 2.0, 2.1]),
+    box('jackL', 'dark', 0.3, 0.3, 0.8, [-1.25, 0.3, 1.5]), // macacos de nivelamento
+    box('jackR', 'dark', 0.3, 0.3, 0.8, [1.25, 0.3, 1.5]),
+    ...sideMarks(1.31, 1.0, 0.3, 0.35, 0.9),
   ];
 }
 
 function aaGunParts() {
   return [
     cyl('base', 'armor', 1.2, 1.4, 0.8, 8, [0, 0.4, 0]),
+    box('platform', 'dark', 2.2, 0.18, 2.2, [0, 0.09, 0]),
     box('shield', 'hull', 1.6, 1.0, 0.15, [0, 1.3, 0.3], [-0.2, 0, 0]),
     cyl('barrelL', 'dark', 0.09, 0.09, 2.6, 6, [-0.28, 1.5, -1.0], [-Math.PI / 4, 0, 0]),
     cyl('barrelR', 'dark', 0.09, 0.09, 2.6, 6, [0.28, 1.5, -1.0], [-Math.PI / 4, 0, 0]),
+    cyl('muzzleL', 'dark', 0.12, 0.12, 0.3, 6, [-0.28, 2.31, -1.81], [-Math.PI / 4, 0, 0]),
+    cyl('muzzleR', 'dark', 0.12, 0.12, 0.3, 6, [0.28, 2.31, -1.81], [-Math.PI / 4, 0, 0]),
     box('seat', 'dark', 0.5, 0.4, 0.5, [0, 0.9, 0.9]),
+    box('ammoBox', 'accent', 0.6, 0.5, 0.5, [-0.9, 0.55, 0.7]),
+    cyl('wheelL', 'tire', 0.45, 0.45, 0.25, 8, [-1.35, 0.45, 0], RZ90),
+    cyl('wheelR', 'tire', 0.45, 0.45, 0.25, 8, [1.35, 0.45, 0], RZ90),
+    cyl('sight', 'dark', 0.05, 0.05, 0.4, 4, [0, 1.7, -0.1], RX90), // mira
   ];
 }
 
 function helicopterParts() {
   return [
     box('body', 'hull', 3.0, 1.7, 6.2, [0, 1.6, 0]),
-    sph('canopy', 'glass', 1.1, 10, 8, [0, 1.7, -3.2], null, [1.2, 0.7, 1.1]),
-    box('tail', 'hull', 0.6, 0.6, 4.5, [0, 1.8, 4.6]),
-    box('fin', 'dark', 0.2, 1.4, 0.9, [0, 2.4, 6.6]),
-    box('rotorA', 'dark', 0.28, 0.07, 9.5, [0, 2.9, 0]),
-    box('rotorB', 'dark', 0.28, 0.07, 9.5, [0, 2.9, 0], [0, Math.PI / 2, 0]),
-    box('tailRotor', 'dark', 0.1, 1.6, 0.15, [0.4, 2.0, 6.8]),
+    sph('canopy', 'glass', 1.1, 10, 8, [0, 1.7, -3.2], null, [1.2, 0.7, 1.1]), // bolha da cabine
+    box('engineDeck', 'armor', 2.2, 0.6, 2.6, [0, 2.6, 0.3]), // dorso do motor
+    cyl('exhaustL', 'dark', 0.22, 0.26, 0.9, 6, [-0.9, 2.45, 1.9], [1.2, 0, 0]),
+    cyl('exhaustR', 'dark', 0.22, 0.26, 0.9, 6, [0.9, 2.45, 1.9], [1.2, 0, 0]),
+    box('tailBoom', 'hull', 0.7, 0.7, 3.0, [0, 1.85, 4.0]), // boom grosso
+    box('tailTip', 'hull', 0.4, 0.45, 2.2, [0, 1.95, 6.4]), // afunilamento da cauda
+    box('fin', 'dark', 0.2, 1.4, 0.9, [0, 2.5, 7.3]),
+    box('stabilizer', 'hull', 1.8, 0.12, 0.6, [0, 2.0, 5.6]), // estabilizador horizontal
+    cyl('rotorHub', 'dark', 0.3, 0.35, 0.5, 8, [0, 2.75, 0]),
+    box('rotorA', 'dark', 0.28, 0.07, 9.5, [0, 3.0, 0]),
+    box('rotorB', 'dark', 0.28, 0.07, 9.5, [0, 3.0, 0], [0, Math.PI / 2, 0]),
+    box('tailRotor', 'dark', 0.1, 1.6, 0.15, [0.35, 2.0, 7.5]),
     box('skidL', 'dark', 0.18, 0.15, 4.5, [-1.3, 0.25, 0]),
     box('skidR', 'dark', 0.18, 0.15, 4.5, [1.3, 0.25, 0]),
+    box('podL', 'armor', 0.5, 0.5, 1.6, [-1.7, 1.2, -0.8]), // pods de foguetes
+    box('podR', 'armor', 0.5, 0.5, 1.6, [1.7, 1.2, -0.8]),
+    ...sideMarks(1.51, 1.7, 0.5, 0.4, 1.4),
   ];
 }
 
@@ -156,10 +227,23 @@ function zeppelinParts() {
   for (let i = 0; i < 4; i++) {
     fins.push(box(`fin${i}`, 'armor', 0.25, 2.6, 1.6, [0, 4.5, 10.2], [0, 0, (i * Math.PI) / 2]));
   }
+  const windows = [];
+  for (let i = 0; i < 3; i++) {
+    windows.push(box(`winL${i}`, 'glass', 0.06, 0.35, 0.5, [-1.01, 1.05, -1.0 + i * 1.0]));
+    windows.push(box(`winR${i}`, 'glass', 0.06, 0.35, 0.5, [1.01, 1.05, -1.0 + i * 1.0]));
+  }
   return [
     sph('envelope', 'blimp', 4.2, 14, 10, [0, 4.5, 0], null, [1, 1, 2.6]),
+    sph('noseCap', 'accent', 1.2, 8, 6, [0, 4.5, -10.6]), // cone de proa
+    box('stripe', 'accent', 0.1, 0.5, 8.0, [0, 8.55, -2]), // faixa de espinhaço
     box('gondola', 'armor', 2.0, 1.1, 3.6, [0, 1.0, 0]),
+    box('bridge', 'glassDark', 1.6, 0.5, 0.8, [0, 1.2, -2.0]), // ponte de comando
+    ...windows,
     ...fins,
+    box('podL', 'dark', 0.6, 0.6, 1.4, [-2.2, 1.6, 1.8]), // naceles dos motores
+    box('podR', 'dark', 0.6, 0.6, 1.4, [2.2, 1.6, 1.8]),
+    box('propL', 'dark', 0.08, 1.2, 0.12, [-2.2, 1.6, 2.55]),
+    box('propR', 'dark', 0.08, 1.2, 0.12, [2.2, 1.6, 2.55]),
   ];
 }
 

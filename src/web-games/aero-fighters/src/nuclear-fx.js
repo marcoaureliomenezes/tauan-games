@@ -173,11 +173,17 @@ function smokeTexture() {
   return _smokeTex;
 }
 
-// ── Shader do fireball: FBM 3D, rampa blackbody, ferve e esfria ───────────────
+// ── Shader do fireball: FBM 3D com domain-warping, rampa blackbody, ferve e
+// esfria. Rework T-N-01 (nuke-firestorm-defense-v1): 5 oitavas + warp de domínio
+// (q→r→d) para o aspecto de "plasma fervendo", núcleo branco-quente definido,
+// borda incandescente via fresnel. Contrato inalterado: uniforms uTime/uFade/
+// uDisp, raio/estágios/curvas puras intactos (T-09). ────────────────────────────
 const FIRE_VERT = /* glsl */ `
   uniform float uTime;
   uniform float uDisp;
   varying vec3 vN;
+  varying vec3 vNv;
+  varying vec3 vView;
   float hash(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453123); }
   float vnoise(vec3 p){
     vec3 i = floor(p), f = fract(p);
@@ -189,13 +195,20 @@ const FIRE_VERT = /* glsl */ `
   }
   float fbm(vec3 p){
     float v = 0.0, a = 0.5;
-    for (int i = 0; i < 4; i++) { v += a * vnoise(p); p *= 2.03; a *= 0.5; }
+    for (int i = 0; i < 5; i++) { v += a * vnoise(p); p *= 2.03; a *= 0.5; }
     return v;
   }
   void main(){
     vN = normal;
-    float d = fbm(normal * 2.6 + vec3(0.0, -uTime * 0.55, 0.0));
-    vec3 p = position * (1.0 + uDisp * (d - 0.5) * 0.55);
+    vNv = normalize(normalMatrix * normal);
+    vView = (modelViewMatrix * vec4(position, 1.0)).xyz;
+    // Domain warp: o campo de ruído é distorcido por ele mesmo (q→r→d) — a
+    // superfície "fere" em bolhas de plasma em vez de ondular suavemente.
+    vec3 sp = normal * 2.4 + vec3(0.0, -uTime * 0.60, 0.0);
+    float q = fbm(sp);
+    float r = fbm(sp + vec3(q) * 1.6 + vec3(0.0, -uTime * 0.35, uTime * 0.20));
+    float d = fbm(sp + vec3(r) * 1.5);
+    vec3 p = position * (1.0 + uDisp * (d - 0.5) * 0.70);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }
 `;
@@ -203,6 +216,8 @@ const FIRE_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uFade;
   varying vec3 vN;
+  varying vec3 vNv;
+  varying vec3 vView;
   float hash(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453123); }
   float vnoise(vec3 p){
     vec3 i = floor(p), f = fract(p);
@@ -214,21 +229,34 @@ const FIRE_FRAG = /* glsl */ `
   }
   float fbm(vec3 p){
     float v = 0.0, a = 0.5;
-    for (int i = 0; i < 4; i++) { v += a * vnoise(p); p *= 2.03; a *= 0.5; }
+    for (int i = 0; i < 5; i++) { v += a * vnoise(p); p *= 2.03; a *= 0.5; }
     return v;
   }
+  // Rampa blackbody estendida: brasa escura → vermelho → laranja → amarelo →
+  // BRANCO puro no topo (núcleo white-hot definido, antes saturava em amarelo).
   vec3 fireRamp(float x){
-    vec3 c = mix(vec3(0.06,0.02,0.01), vec3(0.85,0.22,0.04), smoothstep(0.0, 0.35, x));
-    c = mix(c, vec3(1.0, 0.62, 0.13), smoothstep(0.35, 0.65, x));
-    c = mix(c, vec3(1.0, 0.96, 0.80), smoothstep(0.65, 0.92, x));
+    vec3 c = mix(vec3(0.05,0.015,0.008), vec3(0.80,0.16,0.03), smoothstep(0.0, 0.30, x));
+    c = mix(c, vec3(1.0, 0.55, 0.10), smoothstep(0.30, 0.60, x));
+    c = mix(c, vec3(1.0, 0.92, 0.55), smoothstep(0.60, 0.85, x));
+    c = mix(c, vec3(1.0, 1.0, 1.0), smoothstep(0.85, 1.0, x));
     return c;
   }
   void main(){
-    float n = fbm(vN * 3.1 + vec3(0.0, -uTime * 0.75, uTime * 0.12));
-    // esfriamento: o "calor" cai com o tempo, o ruído vira manchas frias primeiro
-    float heat = clamp(n * 1.55 - uTime * 0.085, 0.0, 1.0);
+    // Mesmo warp do vértice, mais rápido e com segunda camada de rolagem —
+    // manchas de calor que sobem e se enrolam (roiling plasma).
+    vec3 sp = vN * 3.0 + vec3(0.0, -uTime * 0.80, uTime * 0.15);
+    float q = fbm(sp);
+    float r = fbm(sp * 1.7 + vec3(q) * 2.0 + vec3(uTime * 0.10, -uTime * 0.40, 0.0));
+    float n = fbm(sp + vec3(r) * 1.5);
+    // Calor: base alta (núcleo definido) que esfria com o tempo — as manchas
+    // frias do warp aparecem primeiro nas bordas do redemoinho.
+    float heat = clamp(n * 1.90 + 0.22 - uTime * 0.075, 0.0, 1.0);
     vec3 c = fireRamp(heat);
-    float alpha = uFade * (0.30 + 0.70 * heat);
+    // Borda incandescente (fresnel): o limbo da esfera brilha laranja-quente,
+    // proporcional ao calor local — lê como coroa de plasma.
+    float fres = pow(1.0 - abs(dot(normalize(vNv), normalize(-vView))), 2.2);
+    c += vec3(1.0, 0.45, 0.12) * fres * (0.35 + 0.65 * heat) * 0.9;
+    float alpha = uFade * (0.35 + 0.65 * heat);
     gl_FragColor = vec4(c, alpha);
   }
 `;

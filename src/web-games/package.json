@@ -15,7 +15,16 @@
     "test:aero:qa": "npm run validate:aero-map && npm run test:aero:unit && npm run test:aero:sim && npm run test:aero:e2e",
     "test:space-war:unit": "node --experimental-default-type=module tests/space-war/tools/test-celestial-unit.js && node --experimental-default-type=module tests/space-war/tools/test-ballistics-unit.js && node --experimental-default-type=module tests/space-war/tools/test-physics-unit.js && node --experimental-default-type=module tests/space-war/tools/test-mode-unit.js && node --experimental-default-type=module tests/space-war/tools/test-launch-unit.js",
     "test:space-war": "playwright test tests/space-war/ --config=tests/playwright.config.js",
-    "test:far-west": "playwright test tests/far-west/ --config=tests/playwright.config.js"
+    "test:far-west": "playwright test tests/far-west/ --config=tests/playwright.config.js",
+    "test:aero:cachoeira": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-cachoeira.mjs",
+    "test:aero:campaign": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-campaign.mjs",
+    "test:aero:citywar": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-citywar.mjs",
+    "test:aero:defense": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-defense-mode.mjs",
+    "test:aero:defense-weapons": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-defense-weapons.mjs",
+    "test:aero:defense-weapons-v1": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-defense-weapons-v1.mjs",
+    "test:aero:defense-fighters": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-defense-fighters.mjs",
+    "test:aero:defense-director": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-defense-director.mjs",
+    "test:aero:visual": "node --experimental-default-type=module tests/aero-fighters/tools/test-aero-visual.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0"

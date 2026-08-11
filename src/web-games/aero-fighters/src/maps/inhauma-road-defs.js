@@ -11,7 +11,7 @@
 // Zonas de exclusão do aeroporto (x≈-560): TODAS as estradas passam longe delas
 // (a leste de x=-435 ou a oeste de x=-685). Verificado por inhauma-fidelity.spec.js.
 //
-// aero-fighters-inhauma-serra-v1 (T-04): os 4 corredores foram RE-AUTORADOS sobre o
+// v0.2.11 (T-04): os 4 corredores foram RE-AUTORADOS sobre o
 // novo relevo DEM (vale alpino estilo Chamonix, T-01/T-02/T-03) — os pontos de controle
 // abaixo já não descrevem a antiga base FBM. Metodologia: sondagem Node de
 // sampleDemHeight/demSlopeAt (+ inhaumaContinuousHeight, ao vivo, para o resultado

@@ -60,14 +60,15 @@ export const MAP_VALIDATION_DEFS = {
     ].map(([cx, cz, radius, peakHeight, type, name], id) => ({ id, cx, cz, radius, peakHeight, type, name })),
   },
   inhauma: {
-    bounds: { minX: -1600, maxX: 1700, minZ: -1100, maxZ: 1000 },
+    // T-D-04: maxZ 1000 → 2300 (o novo vale de Cachoeira fica em z~2050).
+    bounds: { minX: -1600, maxX: 1700, minZ: -1100, maxZ: 2300 },
     layout: TARGET_LAYOUT_INHAUMA,
     regions: [
       ['urban-rise-inhauma', 0, 0, 360, 10, 'urbanRise'],
       ['morros-oeste-inhauma', -380, 40, 270, 52, 'roundedHill'],
       ['morro-norte-inhauma', -40, -330, 230, 44, 'roundedHill'],
       ['serra-sete-lagoas', 760, -300, 430, 76, 'ridge'],
-      ['vale-cachoeira-prata', -940, 520, 260, 16, 'valley'],
+      ['vale-cachoeira-prata', -950, 2050, 260, 16, 'valley'],
       ['morros-sudeste-inhauma', 330, 330, 240, 40, 'roundedHill'],
     ].map(([name, cx, cz, radius, peakHeight, type], id) => ({ id, name, cx, cz, radius, peakHeight, type })),
   },

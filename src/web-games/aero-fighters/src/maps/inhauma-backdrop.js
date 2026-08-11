@@ -2,7 +2,7 @@
 // Exporta: createInhaumaBackdrop, updateInhaumaBackdrop.
 // Para ajustar raios/alturas/tintas dos anéis, edite BACKDROP_RINGS abaixo.
 //
-// T-V-09 (aero-fighters-inhauma-visual-uplift-v1): a janela de terreno streamed
+// T-V-09 (v0.3.6): a janela de terreno streamed
 // acaba ~2,1 km à frente e NÃO havia montanhas distantes — a 700 m de altitude o
 // horizonte era céu vazio em toda direção (shot 03 da auditoria). Aqui: 3 anéis
 // concêntricos de cristas low-poly (ridged-FBM) a 3,5-5,8 km, recentrados no XZ do

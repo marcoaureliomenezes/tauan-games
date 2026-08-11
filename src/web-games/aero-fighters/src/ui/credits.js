@@ -1,5 +1,5 @@
 // ui/credits.js — In-game attribution credit for the DEM-derived Inhaúma terrain
-// (AC-09, release aero-fighters-inhauma-serra-v1).
+// (AC-09, release v0.2.11).
 //
 // The vendored DEM asset (src/web-games/aero-fighters/assets/inhauma-dem/heightmap.json) carries
 // this exact string in its `attribution.text` field — Tilezen/joerd's AWS Terrain

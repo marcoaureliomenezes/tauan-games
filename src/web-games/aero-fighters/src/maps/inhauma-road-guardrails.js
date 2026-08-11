@@ -1,5 +1,5 @@
 // maps/inhauma-road-guardrails.js — Guardrails instanciados da classe highway
-// (aero-fighters-inhauma-visual-uplift-v1, T-V-16; auditoria §2.6 — MG-238 pista
+// (v0.3.6, T-V-16; auditoria §2.6 — MG-238 pista
 // dupla + BR-040 OSM). Separado de inhauma-road-props.js pelo teto de 250 linhas.
 //
 // Exporta buildGuardrails(roads, heightAt, material) → [postMesh, railMesh] | null

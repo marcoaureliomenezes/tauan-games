@@ -34,6 +34,33 @@ test('No spawned target lands on airport surface (runway / taxiway / service)', 
   expect(result.total).toBeGreaterThan(0);
 });
 
+// ─── T-FIX-01b (T-C-14, release v0.3.4 — SPEC §A/§F):
+// a mesma invariante vale para os spawns de FORMAÇÃO/guarnição em Inhaúma — nada
+// nasce sobre o pavimento do aeroporto nem dentro das zonas de exclusão (formation.js
+// valida/clampa contra TOWN_SHELF + CACHOEIRA_SHELF + INHAUMA_AIRPORT_EXCLUSION_ZONES
+// + faixa do rio; as zonas lidas aqui são as REAIS expostas pelo diagnóstico). ──────
+test('No formation/garrison spawn lands on airport pavement or exclusion zones (inhauma)', async ({ page }) => {
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=runway-clear-campaign');
+  await page.waitForFunction(() => window.__aeroDebug && Array.isArray(window.game?.targets), { timeout: 15000 });
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => window.game.running && window.game.targets.length > 0, { timeout: 5000 });
+
+  const result = await page.evaluate(() => {
+    const zones = window.__aeroDebug.getMapDiagnostics().roadGraph.airportExclusionZones;
+    const runway = window.__aeroDebug.getSnapshot().runwayBounds;
+    const inZone = (x, z) =>
+      zones.some((c) => Math.abs(x - c.cx) <= c.halfW && Math.abs(z - c.cz) <= c.halfL)
+      || (Math.abs(x - runway.center.x) <= runway.width / 2 && Math.abs(z - runway.center.z) <= runway.length / 2);
+    const offenders = window.__aeroDebug.getTargetDiagnostics()
+      .filter((t) => inZone(t.spawnX, t.spawnZ))
+      .map((t) => `${t.type}@(${t.spawnX.toFixed(0)},${t.spawnZ.toFixed(0)})`);
+    return { total: window.game.targets.length, offenders };
+  });
+
+  expect(result.total).toBeGreaterThan(0);
+  expect(result.offenders, `Spawns on airport: ${result.offenders.join(', ')}`).toEqual([]);
+});
+
 // ─── T-FIX-02: MOUNTAIN_BUFFER reduced to 5 m ─────────────────────────────────
 // Note: exact buffer value is verified by test:aero:unit terrainCollision test.
 // This E2E test confirms the game loads cleanly and physics diagnostics are finite.

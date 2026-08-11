@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PLAYER, TARGET_LAYOUT_INHAUMA, MISSILES_NUCLEAR } from '../../../aero-fighters/src/config.js';
+import { PLAYER, CAMPAIGN, MISSILES_NUCLEAR, NUKE_FIRESTORM } from '../../../aero-fighters/src/config.js';
 import {
   fireballFadeAt,
   fireballGrowthAt,
@@ -118,7 +118,7 @@ test('mission spawn validation across deterministic seeds remains stable', () =>
 });
 
 // ─── T-03: DEM-based Inhaúma base height — surface-truth + flyability sim ─────
-// aero-fighters-inhauma-serra-v1: inhaumaBaseHeight now sources the vendored DEM
+// v0.2.11: inhaumaBaseHeight now sources the vendored DEM
 // (T-01/T-02) instead of FBM + INHAUMA_FEATURES. These tests exercise the REAL
 // production height chain (inhaumaContinuousHeight / inhaumaVisualSurfaceHeight),
 // not the synthetic per-map approximation in map-validation.js used above.
@@ -405,15 +405,32 @@ test('AC-01: mountain chains reach well above the valley floor (not isolated hil
   assert.ok(southMassif > valleyFloor + 400, 'expected a continuous massif well above the valley floor to the south');
 });
 
-test('mission targets remain grounded on the DEM terrain (finite, non-negative, bounded height)', () => {
-  assert.ok(TARGET_LAYOUT_INHAUMA.length > 0);
-  for (const [islandIdx, x, z, type] of TARGET_LAYOUT_INHAUMA) {
-    assert.equal(islandIdx, -1, `${type} at (${x},${z}) expected absolute placement (islandIdx=-1)`);
-    const h = inhaumaVisualSurfaceHeight(x, z);
-    assert.ok(Number.isFinite(h), `${type} at (${x},${z}) has non-finite ground height`);
-    assert.ok(h >= 0, `${type} at (${x},${z}) is grounded below zero: ${h}`);
-    assert.ok(h < 1500, `${type} at (${x},${z}) grounded implausibly high: ${h}`);
+// T-C-14 (release v0.3.4 — SPEC §F): TARGET_LAYOUT_INHAUMA
+// ficou ÓRFÃO — em Inhaúma spawnMission é no-op (missions.js) e o layout não spawna
+// mais nada (sobrou como metadata em maps/index.js para mapas não-inhauma; o layout
+// dos mapas legados continua validado pelo validate-aero-map). O contrato de spawn
+// passou a ser o da CAMPANHA: as rotas das colunas/baterias do Ato 1 (config.CAMPAIGN)
+// são os waypoints reais sobre os quais as formações andam — toda posição precisa
+// estar sobre terreno finito, não-negativo e limitado (o pathing/exclusões das
+// formações em si são validados por test-aero-formations.mjs/test-aero-campaign.mjs).
+test('campaign act-1 routes sit on the DEM terrain (finite, non-negative, bounded height)', () => {
+  const routes = [
+    ...Object.values(CAMPAIGN.columnRoutes),
+    ...CAMPAIGN.artilleryRoutes,
+  ];
+  assert.ok(routes.length > 0);
+  let waypointCount = 0;
+  for (const route of routes) {
+    assert.ok(route.length >= 2, 'campaign route needs at least two waypoints');
+    for (const [x, z] of route) {
+      const h = inhaumaVisualSurfaceHeight(x, z);
+      assert.ok(Number.isFinite(h), `campaign waypoint at (${x},${z}) has non-finite ground height`);
+      assert.ok(h >= 0, `campaign waypoint at (${x},${z}) is grounded below zero: ${h}`);
+      assert.ok(h < 1500, `campaign waypoint at (${x},${z}) grounded implausibly high: ${h}`);
+      waypointCount++;
+    }
   }
+  assert.ok(waypointCount >= 20, 'campaign routes sampled too few waypoints to be meaningful');
 });
 
 test('airport clearing stays operational: the real runway/taxiway/service pavement is exactly flat', () => {
@@ -524,6 +541,19 @@ test('D-8: MISSILES_NUCLEAR destruction/player-damage radii are re-tuned per the
   assert.equal(MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS, 680);
   assert.ok(MISSILES_NUCLEAR.PLAYER_KILL_RADIUS < MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS);
   assert.ok(MISSILES_NUCLEAR.PLAYER_DAMAGE_RADIUS < MISSILES_NUCLEAR.BLAST_RADIUS);
+});
+
+// T-N-02 (nuke-firestorm-defense-v1): firestorm constants — RADIUS must stay
+// exactly 2× the fireball max radius (FIREBALL_R_MAX=130 in nuclear-fx.js, kept
+// private there; the 130 is asserted indirectly by the fireballRadius ≤ 131
+// contract in nuclear-fx.spec.js and the saturation bound in the growth tests
+// above). If FIREBALL_R_MAX ever changes, NUKE_FIRESTORM.RADIUS must follow.
+test('T-N-02: NUKE_FIRESTORM radius is 2× the fireball max radius and the fire/smoke lifecycle is 60s + 120s', () => {
+  assert.equal(NUKE_FIRESTORM.RADIUS, 260); // 2 × 130 (FIREBALL_R_MAX, nuclear-fx.js)
+  assert.equal(NUKE_FIRESTORM.FIRE_S, 60);
+  assert.equal(NUKE_FIRESTORM.SMOKE_S, 120);
+  assert.ok(NUKE_FIRESTORM.MAX_EMITTERS > 0 && NUKE_FIRESTORM.MAX_EMITTERS <= 128,
+    'emitter cap must be generous (generalized fire) but FPS-bounded');
 });
 
 // AC-06/D-8: mirrors the exact target-damage formula in projectiles.js's

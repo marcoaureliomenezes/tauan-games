@@ -1,13 +1,18 @@
-// prop-fire.js — Fogo em loop em props (árvores/casas) incendiados pela nuke (WS-5).
+// prop-fire.js — Fogo em loop em props (árvores/casas) incendiados pela nuke (WS-5)
+// e pelos bombardeios de artilharia da campanha (T-C-09, city-war.js).
 // Exporta: spawnPropFire, updatePropFires, clearPropFires.
 // Pool LIMITADO por FPS: no máximo MAX_EMITTERS focos ativos, puxando puffs de fogo
-// aditivos de um pool compartilhado. Guarda headless (não roda sob webdriver/testMode) —
-// consistente com fx.js/HEADLESS_FX. Ticado por main.js: updatePropFires(dt) a cada frame.
+// aditivos de um pool compartilhado. Guarda headless (não roda sob webdriver) —
+// EXCETO em testMode explícito (?testMode=1), onde os focos ficam visíveis para a
+// evidência visual da campanha (pools capados — 48 focos/90 puffs — protegem o FPS).
+// Ticado por main.js: updatePropFires(dt) a cada frame.
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { scene } from './scene.js';
+import { game } from './state.js';
 
 const HEADLESS = typeof navigator !== 'undefined' && navigator.webdriver === true;
+const firesEnabled = () => !HEADLESS || game.runtime?.testMode === true;
 const MAX_EMITTERS = 48;   // cap rígido de focos simultâneos (protege FPS — U-AC-8 é frágil)
 const POOL = 90;           // puffs de fogo reaproveitados
 const FIRE_GEOM = new THREE.SphereGeometry(1.0, 6, 5);
@@ -29,14 +34,14 @@ function build() {
 
 /** Acende um foco de fogo em (x,y,z) que queima ~duration s. Respeita o cap. */
 export function spawnPropFire(x, y, z, scale = 1, duration = 26) {
-  if (HEADLESS) return;
+  if (!firesEnabled()) return;
   build();
   if (emitters.length >= MAX_EMITTERS) return;
   emitters.push({ x, y, z, scale, life: duration + Math.random() * 8, cool: Math.random() * 0.2 });
 }
 
 export function updatePropFires(dt) {
-  if (HEADLESS) return;
+  if (!firesEnabled()) return;
   for (let e = emitters.length - 1; e >= 0; e--) {
     const em = emitters[e];
     em.life -= dt;

@@ -12,12 +12,36 @@ async function openAndStart(page, map) {
 
 for (const map of ['rio', 'desert', 'inhauma']) {
   test.describe(`Aero Fighters — ${map} map diagnostics`, () => {
+    // T-C-14 (release v0.3.4 — SPEC §F): em Inhaúma os
+    // "alvos iniciais" são as unidades de FORMAÇÃO da guarnição/campanha (tipos
+    // 'f*', snap de altura por formation.js#placeMoving/createFormation sobre a
+    // MESMA superfície renderizada que o debug amostra) — a asserção de grounded
+    // vale igual; unidades aéreas (zepelim/helicóptero de patrulha) carregam
+    // airborneAltitude e o debug as considera grounded na altitude de patrulha.
+    // EXCEÇÃO documentada: os proxies 'mg060-military' (T-C-11) são veículos de
+    // ESTRADA — a altura deles segue a DEM contínua (inhaumaContinuousHeight, a
+    // mesma dos carros civis, inhauma-scene.js#updateInhaumaScene), não a grade
+    // bilinear que o debug amostra; em trechos de rampa a diferença entre as duas
+    // cadeias de altura ultrapassa 1 m. O contrato de altura deles é o do teste
+    // de tráfego (inhauma-fidelity.spec.js: wheelHeightViolations/maxClearanceError);
+    // aqui eles ficam com um teto frouxo anti-regressão (nunca voando/enterrados).
     test('initial targets are grounded within tolerance', async ({ page }) => {
       await openAndStart(page, map);
-      const diagnostics = await page.evaluate(() => window.__aeroDebug.getTargetDiagnostics());
-      expect(diagnostics.length).toBeGreaterThan(0);
-      const bad = diagnostics.filter((t) => !t.grounded);
-      expect(bad, JSON.stringify(bad, null, 2)).toEqual([]);
+      const result = await page.evaluate(() => {
+        const diag = window.__aeroDebug.getTargetDiagnostics();
+        if (window.game.activeMap !== 'inhauma') {
+          return { total: diag.length, bad: diag.filter((t) => !t.grounded), flying: [] };
+        }
+        const isMil = (t) => window.game.targets[t.id]?.formationId === 'mg060-military';
+        return {
+          total: diag.length,
+          bad: diag.filter((t) => !isMil(t) && !t.grounded),
+          flying: diag.filter((t) => isMil(t) && Math.abs(t.heightError) > 3),
+        };
+      });
+      expect(result.total).toBeGreaterThan(0);
+      expect(result.bad, JSON.stringify(result.bad, null, 2)).toEqual([]);
+      expect(result.flying, JSON.stringify(result.flying, null, 2)).toEqual([]);
     });
 
     test('terrain samples are finite', async ({ page }) => {

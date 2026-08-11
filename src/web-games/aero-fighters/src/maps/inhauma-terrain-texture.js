@@ -2,7 +2,7 @@
 // Exporta: createInhaumaTerrainTextures.
 // Para ajustar o grão/detalhe, edite TEX_SIZE/DETAIL_REPEAT e as frequências abaixo.
 //
-// T-V-11 (aero-fighters-inhauma-visual-uplift-v1): o terreno era vertex colors
+// T-V-11 (v0.3.6): o terreno era vertex colors
 // puros numa grade de 39 m/vértice — o look "domo pintado" (auditoria §2.2). Aqui:
 // (a) textura de DETALHE tileable em escala de cinza (luminância neutra — modula,
 // não recolore) usada como `map` no MeshLambertMaterial({vertexColors:true}) do

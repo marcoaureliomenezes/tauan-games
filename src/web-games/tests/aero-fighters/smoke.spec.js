@@ -44,12 +44,17 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     expect(errors).toHaveLength(0);
   });
 
-  // AC-3: starts with 100 missiles
-  test('AC-3: starts with 100 missiles', async ({ page }) => {
+  // AC-3 (T-C-14, release v0.3.4 — SPEC §C/F): o míssil
+  // leve passou a ser INFINITO (T-C-08) — o HUD mostra ∞ e player.missiles virou um
+  // valor fixo de exibição (100), nunca decrementado nem recarregado
+  // (main.js#fireMissile sem guard/decremento; service-scene.js não o repõe).
+  test('AC-3: light missiles are infinite — HUD shows ∞ and the display value stays 100', async ({ page }) => {
     await page.goto('/src/web-games/aero-fighters/index.html');
     await page.waitForTimeout(600);
     const missiles = await page.evaluate(() => window.game?.player?.missiles);
-    expect(missiles).toBe(100);
+    expect(missiles).toBe(100); // valor fixo de exibição — o contrato é o ∞ do HUD
+    const hud = await page.evaluate(() => document.getElementById('missiles').textContent);
+    expect(hud).toContain('∞');
   });
 
   // AC-4: ArrowDown rotates after takeoff speed — jet lifts from runway
@@ -66,7 +71,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     expect(yAfter).toBeGreaterThan(yBefore);
   });
 
-  // AC-5 (ADR-U1, aero-fighters-uplift-v1): no SOLO a intenção "subir" é inequívoca —
+  // AC-5 (ADR-U1, v0.1.0): no SOLO a intenção "subir" é inequívoca —
   // ↑ OU ↓ rotacionam e decolam. (Substitui o contrato antigo em que ↑ não decolava.)
   test('AC-5: ArrowUp rotates and lifts off during takeoff roll (ADR-U1)', async ({ page }) => {
     await startGame(page);
@@ -175,8 +180,10 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     expect(after).toBeGreaterThan(before);
   });
 
-  // AC-11: X fires missile com lock-on (espera ~500ms para travar o alvo)
-  test('AC-11: X fires homing missile (após lock-on) e decrementa counter', async ({ page }) => {
+  // AC-11 (T-C-14, SPEC §C/F): X dispara míssil teleguiado (após lock-on ~0.35 s)
+  // e NÃO decrementa o contador — o míssil leve é infinito desde T-C-08; o guard de
+  // supply e o decremento foram removidos de main.js#fireMissile.
+  test('AC-11: X fires homing missile (após lock-on) sem decrementar — supply infinito', async ({ page }) => {
     await startGame(page);
     await page.evaluate(() => {
       const t = window.game.targets[0];
@@ -190,11 +197,16 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     await page.keyboard.press('KeyX');
     await page.waitForTimeout(200);
     const after = await page.evaluate(() => window.game.player.missiles);
-    expect(after).toBe(before - 1);
+    expect(after).toBe(before); // T-C-08: infinito — sem decremento
   });
 
-  // AC-12: mission spawns static military targets (AA guns, bases etc — substituiu ships)
-  test('AC-12: mission spawns static military targets', async ({ page }) => {
+  // AC-12 (T-C-14, SPEC §F): o que spawna como alvo depende do mapa. Nos mapas
+  // legados (ilhas/deserto/rio) a missão spawna os tipos do layout fixo
+  // (base/factory/aaGun...) via missions.js#spawnMission. Em Inhaúma NÃO há waves:
+  // spawnMission é no-op (missions.js) e os alvos são as FORMAÇÕES da campanha —
+  // a guarnição de Cachoeira (spawn no create do mapa, T-C-05) + as colunas do
+  // Ato 1 (spawn-over-time seedado, T-C-06) — tipos 'f*' (units.js#unitTargetType).
+  test('AC-12 (islands): mission spawns static military targets (layout legado)', async ({ page }) => {
     await startGame(page);
     await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 4000 });
     await page.waitForTimeout(800);
@@ -204,7 +216,34 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     expect(hasMilitary).toBe(true);
   });
 
-  // AC-13: killing enemy increments score
+  test('AC-12 (inhauma): spawns são formações da campanha/guarnição (tipos f*)', async ({ page }) => {
+    await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=ac12-campaign');
+    await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
+    await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
+    // A guarnição já está em game.targets desde o create do mapa (sem wave).
+    await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 4000 });
+    const r = await page.evaluate(() => ({
+      types: window.game.targets.map((t) => t.type),
+      allFormation: window.game.targets.every((t) => typeof t.formationId === 'string'),
+      campaign: {
+        act: window.game.campaign?.act,
+        total: window.game.campaign?.actTargetsTotal,
+        mirroredTotal: window.game.targetsTotal,
+      },
+    }));
+    expect(r.types.some((t) => t.startsWith('f'))).toBe(true);
+    expect(r.allFormation).toBe(true); // nenhum alvo de wave/layout no barramento
+    expect(r.campaign.act).toBe(1);
+    // Contrato SPEC §F: "total" = objetivo do ATO, espelhado pela campanha.
+    expect(r.campaign.mirroredTotal).toBe(r.campaign.total);
+  });
+
+  // AC-13 (T-C-14, SPEC §F): matar inimigo incrementa score — segue válido: unidades
+  // de formação entram em game.targets (registerAsTargets) e o kill flui pelo mesmo
+  // barramento de dano/score de targets.js (killTarget). game.enemies é alias de
+  // game.targets (state.js).
   test('AC-13: killing enemy increments score', async ({ page }) => {
     await startGame(page);
     await page.waitForFunction(() => window.game.enemies.length > 0, { timeout: 4000 });

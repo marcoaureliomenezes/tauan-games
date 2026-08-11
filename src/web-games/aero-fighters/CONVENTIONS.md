@@ -8,7 +8,7 @@
 - **Tamanho de função:** ≤ 60 linhas.
 - **Imports por módulo:** ≤ 6 imports do projeto (não conta `three`).
 - **Side-effects no load:** ZERO. Importar um módulo nunca pode iniciar o game loop, tocar áudio, ou adicionar mesh à cena. Apenas `main.js` orquestra ações.
-- **Texturas procedurais (canvas) são permitidas** (T-V-03, release `aero-fighters-inhauma-visual-uplift-v1`, operador 2026-07-18): `THREE.CanvasTexture` gerada em runtime (padrão já usado em `maps/desert.js` e nas placas de `inhauma-road-props.js`) para janelas de prédios, splat/detail de terreno, normal maps de ruído etc. O que continua proibido é asset externo (arquivo de imagem baixado) — tudo gerado em código, offline.
+- **Texturas procedurais (canvas) são permitidas** (T-V-03, release `v0.3.6`, operador 2026-07-18): `THREE.CanvasTexture` gerada em runtime (padrão já usado em `maps/desert.js` e nas placas de `inhauma-road-props.js`) para janelas de prédios, splat/detail de terreno, normal maps de ruído etc. O que continua proibido é asset externo (arquivo de imagem baixado) — tudo gerado em código, offline.
 
 ## Nomenclatura
 

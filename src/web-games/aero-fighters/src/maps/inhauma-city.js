@@ -1,11 +1,19 @@
-// maps/inhauma-city.js — Tipologias e fachadas da cidade de Inhauma (T-V-12/T-V-13,
-// release aero-fighters-inhauma-visual-uplift-v1): textura canvas de janelas com
-// emissiveMap noturno, batches instanciados low-rise/mid-rise/torre com setback e
-// telhados inclinados de 2 águas.
-// Exporta: buildCityMeshes (grupo com os InstancedMesh da cidade) e
-// updateInhaumaCityLights (intensidade do emissive por time-of-day).
-// Para adicionar uma tipologia nova, edite FACADE_SPECS e o roteamento em buildTown
-// (inhauma-scene.js) que atribui block.kind.
+// maps/inhauma-city.js — Tipologias e fachadas das cidades do mapa Inhauma
+// (T-V-12/T-V-13, release v0.3.6): textura canvas de
+// janelas com emissiveMap noturno, batches instanciados low-rise/mid-rise/torre com
+// setback e telhados inclinados de 2 águas.
+// T-C-04 (release v0.3.4): o PLACEMENT dos quarteirões
+// virou o genérico buildTownCluster — UM caminho de código para Inhaúma (buildTown)
+// e Cachoeira da Prata (buildCachoeira), ambos em inhauma-scene.js.
+// Exporta: buildTownCluster (grade + keep-outs + terraceamento → blocks),
+//   makeInhaumaTypology / makeCachoeiraTypology (tipologia por posição no distrito),
+//   buildCityMeshes (grupo com os InstancedMesh da cidade) e
+//   updateInhaumaCityLights (intensidade do emissive por time-of-day).
+// Para adicionar uma tipologia nova, edite FACADE_SPECS e a typology callback que o
+// caller passa a buildTownCluster.
+// NOTA DE TAMANHO: o módulo passa do guideline de 250 linhas com a seção T-C-04
+// (~330) — exceção tolerada no padrão de targets.js (~350, CONVENTIONS.md): a
+// alternativa (dois módulos de cidade) quebraria o caminho único de placement.
 
 import * as THREE from '../../../vendor/three.module.min.js';
 
@@ -160,24 +168,30 @@ function fillBoxBatch(mesh, list, colorOf, towerCap = false) {
   const col = new THREE.Color();
   let i = 0;
   for (const b of list) {
+    // T-N-03: charRefs = mapa bloco→instância para a carbonização do firestorm
+    // (firestorm.js faz setColorAt preto nesses índices).
+    if (!b.charRefs) b.charRefs = [];
     const rotY = ((b.x + b.z) % 9) * 0.05; // mesma micro-rotação da era 1-batch
     if (!towerCap) {
       dummy.position.set(b.x, b.gh + b.h / 2, b.z);
       dummy.scale.set(b.w, b.h, b.d);
       dummy.rotation.set(0, rotY, 0);
       dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
-      col.setHex(colorOf(b)); mesh.setColorAt(i, col); i++;
+      col.setHex(colorOf(b)); mesh.setColorAt(i, col);
+      b.charRefs.push({ mesh, index: i }); i++;
     } else {
       const baseH = b.h * TOWER_BASE_FRAC, capH = b.h - baseH;
       dummy.position.set(b.x, b.gh + baseH / 2, b.z);
       dummy.scale.set(b.w, baseH, b.d);
       dummy.rotation.set(0, rotY, 0);
       dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
-      col.setHex(colorOf(b)); mesh.setColorAt(i, col); i++;
+      col.setHex(colorOf(b)); mesh.setColorAt(i, col);
+      b.charRefs.push({ mesh, index: i }); i++;
       dummy.position.set(b.x, b.gh + baseH + capH / 2, b.z);
       dummy.scale.set(b.w * TOWER_CAP_SCALE, capH, b.d * TOWER_CAP_SCALE);
       dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
-      col.setHex(colorOf(b)).multiplyScalar(1.06); mesh.setColorAt(i, col); i++;
+      col.setHex(colorOf(b)).multiplyScalar(1.06); mesh.setColorAt(i, col);
+      b.charRefs.push({ mesh, index: i }); i++;
     }
   }
 }
@@ -221,6 +235,7 @@ export function buildCityMeshes(blocks) {
       dummy.updateMatrix(); roofs.setMatrixAt(i, dummy.matrix);
       col.setHex(hashPick(ROOF_PALETTE, b.x, b.z)).multiplyScalar(hashJitter(b.x, b.z, 0.85, 1.1));
       roofs.setColorAt(i, col);
+      b.charRefs.push({ mesh: roofs, index: i }); // T-N-03: telhado também carboniza
     });
     g.add(roofs);
   }
@@ -245,4 +260,87 @@ function nightFactorAt(tod) {
 export function updateInhaumaCityLights(tod) {
   const k = nightFactorAt(typeof tod === 'number' ? tod : 0.35) * 0.9;
   for (const m of _facadeMats) if (m.emissiveMap) m.emissiveIntensity = k;
+}
+
+// ─── Placement genérico de quarteirões (T-C-04) ──────────────────────────────
+// UM caminho de código para as duas cidades do mapa: buildTown (Inhaúma) e
+// buildCachoeira (Cachoeira da Prata) chamam buildTownCluster com shelf/params
+// próprios. A ordem das checagens (e o consumo de rng) reproduz EXATAMENTE o loop
+// histórico de buildTown — a saída de Inhaúma é bit-a-bit a mesma de antes.
+const SHELF_FLAT_SLOPE_MAX_DENSITY = 0.12; // abaixo disso, densidade máxima de quarteirão
+const SHELF_MAX_SLOPE = 0.35;              // acima disso, nenhum quarteirão (afinando morro acima)
+const TERRACE_CUT_M = 0.35; // m — quanto a base do quarteirão afunda abaixo da média dos 4 cantos
+
+/** Base nivelada do terraceamento: média dos 4 cantos do footprint (w×d, AABB —
+ *  mesma simplificação de registerStructure) levemente afundada (T-09). */
+function terracedPadHeight(heightAt, x, z, w, d) {
+  const hx = w / 2, hz = d / 2;
+  const avg = (heightAt(x - hx, z - hz) + heightAt(x + hx, z - hz) +
+    heightAt(x - hx, z + hz) + heightAt(x + hx, z + hz)) / 4;
+  return avg - TERRACE_CUT_M;
+}
+
+/** Tipologia de Inhaúma (T-V-13): torres no núcleo do downtown, mid-rise no resto
+ *  do downtown, low-rise com telhado na periferia. Hash por coordenada — sem rng. */
+export function makeInhaumaTypology(center, radius) {
+  return (x, z) => {
+    const rr = Math.hypot(x - center.x, z - center.z);
+    const downtown = rr < radius;
+    if (downtown && rr < 110 && Math.abs(x * 5 + z * 3) % 3 === 0) {
+      return { kind: 'tower', h: 30 + (Math.abs(x * 5 + z * 3) % 17), downtown };
+    }
+    if (downtown) return { kind: 'mid', h: 15 + (Math.abs(x * 5 + z * 3) % 12), downtown };
+    return { kind: 'low', h: 6.5 + (Math.abs(x * 3 + z) % 5), downtown };
+  };
+}
+
+/** Tipologia de Cachoeira da Prata (T-C-04): cidade menor — low-rise com telhado
+ *  dominando, alguns mid-rise perto do centro, sem torres. */
+export function makeCachoeiraTypology(center) {
+  return (x, z) => {
+    const rr = Math.hypot(x - center.x, z - center.z);
+    const downtown = rr < 80;
+    if (downtown && Math.abs(x * 5 + z * 3) % 4 === 0) {
+      return { kind: 'mid', h: 12 + (Math.abs(x * 5 + z * 3) % 8), downtown };
+    }
+    return { kind: 'low', h: 6 + (Math.abs(x * 3 + z) % 5), downtown };
+  };
+}
+
+/** Grade de quarteirões sobre um shelf com keep-outs duros. Retorna blocks
+ *  [{x,z,gh,h,w,d,downtown,kind}] (formato de buildCityMeshes) e registra cada
+ *  prédio via deps.registerStructure (colisão + fogo de nuke).
+ *  deps = { rng, heightAt, slopeAt, nearRoad(x,z,m), riverDist(x,z),
+ *           riverKeepOut, minH, registerStructure, structureId };
+ *  circles = keep-outs circulares [{x,z,r}] (aeroporto, marcos); keepOut(x,z) =
+ *  keep-out extra por callback (landmarks da cidade). */
+export function buildTownCluster({ shelf, stepX, stepZ, typology, deps, circles = [], keepOut = null }) {
+  const blocks = [];
+  for (let x = shelf.minX; x <= shelf.maxX; x += stepX) {
+    for (let z = shelf.minZ; z <= shelf.maxZ; z += stepZ) {
+      if (circles.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) continue;
+      if (keepOut && keepOut(x, z)) continue;
+      if (deps.nearRoad(x, z, 12)) continue;                  // não construir sobre a rodovia
+      if (deps.riverDist(x, z) < deps.riverKeepOut) continue; // não construir no canal/margem do rio
+      if (deps.heightAt(x, z) < deps.minH) continue;          // terreno baixo/alagado demais
+      const slope = deps.slopeAt(x, z);
+      if (slope > SHELF_MAX_SLOPE) continue;                  // encosta íngreme demais p/ terracear
+      if ((x * 7 + z * 13) % 5 === 0) continue;               // lotes vazios (variedade visual)
+      // Afina a densidade conforme a inclinação sobe acima do patamar "prateleira plana".
+      if (slope > SHELF_FLAT_SLOPE_MAX_DENSITY) {
+        const thinT = (slope - SHELF_FLAT_SLOPE_MAX_DENSITY) / (SHELF_MAX_SLOPE - SHELF_FLAT_SLOPE_MAX_DENSITY);
+        if (deps.rng.random() < thinT) continue;
+      }
+      const t = typology(x, z);
+      const w = 11 + Math.abs(x % 6);
+      const d = 9 + Math.abs(z % 5);
+      const padY = terracedPadHeight(deps.heightAt, x, z, w, d);
+      const block = { x, z, gh: padY, h: t.h, w, d, downtown: t.downtown, kind: t.kind };
+      blocks.push(block);
+      // T-N-03: o registro carrega a referência do bloco — buildCityMeshes anexa
+      // nele os charRefs (mesh+índice de instância) usados pela carbonização.
+      deps.registerStructure(deps.structureId, x, z, w / 2, d / 2, padY + t.h, { block });
+    }
+  }
+  return blocks;
 }

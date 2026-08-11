@@ -37,3 +37,51 @@ export function createPilotVisual(scene) {
   scene.add(group);
   return group;
 }
+
+// ─── T-D-10 (inhauma-defense-v1): pool de paraquedas da ejeção dos caças ────
+// Reuso trivial do visual acima: o piloto inimigo ejetado (20% dos abates)
+// desce à deriva até o terreno. Bounded: `max` paraquedas simultâneos.
+
+/** Cria o pool de paraquedas { scene, max, active, free }. */
+export function createParachutePool(scene, max = 2) {
+  return { scene, max, active: [], free: [] };
+}
+
+/** Solta um paraquedas em (x,y,z) com deriva na direção `dir` (rad). */
+export function spawnPoolParachute(pool, x, y, z, dir) {
+  let p = pool.free.pop();
+  if (!p) {
+    if (pool.active.length >= pool.max) return null;
+    p = { mesh: createPilotVisual(pool.scene), x: 0, y: 0, z: 0, dir: 0 };
+  }
+  p.x = x; p.y = y; p.z = z; p.dir = dir;
+  p.mesh.position.set(x, y, z);
+  p.mesh.visible = true;
+  pool.active.push(p);
+  return p;
+}
+
+/** Desce/deriva os paraquedas ativos; recolhe ao tocar o terreno. */
+export function updatePoolParachutes(pool, dt, heightAt, sink = 9, drift = 5) {
+  for (let i = pool.active.length - 1; i >= 0; i--) {
+    const p = pool.active[i];
+    p.y -= sink * dt;
+    p.x += Math.cos(p.dir) * drift * dt;
+    p.z += Math.sin(p.dir) * drift * dt;
+    if (p.y <= heightAt(p.x, p.z) + 0.5) {
+      p.mesh.visible = false;
+      pool.active.splice(i, 1);
+      pool.free.push(p);
+      continue;
+    }
+    p.mesh.position.set(p.x, p.y, p.z);
+  }
+}
+
+/** Remove os meshes do pool da cena (dispose do modo). */
+export function clearParachutePool(pool) {
+  for (const p of pool.active) pool.scene.remove(p.mesh);
+  for (const p of pool.free) pool.scene.remove(p.mesh);
+  pool.active.length = 0;
+  pool.free.length = 0;
+}

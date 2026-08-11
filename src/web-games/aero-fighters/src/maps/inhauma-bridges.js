@@ -1,5 +1,5 @@
 // maps/inhauma-bridges.js — Pontes de Inhaúma nos cruzamentos estrada×rio
-// (aero-fighters-inhauma-serra-v1, T-06).
+// (v0.2.11, T-06).
 //
 // Cruzamentos são DETECTADOS PROGRAMATICAMENTE a partir da geometria viva de estrada
 // (inhauma-road-defs.js, T-04) e rio (inhauma-river.js, T-05) — nenhuma coordenada de

@@ -135,7 +135,7 @@ test('sampleDemHeight extends relief procedurally beyond the DEM edge (T-V-10)',
   const b = demBounds();
   assert.ok(b.maxX > b.minX && b.maxZ > b.minZ);
 
-  // T-V-10 (aero-fighters-inhauma-visual-uplift-v1): o fallback plano de 6 m foi
+  // T-V-10 (v0.3.6): o fallback plano de 6 m foi
   // substituído por continuação procedural (ridged+fbm ancorada na cota da borda) —
   // fim da "panqueca" na borda do mundo (audit shot 15). Novo contrato:
   // finito e plausível em qualquer distância, sem cliff na borda, NÃO-plano além
