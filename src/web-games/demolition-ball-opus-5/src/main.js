@@ -5,6 +5,7 @@ import { buildCity, StructureIndex, CITY_HALF } from './city.js';
 import { DebrisField } from './debris.js';
 import { Rig, safeBallPos } from './rig.js';
 import { Traffic } from './traffic.js';
+import { Pedestrians } from './pedestrians.js';
 import { MissionSystem } from './missions.js';
 import { MODES, DEFAULT_MODE } from './modes.js';
 import { Minimap } from './minimap.js';
@@ -53,6 +54,7 @@ const audio = new Audio();
 // Spawn the rig on a road near the middle of town.
 const rig = new Rig(-CITY_HALF + 8, -CITY_HALF + 40, 0);
 const traffic = new Traffic(34, 77, city.river);
+const pedestrians = new Pedestrians(city);
 
 let collapseEvents = [];
 const world = {
@@ -394,6 +396,7 @@ function frame(nowMs) {
   for (let i = 0; i < steps; i++) rig.update(sub, input, world);
 
   traffic.update(dt, rig, debris);
+  pedestrians.update(dt, rig, world);
   debris.update(dt);
 
   for (const ev of rig.drainImpacts()) {
@@ -422,6 +425,7 @@ function frame(nowMs) {
   renderStructures();
   renderProps();
   traffic.render(renderer);
+  pedestrians.render(renderer, camera.target, DRAW_DETAIL);
   rig.render(renderer, city.palette);
   debris.render(renderer);
   renderBeacon(dt);
@@ -442,7 +446,7 @@ window.__demolition = {
   get simTime() { return simTime; },
   get mode() { return mode; },
   get missions() { return missions; },
-  rig, world, city, debris, traffic, renderer, camera, minimap,
+  rig, world, city, debris, traffic, pedestrians, renderer, camera, minimap,
   press: (code) => keys.add(code),
   release: (code) => keys.delete(code),
   begin,

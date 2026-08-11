@@ -48,7 +48,7 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
   - **Acceptance:** leito sem estruturas (unit); ≥2 pontes atravessáveis; tráfego e
     pedestres usam as pontes; unit de fluxo sem deadlock; screenshot anotado.
 
-- [ ] T6 - Pedestres nas calçadas (R-09, WS-5)
+- [x] T6 - Pedestres nas calçadas (R-09, WS-5)
   - **Owner:** software-engineer
   - **Acceptance:** walkers com pernas alternadas em rotas de calçada/praça/ponte;
     fogem de impactos próximos; bola nunca os fere (unit); visíveis em screenshot.

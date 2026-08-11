@@ -8,6 +8,7 @@ import { DebrisField } from '../../demolition-ball-opus-5/src/debris.js';
 import { MissionSystem, CONTRACTS } from '../../demolition-ball-opus-5/src/missions.js';
 import { Rig, safeBallPos } from '../../demolition-ball-opus-5/src/rig.js';
 import { Traffic } from '../../demolition-ball-opus-5/src/traffic.js';
+import { Pedestrians } from '../../demolition-ball-opus-5/src/pedestrians.js';
 import { MODES } from '../../demolition-ball-opus-5/src/modes.js';
 import { v3, sphereVsBox, qIntegrate, mulberry32, vlen } from '../../demolition-ball-opus-5/src/math.js';
 
@@ -355,6 +356,48 @@ test('rio: tráfego só cruza a água nas pontes e nunca trava (R-07)', () => {
   }
   // 34 cars over 60 s must actually go places — a gridlocked graph stays near 0.
   assert.ok(travelled > 5000, `fleet only travelled ${travelled.toFixed(0)} m in 60 s`);
+});
+
+// ---------------------------------------------------------- v0.9.0 (R-09)
+
+test('pedestres: a bola nunca os fere — eles fogem e todos sobrevivem (R-09)', () => {
+  const city = buildCity();
+  const peds = new Pedestrians(city, 40, 99);
+  const before = peds.walkers.length;
+  const victim = peds.walkers.find((w) => !w.bridge);
+  // Park a "ball" right on top of a walker at demolition speed.
+  const rig = {
+    pos: v3(victim.pos.x + 3, 0, victim.pos.z + 3),
+    ball: { pos: v3(victim.pos.x, 1.5, victim.pos.z), vel: v3(9, 0, 0), radius: 2.6 },
+  };
+  const world = { index: new StructureIndex(city.structures), river: city.river };
+  const d0 = 0;
+  for (let t = 0; t < 4; t += 0.05) peds.update(0.05, rig, world);
+  assert.equal(peds.walkers.length, before, 'no walker may ever be removed');
+  const dAfter = Math.hypot(victim.pos.x - rig.ball.pos.x, victim.pos.z - rig.ball.pos.z);
+  assert.ok(dAfter > 6, `walker must flee the ball (got ${dAfter.toFixed(1)} m away)`);
+  void d0;
+});
+
+test('pedestres: ninguém anda na água — pontes são o único cruzamento (R-07/R-09)', () => {
+  const city = buildCity();
+  const peds = new Pedestrians(city, 48, 5);
+  const rig = { pos: v3(4000, 0, 4000), ball: { pos: v3(4000, 1, 4000), vel: v3(), radius: 2.6 } };
+  const world = { index: new StructureIndex(city.structures), river: city.river };
+  const rv = city.river;
+  for (let t = 0; t < 30; t += 0.05) {
+    peds.update(0.05, rig, world);
+    for (const w of peds.walkers) {
+      const overWater = Math.abs(w.pos.x - rv.x) < rv.half;
+      if (overWater) {
+        assert.ok(w.bridge || rv.onBridge(w.pos.z),
+          `walker swims at x=${w.pos.x.toFixed(1)} z=${w.pos.z.toFixed(1)}`);
+      }
+    }
+  }
+  // Bridge pacers actually pace the whole span.
+  const pacer = peds.walkers.find((w) => w.bridge);
+  assert.ok(pacer, 'bridges must have dedicated walkers');
 });
 
 console.log(`\n${passed} testes ok${process.exitCode ? ' — COM FALHAS' : ''}`);
