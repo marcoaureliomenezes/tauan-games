@@ -16,7 +16,7 @@ module.exports = defineConfig({
   outputDir: './screenshots',
   timeout: 30000,
   retries: 1,
-  workers: 1,
+  workers: 2,
   globalSetup: './globalSetup.js',
   globalTeardown: './globalTeardown.js',
   use: {
