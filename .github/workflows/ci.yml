@@ -5,6 +5,18 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # v0.10.0 T-01: experimento A/B GL/ANGLE — dispara 2 runs na mesma sha,
+  # um com gl_args=true e outro false, mesmo test_cmd (subconjunto).
+  workflow_dispatch:
+    inputs:
+      gl_args:
+        description: 'Ativa as 5 flags GL/ANGLE (PW_GL_ARGS=1)'
+        type: boolean
+        default: false
+      test_cmd:
+        description: 'Comando de teste do step Run tests'
+        type: string
+        default: 'npm test'
 
 permissions:
   contents: read
@@ -50,7 +62,9 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Run tests
-        run: npm test
+        run: ${{ github.event.inputs.test_cmd || 'npm test' }}
+        env:
+          PW_GL_ARGS: ${{ github.event.inputs.gl_args == 'true' && '1' || '0' }}
 
       - name: Upload test results on failure
         if: failure()
