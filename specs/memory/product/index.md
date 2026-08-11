@@ -20,7 +20,6 @@
 
 | slug | title | tldr |
 |------|-------|------|
-| `aero-fighters-v2-jogo` | Aero Fighters v2 — o jogo | Combate aéreo cel-shaded sobre Inhaúma-MG em Godot 4 — OSM + SRTM, roda em Iris Xe. |
 
 ### demolition-ball
 
@@ -31,30 +30,18 @@
 | `demolition-ball-jogo` | Demolition Ball — o jogo | Trator-guindaste com bola de demolição de 4,2 t numa cidade procedural viva; contratos de destruição; WebGL2 100% próprio (zero libs, só snoise MIT). |
 | `demolition-ball-modos` | Demolition Ball — modos de jogo | Modo Tauan (sem prazo/multa, 1 alvo, threshold 0.5, dano x2.5, homing forte) vs Modo Contratos (jogo original); seleção no overlay, trava ao começar. |
 
-### far-west
-
-| slug | title | tldr |
-|------|-------|------|
-| `far-west-jogo` | Far West — o jogo | Faroeste open-world no browser — cowboy a cavalo num mundo procedural de 2048×2048 m com rios, florestas, caça e bandidos. |
 
 ### james-bond
 
 | slug | title | tldr |
 |------|-------|------|
-| `james-bond-godot-jogo` | James Bond (Godot) — o jogo | Port falho do FPS web — código perdido (nunca commitado); rebuild do zero pelo contrato web. |
 | `james-bond-jogo` | James Bond Operações — o jogo | FPS de espionagem no browser com 6 operações, IA de guardas com A*, tudo procedural — nenhum asset do GoldenEye. |
 
-### memoria-bichos
-
-| slug | title | tldr |
-|------|-------|------|
-| `memoria-bichos-jogo` | Memória dos Bichos — o jogo | Jogo da memória infantil em HTML/CSS/JS puro — pares de animais, por clique ou toque. |
 
 ### product
 
 | slug | title | tldr |
 |------|-------|------|
-| `games-catalog` | Catálogo de jogos | Todos os jogos do tauan-games por grupo de tecnologia (src/web-games e src/godot) com status. |
 | `overview` | Identidade do produto | Repositório de jogos web pessoais para o Tauan — imediatamente jogáveis, sem loading, sem erros. |
 | `quality-bar` | Barra de qualidade | Objetivos de produto e critérios de qualidade não-negociáveis dos jogos. |
 
@@ -68,12 +55,5 @@
 
 | slug | title | tldr |
 |------|-------|------|
-| `speed-run-godot-jogo` | Speed Run (Godot) — o jogo | Corrida desktop Godot 4 com VehicleBody3D real — circuito com aterro, guard-rails e 3 IA. |
 | `speed-run-web-jogo` | Speed Run (web) — o jogo | Corrida arcade estilo Cruis'n World no browser — 3 circuitos + pista sprint A→B com modo Fuga, réplica do Idea Adventure 2013, nitro, música Top Gear, fixed timestep. |
-
-### tauan-trex
-
-| slug | title | tldr |
-|------|-------|------|
-| `tauan-trex-jogo` | Tauan T-Rex — o jogo | Clone aprimorado do Chrome Dino em Phaser — pular cactos, abaixar sob pterodátilos, dificuldade progressiva. |
 
