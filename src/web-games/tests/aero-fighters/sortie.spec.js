@@ -10,7 +10,7 @@ const AIRPORT_ELEVATION = 0; // desertAirport.elevation
 
 async function openAero(page) {
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-sortie');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
 }
 
 test('MR sortie debug contract starts at Tauan desert airport', async ({ page }) => {
@@ -37,7 +37,7 @@ test('MR start enters taxi sortie state', async ({ page }) => {
 // Invariant B: no single-frame Δy > 1 m during LIFTOFF transition.
 test('E2E takeoff: y stays above airport elevation and liftoff delta <= 1m', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-takeoff');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
 
   // Start the sortie
   await page.keyboard.press('Space');
@@ -117,7 +117,7 @@ test('E2E takeoff: y stays above airport elevation and liftoff delta <= 1m', asy
 //   ServiceZone: center (-160, 350), length  86, width 70   → x ∈ [-195,−125], z ∈ [ 307, 393]
 test('Visual smoke: desert runway terrain height is 0 everywhere in airport footprint', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?map=desert&testMode=1');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
 
   // Sample the combined footprint at 10 m resolution.
   // Returns an array of { x, z, height } for any sample where height > 0.

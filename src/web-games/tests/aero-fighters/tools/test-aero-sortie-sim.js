@@ -70,7 +70,10 @@ test('service refills full current armament only at completion', () => {
   updateService(service, 2, player);
   assert.deepEqual(player, { missiles: 0, heavyMissiles: 0, nuclearMissiles: 0 });
   updateService(service, 3, player);
-  assert.equal(player.missiles, MISSILES_LIGHT.MAX);
+  // T-C-08 (v0.3.4): míssil leve é INFINITO — o serviço
+  // NÃO recarrega mais 'missiles' (a linha do light saiu de service-scene.js);
+  // heavy/nuke seguem recarregando normalmente.
+  assert.equal(player.missiles, 0);
   assert.equal(player.heavyMissiles, MISSILES_HEAVY.MAX);
   assert.equal(player.nuclearMissiles, MISSILES_NUCLEAR.MAX);
 });

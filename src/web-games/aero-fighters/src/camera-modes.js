@@ -2,6 +2,12 @@ import * as THREE from '../../vendor/three.module.min.js';
 
 export const CameraModes = Object.freeze(['Chase', 'Wide Chase', 'Cockpit/Nose', 'Flyby/Cinematic', 'Orbit/Inspection']);
 
+// T-D-03 (inhauma-defense-v1): chave do modo defesa — o switch de câmera em
+// main.js é dirigido por game.activeMap: os modos de voo seguem no rig abaixo;
+// 'inhauma-defense' delega para defense/turret-camera.js via defense-mode.
+export const DEFENSE_MAP_KEY = 'inhauma-defense';
+export function isDefenseMapKey(mapKey) { return mapKey === DEFENSE_MAP_KEY; }
+
 export function createCameraRig() {
   return { modeIndex: 0, mode: CameraModes[0], cinematic: null };
 }

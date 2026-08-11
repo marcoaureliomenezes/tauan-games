@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tools/extract-osm-roads.sh — Extração OFFLINE dos corredores OSM maiores (T-V-16,
-# aero-fighters-inhauma-visual-uplift-v1). Roda UMA vez (ou quando o PBF mudar) e
+# v0.3.6). Roda UMA vez (ou quando o PBF mudar) e
 # regenera src/maps/inhauma-osm-roads.js vendorizado — o jogo em runtime é offline.
 #
 # Uso (a partir de repos/tauan-games):
@@ -14,7 +14,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../../.." && pwd)"           # repos/tauan-games
-PBF="$REPO_ROOT/src/godot/aero-fighters-v2/Content/World/inhauma-osm.pbf"
+PBF="$REPO_ROOT/src/web-games/aero-fighters/assets/geo/inhauma-osm.pbf"
 TMP="$REPO_ROOT/../../.dadaia/tmp/osm-roads"           # workspace .dadaia/tmp (fora do repo)
 mkdir -p "$TMP"
 

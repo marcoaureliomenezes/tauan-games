@@ -1,5 +1,5 @@
 // test-aero-formations.mjs — Validador Node das formações da campanha Inhaúma
-// (T-C-03, release aero-fighters-inhauma-campaign-v1 — ver SPEC.md §A e §F).
+// (T-C-03, release v0.3.4 — ver SPEC.md §A e §F).
 //
 // Prova, com dados REAIS do mapa (polilinha MG-060 de inhauma-roads.js, altura de
 // inhaumaVisualSurfaceHeight, TOWN_SHELF + airportExclusionZones, polilinha do rio):
@@ -25,6 +25,7 @@ import { inhaumaVisualSurfaceHeight } from '../../../aero-fighters/src/maps/inha
 import { getInhaumaRoads } from '../../../aero-fighters/src/maps/inhauma-roads.js';
 import { getInhaumaRiverPolyline, distanceToRiver, RIVER_HALF_WIDTH_M } from '../../../aero-fighters/src/maps/inhauma-river.js';
 import { INHAUMA_AIRPORT_EXCLUSION_ZONES } from '../../../aero-fighters/src/maps/inhauma-road-airport.js';
+import { computeInhaumaBridgeCrossings } from '../../../aero-fighters/src/maps/inhauma-bridges.js';
 import { createRng } from '../../../aero-fighters/src/rng.js';
 import { TARGET_STATS } from '../../../aero-fighters/src/config.js';
 import { UNIT_TYPES, makeUnit, makeUnitInstanced, unitStats, unitTargetType } from '../../../aero-fighters/src/formations/units.js';
@@ -40,12 +41,15 @@ const RIVER = getInhaumaRiverPolyline();
 const RIVER_BAND = RIVER_HALF_WIDTH_M + 10;
 
 const MG060 = getInhaumaRoads().find((r) => r.id === 'mg-060').points;
-// Rota de terreno: vale de Cachoeira da Prata (cx≈-940, cz≈520) → Inhaúma, contornando
-// a north-approach do aeroporto pelo sul e a TOWN_SHELF pelo norte (validada offline).
-const TERRAIN_ROUTE = [[-940, 520], [-800, 220], [-760, -80], [-740, -480], [-300, -520], [-40, -200]];
-const STATIC_ANCHOR = { mg060: [-810, -300], terrain: [-940, 520] };
+// Rota de terreno: NOVO vale de Cachoeira da Prata (cx≈-950, cz≈2050, T-D-04) →
+// Inhaúma, contornando a south-approach do aeroporto pelo leste e a TOWN_SHELF
+// pela borda leste (mesma rota 'north' de CAMPAIGN.columnRoutes, validada offline).
+const TERRAIN_ROUTE = [[-950, 1890], [-800, 1600], [-350, 1150], [-150, 650], [150, 600], [290, 420], [290, 300]];
+const STATIC_ANCHOR = { mg060: [-810, -300], terrain: [-950, 1890] };
 
 // Grade bilinear pré-amostrada da altura REAL — acelerador do deps (ver header).
+// T-D-01: passo 4→2 m — a encosta do morro 2.5× + o leito da MG-060 cravam
+// curvatura local que estourava a tolerância de 0,5 m numa grade de 4 m.
 function buildGridHeightAt(minX, maxX, minZ, maxZ, step) {
   const nx = Math.floor((maxX - minX) / step) + 1;
   const nz = Math.floor((maxZ - minZ) / step) + 1;
@@ -63,7 +67,7 @@ function buildGridHeightAt(minX, maxX, minZ, maxZ, step) {
     return (h00 + (h10 - h00) * tx) * (1 - tz) + (h01 + (h11 - h01) * tx) * tz;
   };
 }
-const gridHeightAt = buildGridHeightAt(-1080, 20, -620, 640, 4);
+const gridHeightAt = buildGridHeightAt(-1100, 500, -700, 2100, 2);
 
 const makeDeps = (seed) => ({
   rng: createRng(seed),
@@ -71,6 +75,8 @@ const makeDeps = (seed) => ({
   exclusions: EXCLUSIONS,
   riverPolyline: RIVER,
   riverHalfWidth: RIVER_HALF_WIDTH_M,
+  // Pontes reais (estrada×rio) — o cruzamento sobre o deck é legítimo (T-C-02).
+  riverCrossings: computeInhaumaBridgeCrossings().map((c) => ({ x: c.midX, z: c.midZ, r: c.halfLength + 10 })),
 });
 
 const inExclusion = (x, z) => RECTS.some((r) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ);
@@ -88,7 +94,9 @@ function assertFrame(f, label) {
   for (let i = 1; i < alive.length; i++) {
     const a = alive[i - 1].pos, b = alive[i].pos;
     const gap = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
-    assert.ok(gap < 3 * f.def.spacing, `${label}: gap ${gap.toFixed(1)} m >= 3×spacing entre membros ${i - 1}/${i}`);
+    // Coesão só se aplica a formações MÓVEIS (coluna em marcha). Clusters estáticos
+    // (encampment/samSite/aaNest) nascem espalhados no anel de ângulo áureo por design.
+    if (f.def.moving) assert.ok(gap < 3 * f.def.spacing, `${label}: gap ${gap.toFixed(1)} m >= 3×spacing entre membros ${i - 1}/${i}`);
   }
 }
 
@@ -143,7 +151,9 @@ const synthDeps = (seed) => ({
 test('T-C-02: path que raspa a faixa do rio é CLAMPADO (não rejeitado) e membros ficam fora da banda', () => {
   const f = createFormation({ type: 'supplyConvoy', size: 5, path: [[-24, -100], [-24, 100]], deps: synthDeps('clamp') });
   assert.ok(f, 'path paralelo a 24 m do rio deveria ser clampado, não rejeitado');
-  simSeconds(f, 5, 'clamp');
+  // Avança 5 s SEM o assertFrame (ele valida contra o mapa REAL — os deps sintéticos
+  // deste teste vivem noutro espaço de coordenadas; aqui interessa só o movimento).
+  for (let i = 0; i < 150; i++) updateFormations(1 / 30, [f], f.deps);
   for (const m of f.members) assert.ok(Math.abs(m.pos.x) >= 20, `membro dentro da banda do rio (x=${m.pos.x.toFixed(1)})`);
 });
 

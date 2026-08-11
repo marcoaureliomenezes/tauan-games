@@ -116,7 +116,7 @@ function bilinearClamped(state, fx, fy) {
   return bilinearInside(state, cx, cy);
 }
 
-// T-V-10 (aero-fighters-inhauma-visual-uplift-v1): a versão anterior degradava o
+// T-V-10 (v0.3.6): a versão anterior degradava o
 // relevo fora do asset para um plano PLANO de 6 m ao longo de EDGE_BLEND_M — a
 // "panqueca flutuante" na borda do mundo (shot 15 da auditoria). Agora o fallback é
 // uma continuação ridged-FBM ancorada na cota da borda: serras/colinas procedurais

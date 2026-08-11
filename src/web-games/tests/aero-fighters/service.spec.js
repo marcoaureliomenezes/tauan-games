@@ -1,8 +1,15 @@
 const { test, expect } = require('@playwright/test');
 
-test('MR service scene debug path refills armament after test duration', async ({ page }) => {
+test.setTimeout(120000); // teto de wall clock p/ game time lento sob load alto (2026-07-21)
+
+// T-C-14 (release v0.3.4 — SPEC §C): o serviço recarrega
+// SÓ heavy/nuke/rod — o míssil leve é infinito (T-C-08): não é consumido nem
+// reposto (service-scene.js#updateService). player.missiles fica no valor fixo de
+// exibição que tinha (o ∞ é do HUD).
+
+test('MR service scene debug path refills heavy/nuke/rod — NOT light (infinite)', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-service');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
   await page.evaluate(() => {
     window.game.player.missiles = 0;
     window.game.player.heavyMissiles = 0;
@@ -15,14 +22,18 @@ test('MR service scene debug path refills armament after test duration', async (
   // mais tempo de parede — flakava sem bug (2026-07-02). Asserções inalteradas.
   await page.waitForFunction(() => window.__aeroDebug.getSnapshot().serviceState === 'complete', { timeout: 20000 });
   const inv = await page.evaluate(() => window.__aeroDebug.getSnapshot().weaponInventory);
-  expect(inv.missiles).toBe(100);
   expect(inv.heavyMissiles).toBe(10);
   expect(inv.nuclearMissiles).toBe(3);
+  expect(inv.missiles).toBe(0); // T-C-08: leve infinito — o serviço NÃO o recarrega
 });
 
 test('MR service complete keeps aircraft grounded and tells player how to restart', async ({ page }) => {
+  // T-C-14 (campaign-v1 — SPEC §F): em Inhaúma o "completed-gate" da surtida
+  // seguinte passa pela CAMPANHA — spawnMission é no-op (missions.js), a surtida
+  // reinicia sem wave nova e o mundo segue vivo (campaign.js). A UX de solo
+  // (NEXT_SORTIE_READY + instruções) é inalterada.
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=mr-service-next');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
   await page.evaluate(() => {
     window.game.missionRealism.sortie.state = 'SERVICE_SCENE';
     window.game.running = true;

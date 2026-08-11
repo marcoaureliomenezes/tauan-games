@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 
 test('MR landing diagnostics expose envelope and surface classification', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-landing');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
   await page.keyboard.press('Space');
   await page.keyboard.down('KeyW');
   await page.waitForTimeout(1200);
@@ -31,7 +31,7 @@ test('MR landing diagnostics expose envelope and surface classification', async 
 test('E2E landing contract: debug fields present + takeoff reaches AIRBORNE', async ({ page }) => {
   test.setTimeout(45000);
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-landing');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
 
   // Contract assertion: snapshot exposes the new landing fields (Step 3 + Hotfix).
   const initialSnap = await page.evaluate(() => window.__aeroDebug.getSnapshot());

@@ -1,5 +1,5 @@
 // maps/inhauma-river.js — Rio de Inhaúma derivado da DRENAGEM do DEM real
-// (aero-fighters-inhauma-serra-v1, T-05). Substitui o polyline autoral RIVER da era
+// (v0.2.11, T-05). Substitui o polyline autoral RIVER da era
 // FBM (v0.2.0) por um traçado calculado a partir do heightmap-sampler (T-01/T-02):
 // nenhuma coordenada de rio é digitada à mão — tudo deriva do `sampleDemHeight`.
 //

@@ -45,22 +45,32 @@ test('T-09/AC-06/D-9: firing a real nuke runs the flash->fireball->mushroom stag
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game && window.game.running === true, { timeout: 3000 });
+  // Amostragem por requestAnimationFrame (1 amostra/frame), armada ANTES do
+  // disparo: em headless o event loop fica faminto (frames >200 ms em software
+  // GL), e um poll por setTimeout(100) perdia o estágio 'flash' (0,3 s de game
+  // time) entre amostras — flake determinístico, não regressão da timeline.
+  await page.evaluate(async () => {
+    const m = await import('/src/web-games/aero-fighters/src/nuclear-fx.js');
+    window.__nukeSeen = [];
+    window.__nukeSamples = [];
+    const t0 = performance.now();
+    const tick = () => {
+      const st = m.nuclearFxState.stage;
+      const seen = window.__nukeSeen;
+      if (seen[seen.length - 1] !== st) seen.push(st);
+      window.__nukeSamples.push({ plumeH: m.nuclearFxState.plumeHeight, fireR: m.nuclearFxState.fireballRadius });
+      if (performance.now() - t0 < 45000) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
   // Same launch path as uplift.spec.js#U-AC-5 ("nuke sem lock — atinge o solo à frente").
   await page.keyboard.press('KeyT');
+  // Janela larga: em headless faminto o game time anda 2-4x mais lento que o
+  // wall clock — 'mushroom' (2,5 s de game time) pode levar >14 s de parede.
+  test.setTimeout(60000);
+  await page.waitForFunction(() => window.__nukeSeen && window.__nukeSeen.includes('mushroom'), { timeout: 45000 });
 
-  const result = await page.evaluate(async () => {
-    const m = await import('/src/web-games/aero-fighters/src/nuclear-fx.js');
-    const seen = new Set();
-    const samples = [];
-    const t0 = performance.now();
-    while (performance.now() - t0 < 12000) {
-      seen.add(m.nuclearFxState.stage);
-      samples.push({ plumeH: m.nuclearFxState.plumeHeight, fireR: m.nuclearFxState.fireballRadius });
-      if (seen.has('mushroom')) break;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    return { stages: [...seen], samples };
-  });
+  const result = await page.evaluate(() => ({ stages: window.__nukeSeen, samples: window.__nukeSamples }));
 
   expect(result.stages).toContain('flash');
   expect(result.stages).toContain('fireball');

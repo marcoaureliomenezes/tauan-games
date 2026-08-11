@@ -1,4 +1,4 @@
-// uplift.spec.js — ACs da release aero-fighters-uplift-v1 (WS-1..WS-6).
+// uplift.spec.js — ACs da release v0.1.0 (WS-1..WS-6).
 // Cobre: liftoff nos 4 mapas VIA BOTÃO (CRIT-1/CRIT-2b), fim do floor-glue (CRIT-2),
 // verdade de superfície terra/água (HIGH-3), afundamento na água (WS-5),
 // nuke stages + cinematic (WS-6) e altímetro honesto (WS-3).
@@ -14,7 +14,7 @@ const MAP_BUTTONS = {
 
 async function bootViaButton(page, mapKey) {
   await page.goto('/src/web-games/aero-fighters/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
   await page.waitForTimeout(600);
   await page.click(`text=${MAP_BUTTONS[mapKey]}`);
   await page.waitForTimeout(500);
@@ -54,7 +54,7 @@ test.describe('Uplift — decolagem nos 4 mapas via botão (ADR-U2, CRIT-1/2b)',
 
 test('U-AC-2: verdade de superfície — terra no desert, água no mar aberto (HIGH-3)', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
   await page.waitForTimeout(600);
   const kinds = await page.evaluate(async () => {
     const w = await import('/src/web-games/aero-fighters/src/world.js');
@@ -116,7 +116,7 @@ test('U-AC-4: impacto na água afunda e reporta AFUNDOU NO MAR (WS-5)', async ({
 
 test('U-AC-5: nuke percorre stages e a câmera permanece NORMAL (sem cinematic — operador 2026-07-01)', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?map=desert&testMode=1');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
   await page.waitForTimeout(600);
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game && window.game.running === true, { timeout: 3000 });
@@ -157,8 +157,8 @@ test('U-AC-6: altímetro honesto — HUD ALT = metros reais (WS-3)', async ({ pa
 
 test('U-AC-7: Inhauma tem chão amplo e estruturas sólidas', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=solid-inhauma');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
 
@@ -188,58 +188,67 @@ test('U-AC-7: Inhauma tem chão amplo e estruturas sólidas', async ({ page }) =
   expect(checks.mountainCrash).toBe('MOUNTAIN');
 });
 
-test('U-AC-8: Inhauma tem helicópteros, comboio armado e aliados com guerra própria', async ({ page }) => {
-  test.setTimeout(45000);
-  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=slow-action');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+// U-AC-8 (T-C-14, release v0.3.4 — SPEC §E): a Onda 5
+// (T-C-13) MUDOU DELIBERADAMENTE o contrato dos aliados. Antes: os wingmen só
+// combatiam os caças da ally-war (frente própria, separada do jogador). Agora:
+// engajamento GENÉRICO por proximidade do PLAYER (wingmen.js header) — qualquer
+// hostil AÉREO de game.targets (helicópteros/zepelins da guarnição de Cachoeira,
+// airborneAltitude > 0) a menos de WINGMEN.ENGAGE_RADIUS (420 m) do jogador vira
+// alvo; morto ou além de RETURN_RADIUS (560 m — histerese), o wingman volta à
+// formação. Mísseis aliados (flags.supportMissilesFired via ally-war.js#spawnAllyMissile)
+// continuam contando os disparos.
+test('U-AC-8: wingmen engajam hostis aéreos da campanha próximos do player (420 m; histerese 560 m)', async ({ page }) => {
+  test.setTimeout(60000);
+  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=wingmen-campaign');
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game.running === true && window.game.targets.length > 0, { timeout: 5000 });
 
-  const initial = await page.evaluate(() => {
-    const types = window.game.targets.map((t) => t.type);
-    const heli = window.game.targets.find((t) => t.type === 'helicopter');
-    const armed = window.game.targets.find((t) => t.type === 'armedConvoy');
-    return {
-      types,
-      heliAltitude: heli ? heli.mesh.position.y - (heli.spawnY || 0) : 0,
-      armedY: armed?.mesh.position.y ?? null,
-      armedSpawnY: armed?.spawnY ?? null,
-      supportMissiles: window.game.flags.supportMissilesFired || 0,
-      wingmen: window.game.wingmen.length,
-      allyEnemies: window.game.allyEnemies.length,
-      targetsTotal: window.game.targets.length,
-    };
-  });
-  expect(initial.types.filter((t) => t === 'helicopter').length).toBeGreaterThanOrEqual(2);
-  expect(initial.types).toContain('armedConvoy');
-  expect(initial.heliAltitude).toBeGreaterThan(30);
-  expect(Math.abs(initial.armedY - initial.armedSpawnY)).toBeLessThan(2);
-  expect(initial.wingmen).toBeGreaterThanOrEqual(2);
-  // Os amigos têm os PRÓPRIOS inimigos (frente de batalha separada da do player).
-  expect(initial.allyEnemies).toBeGreaterThanOrEqual(1);
-
-  // Os amigos só engajam em voo (decolam quando decolamos): faz a decolagem.
-  await page.keyboard.down('KeyW');
-  await page.waitForTimeout(3500);
-  await page.keyboard.down('ArrowDown');
-  await page.waitForTimeout(2500);
-  await page.keyboard.up('ArrowDown');
-  await page.keyboard.up('KeyW');
-
-  // Em voo, os amigos atacam OS INIMIGOS DELES com mísseis dedicados.
-  await page.waitForFunction(() => (window.game.flags.supportMissilesFired || 0) > 0, { timeout: 12000 });
-  const after = await page.evaluate(() => ({
+  const initial = await page.evaluate(() => ({
+    wingmen: window.game.wingmen.length,
     supportMissiles: window.game.flags.supportMissilesFired || 0,
-    wingmenAlive: window.game.wingmen.length,
-    airborne: window.game.missionRealism.sortie.state === 'AIRBORNE',
-    // Os amigos NÃO destroem os alvos do player (cada lado tem seus inimigos).
-    targetsTotal: window.game.targets.length,
+    airborneHostiles: window.game.targets.filter((t) => !t.dead && (t.airborneAltitude || 0) > 0).length,
   }));
-  // Os aliados travam a própria guerra (mísseis dedicados) enquanto voamos, e a
-  // formação continua intacta. (A checagem antiga de posição relativa dependia da
-  // taxa de quadros — os aliados TRAILEM o líder por design — e era frágil.)
-  expect(after.supportMissiles).toBeGreaterThan(initial.supportMissiles);
-  expect(after.airborne).toBe(true);
-  expect(after.wingmenAlive).toBeGreaterThanOrEqual(2);
+  expect(initial.wingmen).toBeGreaterThanOrEqual(2);
+  // A guarnição de Cachoeira (T-C-05) mantém zepelim + helicópteros de patrulha —
+  // hostis aéreos no barramento game.targets (o contrato novo os torna engajáveis).
+  expect(initial.airborneHostiles).toBeGreaterThanOrEqual(1);
+
+  // Força voo (mesmo padrão de review-fixes T-FIX-05) e teletransporta o jato para
+  // perto de um hostil aéreo da guarnição — dentro do ENGAGE_RADIUS (420 m).
+  await page.evaluate(async () => {
+    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
+    const mr = window.game.missionRealism;
+    mr.sortie.state = 'AIRBORNE';
+    window.game.player.speed = 60;
+    window.game.player.throttle = 0.7;
+    window.game.player.stalled = false;
+    const foe = window.game.targets.find((t) => !t.dead && (t.airborneAltitude || 0) > 0);
+    const p = foe.mesh.position;
+    jet.position.set(p.x + 250, p.y + 30, p.z + 250); // ~355 m — dentro dos 420 m
+  });
+
+  // O wingman escolhe o hostil aéreo de game.targets (não um caça da ally-war)…
+  await page.waitForFunction(
+    () => window.game.wingmen.some((wm) => wm.attackTarget && window.game.targets.includes(wm.attackTarget)),
+    { timeout: 8000 },
+  );
+  // …e os mísseis de suporte aliado disparam contra ele (contrato SPEC §E).
+  await page.waitForFunction(
+    (before) => (window.game.flags.supportMissilesFired || 0) > before,
+    initial.supportMissiles,
+    { timeout: 12000 },
+  );
+
+  // Histerese: afastando o player além de RETURN_RADIUS (560 m) de TODO hostil
+  // aéreo, o wingman larga o alvo e volta à formação (attackTarget → null).
+  await page.evaluate(async () => {
+    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
+    jet.position.set(1500, 160, -400); // Sete Lagoas — >2 km da guarnição de Cachoeira
+  });
+  await page.waitForFunction(
+    () => window.game.wingmen.every((wm) => wm.dead || wm.attackTarget === null),
+    { timeout: 8000 },
+  );
 });

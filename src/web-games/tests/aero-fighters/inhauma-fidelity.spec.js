@@ -7,7 +7,7 @@ const { test, expect } = require('@playwright/test');
 // against the old dump. (The prior spec asserted >500 roads / >10000 nodes — it was
 // the false "confirmation" the operator distrusted; it is intentionally replaced.)
 
-test.setTimeout(60000);
+test.setTimeout(180000); // boot da cena Inhaúma passa de 60 s sob load alto (2026-07-21)
 
 async function openInhauma(page, seed = 'inhauma-fidelity') {
   const errors = [];
@@ -15,8 +15,12 @@ async function openInhauma(page, seed = 'inhauma-fidelity') {
   page.on('pageerror', (e) => errors.push(e.message));
 
   await page.goto(`/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=${seed}`);
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+  // Timeouts de CARGA (não são asserções de comportamento): em máquina
+  // compartilhada/carregada o boot da cena Inhaúma (DEM + cidade + estradas)
+  // passa de 15 s (observado >45 s com load ~20 em 8 cores, 2026-07-21) e o
+  // teste morria antes de qualquer assert.
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
+  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
   return errors;
@@ -115,7 +119,7 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     expect(sete.z).toBeLessThan(inhauma.z - 150);
   });
 
-  // T-10 (aero-fighters-inhauma-serra-v1), round 2: this test used to measure each
+  // T-10 (v0.2.11), round 2: this test used to measure each
   // landmark's distance against the INHAUMA_CITIES 'inhauma' diagnostic circle
   // (x:0, z:0, radius:260 in inhauma.js). That circle is hand-authored, diagnostics-only
   // metadata -- grepped for every consumer: it is exposed by debug.js and read only here
@@ -199,7 +203,7 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     }
   });
 
-  // T-10 (aero-fighters-inhauma-serra-v1): this test used to key its sample points off
+  // T-10 (v0.2.11): this test used to key its sample points off
   // diag.terrainRegions (serra-sete-lagoas / morros-oeste-inhauma / morro-norte-inhauma /
   // vale-cachoeira-prata), which are positions from the v0.2.0 FBM-era INHAUMA_FEATURES
   // list. T-03 replaced the FBM base with the real DEM and explicitly neutralized
@@ -245,7 +249,13 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     expect(samples.northChain).toBeGreaterThan(samples.city + 400);
   });
 
-  test('airport runway is flat and mission targets are grounded away from civil landmarks', async ({ page }) => {
+  // T-C-14 (release v0.3.4 — SPEC §F): "mission targets"
+  // em Inhaúma passaram a ser os alvos da CAMPANHA — unidades da guarnição de
+  // Cachoeira + formações do Ato 1 (tipos 'f*'), spawnadas por formation.js com
+  // exclusões duras (TOWN_SHELF/cidades/aeroporto/rio) e snap de altura sobre a
+  // superfície renderizada. As invariantes (grounded, longe dos marcos civis) valem
+  // igual para esse novo barramento.
+  test('airport runway is flat and campaign targets are grounded away from civil landmarks', async ({ page }) => {
     await openInhauma(page, 'inhauma-airport-targets');
     await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 5000 });
     const result = await page.evaluate(() => {
@@ -263,9 +273,13 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
       const onCivil = targets.filter((target) => landmarks.some((landmark) =>
         Math.hypot(target.x - landmark.x, target.z - landmark.z) < landmark.radius + 18,
       ));
+      // T-C-14: os proxies 'mg060-military' (T-C-11) seguem a DEM contínua da
+      // estrada (ver map.spec.js) — fora do check bilinear de grounded; os alvos
+      // da CAMPANHA (guarnição/formações) assentam na superfície renderizada.
+      const isMil = (target) => window.game.targets[target.id]?.formationId === 'mg060-military';
       return {
         flat: heights.every((h) => Math.abs(h - airport.elevation) < 0.001),
-        grounded: targets.filter((target) => !target.grounded),
+        grounded: targets.filter((target) => !isMil(target) && !target.grounded),
         onCivil,
         targetCount: targets.length,
       };
@@ -277,7 +291,7 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     expect(result.onCivil).toEqual([]);
   });
 
-  // AC-09 (aero-fighters-inhauma-serra-v1, T-10): the Tilezen/joerd (AWS Terrain Tiles)
+  // AC-09 (v0.2.11, T-10): the Tilezen/joerd (AWS Terrain Tiles)
   // attribution required by the DEM's attribution-only license must be visible in-game,
   // not just recorded in the vendored asset's JSON metadata. It is shown in the start
   // overlay (main.js#selectMap -> hud.js#showOverlay) BEFORE the player presses Space —
@@ -289,8 +303,8 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     page.on('pageerror', (e) => errors.push(e.message));
 
     await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=inhauma-attribution');
-    await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
-    await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
+    await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 }); // idem helper (load)
+    await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
 
     const overlay = page.locator('#overlay');
     await expect(overlay).toBeVisible();
@@ -358,37 +372,31 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     expect(Number.isFinite(stats.calls)).toBe(true);
     expect(Number.isFinite(stats.triangles)).toBe(true);
     expect(Number.isFinite(stats.averageFps)).toBe(true);
-    // T-10 (aero-fighters-inhauma-serra-v1) recalibration: this budget was set at 220
-    // calls / 200000 triangles against the OLD FBM-era map (~140 m peaks, 185 trees —
-    // see the T-08 handoff finding: pre-T-08 code was accidentally starving tree count
-    // with a stale height cutoff). The new DEM map legitimately renders more — T-06
-    // added 3 bridge InstancedMesh, T-08 restored the intended ~2000-tree density
-    // (still fully instanced, same draw-call cost per species) — and this is NOT an
-    // instancing regression (verified: buildForests still contributes exactly 7 draw
-    // calls regardless of instance count).
+    // T-10 (v0.2.11) recalibrated this budget to 300 calls
+    // against the PRE-CAMPAIGN map (measured range ~206-243; forest batching was
+    // verified to contribute exactly 7 calls regardless of instance count).
     //
-    // Measured 2026-07-15 (8 fresh headless runs, this commit): calls ranged 223-233;
-    // an earlier `npx playwright test` pass (with retries, same commit) additionally
-    // hit 234-240. Combined with the T-08 handoff's own bisection notes (baseline
-    // already ranged 206-217 at T-04, 210-228 at T-07, i.e. draw-call count is
-    // inherently noisy run-to-run even at a fixed commit/seed — texture/geometry upload
-    // ordering, not instance count), the realistic observed range across this release's
-    // commits is ~206-243. 300 keeps ~25% headroom above the highest observed value
-    // while still catching a real regression (e.g. losing InstancedMesh batching, which
-    // would jump calls into the thousands). A forthcoming T-07 visual-polish follow-up
-    // (biome color tuning + altitude-scaled ridged detail noise, same seg=54 grid, same
-    // instancing) is expected to leave this count materially unchanged, which is why the
-    // budget is calibrated with headroom rather than to the exact current count.
+    // T-C-14/T-C-15 (v0.3.4 — SPEC §Restrições):
+    // the campaign made this view legitimately heavier — the Cachoeira garrison
+    // (~44 units), Act-1 formations, MG-060 military trucks and the occupied-town
+    // geometry all sit in the boot frustum during the camera transition. The C5
+    // wave's per-member Group rendering measured ~900 calls here (and 644 in a
+    // realistic Act-1 battle view); T-C-15 routed formation rendering through
+    // per-type InstancedMesh batches (formation.js, >5 members — the
+    // inhauma-traffic pattern), which brought the same views down to ~408/368.
     //
-    // Triangles: measured 146276-147860 (stable/deterministic across runs, unlike
-    // calls — driven by tree instance count, not upload timing). T-V-01
-    // (aero-fighters-inhauma-visual-uplift-v1, operator decision 2026-07-18): the
-    // 200000 cap was the self-imposed ceiling the map audit identified as blocking
-    // visual upgrades (backdrop mountains, richer city geometry, finer terrain).
-    // Raised to 800000 — still far inside Iris Xe budget at 1080p — while remaining
-    // a real regression guard (e.g. an accidentally un-instanced building batch
-    // would blow past it).
-    expect(stats.calls).toBeLessThan(300);
+    // Measured 2026-07-19 post-fix (fresh headless runs, this view): 409 calls
+    // at the test's own 1 s sample point (385 at 2.5 s, 247 once the camera
+    // settles behind the jet — the 1 s sample is mid-transition with the whole
+    // map in frustum; draw-call count is inherently noisy run-to-run, see the
+    // T-08 handoff notes). 450 = the SPEC's own campaign ceiling (≤450 calls /
+    // ≤800k tris in a full battle) and still catches a real regression (losing
+    // the formation batching jumps this back into the ~900 range).
+    //
+    // Triangles: measured ~125k-158k post-campaign (stable/deterministic across
+    // runs, unlike calls — driven by tree instance count, not upload timing).
+    // The 800000 cap (T-V-01, operator decision 2026-07-18) is unchanged.
+    expect(stats.calls).toBeLessThan(450);
     expect(stats.triangles).toBeLessThan(800000);
     expect(buckets.size).toBeGreaterThan(12);
   });

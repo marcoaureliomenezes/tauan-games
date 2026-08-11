@@ -1,5 +1,5 @@
 // tools/extract-osm-roads.mjs — Conversor OFFLINE GeoJSON → corredores OSM vendorizados
-// (aero-fighters-inhauma-visual-uplift-v1, T-V-16; auditoria §2.6 + SPEC: reimport
+// (v0.3.6, T-V-16; auditoria §2.6 + SPEC: reimport
 // seletivo APROVADO pelo operador — "limpo, não a teia").
 //
 // Lê o GeoJSON major-exportado pelo osmium (ver extract-osm-roads.sh — só
@@ -263,8 +263,8 @@ async function main() {
   if (dropped.length) console.log(`descartados: ${dropped.join('; ')}`);
 
   const banner = `// maps/inhauma-osm-roads.js — VENDORIZADO, GERADO OFFLINE (T-V-16,
-// aero-fighters-inhauma-visual-uplift-v1) por tools/extract-osm-roads.mjs a partir de
-// src/godot/aero-fighters-v2/Content/World/inhauma-osm.pbf (sha256 ${INHAUMA_WEB_MAP_METADATA.inputSha256})
+// v0.3.6) por tools/extract-osm-roads.mjs a partir de
+// src/web-games/aero-fighters/assets/geo/inhauma-osm.pbf (sha256 ${INHAUMA_WEB_MAP_METADATA.inputSha256})
 // via osmium tags-filter highway=motorway,trunk,primary,secondary + osmium export.
 // NÃO EDITAR À MÃO — regerar com tools/extract-osm-roads.sh.
 // Reimport seletivo APROVADO pelo operador na SPEC da release (auditoria §2.6):

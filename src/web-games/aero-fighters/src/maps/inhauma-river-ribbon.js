@@ -1,5 +1,5 @@
 // maps/inhauma-river-ribbon.js — Render do rio de Inhaúma como RIBBON CONTÍNUO ÚNICO
-// (aero-fighters-inhauma-visual-uplift-v1, T-V-15; auditoria §2.5 — a "escada de fitas
+// (v0.3.6, T-V-15; auditoria §2.5 — a "escada de fitas
 // planas" de ~30 meshes separados virou 2 draw calls: 1 água + 1 margem).
 //
 // O TRAÇADO continua vindo de inhauma-river.js (drenagem do DEM, T-05) — este módulo
