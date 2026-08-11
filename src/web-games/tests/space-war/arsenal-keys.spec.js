@@ -7,12 +7,12 @@ const { test, expect } = require('@playwright/test');
 
 async function startAirborne(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
   await page.evaluate(() => window.__swDebug.goTo('terra', 4));   // no ar (landed=false)
   await page.waitForTimeout(200);
 }
@@ -20,13 +20,13 @@ async function startAirborne(page) {
 test.describe('Space War — Arsenal por TECLAS REAIS', () => {
 
   test('KeyG lança a traçadora e o POÇO de Higgs a ATRAI (bug do operador)', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(180000);
     await startAirborne(page);
     // traçadora por TECLA REAL
     await page.keyboard.press('KeyG');
     await page.waitForFunction(
       () => window.__spaceWar.projectiles.some((p) => p.isTracer),
-      undefined, { timeout: 5000 },
+      undefined, { timeout: 45000 },
     );
     // bomba de Higgs por TECLA REAL na mesma linha de tiro: o poço nasce e
     // deve ARRASTAR a traçadora (cap 600 u/s² — "projéteis atraídos pelos
@@ -57,12 +57,12 @@ test.describe('Space War — Arsenal por TECLAS REAIS', () => {
   });
 
   test('KeyH lança a bomba de Higgs e o POÇO gravitacional nasce', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(180000);
     await startAirborne(page);
     await page.keyboard.press('KeyH');
     await page.waitForFunction(
       () => window.__spaceWar.projectiles.some((p) => p.isHiggs),
-      undefined, { timeout: 5000 },
+      undefined, { timeout: 45000 },
     );
     // pulso ~8s após armar (~1.2s) — slow-mo do headless ≈ 3:1 de parede
     await page.waitForFunction(
@@ -74,13 +74,13 @@ test.describe('Space War — Arsenal por TECLAS REAIS', () => {
   });
 
   test('KeyF continua disparando a nuke (regressão)', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startAirborne(page);
     const before = await page.evaluate(() => window.__spaceWar.ship.nukes);
     await page.keyboard.press('KeyF');
     await page.waitForFunction(
       (n) => window.__spaceWar.ship.nukes === n - 1,
-      before, { timeout: 5000 },
+      before, { timeout: 45000 },
     );
     const proj = await page.evaluate(() => window.__spaceWar.projectiles.filter((p) => p.isNuke).length);
     expect(proj).toBeGreaterThanOrEqual(1);

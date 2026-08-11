@@ -15,12 +15,12 @@ const { test, expect } = require('@playwright/test');
 
 async function startFlight(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 
@@ -32,9 +32,9 @@ test.describe('Space War — O voo completo pelos 3 estados', () => {
     await startFlight(page);
 
     // ── 1. ORBIT (Terra): nasce acoplado; decolagem mantém o modo ──
-    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit' && window.__spaceWar.planetary?.key === 'earth', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit' && window.__spaceWar.planetary?.key === 'earth', { timeout: 45000 });
     await page.keyboard.down('KeyW');
-    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 20000 });
+    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 45000 });
     await page.keyboard.up('KeyW');
     // visão orbital: a Lua está DENTRO do mesmo sistema planetário
     await page.evaluate(() => window.__swDebug.goTo('lua', 3));
@@ -48,11 +48,11 @@ test.describe('Space War — O voo completo pelos 3 estados', () => {
 
     // ── 2. ORBIT→CRUISE: longe de qualquer sistema planetário ──
     await page.evaluate(() => window.__swDebug.goTo('mars', 30));
-    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 45000 });
 
     // ── 3. CRUISE→ORBIT com FREIO DE ACOPLAMENTO: chega a 2.000 u/s ──
     await page.evaluate(() => window.__swDebug.goTo('mars', 6));   // fora do sistema (R≈3.8k)
-    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 45000 });
     await page.evaluate(() => {
       const g = window.__spaceWar;
       const mars = g.bodies.find((b) => b.def.key === 'mars');
@@ -76,8 +76,8 @@ test.describe('Space War — O voo completo pelos 3 estados', () => {
     // ── 4. JOURNEY: [Z] para Betelgeuse ──
     await page.evaluate(() => window.__swDebug.target('betelgeuse'));
     await page.keyboard.press('KeyZ');
-    await page.waitForFunction(() => window.__spaceWar.journey?.active, { timeout: 20000 });
-    await page.waitForFunction(() => window.__spaceWar.mode === 'journey', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.journey?.active, { timeout: 45000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'journey', { timeout: 45000 });
     await page.evaluate(() => window.__swDebug.journeyWarp(0.5));
     await page.waitForTimeout(300);
     const cruiseFx = await page.evaluate(() => ({
@@ -90,11 +90,11 @@ test.describe('Space War — O voo completo pelos 3 estados', () => {
     // ── 5. Chegada: JOURNEY→CRUISE → acopla em Brasa (Betelgeuse) ──
     await page.evaluate(() => window.__swDebug.journeyWarp(0.995));
     await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 30000 });
-    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 20000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 45000 });
     await page.evaluate(() => window.__swDebug.goTo('brasa', 2));
     await page.waitForFunction(
       () => window.__spaceWar.mode === 'orbit' && window.__spaceWar.planetary?.key === 'brasa',
-      { timeout: 20000 },
+      { timeout: 45000 },
     );
     // sistema planetário alienígena completo: luas + estação no mapa
     const brasa = await page.evaluate(() => {

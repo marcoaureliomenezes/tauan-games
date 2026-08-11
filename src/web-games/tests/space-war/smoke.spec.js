@@ -6,23 +6,23 @@ const { test, expect } = require('@playwright/test');
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
 }
 
 async function startFlight(page) {
   await load(page);
   await page.keyboard.press('Enter');      // menu -> briefing
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');      // briefing -> flight
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 test.describe('Space War — Smoke / AC', () => {
   // Budgets largos (2026-07-18): a máquina de CI é compartilhada e o boot em
   // software-GL pode passar de 15s sob carga — AC-03/AC-10 estouravam o teto
   // de 30s por TEMPO, não por asserção. Nenhuma asserção foi alterada.
-  test.setTimeout(90000);
+  test.setTimeout(180000);
 
   // AC-01 / AC-08: abre sem build step e expõe estado, sem erro fatal de console.
   test('AC-08: carrega sem erros de console e expõe window.__spaceWar', async ({ page }) => {
@@ -70,7 +70,7 @@ test.describe('Space War — Smoke / AC', () => {
     expect(landed0).toBe(true);
     // Segura o empuxo até decolar de fato (robusto a fps — headless roda em câmera lenta).
     await page.keyboard.down('KeyW');
-    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 12000 });
+    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 45000 });
     await page.waitForTimeout(800);          // sobe um pouco
     await page.keyboard.up('KeyW');
     const s = await page.evaluate(() => ({
@@ -87,7 +87,7 @@ test.describe('Space War — Smoke / AC', () => {
   test('AC-04: gravidade age sobre a nave', async ({ page }) => {
     await startFlight(page);
     await page.keyboard.down('KeyW');
-    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 12000 });
+    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 45000 });
     await page.waitForTimeout(300);
     await page.keyboard.up('KeyW');
     await page.waitForTimeout(400);
@@ -118,13 +118,13 @@ test.describe('Space War — Smoke / AC', () => {
   test('AC-05: laser e nuke', async ({ page }) => {
     await startFlight(page);
     await page.keyboard.down('KeyW');
-    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 12000 });
+    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 45000 });
     await page.waitForTimeout(300);
     await page.keyboard.up('KeyW');
     // laser — espera um projétil aparecer (robusto a fps; câmera lenta em headless)
     const before = await page.evaluate(() => window.__spaceWar.projectiles.length);
     await page.keyboard.down('Space');
-    await page.waitForFunction((b) => window.__spaceWar.projectiles.length > b, before, { timeout: 6000 });
+    await page.waitForFunction((b) => window.__spaceWar.projectiles.length > b, before, { timeout: 45000 });
     await page.keyboard.up('Space');
     const after = await page.evaluate(() => window.__spaceWar.projectiles.length);
     expect(after).toBeGreaterThan(before);
@@ -182,7 +182,7 @@ test.describe('Space War — Smoke / AC', () => {
     });
     const before = await aim();
     await page.keyboard.press('KeyC');
-    await page.waitForFunction(() => window.__spaceWar.ship.aligning === false, { timeout: 8000 }).catch(() => {});
+    await page.waitForFunction(() => window.__spaceWar.ship.aligning === false, { timeout: 45000 }).catch(() => {});
     await page.waitForTimeout(300);
     const after = await aim();
     expect(after).toBeLessThan(before);
@@ -199,7 +199,7 @@ test.describe('Space War — Smoke / AC', () => {
     expect(s.landed).toBe(true);
     // decola e fica perto da Terra: escudo protege
     await page.keyboard.down('KeyW');
-    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 12000 });
+    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 45000 });
     await page.waitForTimeout(1500);
     await page.keyboard.up('KeyW');
     s = await page.evaluate(() => ({ hp: window.__spaceWar.ship.hp, phase: window.__spaceWar.phase }));
