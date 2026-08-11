@@ -61,7 +61,7 @@ function campaignFormationDeps(game) {
  *  offline). T-D-04: com Cachoeira no vale SUDOESTE, a osm-mg-060 é
  *  percorrida do fim SE para o fim NW — ordena por z DECRESCENTE (o vale está
  *  no z alto; antes da mudança o vale ficava no z baixo e a ordem era inversa).
- *  2026-08-11: a coluna PARTE de Cachoeira (-1300,2950 — distância +50%) pelo
+ *  2026-08-11: a coluna PARTE de Cachoeira (-2400,2200 — distância +50%) pelo
  *  valleyPrefix antes de entrar na cabeça SE da estrada. */
 function roadRoute() {
   const w = CAMPAIGN.roadWindow;
