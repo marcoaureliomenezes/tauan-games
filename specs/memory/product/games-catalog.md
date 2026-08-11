@@ -3,11 +3,11 @@ slug: games-catalog
 title: Catálogo de jogos
 category: product
 tldr: Todos os jogos do tauan-games por grupo de tecnologia (src/web-games e src/godot) com status.
-summary: Lista canônica dos 9 jogos do portfólio, pasta, tecnologia, descrição e status. Reescrito 2026-07-18 na reestruturação src/.
+summary: "Lista canônica dos 7 jogos catalogados do portfólio, pasta, tecnologia, descrição e status. Atualizado 2026-08-10 (v0.6.0): memoria-bichos/tauan-trex/demolition-ball-fable-5 deletados; aero-fighters unificado na versão web (v2 Godot removido); port Godot do aero-fighters restaurado e rastreado em git."
 tags: [product, catalog, games]
 token_estimate: 0
-last_updated: "2026-07-18"
-release_origin: repo-restructure-src-20260718
+last_updated: "2026-08-10"
+release_origin: v0.6.0
 ---
 
 ## Propósito
@@ -21,19 +21,20 @@ jogo: atoms em `product/web-games/<jogo>/` e `product/godot/<jogo>/`.
 | Jogo | Pasta | Tecnologia | Status |
 |---|---|---|---|
 | Aero Strike (aero-fighters) | `src/web-games/aero-fighters/` | Three.js r165 | Jogável; mapas incl. Inhaúma GIS |
-| Far West | `src/web-games/far-west/` | Three.js r165 | Em desenvolvimento (far-west-character-v1) |
 | James Bond Operações | `src/web-games/james-bond/` | Three.js r165 | Jogável; 6 operações |
-| Memória dos Bichos | `src/web-games/memoria-bichos/` | HTML/CSS/JS puro | Jogável |
-| Speed Run (web) | `src/web-games/speed-run/` | Three.js r165 | Jogável; 3 pistas, 5 carros |
-| Tauan T-Rex | `src/web-games/tauan-trex/` | Phaser 3 (vendor) | Jogável |
+| Speed Run (web) | `src/web-games/speed-run/` | Three.js r165 | Jogável — uplift v0.7.0: colisões invisíveis zeradas, fixed timestep, pista sprint + modo Fuga, Idea procedural |
 | Space War | `space-war/` ⚠ raiz | Three.js r165 | Jogável; MIGRAÇÃO p/ src/web-games pendente |
 
 ## Godot games (`src/godot/`)
 
 | Jogo | Pasta | Tecnologia | Status |
 |---|---|---|---|
-| Speed Run (Godot) | `src/godot/speed-run/` | Godot 4.7 | Jogável v1 (circuito único, 3 IA) |
-| Aero Fighters v2 | `src/godot/aero-fighters-v2/` | Godot 4.x | Wave 1 completa; Wave 2 em progresso |
+| Space War (Godot) | `src/godot/space-war/` | Godot 4.7 | Em desenvolvimento |
+
+Nota 2026-08-10 (v0.7.0): speed-run Godot deletado após colheita (Idea, sprint,
+perseguição portados para o web). james-bond Godot desapareceu da working tree
+(nunca foi rastreado em git); rebuild parte do zero pelo contrato no atom
+`product/godot/james-bond/`. Corrida no Godot: encerrada por decisão do operador.
 
 ## Nomenclatura
 

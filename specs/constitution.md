@@ -38,14 +38,10 @@ tauan-games/
   src/
     web-games/          ← jogos de BROWSER (Three.js / Phaser / DOM puro)
       aero-fighters/    ← combate aéreo F-35 (Three.js)
-      far-west/         ← faroeste open-world (Three.js)
       james-bond/       ← FPS de espionagem (Three.js)
-      memoria-bichos/   ← jogo da memória infantil (HTML/CSS/JS puro)
       speed-run/        ← corrida arcade estilo Cruis'n (Three.js)
-      tauan-trex/       ← clone do Chrome Dino (Phaser vendorizado)
     godot/              ← jogos DESKTOP nativos (Godot 4)
-      aero-fighters-v2/ ← combate aéreo cel-shaded sobre Inhaúma-MG
-      speed-run/        ← corrida com física VehicleBody3D
+      space-war/        ← port Godot do space-war
   space-war/            ← ⚠ MIGRAÇÃO PENDENTE → src/web-games/space-war
                           (aguarda sessão concorrente encerrar edições)
   vendor/               ← libs e assets de terceiros vendorizados (offline)
@@ -107,10 +103,10 @@ Todo jogo do portfólio, em qualquer tecnologia, herda estas obrigações:
 
 | Degrau | Tecnologia | Grupo | Jogos |
 |--------|-----------|-------|-------|
-| 0 | HTML/CSS/JS puro (DOM) | `src/web-games/` | memoria-bichos |
-| 1 | Phaser 3 (vendor) | `src/web-games/` | tauan-trex |
-| 2 | Three.js r165 (vendor, ES modules, sem build) | `src/web-games/` | aero-fighters, far-west, james-bond, space-war, speed-run |
-| 3 | Godot 4.7 (GDScript, cenas texto, headless CLI) | `src/godot/` | aero-fighters-v2, speed-run |
+| 0 | HTML/CSS/JS puro (DOM) | `src/web-games/` | — (memoria-bichos removido em v0.6.0) |
+| 1 | Phaser 3 (vendor) | `src/web-games/` | — (tauan-trex removido em v0.6.0) |
+| 2 | Three.js r165 (vendor, ES modules, sem build) | `src/web-games/` | aero-fighters, james-bond, space-war, speed-run |
+| 3 | Godot 4.7 (GDScript, cenas texto, headless CLI) | `src/godot/` | space-war |
 | 4 | Unreal Engine 5 | — | reservado (bloqueado por hardware) |
 
 A ladder é didática. Introduzir engine nova exige decisão explícita do operador.

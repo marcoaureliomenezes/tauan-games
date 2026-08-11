@@ -3,14 +3,14 @@ slug: tech-stack
 title: Tech Stack
 category: core
 tldr: Stack comprometida por jogo — grupos src/web-games (Phaser/Three.js/DOM) e src/godot (Godot 4.7), assets CC0 vendorizados.
-summary: Engine comprometida de cada jogo nos dois grupos de tecnologia, princípios de stack (sem build, vendor local, zero TS), stack de testes (Playwright + Godot headless) e padrão de deploy. Atualizado 2026-07-18 na reestruturação src/.
+summary: "Engine comprometida de cada jogo nos dois grupos de tecnologia, princípios de stack (sem build, vendor local, zero TS), stack de testes (Playwright + Godot headless) e padrão de deploy. Atualizado 2026-08-10 (v0.4.0): far-west removido."
 tags:
   - tech-stack
   - engines
   - testing
 token_estimate: 0
-last_updated: "2026-07-18"
-release_origin: repo-restructure-src-20260718
+last_updated: "2026-08-10"
+release_origin: v0.4.0
 ---
 
 ## Stack comprometida por jogo
@@ -19,10 +19,7 @@ release_origin: repo-restructure-src-20260718
 
 | Jogo | Engine | Versão | Justificativa |
 |------|--------|--------|---------------|
-| memoria-bichos | DOM puro (Degrau 0) | — | Jogo de cartas infantil; HTML/CSS/JS bastam. |
-| tauan-trex | Phaser.js (Degrau 1) | 3.x (`vendor/phaser.min.js`) | Canvas, input e physics loop prontos; zero build. |
 | aero-fighters | Three.js (Degrau 2) | r165 (`vendor/three.module.min.js`) | 3D em browser; ~30 módulos ES. |
-| far-west | Three.js (Degrau 2) | r165 | Open-world procedural determinístico. |
 | james-bond | Three.js (Degrau 2) + Yuka 0.7.8 + Howler 2.2.4 (vendor) | r165 | FPS com navegação A* e áudio Web Audio. |
 | space-war (⚠ raiz) | Three.js (Degrau 2) | r165 | Física real documentada; `celestial/` testável em node. |
 | speed-run | Three.js (Degrau 2) + GLTFLoader | r165 | Corrida arcade; GLB Quaternius CC0. |
@@ -31,8 +28,6 @@ release_origin: repo-restructure-src-20260718
 
 | Jogo | Engine | Versão | Justificativa |
 |------|--------|--------|---------------|
-| speed-run | Godot 4 (Degrau 3) | 4.7.1 (`~/.local/bin/godot4`) | VehicleBody3D + gráficos de engine real; decisão do operador 2026-07-18 após pesquisa (Unity/Unreal são editor-GUI-cêntricos; Godot opera por texto+CLI). |
-| aero-fighters-v2 | Godot 4 (Degrau 3) | 4.x stable | Forward+ cabe em Iris Xe @1080p; cel-shading; OSM+SRTM. |
 
 UE5 (Degrau 4) segue reservado — bloqueado por hardware.
 

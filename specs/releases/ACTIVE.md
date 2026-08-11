@@ -1,2 +1,2 @@
-release: far-west-character-v1
+release: v0.10.0
 phase: IMPLEMENTATION

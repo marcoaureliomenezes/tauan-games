@@ -24,6 +24,7 @@ outside a reserved `game-developer` task, the game-folder exclusivity above stan
 |---|---|---|---|
 | Tauan T-Rex | `src/web-games/tauan-trex/` | Phaser 3.60 (vendor-local) | Endless runner clone (dinosaur jumps over obstacles). Single-file (`game.js`, ~773 lines). Fully implemented; all 8 ACs pass. |
 | Aero Strike | `src/web-games/aero-fighters/` | Three.js r165 (vendor-local, ES modules) | F-35 ground-strike simulator: destroy military targets (bases, factories, buildings, convoys, AA guns) over a 3D ocean world. 15-module architecture under `src/`. Fully implemented; all 18 ACs pass. |
+| Aero Fighters (Godot) | `src/godot/aero-fighters/` | Godot 4.7 (GDScript, Forward+) | Port of Aero Strike focused on Inhaúma/Cachoeira da Prata: fighter campaign (Act 1 defend Inhaúma, Act 2 liberate Cachoeira) + AA-battery defense mode with infinite director. Real DEM terrain (`assets/heightmap/`), requirements in `docs/REQUISITOS.md`. Replaces the deleted `aero-fighters-v2`. |
 
 ## Spec Structure
 

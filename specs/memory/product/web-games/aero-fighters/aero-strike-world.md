@@ -11,7 +11,7 @@ tags:
   - maps
 token_estimate: 0
 last_updated: "2026-07-01"
-release_origin: aero-fighters-world-realism-v1
+release_origin: v0.2.1
 ---
 
 ## Propósito

@@ -28,15 +28,11 @@ flowchart TB
         hub[index.html hub]
         subgraph web[src/web-games — browser]
             af[aero-fighters]
-            fw[far-west]
             jb[james-bond]
-            mb[memoria-bichos]
             srw[speed-run]
-            tt[tauan-trex]
         end
         subgraph god[src/godot — desktop]
-            afv2[aero-fighters-v2]
-            srg[speed-run]
+            swg[space-war]
         end
         sw[space-war ⚠ raiz — migração pendente p/ src/web-games]
         vendor[vendor/]
@@ -91,16 +87,6 @@ orquestra; lógica em `player.js`, `missions.js`, `airport.js`, `ground-physics.
 Inhaúma-MG com pontes/rios/estradas autorais). Docs próprios: `ARCHITECTURE.md`,
 `CONVENTIONS.md`, `AGENTS.md`.
 
-### far-west (Three.js — Degrau 2)
-
-Faroeste open-world 2048×2048 m procedural: cowboy a cavalo, montanhas, florestas,
-2 rios com vaus e pontes, lago; caça (veados), captura de bandidos. Pipeline de
-mundo determinístico: `noise.js` (simplex seeded) → `rivers.js` (polylines
-descendo p/ lago) → `heightfield.js` (grid 2 m, contrato `heightAt/normalAt/
-slopeAt/moistureAt`) → chunks LOD. `state.js` = `window.game` fonte única;
-`config.js` centraliza TODAS as constantes. Em desenvolvimento ativo
-(release `far-west-character-v1`).
-
 ### james-bond (Three.js — Degrau 2)
 
 FPS de espionagem inspirado nos shooters de 1997, 6 operações (Barragem Alpina,
@@ -108,12 +94,6 @@ Complexo Químico, Relay Congelado, Silo de Mísseis, Fragata Sequestrada, Contr
 na Selva). Colisão AABB determinística, navegação dos guardas via Yuka (A*),
 áudio sintetizado por Web Audio (Howler vendorizado p/ evolução), materiais PBR
 procedurais, auto-degradação de qualidade em GPU fraca (55% resolução, 30 Hz).
-
-### memoria-bichos (DOM puro — Degrau 0)
-
-Jogo da memória infantil em HTML/CSS/JS puro (sem canvas): níveis por quantidade
-de pares, cartas de animais viradas por clique/toque, acessível a criança pequena.
-Arquivo único `game.js` + `styles.css`.
 
 ### speed-run (Three.js — Degrau 2)
 
@@ -123,12 +103,7 @@ superfícies asfalto/terra/offroad com atrito distinto), 5 carros GLB Quaternius
 (incl. Fiat Idea Adventure 2013 Dual Logic), física própria em `physics.js`
 (colisão elástica com massas reais, capotamento, ré), tráfego civil, texturas
 procedurais canvas (era PS1: low-poly + textura rica). Rig de rodas GLB com pivô
-recentrado no cubo. Versão irmã em Godot: `src/godot/speed-run`.
-
-### tauan-trex (Phaser 3 — Degrau 1)
-
-Clone aprimorado do Chrome Dino: pular cactos, abaixar sob pterodátilos,
-dificuldade progressiva. `game.js` único sobre `vendor/phaser.min.js`.
+recentrado no cubo. Uplift v0.7.0: colisões zeradas, fixed timestep, pista sprint + modo Fuga.
 
 ### space-war (Three.js — Degrau 2) — ⚠ ainda na raiz, migração pendente
 
@@ -170,30 +145,11 @@ flowchart LR
     exp --> rel[GitHub Releases binário]
 ```
 
-### speed-run (Godot 4)
+### speed-run (Godot 4) — REMOVIDO em v0.7.0 (2026-08-10)
 
-Corrida com física de veículo REAL da engine: `VehicleBody3D` + 4
-`VehicleWheel3D` (suspensão raycast, atrito de pneu, transferência de peso).
-Construção 100% procedural em GDScript: `race.gd` monta mundo (Curve3D fechada
-→ pista ribbon + colisor trimesh + guard-rails com colisão + terreno heightfield
-que SEGUE a elevação da pista), `car_factory.gd` monta carros dos GLB Quaternius
-(rig de roda: pivô no cubo via AABB, espelho por rotação 180° — nunca escala
-negativa). Iluminação real: sol com sombras, céu procedural, névoa, tonemap
-FILMIC. 1 jogador + 3 IA seguidoras de spline. Convenção MEDIDA empiricamente
-(tests/probe.gd): `engine_force` positivo = ré neste rig — frente usa força
-negativa. Testes: `CORRIDA_TEST=1` (headless, mede avanço real no sentido da
-corrida) e `CORRIDA_SHOT=<dir>` (captura screenshots do viewport p/ validação
-visual em Wayland).
-
-### aero-fighters-v2 (Godot 4)
-
-Combate aéreo cel-shaded sobre recriação estilizada de Inhaúma-MG: footprints de
-prédios do OpenStreetMap + elevação SRTM (mirror AWS), shader cel próprio
-(`CelShaderPass`), AA guns, física de voo própria. Scene tree + Autoloads;
-CI lint-only no GitHub Actions (`aero-v2-godot-ci.yml`: gdlint, validade de
-cenas headless, flake8 nos tools Python, verificação Git LFS). Wave 1 completa,
-Wave 2 em progresso (histórico: pausado 2026-06-12, retomado com a migração p/
-`src/godot/` em 2026-07-18).
+Corrida no Godot encerrada por decisão do operador (playtest reprovou: lag,
+InputMap spam do addon M.A.V.S, IA travada). Colheita portada para o web:
+Idea Adventure box-spec, pista sprint A→B com cidades, modo perseguição.
 
 ---
 

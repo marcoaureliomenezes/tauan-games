@@ -77,17 +77,11 @@ Gotchas de método (aprendidos e obrigatórios):
 - **aero-fighters** — `tests/aero-fighters/`: smokes + QA de missão
   (`npm run test:aero:qa`); diagnósticos de estrada/GIS no próprio jogo
   (`inhauma-road-diagnostics.js`).
-- **far-west** — `tests/far-west/`: smoke de mundo (rios monotônicos, vaus,
-  heightfield `heightAt` == malha renderizada); release ativa usa sessão própria
-  na porta 8080.
 - **james-bond** — `tests/james-bond/`: smoke por operação, `window.game` para
   estado; auto-degradação de qualidade testada em GPU por software.
-- **memoria-bichos** — `tests/memoria-bichos/`: fluxo completo de nível, pares,
-  acessibilidade de clique/toque, navegação a partir do hub.
 - **speed-run (web)** — `tests/corrida/`: menu (3 pistas/5 carros/Idea presente),
   corrida por pista com IA dirigindo (racers=6, traffic=4, superfície válida),
   ordenação de atrito das superfícies. `TEST_PORT=8093`.
-- **tauan-trex** — `tests/trex/`: ACs numerados (score após 3 s, FPS ≥ 55 em 10 s).
 - **space-war** (raiz, migração pendente) — `tests/space-war/`: specs de journey/
   fotometria do starfield; biblioteca `celestial/` testável em node puro.
 
@@ -108,17 +102,12 @@ Gotchas de método (aprendidos e obrigatórios):
    PNGs em marcos de tempo (Wayland não tem ferramenta CLI de screenshot —
    o próprio jogo captura `get_viewport().get_texture().get_image()`).
 
-CI (GitHub Actions): `aero-v2-godot-ci.yml` — gdlint em todos os `.gd`, validade
-de `project.godot`/cenas via Godot headless `--quit`, flake8/black nos tools,
-verificação de ponteiros Git LFS. Gates visuais/perf rodam localmente no Iris Xe
-do operador (decisão ADR-V2-G-01/02).
+CI (GitHub Actions): `godot-ci.yml` — gdlint, import headless e (quando presente)
+gdUnit4, com descoberta dinâmica dos projetos em `src/godot/`.
 
 ### Por jogo (Godot)
 
-- **speed-run (godot)** — `tests/probe.gd` (convenções medidas: engine sign,
-  steering, estabilidade em chão plano), smoke `CORRIDA_TEST` com métrica de
-  avanço real, screenshots `CORRIDA_SHOT` para terreno/rodas/carros. Gotchas
-  cravados: winding de grid invertido = terreno invisível ("chão branco");
-  espelhar roda por rotação 180°, nunca escala negativa (winding).
-- **aero-fighters-v2** — CI lint-only (workflow acima) + gates visuais/perf
-  locais; LFS verificado no CI; cenas validadas headless.
+- **space-war (godot)** — único projeto Godot ativo (2026-08-10); smoke via
+  `godot-ci.yml` (import headless + gdUnit4 quando presente).
+- (speed-run Godot removido em v0.7.0 — padrões de sonda empírica acima ficam
+  como lição registrada para futuros projetos Godot.)

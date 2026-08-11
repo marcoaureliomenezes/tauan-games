@@ -1,8 +1,8 @@
 ---
 title: Far West — open-world cowboy horse-riding game (operator 2026-07-18)
-status: picked
+status: rejected
 opened: 2026-07-18
-release: far-west-open-world-v1
+release: v0.3.1
 description: "Novo jogo web 3D de mundo aberto — cowboy a cavalo caçando bandidos fugitivos em paisagem de faroeste (montanhas, florestas, rios), com 1ª/3ª pessoa, caça a veados, acampamento, 2 cidades, 2 aldeias indígenas e trem. Stack proposta — Three.js r165 vendored + packs GLTF CC0."
 intents:
   - subject:
@@ -16,6 +16,11 @@ intents:
 ---
 
 # Far West — open-world cowboy game
+
+> **REJEITADO pelo operador em 2026-08-10** (release `v0.4.0`):
+> o jogo era o mesmo que `bang-bang` sob nome errado; ambos foram deletados do
+> catálogo (código, testes, memória). Releases `far-west-*` e `v0.3.7`
+> arquivadas em `specs/releases/legacy/`.
 
 ## Demand verbatim (operator, 2026-07-18)
 

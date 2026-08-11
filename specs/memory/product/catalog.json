@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-18T18:15:58Z",
+  "generated_at": "2026-08-11T20:39:41Z",
   "context": "tauan-games",
   "features": [
     {
@@ -9,7 +9,7 @@
       "category": "product",
       "area": "product",
       "tldr": "Todos os jogos do tauan-games por grupo de tecnologia (src/web-games e src/godot) com status.",
-      "summary": "Lista canônica dos 9 jogos do portfólio, pasta, tecnologia, descrição e status. Reescrito 2026-07-18 na reestruturação src/.",
+      "summary": "Lista canônica dos 7 jogos catalogados do portfólio, pasta, tecnologia, descrição e status. Atualizado 2026-08-10 (v0.6.0): memoria-bichos/tauan-trex/demolition-ball-fable-5 deletados; aero-fighters unificado na versão web (v2 Godot removido); port Godot do aero-fighters restaurado e rastreado em git.",
       "path": "specs/memory/product/games-catalog.md",
       "tags": [
         "product",
@@ -39,6 +39,24 @@
     },
     {
       "rank": 3,
+      "slug": "james-bond-godot-jogo",
+      "title": "James Bond (Godot) — o jogo",
+      "category": "product",
+      "area": "james-bond",
+      "tldr": "Port falho do FPS web — código perdido (nunca commitado); rebuild do zero pelo contrato web.",
+      "summary": "Estado do port Godot do james-bond (src/godot/james-bond) auditado em 2026-08-10 contra a versão web (referência boa). Sistemas salváveis; mapas/missões/inimigos/arsenal devem ser reconstruídos a partir de missions.js, weapons.js e guards.js TYPE_STATS.",
+      "path": "specs/memory/product/godot/james-bond/james-bond-godot-jogo.md",
+      "tags": [
+        "product",
+        "james-bond",
+        "godot",
+        "fps"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 4,
       "slug": "speed-run-godot-jogo",
       "title": "Speed Run (Godot) — o jogo",
       "category": "product",
@@ -56,7 +74,7 @@
       "depends_on": []
     },
     {
-      "rank": 4,
+      "rank": 5,
       "slug": "overview",
       "title": "Identidade do produto",
       "category": "product",
@@ -75,7 +93,7 @@
       ]
     },
     {
-      "rank": 5,
+      "rank": 6,
       "slug": "quality-bar",
       "title": "Barra de qualidade",
       "category": "product",
@@ -91,7 +109,7 @@
       "depends_on": []
     },
     {
-      "rank": 6,
+      "rank": 7,
       "slug": "aero-strike-combat",
       "title": "Aero Strike — inimigos e armas",
       "category": "product",
@@ -114,7 +132,7 @@
       ]
     },
     {
-      "rank": 7,
+      "rank": 8,
       "slug": "aero-strike-flight",
       "title": "Aero Strike — voo e jogabilidade",
       "category": "product",
@@ -136,7 +154,7 @@
       ]
     },
     {
-      "rank": 8,
+      "rank": 9,
       "slug": "aero-strike-fx",
       "title": "Aero Strike — efeitos, nuke, câmera, HUD e áudio",
       "category": "product",
@@ -159,7 +177,7 @@
       ]
     },
     {
-      "rank": 9,
+      "rank": 10,
       "slug": "aero-strike-world",
       "title": "Aero Strike — mundo e mapas",
       "category": "product",
@@ -181,7 +199,7 @@
       ]
     },
     {
-      "rank": 10,
+      "rank": 11,
       "slug": "aero-strike",
       "title": "Aero Strike — o jogo",
       "category": "product",
@@ -208,7 +226,7 @@
       ]
     },
     {
-      "rank": 11,
+      "rank": 12,
       "slug": "far-west-jogo",
       "title": "Far West — o jogo",
       "category": "product",
@@ -225,7 +243,7 @@
       "depends_on": []
     },
     {
-      "rank": 12,
+      "rank": 13,
       "slug": "james-bond-jogo",
       "title": "James Bond Operações — o jogo",
       "category": "product",
@@ -242,7 +260,7 @@
       "depends_on": []
     },
     {
-      "rank": 13,
+      "rank": 14,
       "slug": "memoria-bichos-jogo",
       "title": "Memória dos Bichos — o jogo",
       "category": "product",
@@ -259,7 +277,7 @@
       "depends_on": []
     },
     {
-      "rank": 14,
+      "rank": 15,
       "slug": "space-war-jogo",
       "title": "Space War — o jogo",
       "category": "product",
@@ -277,13 +295,13 @@
       "depends_on": []
     },
     {
-      "rank": 15,
+      "rank": 16,
       "slug": "speed-run-web-jogo",
       "title": "Speed Run (web) — o jogo",
       "category": "product",
       "area": "speed-run",
-      "tldr": "Corrida arcade estilo Cruis'n World no browser — 3 pistas, 5 carros GLB (incl. Fiat Idea Adventure 2013), tráfego civil, capotamento.",
-      "summary": "Intuito, pistas, lógica e características do speed-run web (src/web-games/speed-run, Three.js). Versão irmã desktop em src/godot/speed-run.",
+      "tldr": "Corrida arcade estilo Cruis'n World no browser — 3 circuitos + pista sprint A→B com modo Fuga, réplica do Idea Adventure 2013, nitro, música Top Gear, fixed timestep.",
+      "summary": "Intuito, pistas, lógica e características do speed-run web (src/web-games/speed-run, Three.js). v0.8.0 (2026-08-11): réplica v2 do Idea guiada por fotos reais, nitro (Shift), música procedural 144 BPM, sinalização por dados (chevrons/LOMBADA/VADO/300-200-100) + sol com flare + zebras, full-scan permanente zerado (com guard de estreitamento). v0.7.0: colisões invisíveis zeradas, timestep fixo 120 Hz, sprint + perseguição portados do Godot (encerrado).",
       "path": "specs/memory/product/web-games/speed-run/speed-run-web-jogo.md",
       "tags": [
         "product",
@@ -294,7 +312,7 @@
       "depends_on": []
     },
     {
-      "rank": 16,
+      "rank": 17,
       "slug": "tauan-trex-jogo",
       "title": "Tauan T-Rex — o jogo",
       "category": "product",

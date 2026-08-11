@@ -1,17 +1,30 @@
 ---
-title: Space War interstellar journey — travel the galaxy between systems (operator 2026-07-04)
+title: "Space War interstellar journey — travel the galaxy between systems (operator 2026-07-04)"
 status: picked
 opened: 2026-07-04
-release: space-war-interstellar-journey-v1
-description: Operator demand (verbatim intent): navigating between systems today is "into the nothing". New flow — [T] target another system, [O] orient to it, [Z] engage the interstellar burn (context-sensitive Z: cross-system target = journey, in-system = assist toggle, operator-approved). Journey is a BRACHISTOCHRONE, accelerate to midpoint then decelerate symmetrically, time-normalized ~3:00-6:00 min proportional to distance. The galaxy must EXIST between systems: thousands of stars streaming past with PARALLAX that intensifies with speed (some near, some far), star systems and nebulae (Ha red / OIII teal / reflection blue) crossed en route, the galactic-bulge star cloud visible when pointing at Sagittarius A*, and REALISTIC relativistic visuals at peak speed (aberration bunching stars forward, Doppler blue/redshift — operator picked realistic over cinematic). Also ship visibility - stronger plasma engine jet, red wingtip lights, reflex/rim so the ship reads on screen.
+release: v0.2.6
+description: >-
+  Operator demand (verbatim intent): navigating between systems today is "into the
+  nothing". New flow — [T] target another system, [O] orient to it, [Z] engage the
+  interstellar burn (context-sensitive Z: cross-system target = journey, in-system
+  = assist toggle, operator-approved). Journey is a BRACHISTOCHRONE, accelerate to
+  midpoint then decelerate symmetrically, time-normalized ~3:00-6:00 min
+  proportional to distance. The galaxy must EXIST between systems: thousands of
+  stars streaming past with PARALLAX that intensifies with speed (some near, some
+  far), star systems and nebulae (Ha red / OIII teal / reflection blue) crossed en
+  route, the galactic-bulge star cloud visible when pointing at Sagittarius A*,
+  and REALISTIC relativistic visuals at peak speed (aberration bunching stars
+  forward, Doppler blue/redshift — operator picked realistic over cinematic).
+  Also ship visibility - stronger plasma engine jet, red wingtip lights,
+  reflex/rim so the ship reads on screen.
 intents:
   - subject:
       kind: catalog
-      ref: games-catalog
+      ref: space-war-jogo
     change: "space-war: interstellar journey (T/O/Z brachistochrone autopilot between systems, 3-6 min time-normalized), parallax starfield corridor (thousands of streaming stars + nebulae), galactic-bulge cloud toward Sgr A*, realistic relativistic aberration/Doppler at peak speed, ship visibility pass (plasma jet, red wingtip lights)."
   - subject:
       kind: doc
-      ref: memory/architecture.md#Camadas
+      ref: memory/product/web-games/space-war/space-war-jogo.md#Lógica
     change: "Space War Degrau 2: journey autopilot module + chunked interstellar starfield layer + relativistic screen-space pass documented in the celestial/postfx stack."
 ---
 
@@ -33,3 +46,12 @@ cos θ' = (cos θ − β)/(1 − β cos θ) + Doppler ν' = νγ(1 + β cos θ) 
 research brief at .dadaia/tmp/claude/20260704/physics-brief-interstellar-travel.md.
 Operator decisions (2026-07-04 AskUserQuestion): ship physics-fidelity-v1 first;
 context-sensitive [Z]; realistic (not cinematic) relativity.
+
+## Curadoria (2026-08-11, project-manager)
+
+Normalização BL-SCHEMA: (1) `description` sem aspas com `:` interno quebrava o parse
+YAML do frontmatter — convertido para folded scalar, texto preservado verbatim; (2)
+âncora `memory/architecture.md#Camadas` deixou de existir após a reescrita da memória —
+refs re-vinculadas a `space-war-jogo` (catálogo) e
+`memory/product/web-games/space-war/space-war-jogo.md#Lógica`; `games-catalog` liberada
+para evitar conflito de âncora com outras entradas vivas. Changes preservados verbatim.
