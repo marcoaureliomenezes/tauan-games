@@ -22,6 +22,35 @@ const ROPE_MAX = 26;
 const MAX_SPEED = 15.5;
 const REVERSE_SPEED = 7;
 
+/** Homing servo defaults (SPEC v0.9.0 R-03); modes may override via world.homingConfig. */
+export const HOMING_DEFAULT = { gain: 2.0, maxA: 26, cruise: 14 };
+
+/**
+ * Clamp a candidate ball position (SPEC v0.9.0 R-04): never below the ground,
+ * never inside a structure footprint. Without a world only the ground clamp
+ * applies (the constructor runs before the world exists).
+ */
+export function safeBallPos(pos, radius, world = null) {
+  const p = v3(pos.x, Math.max(pos.y, radius), pos.z);
+  if (world && world.index) {
+    for (const s of world.index.query(p.x, p.z, radius + 2)) {
+      if (s.destroyed >= s.total) continue;
+      if (p.y - radius > s.size.y) continue;
+      const hx = s.size.x / 2 + radius;
+      const hz = s.size.z / 2 + radius;
+      const dx = p.x - s.center.x;
+      const dz = p.z - s.center.z;
+      if (Math.abs(dx) < hx && Math.abs(dz) < hz) {
+        const px = hx - Math.abs(dx);
+        const pz = hz - Math.abs(dz);
+        if (px < pz) p.x = s.center.x + Math.sign(dx || 1) * hx;
+        else p.z = s.center.z + Math.sign(dz || 1) * hz;
+      }
+    }
+  }
+  return p;
+}
+
 /** Shortest-arc quaternion rotating +Y onto `dir`. Used to aim cylinders. */
 export function quatFromY(dir) {
   const d = vnorm(dir);
@@ -56,7 +85,7 @@ export class Rig {
     this.lastImpact = 0;
     this.impactEvents = [];
     this.computeTip();
-    this.ball.pos = vadd(this.tip, v3(0, -this.ropeLen, 0));
+    this.ball.pos = safeBallPos(vadd(this.tip, v3(0, -this.ropeLen, 0)), BALL_RADIUS);
     this.prevTip = { ...this.tip };
   }
 
@@ -159,11 +188,31 @@ export class Rig {
       const dragA = 0.0016 * sp;
       b.vel = vaddScaled(b.vel, b.vel, -dragA * dt);
     }
-    // Operator "pump": tangential thrust along the boom heading builds the swing.
+    // Operator "pump". With SPACE held and a homing target available (SPEC
+    // v0.9.0 R-03, ADR-2), a velocity servo steers the swing toward the target:
+    // capped horizontal acceleration makes the pendulum sweep through the
+    // target pass after pass. SHIFT (pump < 0) stays the reverse boom push, and
+    // without any target SPACE remains the classic boom-heading pump.
     if (input.pump !== 0) {
-      const a = this.worldTurretYaw;
-      const push = v3(Math.sin(a), 0, Math.cos(a));
-      b.vel = vaddScaled(b.vel, push, input.pump * 15.5 * dt);
+      const target = input.pump > 0 && world.homingTarget ? world.homingTarget() : null;
+      if (target) {
+        const cfg = world.homingConfig || HOMING_DEFAULT;
+        const dx = target.x - b.pos.x;
+        const dz = target.z - b.pos.z;
+        const dl = Math.hypot(dx, dz);
+        if (dl > 0.5) {
+          const nx = dx / dl;
+          const nz = dz / dl;
+          const ax = clamp(cfg.gain * (nx * cfg.cruise - b.vel.x), -cfg.maxA, cfg.maxA);
+          const az = clamp(cfg.gain * (nz * cfg.cruise - b.vel.z), -cfg.maxA, cfg.maxA);
+          b.vel.x += ax * dt;
+          b.vel.z += az * dt;
+        }
+      } else {
+        const a = this.worldTurretYaw;
+        const push = v3(Math.sin(a), 0, Math.cos(a));
+        b.vel = vaddScaled(b.vel, push, input.pump * 15.5 * dt);
+      }
     }
 
     b.pos = vaddScaled(b.pos, b.vel, dt);
@@ -240,7 +289,9 @@ export class Rig {
       const contact = vaddScaled(b.pos, normal, -b.radius);
 
       if (closing > 1.2) {
-        const energy = 0.5 * b.mass * closing * closing;
+        // Modo Tauan multiplies impact energy (SPEC v0.9.0 R-02) so a couple of
+        // good swings bring a small building down.
+        const energy = 0.5 * b.mass * closing * closing * (world.damageMultiplier || 1);
         const dir = vscale(normal, -1);
         const res = applyImpact(s, contact, energy, dir, world.debris, {
           onCollapse: world.onCollapse,

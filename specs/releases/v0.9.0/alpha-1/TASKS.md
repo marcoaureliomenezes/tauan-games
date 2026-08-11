@@ -23,14 +23,14 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
     `.dadaia/tmp/software-engineer/20260811/db-worktree` — a working tree da outra
     sessão não foi tocada. Baseline do jogo commitada como primeiro commit da branch.
 
-- [-] T2 - Modos Tauan/Contratos + destruição fácil no Tauan (R-01, R-02, WS-1)
+- [x] T2 - Modos Tauan/Contratos + destruição fácil no Tauan (R-01, R-02, WS-1)
   - **Owner:** software-engineer
   - **Acceptance:** AC-1 e AC-3 da SPEC; unit por modo; e2e da seleção de modo;
     baseline anterior segue verde.
   - **Nota:** implementação iniciada em shadow copy `/tmp/db-impl/` (T1 pendente de
     aval git do operador); arquivos finais copiados para a branch quando T1 resolver.
 
-- [-] T3 - ESPAÇO com homing (servo) + spawn seguro da bola (R-03, R-04, WS-2)
+- [x] T3 - ESPAÇO com homing (servo) + spawn seguro da bola (R-03, R-04, WS-2)
   - **Owner:** software-engineer
   - **Acceptance:** AC-2; unit espelhando o spike (≥6 impactos/25s no cenário
     padrão); bola nunca spawna dentro de volume; `Q/E`/`Z/X` intactos durante o homing.

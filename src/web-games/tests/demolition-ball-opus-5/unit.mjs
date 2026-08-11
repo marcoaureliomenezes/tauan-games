@@ -6,6 +6,8 @@ import { buildCity, Structure, StructureIndex } from '../../demolition-ball-opus
 import { applyImpact, collapseUnsupported } from '../../demolition-ball-opus-5/src/destruction.js';
 import { DebrisField } from '../../demolition-ball-opus-5/src/debris.js';
 import { MissionSystem, CONTRACTS } from '../../demolition-ball-opus-5/src/missions.js';
+import { Rig, safeBallPos } from '../../demolition-ball-opus-5/src/rig.js';
+import { MODES } from '../../demolition-ball-opus-5/src/modes.js';
 import { v3, sphereVsBox, qIntegrate, mulberry32, vlen } from '../../demolition-ball-opus-5/src/math.js';
 
 let passed = 0;
@@ -215,6 +217,102 @@ test('sim: a full swing into a warehouse actually flattens it', () => {
   assert.ok(s.progress > 0.9, `only ${(s.progress * 100).toFixed(0)}% down after ${swings} swings`);
   assert.ok(swings > 3, 'a warehouse should take more than a couple of hits');
   assert.ok(vlen(v3(1, 0, 0)) === 1);
+});
+
+// ---------------------------------------------------------- v0.9.0 (R-01..R-04)
+
+test('modes: tauan — one target, 0.5 threshold, no deadline, no collateral fine', () => {
+  const city = buildCity(11);
+  const m = new MissionSystem(city.structures, 4242, {
+    singleTarget: true, thresholdOverride: 0.5, deadlines: false, collateralFines: false,
+  });
+  m.start(0);
+  m.start(0);   // contract 2 (spec count = 2): singleTarget must force one
+  assert.equal(m.current.targets.length, 1);
+  assert.equal(m.thresholdOf(), 0.5);
+  assert.equal(m.current.deadline, 0);
+  assert.equal(m.timeLeft(999), null);
+  const other = city.structures.find((s) => !m.current.targets.includes(s) && s.total > 0);
+  m.registerDamage(other, 500);
+  const t = m.current.targets[0];
+  t.destroyed = Math.ceil(t.total * 0.55);   // past the 0.5 threshold
+  m.update(10);
+  assert.ok(m.current.done, 'contract should complete at 55% in tauan mode');
+  assert.equal(m.completed[0].fine, 0);
+  assert.equal(m.completed[0].payout, CONTRACTS[1].reward);
+});
+
+test('modes: contratos (defaults) keeps multi-target, spec thresholds and deadlines', () => {
+  const city = buildCity(11);
+  const m = new MissionSystem(city.structures, 4242);
+  m.start(0);
+  m.start(0);   // contract 2
+  assert.equal(m.current.targets.length, CONTRACTS[1].count);
+  assert.equal(m.thresholdOf(), CONTRACTS[1].threshold);
+  m.start(0);   // contract 3 — spec has time: 210
+  assert.equal(m.current.deadline, 210);
+  assert.ok(m.timeLeft(100) !== null);
+});
+
+function homingScenario() {
+  const s = new Structure({ x: 0, z: 0, w: 14, d: 14, h: 10, type: 'warehouse', name: 'W', color: [1, 1, 1] });
+  const world = {
+    structures: [s], index: new StructureIndex([s]), debris: new DebrisField(),
+    bounds: { half: 500 }, onCollapse: () => {},
+  };
+  const rig = new Rig(s.center.x + s.size.x / 2 + 22, s.center.z, -Math.PI / 2);
+  rig.turretYaw = 0;
+  rig.boomPitch = 0.5;
+  rig.ropeLen = 9;
+  rig.computeTip();
+  rig.ball.pos = v3(rig.tip.x, rig.tip.y - 9, rig.tip.z);  // hanging free above ground
+  rig.ball.vel = v3();
+  return { s, world, rig };
+}
+
+const NO_DRIVE = { throttle: 0, steer: 0, brake: false, slew: 0, pitch: 0, rope: 0, pump: 0 };
+
+test('homing: SPACE servo swings the ball into the target repeatedly (R-03)', () => {
+  for (const [modeId, minImpacts] of [['tauan', 6], ['contratos', 4]]) {
+    const { world, rig } = homingScenario();
+    world.homingTarget = () => ({ x: 0, z: 0 });
+    world.homingConfig = MODES[modeId].homing;
+    const dt = 0.0125;
+    let impacts = 0;
+    let first = null;
+    for (let i = 0; i < Math.floor(25 / dt); i++) {
+      rig.update(dt, { ...NO_DRIVE, pump: 1 }, world);
+      for (const _ of rig.drainImpacts()) { impacts++; if (first === null) first = i * dt; }
+    }
+    assert.ok(first !== null && first <= 3, `${modeId}: first impact took ${first}s`);
+    assert.ok(impacts >= minImpacts, `${modeId}: only ${impacts} impacts in 25s — homing too weak`);
+  }
+});
+
+test('homing: without a target SPACE stays the classic boom pump', () => {
+  const { world, rig } = homingScenario();   // no homingTarget on world
+  const dt = 0.0125;
+  let maxSpeed = 0;
+  for (let i = 0; i < Math.floor(8 / dt); i++) {
+    rig.update(dt, { ...NO_DRIVE, pump: 1 }, world);
+    const sp = vlen(rig.ball.vel);
+    if (sp > maxSpeed) maxSpeed = sp;
+  }
+  assert.ok(maxSpeed > 2, `pump did not build a swing (max ${maxSpeed.toFixed(1)} m/s)`);
+});
+
+test('spawn: safeBallPos never leaves the ball inside a structure or underground (R-04)', () => {
+  const s = new Structure({ x: 0, z: 0, w: 14, d: 14, h: 10, type: 'warehouse', name: 'W', color: [1, 1, 1] });
+  const world = { structures: [s], index: new StructureIndex([s]) };
+  const p = safeBallPos(v3(0, -3, 0), 1.75, world);   // dead centre, below ground
+  assert.ok(p.y >= 1.75, `underground: y=${p.y}`);
+  const inside = Math.abs(p.x - s.center.x) < s.size.x / 2 + 1.75
+    && Math.abs(p.z - s.center.z) < s.size.z / 2 + 1.75
+    && p.y - 1.75 <= s.size.y;
+  assert.ok(!inside, `still inside the footprint: ${JSON.stringify(p)}`);
+  // without a world only the ground clamp applies
+  const q = safeBallPos(v3(5, -10, 5), 1.75);
+  assert.equal(q.y, 1.75);
 });
 
 console.log(`\n${passed} testes ok${process.exitCode ? ' — COM FALHAS' : ''}`);

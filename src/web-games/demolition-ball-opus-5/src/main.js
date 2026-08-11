@@ -3,9 +3,10 @@
 import { Renderer } from './renderer.js';
 import { buildCity, StructureIndex, CITY_HALF } from './city.js';
 import { DebrisField } from './debris.js';
-import { Rig } from './rig.js';
+import { Rig, safeBallPos } from './rig.js';
 import { Traffic } from './traffic.js';
 import { MissionSystem } from './missions.js';
+import { MODES, DEFAULT_MODE } from './modes.js';
 import { Minimap } from './minimap.js';
 import { Audio } from './audio.js';
 import {
@@ -30,6 +31,8 @@ const hud = {
   stats: document.getElementById('stats'),
   overlay: document.getElementById('start-overlay'),
   targets: document.getElementById('target-list'),
+  modeTauan: document.getElementById('mode-tauan'),
+  modeContratos: document.getElementById('mode-contratos'),
 };
 
 // ?quality=low trims shadow resolution and draw distance — used by the
@@ -44,7 +47,6 @@ renderer.setStaticMesh(city.staticMesh);
 
 const debris = new DebrisField();
 const structureIndex = new StructureIndex(city.structures);
-const missions = new MissionSystem(city.structures);
 const audio = new Audio();
 
 // Spawn the rig on a road near the middle of town.
@@ -58,6 +60,55 @@ const world = {
   debris,
   bounds: { half: CITY_HALF },
   onCollapse: (structure, cells) => { collapseEvents.push({ structure, cells }); },
+  damageMultiplier: 1,
+  homingConfig: null,          // null -> rig.js HOMING_DEFAULT
+  homingTarget: null,
+};
+
+// Game mode (SPEC v0.9.0 R-01): chosen on the start overlay, locked once the
+// game begins. Rebuilding the MissionSystem re-rolls the contract chain, so the
+// backdrop contract behind the overlay always matches the selected mode.
+let mode = MODES[DEFAULT_MODE];
+let missions = null;
+
+function selectMode(id) {
+  if (started || !MODES[id]) return;
+  mode = MODES[id];
+  missions = new MissionSystem(city.structures, 4242, {
+    singleTarget: mode.singleTarget,
+    thresholdOverride: mode.threshold,
+    deadlines: mode.deadlines,
+    collateralFines: mode.collateralFines,
+  });
+  missions.start(simTime);
+  world.damageMultiplier = mode.damageMultiplier;
+  world.homingConfig = mode.homing;
+  hud.modeTauan.classList.toggle('sel', mode.id === 'tauan');
+  hud.modeContratos.classList.toggle('sel', mode.id === 'contratos');
+}
+
+// The homing servo (R-03, ADR-2) aims at the nearest unfinished contract
+// target; with no active target it aims at the nearest car on the street.
+world.homingTarget = () => {
+  const m = missions && missions.current;
+  if (m && !m.done) {
+    const th = missions.thresholdOf();
+    let best = null;
+    let bd = Infinity;
+    for (const t of m.targets) {
+      if (t.progress >= th) continue;
+      const d = Math.hypot(t.center.x - rig.ball.pos.x, t.center.z - rig.ball.pos.z);
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (best) return { x: best.center.x, z: best.center.z };
+  }
+  let best = null;
+  let bd = Infinity;
+  for (const c of traffic.aliveCars) {
+    const d = Math.hypot(c.pos.x - rig.ball.pos.x, c.pos.z - rig.ball.pos.z);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best ? { x: best.pos.x, z: best.pos.z } : null;
 };
 
 // ---------------------------------------------------------------- input
@@ -106,6 +157,8 @@ window.addEventListener('wheel', (e) => {
   camera.distance = clamp(camera.distance + e.deltaY * 0.02, 10, 70);
 }, { passive: true });
 canvas.addEventListener('click', begin);
+hud.modeTauan.addEventListener('click', () => selectMode('tauan'));
+hud.modeContratos.addEventListener('click', () => selectMode('contratos'));
 
 const minimap = new Minimap(mapCanvas);
 
@@ -348,17 +401,20 @@ function frame(nowMs) {
   requestAnimationFrame(frame);
 }
 
-missions.start(0);
+selectMode(DEFAULT_MODE);
 requestAnimationFrame(frame);
 
 // Test/debug surface: deterministic seed makes these values stable per build.
 window.__demolition = {
   get frames() { return frames; },
   get simTime() { return simTime; },
-  rig, missions, world, city, debris, traffic, renderer, camera, minimap,
+  get mode() { return mode; },
+  get missions() { return missions; },
+  rig, world, city, debris, traffic, renderer, camera, minimap,
   press: (code) => keys.add(code),
   release: (code) => keys.delete(code),
   begin,
+  selectMode: (id) => selectMode(id),
   totalProgress() {
     let t = 0, d = 0;
     for (const s of city.structures) { t += s.total; d += s.destroyed; }
@@ -382,7 +438,7 @@ window.__demolition = {
     const target = v3(wallX, Math.min(structure.size.y * 0.45 + offsetY, rig.tip.y - 1.5), structure.center.z);
     const rel = vsub(target, rig.tip);
     const d = vlen(rel);
-    rig.ball.pos = d > rig.ropeLen ? vaddScaled(rig.tip, vscale(rel, 1 / d), rig.ropeLen) : target;
+    rig.ball.pos = safeBallPos(d > rig.ropeLen ? vaddScaled(rig.tip, vscale(rel, 1 / d), rig.ropeLen) : target, rig.ball.radius, world);
     rig.ball.vel = v3(-17, -3, 0);
   },
 };

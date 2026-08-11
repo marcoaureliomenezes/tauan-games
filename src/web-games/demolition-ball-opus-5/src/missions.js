@@ -38,9 +38,22 @@ const CONTRACTS = [
 ];
 
 export class MissionSystem {
-  constructor(structures, seed = 4242) {
+  /**
+   * @param {object[]} structures
+   * @param {number} seed
+   * @param {object} opts mode shaping (SPEC v0.9.0 R-01): singleTarget forces one
+   *   target per contract; thresholdOverride replaces spec.threshold; deadlines=false
+   *   disables the clock; collateralFines=false zeroes the collateral fine.
+   */
+  constructor(structures, seed = 4242, opts = {}) {
     this.rand = mulberry32(seed);
     this.structures = structures;
+    this.opts = {
+      singleTarget: !!opts.singleTarget,
+      thresholdOverride: opts.thresholdOverride ?? null,
+      deadlines: opts.deadlines !== false,
+      collateralFines: opts.collateralFines !== false,
+    };
     this.index = -1;
     this.current = null;
     this.money = 0;
@@ -50,6 +63,11 @@ export class MissionSystem {
     this.banner = null;
     this.allDone = false;
     this.used = new Set();
+  }
+
+  /** Effective threshold for a contract (mode override wins). */
+  thresholdOf(c = this.current) {
+    return this.opts.thresholdOverride ?? (c ? c.spec.threshold : 1);
   }
 
   pickTargets(spec) {
@@ -64,7 +82,7 @@ export class MissionSystem {
       .map((s) => ({ s, d: Math.hypot(s.center.x - anchor.center.x, s.center.z - anchor.center.z) }))
       .sort((a, b) => a.d - b.d)
       .map((e) => e.s);
-    return sorted.slice(0, spec.count);
+    return sorted.slice(0, this.opts.singleTarget ? 1 : spec.count);
   }
 
   start(now = 0) {
@@ -86,7 +104,7 @@ export class MissionSystem {
       spec,
       targets,
       startedAt: now,
-      deadline: spec.time ? now + spec.time : 0,
+      deadline: this.opts.deadlines && spec.time ? now + spec.time : 0,
       done: false,
     };
     this.banner = { text: spec.title, sub: spec.brief, until: now + 6 };
@@ -95,9 +113,10 @@ export class MissionSystem {
 
   get waypoint() {
     if (!this.current || !this.current.targets.length) return null;
+    const th = this.thresholdOf();
     let x = 0, z = 0, n = 0;
     for (const t of this.current.targets) {
-      if (t.progress >= this.current.spec.threshold) continue;
+      if (t.progress >= th) continue;
       x += t.center.x; z += t.center.z; n++;
     }
     if (!n) {
@@ -109,7 +128,7 @@ export class MissionSystem {
 
   get progress() {
     if (!this.current) return 1;
-    const th = this.current.spec.threshold;
+    const th = this.thresholdOf();
     let sum = 0;
     for (const t of this.current.targets) sum += Math.min(1, t.progress / th);
     return this.current.targets.length ? sum / this.current.targets.length : 0;
@@ -129,7 +148,7 @@ export class MissionSystem {
     if (this.progress >= 0.999) {
       c.done = true;
       const timeBonus = c.deadline ? Math.max(0, Math.round((c.deadline - now) * 60)) : 0;
-      const fine = Math.round(this.collateral * 45);
+      const fine = this.opts.collateralFines ? Math.round(this.collateral * 45) : 0;
       const payout = Math.max(0, c.spec.reward + timeBonus - fine);
       this.money += payout;
       this.completed.push({ title: c.spec.title, payout, timeBonus, fine });

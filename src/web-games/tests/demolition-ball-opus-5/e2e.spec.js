@@ -126,3 +126,40 @@ test('HUD mostra contrato, alvos e caixa', async ({ page }) => {
   await expect(page.locator('#money')).toContainText('$');
   await page.screenshot({ path: 'screenshots/demolition-ball-opus-5.png' });
 });
+
+// ---------------------------------------------------------------- v0.9.0 (R-01)
+
+test('overlay oferece os dois modos e o Tauan é o padrão (AC-1)', async ({ page }) => {
+  await boot(page);
+  await expect(page.locator('#mode-tauan')).toBeVisible();
+  await expect(page.locator('#mode-contratos')).toBeVisible();
+  const tauan = await page.evaluate(() => ({
+    mode: window.__demolition.mode.id,
+    threshold: window.__demolition.missions.thresholdOf(),
+    deadline: window.__demolition.missions.current.deadline,
+    targets: window.__demolition.missions.current.targets.length,
+  }));
+  expect(tauan.mode).toBe('tauan');
+  expect(tauan.threshold).toBeLessThanOrEqual(0.5);
+  expect(tauan.deadline).toBe(0);          // sem cronômetro no Modo Tauan
+  expect(tauan.targets).toBe(1);           // um alvo por vez
+
+  await page.click('#mode-contratos');
+  const contratos = await page.evaluate(() => ({
+    mode: window.__demolition.mode.id,
+    threshold: window.__demolition.missions.thresholdOf(),
+    deadlines: window.__demolition.missions.opts.deadlines,
+    fines: window.__demolition.missions.opts.collateralFines,
+  }));
+  expect(contratos.mode).toBe('contratos');
+  expect(contratos.threshold).toBeGreaterThan(0.5);   // spec.threshold original (0.9)
+  // Contratos 1–2 têm time:0 por design; o que o modo garante é a regra ligada.
+  expect(contratos.deadlines).toBe(true);
+  expect(contratos.fines).toBe(true);
+
+  // Depois de começar, o modo trava.
+  await page.evaluate(() => window.__demolition.begin());
+  await page.evaluate(() => window.__demolition.selectMode('tauan'));
+  const locked = await page.evaluate(() => window.__demolition.mode.id);
+  expect(locked).toBe('contratos');
+});
