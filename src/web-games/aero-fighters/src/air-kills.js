@@ -67,6 +67,9 @@ export function updateAirKills(dt) {
   for (let i = fallers.length - 1; i >= 0; i--) {
     const rec = fallers[i];
     const { t, f } = rec;
+    // Mesh já saiu da cena (clearTargets em troca de missão/restart): descarta
+    // a queda sem FX — não há mais nada visível caindo.
+    if (!t.mesh || (!t.mesh.parent && !t.member)) { fallers.splice(i, 1); continue; }
     const events = stepDying(f, dt, ctx, rec.cfg);
     // Aplica o estado da queda ao mesh (mundo == local: grupos na origem).
     t.mesh.position.set(f.x, f.y, f.z);

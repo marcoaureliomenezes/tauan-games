@@ -257,15 +257,15 @@ export const CAMPAIGN = {
   // contornam a TOWN_SHELF pela borda leste/norte (longe do morro da bateria a NW)
   // e terminam a ~140 m da borda do shelf: chegar ao fim do path ('arrived') =
   // invasão bem-sucedida = Inhaúma cai.
-  // 2026-08-11: Cachoeira foi para (-1300,2950) (+50% de distância) — todas as
+  // 2026-08-11: Cachoeira foi para (-2400,2200) (+50% de distância) — todas as
   // rotas ganharam o PREFIXO de descida do novo vale até o antigo ponto de
   // partida (-950,1890), preservando os corredores validados dali em diante.
   // valleyPrefix é também usado por roadRoute() em campaign.js para as colunas
   // de estrada PARTIREM de Cachoeira antes de pegar a osm-mg-060.
-  valleyPrefix: [[-1300, 2790], [-1150, 2350], [-950, 1890]],
+  valleyPrefix: [[-2400, 2040], [-1700, 1950], [-950, 1890]],
   columnRoutes: {
-    north: [[-1300, 2790], [-1150, 2350], [-950, 1890], [-800, 1600], [-350, 1150], [-150, 650], [150, 600], [290, 420], [290, 300]],
-    farNorth: [[-1300, 2790], [-1150, 2350], [-950, 1890], [-600, 1500], [-100, 1100], [350, 800], [550, 550], [500, 300], [350, 100], [290, -50]],
+    north: [[-2400, 2040], [-1700, 1950], [-950, 1890], [-800, 1600], [-350, 1150], [-150, 650], [150, 600], [290, 420], [290, 300]],
+    farNorth: [[-2400, 2040], [-1700, 1950], [-950, 1890], [-600, 1500], [-100, 1100], [350, 800], [550, 550], [500, 300], [350, 100], [290, -50]],
     // 'road' é montada em runtime: trecho da osm-mg-060 (do fim SE da estrada,
     // atravessando a ponte sobre o rio em (-1275,870)) + saída de terreno a
     // noroeste, contornando o MORRO DA BATERIA pelo norte e fechando na borda
@@ -275,9 +275,9 @@ export const CAMPAIGN = {
   // Rotas das baterias: partem do vale e terminam no ponto de deploy (600-1200 m
   // da TOWN_SHELF) — deploys=true → estado 'deployed' no fim (Onda 4 as faz atirar).
   artilleryRoutes: [
-    [[-1300, 2790], [-1150, 2350], [-950, 1890], [-850, 1600], [-750, 1250]],              // deploy 697 m sudoeste
-    [[-1300, 2790], [-1150, 2350], [-950, 1890], [-600, 1500], [-200, 1150], [100, 1200]], // deploy 640 m sul
-    [[-1300, 2790], [-1150, 2350], [-950, 1890], [-500, 1500], [0, 1150], [600, 1000]],    // deploy 629 m sudeste
+    [[-2400, 2040], [-1700, 1950], [-950, 1890], [-850, 1600], [-750, 1250]],              // deploy 697 m sudoeste
+    [[-2400, 2040], [-1700, 1950], [-950, 1890], [-600, 1500], [-200, 1150], [100, 1200]], // deploy 640 m sul
+    [[-2400, 2040], [-1700, 1950], [-950, 1890], [-500, 1500], [0, 1150], [600, 1000]],    // deploy 629 m sudeste
   ],
   // Trecho da osm-mg-060 usado como prefixo da rota 'road': a estrada INTEIRA do
   // fim SE (perto do novo vale) ao fim NW (de onde o roadTail sai por terreno).

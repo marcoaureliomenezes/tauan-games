@@ -12,7 +12,7 @@ import { fbm2D, ridgedFbm2D } from './noise.js';
 import { applyInhaumaRoadBed, nearAnyRoad } from './inhauma-roads.js';
 import { getPortalMounds } from './inhauma-road-defs.js';
 import { updateRoadTraffic } from './inhauma-traffic.js';
-import { updateWaterSurfaces } from '../environment/water-surface.js';
+import { updateWaterSurfaces, createReflectiveWater } from '../environment/water-surface.js';
 import { loadInhaumaDem, sampleDemHeight, demSlopeAt } from './heightmap-sampler.js';
 import { AA_DEFENSE } from '../config.js';
 import { createInhaumaBackdrop, updateInhaumaBackdrop } from './inhauma-backdrop.js';
@@ -23,8 +23,12 @@ import {
   riverCarveAt,
   riverSurfaceInfoAt,
   RIVER_HALF_WIDTH_M,
+  RIVER_CARVE_DEPTH_M,
+  getInhaumaRiverPolyline,
+  riverBankHeightAt,
+  riverWaterLevelAt,
 } from './inhauma-river.js';
-import { bridgeDeckHeightAt, buildInhaumaBridges } from './inhauma-bridges.js';
+import { bridgeDeckHeightAt, buildInhaumaBridges, computeInhaumaBridgeCrossings } from './inhauma-bridges.js';
 import { mergeGeometries } from '../../../vendor/jsm/utils/BufferGeometryUtils.js';
 // T-V-12/T-V-13 (inhauma-visual-uplift-v1): tipologias/fachadas da cidade.
 // T-C-04 (inhauma-campaign-v1): placement genérico das duas cidades (buildTownCluster).
@@ -102,7 +106,7 @@ export const INHAUMA_FEATURES = [
   { id: 'morro-norte-inhauma', cx: -40, cz: -330, radius: 250, peakHeight: 50, type: 'roundedHill' },
   { id: 'serra-sete-lagoas', cx: 760, cz: -300, radius: 460, peakHeight: 96, type: 'ridge' },
   // 2026-08-11: move junto com CACHOEIRA_TOWN_CENTER (distância +50%).
-  { id: 'vale-cachoeira-prata', cx: -1300, cz: 2950, radius: 260, peakHeight: 16, type: 'valley' },
+  { id: 'vale-cachoeira-prata', cx: -2400, cz: 2200, radius: 260, peakHeight: 16, type: 'valley' },
   { id: 'morros-sudeste-inhauma', cx: 330, cz: 330, radius: 240, peakHeight: 44, type: 'roundedHill' },
   { id: 'serra-leste-inhauma', cx: 1300, cz: 120, radius: 380, peakHeight: 70, type: 'ridge' },
 ].map((d, index) => ({ ...d, index }));
@@ -203,15 +207,20 @@ function ridgedCrestDetailAt(x, z, demH) {
 // A rota de invasão/campanha desce o vale até a ponte da osm-mg-060 em
 // (-1275,870) e contorna a TOWN_SHELF pelo norte — ver CAMPAIGN em config.js.
 // 2026-08-11 (operador: "coloque a distância pelo menos 50% maior"):
-// REPOSICIONADA de (-950,2050) para (-1300,2950), no prolongamento do MESMO
-// eixo do vale sudoeste — 1931 m → 2897 m centro-a-centro com Inhaúma (+50%).
-// O aterro urbano (CACHOEIRA_SHELF_H + penumbra) nivela o shelf onde quer que
-// ele esteja; a contribuição autoral 'vale-cachoeira-prata' move junto.
-export const CACHOEIRA_SHELF = { minX: -1420, maxX: -1180, minZ: 2860, maxZ: 3040 };
-export const CACHOEIRA_TOWN_CENTER = { x: -1300, z: 2950 }; // centro do shelf
-export const CACHOEIRA_CHURCH = { x: -1278, z: 2918 };      // igrejinha (marco)
-export const CACHOEIRA_PRACA = { x: -1312, z: 2972 };       // praça (marco)
-const CACHOEIRA_SHELF_H = 71;   // cota do aterro urbano (= média DEM sondada ~71,4 m)
+// REPOSICIONADA de (-950,2050) para (-2400,2200) — 1931 m → 2903 m
+// centro-a-centro com Inhaúma (+50,3%), seguindo o MESMO corredor sudoeste.
+// Sítio re-sondado no DEM (probe Node 2026-08-11, anel 2850-3250 m completo):
+// planície de várzea a leste do rio (spread 28 m, média ~6 m — o prolongamento
+// direto do eixo antigo cai na serra, spread ≥131 m, e a malha de LOD distante
+// não resolve a penumbra do aterro lá; ver WS-1). Cota do aterro re-baixada
+// para 12 m (acima de WATER_LEVEL 4.5 + margem); montanhas no anel oeste/sul
+// mantêm os ninhos de AA da guarnição. Rotas partem do novo vale sem cruzar o
+// rio (mesma margem; probe distanceToRiver ao longo do prefixo).
+export const CACHOEIRA_SHELF = { minX: -2520, maxX: -2280, minZ: 2110, maxZ: 2290 };
+export const CACHOEIRA_TOWN_CENTER = { x: -2400, z: 2200 }; // centro do shelf
+export const CACHOEIRA_CHURCH = { x: -2378, z: 2168 };      // igrejinha (marco)
+export const CACHOEIRA_PRACA = { x: -2412, z: 2222 };       // praça (marco)
+const CACHOEIRA_SHELF_H = 12;   // cota do aterro urbano (várzea ~6 m sondada 2026-08-11 + margem sobre WATER_LEVEL)
 const CACHOEIRA_FEATHER_M = 45; // penumbra de emenda com o relevo
 const CACHOEIRA_SHELF_KEEP_MARGIN = 20; // margem extra p/ floresta não invadir a cidade
 
@@ -665,17 +674,166 @@ export function inhaumaHeightAt(isl, dx, dz) {
 // substituído por UM ribbon contínuo + fita de margem (2 draw calls) — ver
 // maps/inhauma-river-ribbon.js. O traçado/entalhe do rio (inhauma-river.js) não muda.
 export function buildInhaumaWater(scene) {
-  return buildInhaumaRiver(scene, inhaumaContinuousHeight);
+  const river = buildInhaumaRiver(scene, inhaumaContinuousHeight);
+  buildRiverRocks(scene);
+  return river;
 }
 
-// ─── Barragem (represa) — APOSENTADA (T-09 DEVIATION) ────────────────────────
-// Ver a nota de DAM/RESERVOIR mais acima no arquivo para a justificativa completa.
-// A função continua exportada e chamável (inhauma.js#createInhaumaWorld chama
-// buildDam(scene) — fora do write-set desta tarefa) mas agora é um no-op limpo: não
-// adiciona geometria à cena, não registra estrutura de colisão, não retorna grupo.
+// 2026-08-11 (operador: "trabalhe melhor nos rios"): pedras de margem — um
+// InstancedMesh de icosaedros low-poly semeado ao longo do traçado real, nas
+// duas margens, fora das zonas de ponte. Jitter por HASH do índice (não consome
+// o stream do game.rng — determinístico e imune a reordenação de builders).
+function buildRiverRocks(scene) {
+  const poly = getInhaumaRiverPolyline();
+  if (!poly || poly.length < 4) return null;
+  const crossings = computeInhaumaBridgeCrossings();
+  const h = (i, k) => {
+    const s = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
+    return s - Math.floor(s); // [0,1) estável
+  };
+  const mats = [];
+  const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3();
+  for (let i = 1; i < poly.length - 1; i += 1) {
+    const p = poly[i];
+    if (Math.abs(p.x) > 2600 || Math.abs(p.z) > 2600) continue;
+    if (crossings.some((c) => Math.hypot(p.x - c.midX, p.z - c.midZ) < c.halfLength + 26)) continue;
+    const q = poly[i + 1];
+    const len = Math.hypot(q.x - p.x, q.z - p.z) || 1;
+    const nx = -(q.z - p.z) / len, nz = (q.x - p.x) / len; // normal lateral
+    for (const side of [-1, 1]) {
+      const n = Math.floor(h(i, side) * 3); // 0-2 pedras por lado
+      for (let k = 0; k < n; k++) {
+        const lat = RIVER_HALF_WIDTH_M + 3 + h(i, side * 10 + k) * 16;
+        const along = (h(i, side * 20 + k) - 0.5) * len;
+        const x = p.x + nx * lat * side + ((q.x - p.x) / len) * along;
+        const z = p.z + nz * lat * side + ((q.z - p.z) / len) * along;
+        const y = riverBankHeightAt(x, z);
+        if (!Number.isFinite(y)) continue;
+        const sc = 0.9 + h(i, side * 30 + k) * 2.6;
+        _e.set(h(i, 41 + k) * Math.PI, h(i, 43 + k) * Math.PI * 2, h(i, 47 + k) * Math.PI);
+        _q.setFromEuler(_e);
+        _s.set(sc, sc * (0.6 + h(i, 53 + k) * 0.5), sc);
+        _m.compose(new THREE.Vector3(x, y - 0.4, z), _q, _s);
+        mats.push(_m.clone());
+      }
+    }
+  }
+  if (!mats.length) return null;
+  const inst = new THREE.InstancedMesh(
+    new THREE.IcosahedronGeometry(1, 0),
+    smat(0x8d8a80, { roughness: 0.95 }),
+    mats.length,
+  );
+  for (let i = 0; i < mats.length; i++) inst.setMatrixAt(i, mats[i]);
+  inst.instanceMatrix.needsUpdate = true;
+  inst.castShadow = false;
+  inst.receiveShadow = true;
+  scene.add(inst);
+  return inst;
+}
+
+// ─── Barragem (represa) — RECONSTRUÍDA sobre o canal REAL (2026-08-11) ────────
+// A deviation T-09 aposentou a represa herdada da era FBM porque ela flutuava
+// 400-700 m longe do rio real. O operador ordenou o retorno ("uma represa de
+// água") — esta é a opção (a) daquela nota: sítio ESCOLHIDO EM RUNTIME sobre a
+// polilinha do rio (drenagem do DEM), longe de pontes e da usina, com muro no
+// canal, vertedouro, torres de controle e lago de reservatório a montante
+// (shader de fluxo compartilhado — mesmo material do rio). Níveis d'água vêm
+// da API do rio (riverBankHeightAt/riverWaterLevelAt) — nada digitado à mão.
 export function buildDam(scene) {
-  void scene;
-  return null;
+  const poly = getInhaumaRiverPolyline();
+  if (!poly || poly.length < 8) return null;
+  const crossings = computeInhaumaBridgeCrossings();
+  const NUKE_PLANT = { x: 620, z: 640 };
+  // Sítio: varre o trecho central da polilinha e pega o 1º ponto ≥260 m de
+  // qualquer ponte, ≥320 m da usina e dentro do foco jogável (|x|,|z| ≤ 2400).
+  let site = null, dir = null;
+  for (let i = Math.floor(poly.length * 0.30); i < Math.floor(poly.length * 0.80); i++) {
+    const p = poly[i], q = poly[i + 1];
+    if (!q) break;
+    if (Math.abs(p.x) > 2400 || Math.abs(p.z) > 2400) continue;
+    if (Math.hypot(p.x - NUKE_PLANT.x, p.z - NUKE_PLANT.z) < 320) continue;
+    if (crossings.some((c) => Math.hypot(p.x - c.midX, p.z - c.midZ) < 260)) continue;
+    site = p;
+    const len = Math.hypot(q.x - p.x, q.z - p.z) || 1;
+    dir = { x: (q.x - p.x) / len, z: (q.z - p.z) / len }; // sentido do fluxo
+    break;
+  }
+  if (!site) return null;
+  const perp = { x: -dir.z, z: dir.x };
+  const bank = riverBankHeightAt(site.x, site.z);
+  const water = riverWaterLevelAt(site.x, site.z) ?? bank - 1.5;
+  const bedY = water - RIVER_CARVE_DEPTH_M - 2;
+  const crestY = bank + 14;                 // crista acima das margens
+  const wallH = crestY - bedY;
+  const wallLen = RIVER_HALF_WIDTH_M * 2 + 56; // canal + ancoragem nas margens
+  const yaw = Math.atan2(perp.x, perp.z);
+
+  const g = new THREE.Group();
+  const concrete = smat(0xb9b6ad, { roughness: 0.9 });
+  const darkConcrete = smat(0x8e8b83, { roughness: 0.95 });
+
+  // Muro de gravidade: 3 segmentos em arco suave abrindo para a jusante.
+  for (const [off, bow] of [[-wallLen / 3, 4], [0, 0], [wallLen / 3, 4]]) {
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(wallLen / 3 + 2, wallH, 12), concrete);
+    seg.position.set(
+      site.x + perp.x * off + dir.x * bow,
+      bedY + wallH / 2,
+      site.z + perp.z * off + dir.z * bow,
+    );
+    seg.rotation.y = yaw;
+    seg.receiveShadow = true;
+    g.add(seg);
+  }
+  registerStructure('represa-inhauma', site.x, site.z, wallLen / 2, 14, crestY, { charRoot: g });
+
+  // Vertedouro central (calha rebaixada) + espuma na base a jusante.
+  const spill = new THREE.Mesh(new THREE.BoxGeometry(18, wallH * 0.55, 13.5), darkConcrete);
+  spill.position.set(site.x, bedY + wallH * 0.275, site.z);
+  spill.rotation.y = yaw;
+  g.add(spill);
+  const foam = new THREE.Mesh(
+    new THREE.CircleGeometry(14, 16),
+    new THREE.MeshBasicMaterial({ color: 0xe8f4f8, transparent: true, opacity: 0.55 }),
+  );
+  foam.rotation.x = -Math.PI / 2;
+  foam.position.set(site.x + dir.x * 16, water - 1.2, site.z + dir.z * 16);
+  g.add(foam);
+
+  // Torres de controle nas ombreiras.
+  for (const s of [-1, 1]) {
+    const tx = site.x + perp.x * (wallLen / 2 - 6);
+    const tz = site.z + perp.z * (wallLen / 2 - 6);
+    const x = s === 1 ? tx : site.x - perp.x * (wallLen / 2 - 6);
+    const z = s === 1 ? tz : site.z - perp.z * (wallLen / 2 - 6);
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(4, 4.6, 12, 10), concrete);
+    tower.position.set(x, crestY + 6, z);
+    g.add(tower);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(5, 3, 10), darkConcrete);
+    roof.position.set(x, crestY + 13.5, z);
+    g.add(roof);
+    registerStructure(`torre-represa-${s}`, x, z, 5, 5, crestY + 15, { charRoot: tower });
+  }
+
+  // Lago do reservatório A MONTANTE: elipse alongada no eixo do fluxo, lâmina
+  // um pouco acima do nível natural (a barragem "encheu" o vale). Água
+  // REFLEXIVA (jsm Water) — o único lago do mapa, uso previsto pelo módulo
+  // compartilhado (o passe de reflexo já é throttled/distância-gated lá).
+  // Geometria em XY: createReflectiveWater aplica o flip -90°; a orientação
+  // in-plane (eixo do fluxo) entra como rotateZ ANTES do flip. Browser-only:
+  // o jsm Water toca `document` (canvas de normais) — em Node (sims/validador)
+  // a represa existe sem lâmina, e o teste valida sítio/estruturas.
+  if (typeof document !== 'undefined') {
+    const lakeGeom = new THREE.CircleGeometry(85, 28);
+    lakeGeom.scale(1.0, 1.7, 1);
+    lakeGeom.rotateZ(-yaw);
+    const lake = createReflectiveWater(lakeGeom, {});
+    lake.position.set(site.x - dir.x * 120, water + 3.2, site.z - dir.z * 120);
+    g.add(lake);
+  }
+
+  scene.add(g);
+  return { group: g, site: { x: site.x, z: site.z }, crestY, waterY: water + 3.2 };
 }
 
 // ─── Usina nuclear (torres de resfriamento + cúpula + vapor) ──────────────────
@@ -719,7 +877,14 @@ export function buildNuclearPlant(scene) {
 
 // ─── Fábricas (zona industrial + chaminés) ───────────────────────────────────
 export function buildFactories(scene) {
-  const zones = [[1180, -260], [1080, -120], [-820, 300]];
+  // 2026-08-11 (operador): parque industrial AO REDOR DA USINA nuclear — 3 zonas
+  // novas anelando (620,640) além das 3 legadas. Guarda de rio: zona a <70 m do
+  // canal real é descartada (a usina fica "perto do rio" de propósito; galpão
+  // dentro d'água não).
+  const zones = [
+    [1180, -260], [1080, -120], [-820, 300],
+    [800, 520], [460, 830], [830, 760],
+  ].filter(([zx, zz]) => distanceToRiver(zx, zz) > 70 && !nearAnyRoad(zx, zz, 42));
   const smoke = [];
   const g = new THREE.Group();
   for (const [zx, zz] of zones) {
@@ -1032,6 +1197,50 @@ export function buildTown(scene) {
   const plazaY = inhaumaContinuousHeight(PLAZA.x, PLAZA.z) + 0.25;
   const plaza = new THREE.Mesh(new THREE.PlaneGeometry(64, 52), lmat(0x6f8d62));
   plaza.rotation.x = -Math.PI / 2; plaza.position.set(PLAZA.x, plazaY, PLAZA.z); g.add(plaza);
+
+  // 2026-08-11 (operador: "torres, praças"): mobiliário urbano de Inhaúma —
+  // coreto na praça, torre de rádio no downtown e 2 caixas d'água elevadas.
+  // Coreto (base octogonal + colunas + telhado cônico) no centro da praça.
+  const coretoBase = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.5, 1.2, 8), lmat(0xcabfa4));
+  coretoBase.position.set(PLAZA.x, plazaY + 0.6, PLAZA.z); g.add(coretoBase);
+  for (let ci = 0; ci < 6; ci++) {
+    const a = (ci / 6) * Math.PI * 2;
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 4.2, 6), lmat(0xf0e8d2));
+    col.position.set(PLAZA.x + Math.cos(a) * 5.4, plazaY + 3.2, PLAZA.z + Math.sin(a) * 5.4);
+    g.add(col);
+  }
+  const coretoRoof = new THREE.Mesh(new THREE.ConeGeometry(8.2, 3.4, 8), lmat(0x9c4a32));
+  coretoRoof.position.set(PLAZA.x, plazaY + 7.0, PLAZA.z); g.add(coretoRoof);
+  registerStructure('coreto-inhauma', PLAZA.x, PLAZA.z, 8, 8, plazaY + 8.7, { charRoot: coretoBase });
+
+  // Torre de rádio treliçada no flanco do downtown (mastro + travessas + antena).
+  const RADIO = { x: DOWNTOWN_CENTER.x + 96, z: DOWNTOWN_CENTER.z - 58 };
+  const radioY = inhaumaContinuousHeight(RADIO.x, RADIO.z);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 2.2, 46, 6), lmat(0xb8442e));
+  mast.position.set(RADIO.x, radioY + 23, RADIO.z); g.add(mast);
+  for (let s = 0; s < 4; s++) {
+    const brace = new THREE.Mesh(new THREE.BoxGeometry(7 - s * 1.4, 0.5, 0.5), lmat(0xd8d8d8));
+    brace.position.set(RADIO.x, radioY + 8 + s * 10, RADIO.z);
+    brace.rotation.y = (s % 2) * Math.PI / 4;
+    g.add(brace);
+  }
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 10, 5), lmat(0xffffff));
+  antenna.position.set(RADIO.x, radioY + 51, RADIO.z); g.add(antenna);
+  registerStructure('torre-radio-inhauma', RADIO.x, RADIO.z, 4, 4, radioY + 56, { charRoot: mast });
+
+  // Caixas d'água elevadas (tanque sobre pernas) perto dos campos.
+  for (const [wi, wOff] of [[0, { x: 70, z: -34 }], [1, { x: -66, z: 26 }]]) {
+    const wx = FIELDS[wi % FIELDS.length].x + wOff.x;
+    const wz = FIELDS[wi % FIELDS.length].z + wOff.z;
+    const wy = inhaumaContinuousHeight(wx, wz);
+    const legs = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.6, 14, 6), lmat(0x8f8f8f));
+    legs.position.set(wx, wy + 7, wz); g.add(legs);
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 7, 12), lmat(0x74a8c4));
+    tank.position.set(wx, wy + 17.5, wz); g.add(tank);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(6.4, 2.2, 12), lmat(0x5c8399));
+    cap.position.set(wx, wy + 22.1, wz); g.add(cap);
+    registerStructure(`caixa-dagua-inhauma-${wi + 1}`, wx, wz, 7, 7, wy + 23, { charRoot: tank });
+  }
 
   scene.add(g);
   return g;

@@ -54,14 +54,14 @@ test('T-C-04(a): o shelf de Cachoeira existe e é plano (stddev < 3 m)', () => {
   const mean = hs.reduce((a, b) => a + b, 0) / hs.length;
   const sd = Math.sqrt(hs.reduce((a, b) => a + (b - mean) ** 2, 0) / hs.length);
   assert.ok(sd < 3, `shelf não é plano: stddev=${sd.toFixed(2)} m`);
-  // T-D-04: novo vale a (-950,2050) — cota sondada ~71 m (probe 2026-07-20)
-  assert.ok(mean > 60 && mean < 80, `cota do shelf fora do esperado: ${mean.toFixed(1)} m`);
+  // 2026-08-11: novo vale de várzea a (-2400,2200) — aterro CACHOEIRA_SHELF_H=12 m
+  assert.ok(mean > 8 && mean < 16, `cota do shelf fora do esperado: ${mean.toFixed(1)} m`);
 });
 
 // ─── (a2) T-D-04: Cachoeira × Inhaúma a ~2 km (release nuke-firestorm-defense-v1)
-test('T-D-04(a2): Cachoeira a 1,9-2,1 km do centro de Inhaúma, no quadrante SW', () => {
+test('T-D-04(a2)/2026-08-11: Cachoeira a 2,85-3,25 km do centro de Inhaúma (+50%), no quadrante SW', () => {
   const d = Math.hypot(CACHOEIRA_TOWN_CENTER.x - (-250), CACHOEIRA_TOWN_CENTER.z - 250);
-  assert.ok(d >= 1900 && d <= 2100, `distância centro-a-centro fora de 1,9-2,1 km: ${d.toFixed(0)} m`);
+  assert.ok(d >= 2850 && d <= 3250, `distância centro-a-centro fora de 2,85-3,25 km: ${d.toFixed(0)} m`);
   // Fidelidade regional (inhauma-fidelity.spec.js): a oeste e ao sul de Inhaúma
   assert.ok(CACHOEIRA_TOWN_CENTER.x < -250 - 350, 'não está a oeste de Inhaúma');
   assert.ok(CACHOEIRA_TOWN_CENTER.z > 250 + 150, 'não está ao sul de Inhaúma');
@@ -137,7 +137,7 @@ test('T-C-05(d): guarnição completa spawna e registra alvos no barramento de d
   // (praça + largo da igreja) — ver CACHOEIRA_GARRISON.townAaBatteries.
   assert.equal(types.filter((t) => t === 'aaNest').length, 5, 'aaNests != 3 morros + 2 urbanas');
   assert.equal(types.filter((t) => t === 'armoredColumn').length, 2, 'colunas != 2');
-  assert.equal(types.filter((t) => t === 'airPatrol').length, 3, 'patrulhas aéreas != 3 (1 zep + 2 heli)');
+  assert.equal(types.filter((t) => t === 'airPatrol').length, 5, 'patrulhas aéreas != 5 (1 zep + 4 heli — 2026-08-11)');
   assert.ok(types.includes('encampment') && types.includes('samSite'), 'QG incompleto');
   const members = g.formations.reduce((s, f) => s + f.members.length, 0);
   assert.equal(game.targets.length, members, 'nem todo membro virou target');
