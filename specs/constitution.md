@@ -40,8 +40,6 @@ tauan-games/
       aero-fighters/    ← combate aéreo F-35 (Three.js)
       james-bond/       ← FPS de espionagem (Three.js)
       speed-run/        ← corrida arcade estilo Cruis'n (Three.js)
-    godot/              ← jogos DESKTOP nativos (Godot 4)
-      space-war/        ← port Godot do space-war
   space-war/            ← ⚠ MIGRAÇÃO PENDENTE → src/web-games/space-war
                           (aguarda sessão concorrente encerrar edições)
   vendor/               ← libs e assets de terceiros vendorizados (offline)
@@ -53,8 +51,8 @@ tauan-games/
 
 Regras estruturais:
 
-1. **Jogo novo em Godot → `src/godot/<jogo>/`. Jogo novo web → `src/web-games/<jogo>/`.**
-   Nenhum jogo novo nasce na raiz.
+1. **Jogo novo → `src/web-games/<jogo>/`** (o repositório é 100% web — decisão
+   do operador, 2026-08-11). Nenhum jogo novo nasce na raiz.
 2. Cada jogo é uma pasta **isolada e independente**; proibido um jogo importar
    código de outro jogo.
 3. Infraestrutura transversal (permitida fora de `src/`): `vendor/`, `tests/`,
@@ -70,15 +68,12 @@ Regras estruturais:
 Todo jogo do portfólio, em qualquer tecnologia, herda estas obrigações:
 
 1. **Offline-first** — sem CDN, sem fetch externo em runtime. Libs e modelos 3D
-   são vendorizados em `vendor/` (web) ou embutidos no projeto (Godot).
 2. **Assets de terceiros só com licença clara** — CC0/CC-BY documentada em
    `vendor/models/LICENSES.md` (ou equivalente). Nunca assets de jogos comerciais.
 3. **README pt-BR** com instruções de execução e tabela de controles.
 4. **Testável por agente** — jogos web expõem estado de debug em `window`
-   (ex.: `window.game`, `window.__corrida`); jogos Godot aceitam modo de teste
    headless por variável de ambiente (ex.: `CORRIDA_TEST=1`) com exit code.
 5. **Ao menos um smoke test** — Playwright em `tests/<jogo>/` (web) ou cena/env
-   de teste headless (Godot) validando que o jogo abre e joga sem erros.
 6. **Roda no hardware do operador** — Ubuntu + Intel Iris Xe (iGPU). Efeitos que
    exigem GPU dedicada são proibidos ou degradam automaticamente.
 7. **Controles descobríveis em segundos** — mapeamento exibido no jogo ou no menu.
@@ -106,11 +101,9 @@ Todo jogo do portfólio, em qualquer tecnologia, herda estas obrigações:
 | 0 | HTML/CSS/JS puro (DOM) | `src/web-games/` | — (memoria-bichos removido em v0.6.0) |
 | 1 | Phaser 3 (vendor) | `src/web-games/` | — (tauan-trex removido em v0.6.0) |
 | 2 | Three.js r165 (vendor, ES modules, sem build) | `src/web-games/` | aero-fighters, james-bond, space-war, speed-run |
-| 3 | Godot 4.7 (GDScript, cenas texto, headless CLI) | `src/godot/` | space-war |
 | 4 | Unreal Engine 5 | — | reservado (bloqueado por hardware) |
 
 A ladder é didática. Introduzir engine nova exige decisão explícita do operador.
-Decisão 2026-07-18: corridas migram para Godot 4 (Degrau 3) por física de veículo
 e gráficos de engine real; a versão Three.js do speed-run permanece como jogo web.
 
 ---

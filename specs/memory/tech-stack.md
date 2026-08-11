@@ -2,8 +2,7 @@
 slug: tech-stack
 title: Tech Stack
 category: core
-tldr: Stack comprometida por jogo — grupos src/web-games (Phaser/Three.js/DOM) e src/godot (Godot 4.7), assets CC0 vendorizados.
-summary: "Engine comprometida de cada jogo nos dois grupos de tecnologia, princípios de stack (sem build, vendor local, zero TS), stack de testes (Playwright + Godot headless) e padrão de deploy. Atualizado 2026-08-10 (v0.4.0): far-west removido."
+tldr: Stack comprometida por jogo — 5 jogos web em src/web-games (Three.js r165 / WebGL2 puro), assets CC0 vendorizados.
 tags:
   - tech-stack
   - engines
@@ -24,12 +23,6 @@ release_origin: v0.4.0
 | space-war (⚠ raiz) | Three.js (Degrau 2) | r165 | Física real documentada; `celestial/` testável em node. |
 | speed-run | Three.js (Degrau 2) + GLTFLoader | r165 | Corrida arcade; GLB Quaternius CC0. |
 
-### Grupo `src/godot/`
-
-| Jogo | Engine | Versão | Justificativa |
-|------|--------|--------|---------------|
-
-UE5 (Degrau 4) segue reservado — bloqueado por hardware.
 
 ## Princípios de stack
 
@@ -40,7 +33,6 @@ UE5 (Degrau 4) segue reservado — bloqueado por hardware.
   PREFERÍVEIS a reinventar (lei do operador).
 - **Vendor local commitado** — testes exigem operação offline.
 - **Zero TypeScript nos jogos web** — JS puro.
-- **Godot sem editor GUI** — cenas `.tscn` texto + GDScript, construção
   procedural em código, headless CLI para import/teste/export.
 
 ## Testing stack
@@ -49,14 +41,12 @@ UE5 (Degrau 4) segue reservado — bloqueado por hardware.
 |------------|-----|
 | Playwright ^1.44 | Smokes + ACs de todos os jogos web (`tests/<jogo>/`, `TEST_PORT` p/ sessões concorrentes) |
 | `npx serve` / `python3 -m http.server` | Servidor estático dos testes |
-| `godot4 --headless` + env vars | Import, smoke com exit code (`CORRIDA_TEST=1`), screenshots (`CORRIDA_SHOT`) |
 | `tests/probe.gd` (padrão sonda) | Medição empírica de convenções físicas da engine |
 
 ## Padrão de deploy
 
 - **Web** (`src/web-games/`): GitHub Pages via `.github/workflows/pages.yml`;
   hub `index.html` na raiz com um card por jogo.
-- **Godot** (`src/godot/`): binário Linux x64 via `godot4 --export-release`;
   distribuição por GitHub Releases; export web WASM descartado (performance).
 
 ## Descartado / não adotado
@@ -66,4 +56,3 @@ UE5 (Degrau 4) segue reservado — bloqueado por hardware.
 | Kaboom.js / Babylon.js / Pygame / TS+bundler | como antes (maturidade/peso/browser/over-engineering) |
 | Unity | desenvolvimento sem editor GUI é impraticável (comunidade) — agente não opera |
 | Unreal 5 p/ corrida | editor-cêntrico + dezenas de GB + sem export web viável |
-| Godot web export (WASM) | 200 fps desktop → 15-20 browser documentado; desktop-first |

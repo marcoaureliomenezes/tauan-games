@@ -2,7 +2,7 @@
 slug: architecture
 title: Arquitetura
 category: core
-tldr: Dois grupos por tecnologia — src/web-games (browser) e src/godot (desktop) — com deploy Pages e binário Godot.
+tldr: Um grupo — src/web-games (browser), 5 jogos — com deploy GitHub Pages.
 summary: Arquitetura macro dos dois grupos (web-games e godot), sub-seção por jogo, estratégias de deploy, requisitos de execução, publicação e regras de dependência. Reescrito 2026-07-18 na reestruturação src/.
 tags:
   - architecture
