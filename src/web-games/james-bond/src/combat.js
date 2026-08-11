@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 import { WEAPONS, freshAmmo } from './content/weapons.js';
 import { createViewModel } from './view-model.js';
 import { createExplosives } from './gameplay/explosives.js';
+import { isPrecisionShot, computeSpread } from './gameplay/spread.js';
 
 const raycaster = new THREE.Raycaster();
 const direction = new THREE.Vector3();
@@ -71,6 +72,11 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
   let bloom = 0;
   let recoverable = 0;
   let adsT = 0;
+  // F2 — precisão de primeiro tiro: tempo desde o último disparo (qualquer
+  // arma). Começa em Infinity de propósito — o primeiro tiro de uma missão
+  // nova é sempre o "tiro deliberado", nunca precisa de um `update(dt)`
+  // prévio para se qualificar.
+  let timeSinceLastShot = Infinity;
   game.ammo = freshAmmo();
   game.view = { adsT: 0, spread: 0, bloom: 0 };
 
@@ -99,13 +105,20 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
     return targets;
   }
 
-  function currentSpread() {
+  /**
+   * @param {boolean} precise F2 — quando true, ignora quase todo o
+   * espalhamento de `bloom` (ver gameplay/spread.js). `false` (padrão) é o
+   * valor usado para o HUD (`game.view.spread`, ver `update`): o crosshair
+   * reflete o estado de AQUECIMENTO da arma, não o bônus pontual de um tiro
+   * que ainda nem saiu.
+   */
+  function currentSpread(precise = false) {
     const weapon = WEAPONS[game.currentWeapon];
     const speed = game.player.speed || 0;
     const moveFactor = game.player.grounded === false ? 2.2 : speed > 5.5 ? 1.7 : speed > 0.5 ? 1.3 : 1;
     const crouchFactor = game.player.crouched ? 0.8 : 1;
     const adsFactor = 1 - adsT * 0.68;
-    return weapon.spread * (1 + bloom) * moveFactor * crouchFactor * adsFactor;
+    return computeSpread(weapon, { bloom, moveFactor, crouchFactor, adsFactor, precise });
   }
 
   function switchWeapon(id) {
@@ -163,6 +176,11 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
     const weapon = WEAPONS[game.currentWeapon];
     const ammo = game.ammo[game.currentWeapon];
     if (ammo.mag <= 0) { audio.dry(); cooldown = 0.24; return; }
+    // F2: decide ANTES de zerar o relógio — é o tempo até ESTE tiro que
+    // importa, não o próximo. Calculado para toda arma (mesmo faca/lança-
+    // -granadas), mas só o `hitscan` de fireRay consome o resultado.
+    const precise = isPrecisionShot(timeSinceLastShot, weapon);
+    timeSinceLastShot = 0;
     if (weapon.kind === 'melee') return swingKnife(weapon);
     if (weapon.kind === 'throwable') return lobGrenade(weapon);
     if (weapon.kind === 'launcher') return fireLauncher(weapon);
@@ -173,13 +191,17 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
     viewModel.onShoot();
     fx.muzzle(camera, Boolean(weapon.suppressed));
     guards.notifyNoise(camera.position, weapon.noise, game.time);
+    // F2: o raio sai com a câmera AINDA na direção mirada — o recuo desloca a
+    // mira só DEPOIS, afetando o tiro seguinte. Aplicado antes, um Desert
+    // Eagle (recoil 0.048 rad) erraria o alvo por ~4,7 m a 97 m mesmo com a
+    // mira exata em cima dele.
+    const pellets = weapon.pellets || 1;
+    for (let i = 0; i < pellets; i += 1) fireRay(weapon, i > 0, precise);
     bloom = Math.min(2.6, bloom + CONFIG.bloomPerShot * (weapon.pellets ? 1.9 : 1));
     const aimKick = weapon.recoil * (1 - adsT * 0.35) * (1 + bloom * 0.25);
     pitchCamera(aimKick);
     yawCamera((Math.random() - 0.5) * weapon.recoil * 0.5);
     recoverable += aimKick * 0.72;
-    const pellets = weapon.pellets || 1;
-    for (let i = 0; i < pellets; i += 1) fireRay(weapon, i > 0);
   }
 
   // Faca: golpe de curtíssimo alcance, sem munição e quase silencioso — dá para
@@ -258,22 +280,36 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
     camera.quaternion.multiply(kickQuat);
   }
 
-  function fireRay(weapon, pellet) {
+  // range: alcance efetivo do raycast, por arma (F2) — sem isto o corte fixo
+  // de 90 m truncava um tiro no meio da rua principal antes de ela acabar
+  // (~139 m de diagonal no maior quarteirão). 90 sobra como fallback só para
+  // uma arma futura que não declare `range`.
+  function fireRay(weapon, pellet, precise = false) {
     camera.getWorldDirection(direction);
     right.crossVectors(direction, UP).normalize();
     upv.crossVectors(right, direction).normalize();
-    const spread = currentSpread();
+    const spread = currentSpread(precise);
     const rx = (Math.random() + Math.random() - 1) * spread;
     const ry = (Math.random() + Math.random() - 1) * spread;
     direction.addScaledVector(right, rx).addScaledVector(upv, ry).normalize();
+    const range = weapon.range ?? 90;
     raycaster.set(camera.position, direction);
-    raycaster.far = 90;
+    raycaster.far = range;
     const hits = raycaster.intersectObjects(raycastTargets(), true);
     const hit = hits.find((entry) => !entry.object.userData.viewModel && !entry.object.userData.fx
       && !entry.object.userData.noRay && entry.distance > 0.3);
+    // Telemetria de TESTE: registro cru do último tiro (direção, spread e o
+    // que o raio encontrou) — os specs diagnosticam mira/precisão sem
+    // screenshot. Custo: um objeto pequeno por tiro.
+    game.telemetry.lastShot = {
+      precise, spread,
+      dir: { x: direction.x, y: direction.y, z: direction.z },
+      hit: hit ? { distance: hit.distance, zone: hit.object.userData.zone || null,
+        enemyId: hit.object.userData.enemy?.id ?? null } : null,
+    };
     viewModel.muzzleWorld(muzzle);
     if (!hit) {
-      fx.tracer(muzzle, temp.copy(camera.position).addScaledVector(direction, 90));
+      fx.tracer(muzzle, temp.copy(camera.position).addScaledVector(direction, range));
       return;
     }
     if (!pellet) fx.tracer(muzzle, hit.point);
@@ -306,6 +342,7 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
 
   function update(dt) {
     cooldown -= dt;
+    timeSinceLastShot += dt;
     if (reloadTimer > 0) {
       reloadTimer -= dt;
       if (reloadTimer <= 0) completeReload();
@@ -351,7 +388,24 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
     return input.held('KeyW') || input.held('KeyA') || input.held('KeyS') || input.held('KeyD');
   }
 
-  return { update, switchWeapon, reload, warmWeaponModels, explode: explosives.explode,
+  // Gancho de TESTE: replica o raio de fireRay sem espalhamento e devolve as
+  // primeiras interseções cruas — permite aos specs diagnosticarem "o que o
+  // tiro acertaria" sem disparar de verdade. Não usado pelo jogo.
+  function debugRay(range = 200) {
+    camera.getWorldDirection(direction);
+    raycaster.set(camera.position, direction);
+    raycaster.far = range;
+    return raycaster.intersectObjects(raycastTargets(), true).slice(0, 5).map((entry) => ({
+      distance: entry.distance,
+      name: entry.object.name || entry.object.type,
+      zone: entry.object.userData.zone || null,
+      enemyId: entry.object.userData.enemy?.id ?? null,
+      fx: Boolean(entry.object.userData.fx), noRay: Boolean(entry.object.userData.noRay),
+      viewModel: Boolean(entry.object.userData.viewModel),
+    }));
+  }
+
+  return { update, switchWeapon, reload, warmWeaponModels, explode: explosives.explode, debugRay,
     get inFlight() { return explosives.inFlight; },
     // PERF: flashlight/fill NUNCA são removidos daqui — são permanentes (ver
     // `createCombatLights` em main.js), só a intensidade é alternada por

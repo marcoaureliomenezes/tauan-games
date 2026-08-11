@@ -22,12 +22,15 @@ export const WEAPONS = Object.freeze({
   },
   deagle: {
     name: 'DESERT EAGLE', slot: 2, kind: 'hitscan', mag: 7, reserve: Infinity, damage: 82, cadence: 0.32, reload: 3.0,
-    spread: 0.006, recoil: 0.048, noise: 28, color: 0xd7d9d5, adsFov: 58, knock: 1.5,
+    // range 170 m: cobre a diagonal do maior quarteirão (~139 m) com folga —
+    // sem isso o raycast hardcoded de 90 m (ver combat.js fireRay) cortava o
+    // tiro no meio da rua principal antes de alcançar a outra ponta (F2).
+    spread: 0.006, recoil: 0.048, noise: 28, color: 0xd7d9d5, adsFov: 58, knock: 1.5, range: 170,
     muzzle: [0, 0.03, -0.92], kick: 0.17, pitch: 150,
   },
   ak47: {
     name: 'AK-47', slot: 3, kind: 'hitscan', mag: 30, reserve: Infinity, damage: 50, cadence: 0.1, reload: 3.0,
-    spread: 0.009, recoil: 0.023, noise: 32, auto: true, color: 0x283128, adsFov: 50, penetration: 1, knock: 0.85,
+    spread: 0.009, recoil: 0.023, noise: 32, auto: true, color: 0x283128, adsFov: 50, penetration: 1, knock: 0.85, range: 170,
     muzzle: [0, 0.05, -1.42], kick: 0.1, pitch: 180,
   },
   rpg: {
