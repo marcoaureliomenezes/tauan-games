@@ -27,7 +27,19 @@ const PALETTE = {
   sidewalk: [0.56, 0.56, 0.54],
   grass: [0.24, 0.38, 0.18],
   paint: [0.85, 0.83, 0.55],
+  path: [0.70, 0.63, 0.48],
+  planter: [0.46, 0.44, 0.42],
 };
+
+// Facade style ids consumed by the instanced fragment shader (R-05).
+export const FACADE_STYLE = {
+  skyscraper: 1, apartment: 2, house: 3, warehouse: 4, shop: 5, silo: 6,
+};
+
+const FLOWER_COLORS = [
+  [0.85, 0.20, 0.25], [0.95, 0.75, 0.15], [0.80, 0.35, 0.75],
+  [0.95, 0.45, 0.15], [0.85, 0.85, 0.90],
+];
 
 let nextStructureId = 1;
 
@@ -41,6 +53,7 @@ export class Structure {
     this.name = spec.name;
     this.color = spec.color;
     this.roofColor = spec.roofColor || PALETTE.roofFlat;
+    this.styleId = FACADE_STYLE[spec.type] || 0;
 
     this.nx = Math.max(2, Math.round(spec.w / CELL));
     this.nz = Math.max(2, Math.round(spec.d / CELL));
@@ -266,14 +279,31 @@ export function buildCity(seed = 20260725) {
       const isDowntown = Math.abs(gx - (GRID - 1) / 2) + Math.abs(gz - (GRID - 1) / 2) <= 1;
 
       if (isPark) {
+        // Plaza (R-06): lawn, crossing paths, varied trees and flowerbeds.
         builder.addFlatQuad(bx - BLOCK / 2, bz - BLOCK / 2, bx + BLOCK / 2, bz + BLOCK / 2, 0.2, PALETTE.grass, 0.95);
+        builder.addFlatQuad(bx - 2.4, bz - BLOCK / 2, bx + 2.4, bz + BLOCK / 2, 0.24, PALETTE.path, 0.92);
+        builder.addFlatQuad(bx - BLOCK / 2, bz - 2.4, bx + BLOCK / 2, bz + 2.4, 0.24, PALETTE.path, 0.92);
         parks.push({ x: bx, z: bz });
-        for (let i = 0; i < 9; i++) {
+        let planted = 0;
+        while (planted < 10) {
+          const tx = (rand() - 0.5) * (BLOCK - 10);
+          const tz = (rand() - 0.5) * (BLOCK - 10);
+          if (Math.abs(tx) < 4.5 || Math.abs(tz) < 4.5) continue;   // keep paths clear
           props.push({
             kind: 'tree',
-            x: bx + (rand() - 0.5) * (BLOCK - 8),
-            z: bz + (rand() - 0.5) * (BLOCK - 8),
+            variant: Math.floor(rand() * 3),
+            x: bx + tx,
+            z: bz + tz,
             h: 4 + rand() * 3.5,
+          });
+          planted++;
+        }
+        for (const [fx, fz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          props.push({
+            kind: 'flowerbed',
+            x: bx + fx * 8,
+            z: bz + fz * 8,
+            color: FLOWER_COLORS[Math.floor(rand() * FLOWER_COLORS.length)],
           });
         }
         continue;
@@ -329,6 +359,20 @@ export function buildCity(seed = 20260725) {
           name: structureName(rand, lot.type, gx, gz),
         });
         structures.push(s);
+      }
+
+      // Residential streets get kerbside trees (R-06).
+      if (lots.some((l) => l.type === 'house' || l.type === 'apartment')) {
+        for (let i = 0; i < 3; i++) {
+          const side = Math.floor(rand() * 4);
+          const off = BLOCK / 2 + 1.8;
+          const jitter = (rand() - 0.5) * BLOCK * 0.65;
+          const p = side === 0 ? { x: bx + jitter, z: bz - off }
+            : side === 1 ? { x: bx + jitter, z: bz + off }
+              : side === 2 ? { x: bx - off, z: bz + jitter }
+                : { x: bx + off, z: bz + jitter };
+          props.push({ kind: 'tree', variant: Math.floor(rand() * 3), x: p.x, z: p.z, h: 3.5 + rand() * 2 });
+        }
       }
 
       // Street furniture along the kerb.

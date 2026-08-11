@@ -1,5 +1,7 @@
 // GLSL ES 3.0 sources. One shared lighting model keeps every surface coherent.
 
+import { SNOISE_2D } from './vendor/snoise.js';
+
 const COMMON_LIGHTING = /* glsl */`
 precision highp sampler2DShadow;   // GLSL ES 3.0 has no default precision for samplers
 
@@ -79,7 +81,7 @@ precision highp float;
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec4 i_pos;    // xyz = world position, w = damage 0..1
-layout(location = 3) in vec4 i_scale;  // xyz = half-extents, w = unused
+layout(location = 3) in vec4 i_scale;  // xyz = half-extents, w = facade style id
 layout(location = 4) in vec4 i_quat;   // orientation
 layout(location = 5) in vec4 i_color;  // rgb = albedo, a = roughness
 
@@ -91,6 +93,7 @@ out vec3 v_world;
 out vec3 v_color;
 out float v_rough;
 out float v_damage;
+out float v_style;
 out vec3 v_local;
 out vec4 v_lightSpace;
 
@@ -104,6 +107,7 @@ void main() {
   v_color = i_color.rgb;
   v_rough = i_color.a;
   v_damage = i_pos.w;
+  v_style = i_scale.w;
   v_local = a_pos;
   v_lightSpace = u_lightViewProj * vec4(world, 1.0);
   gl_Position = u_viewProj * vec4(world, 1.0);
@@ -116,6 +120,7 @@ in vec3 v_world;
 in vec3 v_color;
 in float v_rough;
 in float v_damage;
+in float v_style;
 in vec3 v_local;
 in vec4 v_lightSpace;
 out vec4 outColor;
@@ -126,19 +131,96 @@ float hash(vec3 p) {
   return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
 }
 
+// Facade styles (SPEC v0.9.0 R-05), carried per-instance in i_scale.w:
+// 0 none · 1 glass tower · 2 apartment · 3 house · 4 warehouse · 5 shop · 6 silo.
+// Patterns are anchored in world space, so the per-cell voxel boxes of one
+// building line up into a single continuous facade.
+void facade(inout vec3 albedo, inout float rough, vec3 N, float style) {
+  vec2 uv = abs(N.x) > 0.5 ? v_world.zy : v_world.xy;
+  float ground = 1.0 - step(3.4, v_world.y);
+
+  if (style == 1.0) {
+    // Glass curtain wall: big glass cells split by mullions.
+    vec2 g = uv * vec2(0.30, 0.27);
+    vec2 f = fract(g);
+    float mullion = step(f.x, 0.10) + step(f.y, 0.12);
+    float litw = step(0.86, hash(vec3(floor(g), 7.0)));
+    vec3 glass = mix(vec3(0.30, 0.44, 0.58), vec3(0.86, 0.78, 0.52), litw * 0.55);
+    glass *= 0.92 + 0.16 * hash(vec3(floor(g), 2.0));
+    albedo = mix(glass, v_color * 0.52, clamp(mullion, 0.0, 1.0));
+    rough = mix(0.06, 0.5, clamp(mullion, 0.0, 1.0));
+    if (ground > 0.5 && v_world.y < 3.0) {         // lobby: taller glass, dark frames
+      float lob = step(fract(uv.x * 0.09), 0.06);
+      albedo = mix(vec3(0.16, 0.22, 0.28), v_color * 0.4, lob);
+      rough = 0.08;
+    }
+    return;
+  }
+
+  if (style == 4.0 || style == 6.0) {
+    // Industrial: ribbed metal walls; the warehouse gets a wide gate.
+    float rib = 0.92 + 0.08 * step(0.5, fract(uv.x * 0.9));
+    albedo = v_color * rib;
+    if (style == 4.0 && ground > 0.5) {
+      float gate = step(abs(fract(uv.x * 0.055) - 0.5), 0.30) * step(v_world.y, 3.1);
+      vec3 gateCol = vec3(0.30, 0.33, 0.36) * (0.85 + 0.15 * step(0.5, fract(v_world.y * 1.6)));
+      albedo = mix(albedo, gateCol, gate);
+      rough = mix(rough, 0.4, gate);
+    }
+    return;
+  }
+
+  // Punched windows (apartment / house / shop): frame + glass per lattice cell.
+  vec2 g = uv * vec2(0.42, 0.40);
+  vec2 f = fract(g);
+  float win = step(0.22, f.x) * step(f.x, 0.80) * step(0.32, f.y) * step(f.y, 0.82);
+  float glassArea = step(0.28, f.x) * step(f.x, 0.74) * step(0.40, f.y) * step(f.y, 0.76);
+  float frame = win - glassArea;
+  float litw = step(0.88, hash(vec3(floor(g), 3.0)));
+  vec3 glass = mix(vec3(0.10, 0.13, 0.18), vec3(0.95, 0.82, 0.55), litw);
+
+  if (ground > 0.5) {
+    if (style == 5.0) {
+      // Shop: storefront glass band with slim frames + awning stripe.
+      float sf = step(0.6, v_world.y) * step(v_world.y, 2.6);
+      float post = step(fract(uv.x * 0.14), 0.05);
+      albedo = mix(albedo, mix(vec3(0.16, 0.20, 0.26), v_color * 0.5, post), sf);
+      rough = mix(rough, 0.1, sf * (1.0 - post));
+      float awning = step(2.6, v_world.y) * step(v_world.y, 3.2);
+      vec3 awnCol = mix(vec3(0.75, 0.22, 0.18), vec3(0.16, 0.32, 0.55), step(0.5, hash(vec3(floor(v_world.xz * 0.02), 9.0))));
+      albedo = mix(albedo, awnCol, awning);
+      return;
+    }
+    // Door every ~7 m; the rest of the ground floor keeps sparse windows.
+    float dcell = fract(uv.x * 0.14);
+    float door = step(abs(dcell - 0.5), 0.11) * step(v_world.y, 2.5);
+    float dframe = step(abs(dcell - 0.5), 0.14) * step(v_world.y, 2.7) - door;
+    albedo = mix(albedo, vec3(0.30, 0.18, 0.10), door);
+    albedo = mix(albedo, vec3(0.88, 0.86, 0.80), clamp(dframe, 0.0, 1.0));
+    rough = mix(rough, 0.35, door);
+    win *= step(0.5, 1.0 - door - clamp(dframe, 0.0, 1.0));
+    glassArea *= step(0.5, 1.0 - door - clamp(dframe, 0.0, 1.0));
+    frame = clamp(win - glassArea, 0.0, 1.0);
+  }
+
+  albedo = mix(albedo, vec3(0.90, 0.88, 0.82), frame);          // moldura
+  albedo = mix(albedo, glass, glassArea);
+  rough = mix(rough, 0.07, glassArea);
+  if (style == 2.0) {
+    // Apartment: light slab line at every floor (balcony hint).
+    float slab = step(fract(g.y), 0.07);
+    albedo = mix(albedo, v_color * 1.12, slab * (1.0 - win));
+  }
+}
+
 void main() {
   vec3 N = normalize(v_normal);
   vec3 albedo = v_color;
+  float rough = v_rough;
 
-  // Facade detail: window bands on the vertical faces of building blocks.
   float vertical = 1.0 - abs(N.y);
-  if (vertical > 0.5 && v_rough < 0.85) {
-    vec2 uv = abs(N.x) > 0.5 ? v_world.zy : v_world.xy;
-    vec2 cell = floor(uv * 0.55);
-    float win = step(0.35, fract(uv.x * 0.55)) * step(0.4, fract(uv.y * 0.55));
-    float lit = step(0.82, hash(vec3(cell, 3.0)));
-    albedo = mix(albedo, mix(vec3(0.09, 0.12, 0.17), vec3(0.95, 0.82, 0.55), lit), win * 0.75 * vertical);
-  }
+  float style = floor(v_style + 0.5);
+  if (style > 0.5 && vertical > 0.5) facade(albedo, rough, N, style);
 
   // Damage: darkened, dusty, cracked-looking concrete.
   float grit = hash(floor(v_world * 3.0));
@@ -146,7 +228,7 @@ void main() {
 
   float ndl = max(dot(N, normalize(u_sunDir)), 0.0);
   float shadow = shadowFactor(v_lightSpace, ndl);
-  vec3 color = shade(albedo, N, v_world, clamp(v_rough + v_damage * 0.3, 0.05, 1.0), shadow);
+  vec3 color = shade(albedo, N, v_world, clamp(rough + v_damage * 0.3, 0.05, 1.0), shadow);
   outColor = vec4(tonemap(applyFog(color, v_world)), 1.0);
 }`;
 
@@ -232,14 +314,46 @@ uniform vec3 u_sunDir;
 uniform vec3 u_skyTop;
 uniform vec3 u_skyHorizon;
 uniform vec3 u_sunColor;
+uniform float u_time;
+uniform float u_cloudHq;   // 0 = one noise octave (?quality=low), 1 = three
 out vec4 outColor;
+
+${SNOISE_2D}
+
 void main() {
   vec3 d = normalize(v_dir);
+  vec3 S = normalize(u_sunDir);
   float h = clamp(d.y * 0.5 + 0.5, 0.0, 1.0);
   vec3 col = mix(u_skyHorizon, u_skyTop, pow(h, 0.85));
-  float sun = pow(max(dot(d, normalize(u_sunDir)), 0.0), 220.0);
-  float glow = pow(max(dot(d, normalize(u_sunDir)), 0.0), 6.0) * 0.18;
+
+  // Sunny-morning warmth hugging the horizon on the sun's side (R-08).
+  float toSun = max(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(S.x, 0.0, S.z))), 0.0);
+  col += vec3(0.28, 0.16, 0.05) * pow(toSun, 3.0) * (1.0 - smoothstep(0.0, 0.35, d.y));
+
+  float sun = pow(max(dot(d, S), 0.0), 220.0);
+  float glow = pow(max(dot(d, S), 0.0), 6.0) * 0.18;
   col += u_sunColor * (sun * 3.0 + glow);
+
+  // Slow procedural clouds (R-08, ADR-5): 3 octaves of vendored snoise on a
+  // sky plane, drifting with the wind; they thin out toward the horizon.
+  if (d.y > 0.015) {
+    vec2 p = d.xz / (d.y + 0.14) * 1.15;
+    vec2 drift = vec2(u_time * 0.010, u_time * 0.0045);
+    float n = snoise(p * 0.26 + drift) * 0.60;
+    if (u_cloudHq > 0.5) {
+      n += snoise(p * 0.72 + drift * 2.1) * 0.28
+         + snoise(p * 1.90 + drift * 3.7) * 0.12;
+    } else {
+      n *= 1.35;
+    }
+    float cov = smoothstep(0.04, 0.52, n) * smoothstep(0.015, 0.14, d.y);
+    // Puffy shading: dense cores dim slightly, sun side gets a silver lining.
+    float dense = smoothstep(0.35, 0.95, n);
+    vec3 cloud = mix(vec3(1.04, 1.02, 0.99), vec3(0.78, 0.80, 0.85), dense * 0.6);
+    cloud += u_sunColor * 0.10 * pow(max(dot(d, S), 0.0), 3.0);
+    col = mix(col, cloud, cov * 0.88);
+  }
+
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
   outColor = vec4(col, 1.0);
 }`;

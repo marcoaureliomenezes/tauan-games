@@ -60,12 +60,12 @@ class InstanceBatch {
 
   reset() { this.count = 0; }
 
-  push(px, py, pz, damage, sx, sy, sz, qx, qy, qz, qw, r, g, b, rough) {
+  push(px, py, pz, damage, sx, sy, sz, qx, qy, qz, qw, r, g, b, rough, style = 0) {
     if (this.count >= this.max) return;
     const o = this.count * INSTANCE_FLOATS;
     const d = this.data;
     d[o] = px; d[o + 1] = py; d[o + 2] = pz; d[o + 3] = damage;
-    d[o + 4] = sx; d[o + 5] = sy; d[o + 6] = sz; d[o + 7] = 0;
+    d[o + 4] = sx; d[o + 5] = sy; d[o + 6] = sz; d[o + 7] = style;
     d[o + 8] = qx; d[o + 9] = qy; d[o + 10] = qz; d[o + 11] = qw;
     d[o + 12] = r; d[o + 13] = g; d[o + 14] = b; d[o + 15] = rough;
     this.count++;
@@ -126,7 +126,7 @@ export class Renderer {
       sunColor: [1.55, 1.36, 1.06],
       skyAmbient: [0.30, 0.36, 0.46],
       groundAmbient: [0.16, 0.15, 0.13],
-      fogColor: [0.66, 0.72, 0.80],
+      fogColor: [0.73, 0.79, 0.87],   // sits between skyHorizon and the streets so the seam melts
       fogDensity: 0.0022,
       skyTop: [0.20, 0.42, 0.82],
       skyHorizon: [0.78, 0.85, 0.93],
@@ -143,10 +143,10 @@ export class Renderer {
     this.particleCount = 0;
   }
 
-  /** pos/half/quat are objects; color is [r,g,b]. */
-  pushBox(pos, half, quat, color, rough = 0.7, damage = 0) {
+  /** pos/half/quat are objects; color is [r,g,b]; style = facade id (R-05). */
+  pushBox(pos, half, quat, color, rough = 0.7, damage = 0, style = 0) {
     this.batches.box.push(pos.x, pos.y, pos.z, damage, half.x, half.y, half.z,
-      quat.x, quat.y, quat.z, quat.w, color[0], color[1], color[2], rough);
+      quat.x, quat.y, quat.z, quat.w, color[0], color[1], color[2], rough, style);
   }
 
   pushSphere(pos, radius, quat, color, rough = 0.4, damage = 0) {
@@ -245,8 +245,10 @@ export class Renderer {
     gl.clearColor(this.env.fogColor[0], this.env.fogColor[1], this.env.fogColor[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // sky
+    // sky — depth test must be OFF: the fullscreen quad sits exactly at the far
+    // plane (z == 1.0), which LESS rejects against the cleared depth buffer.
     gl.depthMask(false);
+    gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
     gl.useProgram(this.skyProg.prog);
     const su = this.skyProg.uniforms;
@@ -256,9 +258,12 @@ export class Renderer {
     gl.uniform3fv(su.u_skyTop, this.env.skyTop);
     gl.uniform3fv(su.u_skyHorizon, this.env.skyHorizon);
     gl.uniform3fv(su.u_sunColor, this.env.sunColor);
+    if (su.u_time) gl.uniform1f(su.u_time, this.env.time || 0);
+    if (su.u_cloudHq) gl.uniform1f(su.u_cloudHq, this.env.cloudHq === false ? 0 : 1);
     gl.bindVertexArray(this.sky.vao);
     gl.drawElements(gl.TRIANGLES, this.sky.count, gl.UNSIGNED_INT, 0);
     gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
     gl.depthMask(true);
 
     // static ground

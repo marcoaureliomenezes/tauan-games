@@ -36,7 +36,7 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
     padrão); bola nunca spawna dentro de volume; `Q/E`/`Z/X` intactos durante o homing.
   - **Nota:** idem T2 — shadow copy primeiro, validação unit no shadow.
 
-- [ ] T4 - Fachadas detalhadas + praças/vegetação + céu com nuvens (R-05, R-06, R-08, WS-3)
+- [x] T4 - Fachadas detalhadas + praças/vegetação + céu com nuvens (R-05, R-06, R-08, WS-3)
   - **Owner:** software-engineer
   - **Acceptance:** screenshots Playwright anotados mostrando janelas com
     moldura/vidro, portas no térreo, praça com árvores variadas e flores, nuvens

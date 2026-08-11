@@ -127,6 +127,26 @@ test('HUD mostra contrato, alvos e caixa', async ({ page }) => {
   await page.screenshot({ path: 'screenshots/demolition-ball-opus-5.png' });
 });
 
+// ---------------------------------------------------------------- v0.9.0 (R-05..R-08)
+
+test('cidade viva mantém fps jogável em quality=low (T4)', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => window.__demolition.begin());
+  const fps = await page.evaluate(async () => {
+    // Warm up, then take the BEST of six 30-frame windows: the game's own cost
+    // is what we gate on, not ambient CI machine load spikes.
+    for (let i = 0; i < 30; i++) await new Promise((r) => requestAnimationFrame(r));
+    let best = 0;
+    for (let w = 0; w < 6; w++) {
+      const t0 = performance.now();
+      for (let i = 0; i < 30; i++) await new Promise((r) => requestAnimationFrame(r));
+      best = Math.max(best, 30000 / (performance.now() - t0));
+    }
+    return best;
+  });
+  expect(fps).toBeGreaterThanOrEqual(20);
+});
+
 // ---------------------------------------------------------------- v0.9.0 (R-01)
 
 test('overlay oferece os dois modos e o Tauan é o padrão (AC-1)', async ({ page }) => {

@@ -42,6 +42,7 @@ const DRAW_MAX = LOW ? 240 : 420;      // beyond this, a structure is skipped
 const DRAW_DETAIL = LOW ? 110 : 190;   // beyond this, an intact one is a single box
 
 const renderer = new Renderer(canvas, LOW ? { shadowSize: 1024, maxPixelRatio: 1 } : {});
+if (LOW) renderer.env.cloudHq = false;   // one snoise octave on software rasterisers
 const city = buildCity();
 renderer.setStaticMesh(city.staticMesh);
 
@@ -232,7 +233,7 @@ function renderStructures() {
       renderer.pushBox(
         v3(s.center.x, s.size.y / 2, s.center.z),
         v3(s.size.x / 2, s.size.y / 2, s.size.z / 2),
-        { x: 0, y: 0, z: 0, w: 1 }, s.color, rough, 0,
+        { x: 0, y: 0, z: 0, w: 1 }, s.color, rough, 0, s.styleId,
       );
       continue;
     }
@@ -249,8 +250,31 @@ function renderStructures() {
         isRoof ? s.roofColor : s.color,
         isRoof ? 0.8 : rough,
         clamp(s.damage[i], 0, 1),
+        isRoof ? 0 : s.styleId,
       );
     }
+  }
+}
+
+const IQ = { x: 0, y: 0, z: 0, w: 1 };
+
+function renderTree(p) {
+  const v = p.variant || 0;
+  if (v === 1) {
+    // Conifer: stacked shrinking canopies.
+    renderer.pushCylinder(v3(p.x, p.h * 0.28, p.z), 0.24, p.h * 0.28, IQ, [0.30, 0.21, 0.13], 0.9);
+    for (let i = 0; i < 3; i++) {
+      renderer.pushSphere(v3(p.x, p.h * (0.52 + 0.24 * i), p.z), p.h * (0.34 - 0.09 * i), IQ, [0.13, 0.30, 0.15], 0.9);
+    }
+  } else if (v === 2) {
+    // Tall and slim: high trunk, small offset crowns.
+    renderer.pushCylinder(v3(p.x, p.h * 0.5, p.z), 0.20, p.h * 0.5, IQ, [0.34, 0.26, 0.16], 0.9);
+    renderer.pushSphere(v3(p.x, p.h * 1.04, p.z), p.h * 0.30, IQ, [0.24, 0.40, 0.17], 0.9);
+    renderer.pushSphere(v3(p.x + p.h * 0.14, p.h * 0.90, p.z - p.h * 0.10), p.h * 0.20, IQ, [0.20, 0.35, 0.14], 0.9);
+  } else {
+    // Classic round crown.
+    renderer.pushCylinder(v3(p.x, p.h * 0.35, p.z), 0.28, p.h * 0.35, IQ, [0.28, 0.20, 0.13], 0.9);
+    renderer.pushSphere(v3(p.x, p.h * 0.82, p.z), p.h * 0.42, IQ, [0.20, 0.36, 0.16], 0.9);
   }
 }
 
@@ -260,11 +284,17 @@ function renderProps() {
     const d = Math.hypot(p.x - cam.x, p.z - cam.z);
     if (d > DRAW_DETAIL) continue;
     if (p.kind === 'tree') {
-      renderer.pushCylinder(v3(p.x, p.h * 0.35, p.z), 0.28, p.h * 0.35, { x: 0, y: 0, z: 0, w: 1 }, [0.28, 0.20, 0.13], 0.9);
-      renderer.pushSphere(v3(p.x, p.h * 0.82, p.z), p.h * 0.42, { x: 0, y: 0, z: 0, w: 1 }, [0.20, 0.36, 0.16], 0.9);
+      renderTree(p);
+    } else if (p.kind === 'flowerbed') {
+      // Planter box + a spray of coloured flower dots (R-06).
+      renderer.pushBox(v3(p.x, 0.42, p.z), v3(1.5, 0.32, 1.5), IQ, city.palette.planter, 0.85);
+      renderer.pushBox(v3(p.x, 0.62, p.z), v3(1.3, 0.12, 1.3), IQ, [0.23, 0.16, 0.11], 0.95);
+      for (const [ox, oz] of [[-0.7, -0.6], [0.6, -0.5], [-0.4, 0.7], [0.7, 0.6], [0.0, 0.05]]) {
+        renderer.pushSphere(v3(p.x + ox, 0.86, p.z + oz), 0.20, IQ, p.color, 0.7);
+      }
     } else {
-      renderer.pushCylinder(v3(p.x, p.h / 2, p.z), 0.11, p.h / 2, { x: 0, y: 0, z: 0, w: 1 }, [0.28, 0.29, 0.31], 0.5);
-      renderer.pushBox(v3(p.x, p.h, p.z), v3(0.34, 0.14, 0.55), { x: 0, y: 0, z: 0, w: 1 }, [0.85, 0.83, 0.7], 0.3);
+      renderer.pushCylinder(v3(p.x, p.h / 2, p.z), 0.11, p.h / 2, IQ, [0.28, 0.29, 0.31], 0.5);
+      renderer.pushBox(v3(p.x, p.h, p.z), v3(0.34, 0.14, 0.55), IQ, [0.85, 0.83, 0.7], 0.3);
     }
   }
 }
@@ -386,6 +416,7 @@ function frame(nowMs) {
   audio.setEngine(rig.speed, input.throttle);
   updateCamera(dt);
 
+  renderer.env.time = simTime;
   renderer.beginFrame();
   renderStructures();
   renderProps();
