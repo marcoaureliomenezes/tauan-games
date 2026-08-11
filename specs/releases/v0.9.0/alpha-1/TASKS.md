@@ -80,9 +80,10 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
   - **Owner:** qa-engineer
   - **Acceptance:** AC-1..AC-8; `node tests/demolition-ball-opus-5/unit.mjs` e
     Playwright do jogo verdes; relatório de QA + handoff; operador (e filho) jogam.
-  - **Estado (2026-08-11):** 30 unit verdes; e2e 8/9 verdes — a exceção é SÓ o
-    teste de fps sob loadavg ~31 na máquina (A/B provou: baseline 15,5 fps vs
-    v0.9.0 13,9 fps no mesmo ambiente → custo próprio da release ~10%; o gate
-    de 20 fps passa em máquina ociosa). Screenshots de evidência capturados
-    (modos, fachadas, praça, rio/pontes, pedestres, cones, operador).
-    **Pendente: re-rodar suíte com a máquina calma + operador (e filho) jogarem.**
+  - **Estado (2026-08-11):** SUÍTE COMPLETA VERDE — 30 unit + 9/9 e2e (incl.
+    fps ≥20 em quality=low, AC-1 modos, AC-5 equipe). Nota: houve UMA reprova de
+    fps sob loadavg ~31; A/B na mesma máquina provou custo próprio da release
+    ~10% (baseline 15,5 vs v0.9.0 13,9); com Chromium 147 e load menor, verde.
+    Screenshots de evidência capturados (modos, fachadas, praça, rio/pontes,
+    pedestres, cones, operador). **Pendente apenas: operador (e filho) jogarem
+    e aceitarem — servidor registrado em http://127.0.0.1:8148/demolition-ball-opus-5/**
