@@ -125,8 +125,13 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
   // Um grafo por nível: guarda do mezanino só anda em laje, guarda do térreo
   // só anda em corredor. Sem isso o inimigo de cima seguia caminhos do térreo
   // a 3.55 m de altura e parecia flutuar sobre um piso invisível.
+  // `groundNavWalkable` (ver world.js) é `groundWalkable` menos a base da
+  // torre e as bocas de visita da passagem (M2/M3) — recintos que a IA não
+  // sabe contornar/descer. O JOGADOR continua andando ali normalmente; só o
+  // grafo de patrulha e o spawner de reforço evitam essas células.
+  const groundWalkableForNav = world.groundNavWalkable || world.groundWalkable;
   const navByLevel = {
-    ground: buildNavGraph(world, world.groundWalkable),
+    ground: buildNavGraph(world, groundWalkableForNav),
     upper: world.upper.cells.size ? buildNavGraph(world, world.upperWalkable) : null,
   };
   const difficulty = DIFFICULTY[game.difficulty];
@@ -224,7 +229,7 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
   const groundCells = [];
   for (let z = 0; z < world.height; z += 1) {
     for (let x = 0; x < world.width; x += 1) {
-      if (!world.groundWalkable(x, z)) continue;
+      if (!groundWalkableForNav(x, z)) continue;
       groundCells.push({
         x, z,
         interior: world.chars[z][x] === '.',

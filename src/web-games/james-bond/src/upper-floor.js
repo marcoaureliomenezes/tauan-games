@@ -147,8 +147,12 @@ export function addUpperFloor(group, physics, mission, world, materials) {
  * baixo da escadaria; só se sobe pisando degrau a degrau, e cada espelho
  * (0.507 m) cabe no passo automático de 0.62 m.
  */
-function addStairPhysics(physics, position, [dx, dz], top, half) {
-  const rise = top / STAIR_STEPS;
+// `base` generaliza a escadaria para nascer ACIMA do chão (ex.: mezanino ->
+// telhado, ver roof.js): degrau MACIÇO de `base` até o próprio degrau, em vez
+// de sempre 0..degrau. Omitido (0), o comportamento é IDÊNTICO ao original
+// (chão -> mezanino) — nenhuma missão hoje passa este argumento.
+export function addStairPhysics(physics, position, [dx, dz], top, half, base = 0) {
+  const rise = (top - base) / STAIR_STEPS;
   const run = CONFIG.cellSize / STAIR_STEPS;
   for (let i = 0; i < STAIR_STEPS; i += 1) {
     const along = -half + (i + 0.5) * run;
@@ -156,15 +160,17 @@ function addStairPhysics(physics, position, [dx, dz], top, half) {
     const cz = position.z + dz * along;
     const hx = dx ? run / 2 : half;
     const hz = dz ? run / 2 : half;
-    physics.addPlatform(cx, cz, hx, hz, rise * (i + 1), 0);
+    physics.addPlatform(cx, cz, hx, hz, base + rise * (i + 1), base);
   }
 }
 
-/** Escadaria sólida: degraus fechados do chão ao topo, na largura da célula. */
-function buildStaircase([dx, dz], top, materials) {
+/** Escadaria sólida: degraus fechados do chão ao topo, na largura da célula.
+ * `base` (ver addStairPhysics) desloca o grupo inteiro para nascer em cima de
+ * outro nível; omitido, o degrau nasce em y=0 como sempre. */
+export function buildStaircase([dx, dz], top, materials, base = 0) {
   const group = new THREE.Group();
   const material = materials.trim;
-  const rise = top / STAIR_STEPS;
+  const rise = (top - base) / STAIR_STEPS;
   const run = CONFIG.cellSize / STAIR_STEPS;
   const half = CONFIG.cellSize / 2;
   for (let i = 0; i < STAIR_STEPS; i += 1) {
@@ -189,10 +195,11 @@ function buildStaircase([dx, dz], top, materials) {
  * Altura escolhida abaixo da linha dos olhos (1.68 em pé, 1.25 agachado) para
  * o mezanino continuar servindo de ninho de sniper.
  */
-const PARAPET_HEIGHT = 1.05;
-const PARAPET_THICKNESS = 0.18;
+export const PARAPET_HEIGHT = 1.05;
+export const PARAPET_THICKNESS = 0.18;
 
-function addParapets(group, physics, world, cells, mouths, material, top) {
+/** Exportado: roof.js reusa a mesma guarda-corpo de borda para o telhado. */
+export function addParapets(group, physics, world, cells, mouths, material, top) {
   const neighbours = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   // Agrupa as arestas por lado e linha para MESCLAR trechos contíguos: uma
   // borda de 5 células vira um colisor só, como já é feito com as paredes.

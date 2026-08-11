@@ -7,6 +7,20 @@ export const CONFIG = Object.freeze({
   floorHeight: 3.55,
   slabThickness: 0.26,
   upperWallHeight: 3.0,
+  // M1 — telhado/cobertura: terceiro nível, pisável, direto sobre as paredes
+  // do mezanino (que já fecham o cômodo até aqui). Sem inimigo — só o
+  // jogador sobe (ver ai/nav-graph.js, que permanece só térreo+mezanino).
+  roofHeight: 3.55 + 3.0,
+  roofSlabThickness: 0.26,
+  // M2 — torre de vigia: landmark alto com subida por escada de mão
+  // (physics.addLadder) até uma plataforma de observação. Mais alta que o
+  // telhado — é o ponto mais alto de cada missão, visível da rua.
+  towerHeight: 10.2,
+  towerSlabThickness: 0.26,
+  // M3 — esgoto/passagem subterrânea: nível abaixo da rua, ligado por 2-3
+  // bocas de visita (escada descendo). O teto da passagem é o próprio piso
+  // da rua (inalterado) — só as células de entrada perdem a laje térrea.
+  undergroundDepth: 3.0,
   climbSpeed: 3.1,
   eyeHeight: 1.68,
   playerSpeed: 4.8,
