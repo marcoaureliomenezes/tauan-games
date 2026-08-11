@@ -65,7 +65,7 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
     entradas; 1×/contrato; equipe recolhe cones ao concluir o alvo (e2e + unit de
     `closedBlocks`).
 
-- [ ] T9 - Operador visível na cabine (R-12, WS-7)
+- [x] T9 - Operador visível na cabine (R-12, WS-7)
   - **Owner:** software-engineer
   - **Acceptance:** AC-6 — figura com capacete/tronco/braços sentada na cab,
     acompanhando o slew; visível nas câmeras follow e ball (screenshots).

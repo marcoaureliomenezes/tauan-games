@@ -378,9 +378,34 @@ export class Rig {
     const hx = Math.sin(this.worldTurretYaw), hz = Math.cos(this.worldTurretYaw);
     const housePos = v3(hp.x - hx * 0.9, 3.0, hp.z - hz * 0.9);
     renderer.pushBox(housePos, v3(1.65, 1.05, 2.3), houseQuat, yellow, 0.45);
-    // Cab glass
-    const cabPos = v3(hp.x + hx * 0.9 + hz * 1.0, 3.15, hp.z + hz * 0.9 - hx * 1.0);
-    renderer.pushBox(cabPos, v3(0.85, 0.95, 1.05), houseQuat, [0.18, 0.28, 0.34], 0.15);
+    // Open cab + visible operator (SPEC v0.9.0 R-12, ADR-6). The old cab was a
+    // single opaque "glass" box, which would hide anyone inside; instead: floor,
+    // four corner posts, roof and a thin windshield, with the operator seated at
+    // the controls, all rotating with the turret.
+    const GLASS = [0.18, 0.28, 0.34];
+    const VEST = [1.0, 0.45, 0.05];
+    const tlocal = (r, y, f) => v3(hp.x + hx * f + hz * r, y, hp.z + hz * f - hx * r);
+    const rightAxis = v3(hz, 0, -hx);
+    // The cab hangs off the FRONT of the slewing house (which spans f<=1.4) so
+    // the operator is never swallowed by the house box.
+    renderer.pushBox(tlocal(1.0, 2.90, 1.45), v3(0.55, 0.35, 0.40), houseQuat, yellow, 0.5);
+    renderer.pushBox(tlocal(1.0, 2.32, 2.55), v3(0.85, 0.10, 1.05), houseQuat, steel, 0.6);
+    renderer.pushBox(tlocal(1.0, 4.12, 2.55), v3(0.92, 0.07, 1.12), houseQuat, yellow, 0.5);
+    for (const [rr, ff] of [[0.28, 1.57], [1.72, 1.57], [0.28, 3.53], [1.72, 3.53]]) {
+      renderer.pushBox(tlocal(rr, 3.22, ff), v3(0.07, 0.84, 0.07), houseQuat, yellow, 0.5);
+    }
+    renderer.pushBox(tlocal(1.0, 3.30, 3.55), v3(0.78, 0.76, 0.045), houseQuat, GLASS, 0.12);
+    // seat, console, operator: thighs, torso in vest, arms to the levers, head+helmet
+    renderer.pushBox(tlocal(1.0, 2.66, 1.95), v3(0.30, 0.24, 0.26), houseQuat, [0.15, 0.15, 0.17], 0.8);
+    renderer.pushBox(tlocal(1.0, 2.96, 3.07), v3(0.30, 0.09, 0.14), houseQuat, dark, 0.6);
+    renderer.pushBox(tlocal(1.0, 2.82, 2.47), v3(0.16, 0.09, 0.30), houseQuat, [0.20, 0.24, 0.35], 0.85);
+    renderer.pushBox(tlocal(1.0, 3.28, 2.17), v3(0.24, 0.36, 0.17), houseQuat, VEST, 0.7);
+    const armQ = qmul(houseQuat, qFromAxisAngle(rightAxis, 1.05));
+    for (const side of [-1, 1]) {
+      renderer.pushCylinder(tlocal(1.0 + side * 0.21, 3.34, 2.60), 0.05, 0.30, armQ, VEST, 0.8);
+    }
+    renderer.pushSphere(tlocal(1.0, 3.80, 2.17), 0.145, houseQuat, [0.85, 0.62, 0.45], 0.75);
+    renderer.pushSphere(tlocal(1.0, 3.92, 2.17), 0.165, houseQuat, [0.98, 0.85, 0.10], 0.5);
     // Counterweight
     const cwPos = v3(hp.x - hx * 3.0, 2.6, hp.z - hz * 3.0);
     renderer.pushBox(cwPos, v3(1.5, 0.9, 0.75), houseQuat, [0.2, 0.2, 0.22], 0.7);
