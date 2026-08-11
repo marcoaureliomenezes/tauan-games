@@ -14,8 +14,9 @@ const GL_ARGS = [
 module.exports = defineConfig({
   testDir: '.',
   // v0.10.0 T-03: diretórios com config dedicado rodam em jobs de CI próprios
-  // (james-bond-ci.yml / demolition-ball-ci.yml) — fora do run raiz.
-  testIgnore: ['**/james-bond/**', '**/demolition-ball-opus-5/**'],
+  // (james-bond-ci.yml) — fora do run raiz. A entrada de
+  // demolition-ball foi removida: o jogo/testes foram deletados (59f793d).
+  testIgnore: ['**/james-bond/**'],
   outputDir: './screenshots',
   timeout: 30000,
   retries: 1,
