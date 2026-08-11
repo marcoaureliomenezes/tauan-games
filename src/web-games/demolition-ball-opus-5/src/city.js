@@ -29,7 +29,17 @@ const PALETTE = {
   paint: [0.85, 0.83, 0.55],
   path: [0.70, 0.63, 0.48],
   planter: [0.46, 0.44, 0.42],
+  water: [0.10, 0.23, 0.35],
+  stone: [0.42, 0.42, 0.40],
 };
+
+// River layout (R-07, ADR-4): a north-south river through block column RIVER_COL
+// (between the vertical roads RIVER_COL and RIVER_COL+1). Only the roads listed
+// in RIVER_BRIDGES cross it; every other east-west crossing is severed from the
+// traffic graph.
+export const RIVER_COL = 1;
+export const RIVER_HALF = 15;
+export const RIVER_BRIDGES = [2, 4, 6];
 
 // Facade style ids consumed by the instanced fragment shader (R-05).
 export const FACADE_STYLE = {
@@ -249,27 +259,82 @@ export function buildCity(seed = 20260725) {
   const parks = [];
 
   const half = CITY_HALF;
-  // Ground plane (grass belt around the city + asphalt everywhere inside).
-  builder.addFlatQuad(-half - 400, -half - 400, half + 400, half + 400, -0.06, PALETTE.grass, 0.95);
-  builder.addFlatQuad(-half, -half, half, half, 0, PALETTE.asphalt, 0.82);
-
   const blockOrigin = (g) => -half + g * SPAN + ROAD / 2;
 
-  // Lane markings down the middle of every road.
+  // River geometry (R-07): recessed water strip through block column RIVER_COL.
+  const RX = blockOrigin(RIVER_COL) + BLOCK / 2;
+  const RH = RIVER_HALF;
+  const roadZ = (j) => -half + j * SPAN;
+  const river = {
+    x: RX,
+    half: RH,
+    bridges: RIVER_BRIDGES.slice(),
+    leftRoad: RIVER_COL,
+    rightRoad: RIVER_COL + 1,
+    onBridge(z) {
+      return RIVER_BRIDGES.some((j) => Math.abs(z - roadZ(j)) < ROAD / 2 + 1.5);
+    },
+  };
+
+  // Ground plane, split around the riverbed (grass belt + asphalt inside).
+  builder.addFlatQuad(-half - 400, -half - 400, RX - RH, half + 400, -0.06, PALETTE.grass, 0.95);
+  builder.addFlatQuad(RX + RH, -half - 400, half + 400, half + 400, -0.06, PALETTE.grass, 0.95);
+  builder.addFlatQuad(-half, -half, RX - RH, half, 0, PALETTE.asphalt, 0.82);
+  builder.addFlatQuad(RX + RH, -half, half, half, 0, PALETTE.asphalt, 0.82);
+
+  // Water (low roughness -> the sun glints off it) + stone embankment walls.
+  builder.addFlatQuad(RX - RH, -half - 400, RX + RH, half + 400, -0.42, PALETTE.water, 0.08);
+  builder.addBox(RX - RH - 0.4, -0.2, 0, 0.45, 0.34, half + 400, PALETTE.stone, 0.85);
+  builder.addBox(RX + RH + 0.4, -0.2, 0, 0.45, 0.34, half + 400, PALETTE.stone, 0.85);
+
+  // Bridges: deck flush with the road, guard rails, pillars in the water.
+  for (const j of RIVER_BRIDGES) {
+    const zj = roadZ(j);
+    builder.addBox(RX, -0.16, zj, RH + 3.0, 0.28, ROAD / 2 + 1, [0.40, 0.40, 0.43], 0.8);
+    builder.addBox(RX, 0.62, zj - (ROAD / 2 + 0.7), RH + 3.0, 0.5, 0.16, [0.78, 0.78, 0.74], 0.55);
+    builder.addBox(RX, 0.62, zj + (ROAD / 2 + 0.7), RH + 3.0, 0.5, 0.16, [0.78, 0.78, 0.74], 0.55);
+    for (const px of [-7, 7]) {
+      builder.addBox(RX + px, -0.35, zj, 1.1, 0.45, ROAD / 2 - 1, PALETTE.stone, 0.9);
+    }
+  }
+
+  // Lane markings down the middle of every road. East-west dashes stop at the
+  // water unless that road is a bridge.
   for (let g = 0; g <= GRID; g++) {
-    const c = -half + g * SPAN + ROAD / 2 - ROAD / 2 + ROAD / 2 - ROAD / 2;
     const roadCentre = -half + g * SPAN;
     for (let t = -half; t < half; t += 8) {
       builder.addFlatQuad(roadCentre - 0.22, t, roadCentre + 0.22, t + 4.2, 0.02, PALETTE.paint, 0.7);
-      builder.addFlatQuad(t, roadCentre - 0.22, t + 4.2, roadCentre + 0.22, 0.02, PALETTE.paint, 0.7);
+      const overWater = t + 4.2 > RX - RH && t < RX + RH;
+      if (!overWater || RIVER_BRIDGES.includes(g)) {
+        // On a bridge the dash rides on the deck (top at y = 0.12).
+        const y = overWater ? 0.14 : 0.02;
+        builder.addFlatQuad(t, roadCentre - 0.22, t + 4.2, roadCentre + 0.22, y, PALETTE.paint, 0.7);
+      }
     }
-    void c;
   }
 
   for (let gz = 0; gz < GRID; gz++) {
     for (let gx = 0; gx < GRID; gx++) {
       const bx = blockOrigin(gx) + BLOCK / 2;
       const bz = blockOrigin(gz) + BLOCK / 2;
+
+      // Riverbank blocks: grass down to the water, a few trees, no structures.
+      if (gx === RIVER_COL) {
+        builder.addFlatQuad(bx - BLOCK / 2 - 3, bz - BLOCK / 2 - 3, RX - RH, bz + BLOCK / 2 + 3, 0.04, PALETTE.grass, 0.95);
+        builder.addFlatQuad(RX + RH, bz - BLOCK / 2 - 3, bx + BLOCK / 2 + 3, bz + BLOCK / 2 + 3, 0.04, PALETTE.grass, 0.95);
+        for (const sideX of [RX - RH - 8, RX + RH + 8]) {
+          if (rand() < 0.75) {
+            props.push({
+              kind: 'tree',
+              variant: Math.floor(rand() * 3),
+              x: sideX + (rand() - 0.5) * 6,
+              z: bz + (rand() - 0.5) * (BLOCK - 14),
+              h: 3.5 + rand() * 3,
+            });
+          }
+        }
+        continue;
+      }
 
       // Sidewalk slab + kerb for the whole block.
       builder.addBox(bx, 0.09, bz, BLOCK / 2 + 3, 0.09, BLOCK / 2 + 3, PALETTE.sidewalk, 0.9);
@@ -393,6 +458,7 @@ export function buildCity(seed = 20260725) {
     structures,
     props,
     parks,
+    river,
     staticMesh: builder.build(),
     palette: PALETTE,
     bounds: { half },

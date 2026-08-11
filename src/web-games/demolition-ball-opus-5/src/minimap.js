@@ -57,6 +57,14 @@ export class Minimap {
     ctx.fillStyle = '#171e26';
     ctx.fillRect(toX(-CITY_HALF), toY(-CITY_HALF), CITY_HALF * 2 * scale, CITY_HALF * 2 * scale);
 
+    // River + bridges (R-07)
+    const river = world.river;
+    if (river) {
+      ctx.fillStyle = '#1c3b55';
+      ctx.fillRect(toX(river.x - river.half), toY(-CITY_HALF - 40),
+        river.half * 2 * scale, (CITY_HALF + 40) * 2 * scale);
+    }
+
     // Roads
     ctx.strokeStyle = '#2b3644';
     ctx.lineWidth = Math.max(1.5, 15 * scale);
@@ -69,6 +77,16 @@ export class Minimap {
       ctx.lineTo(toX(CITY_HALF), toY(c));
     }
     ctx.stroke();
+
+    // Bridge decks over the water, drawn on top of the road strokes.
+    if (river) {
+      ctx.fillStyle = '#55677c';
+      for (const j of river.bridges) {
+        const z = -CITY_HALF + j * SPAN;
+        ctx.fillRect(toX(river.x - river.half - 3), toY(z - 8),
+          (river.half + 3) * 2 * scale, 16 * scale);
+      }
+    }
 
     // Structures
     const targets = missions.current ? missions.current.targets : [];

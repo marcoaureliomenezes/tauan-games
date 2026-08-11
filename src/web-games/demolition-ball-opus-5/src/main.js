@@ -52,7 +52,7 @@ const audio = new Audio();
 
 // Spawn the rig on a road near the middle of town.
 const rig = new Rig(-CITY_HALF + 8, -CITY_HALF + 40, 0);
-const traffic = new Traffic(34);
+const traffic = new Traffic(34, 77, city.river);
 
 let collapseEvents = [];
 const world = {
@@ -61,6 +61,7 @@ const world = {
   debris,
   bounds: { half: CITY_HALF },
   onCollapse: (structure, cells) => { collapseEvents.push({ structure, cells }); },
+  river: city.river,
   damageMultiplier: 1,
   homingConfig: null,          // null -> rig.js HOMING_DEFAULT
   homingTarget: null,

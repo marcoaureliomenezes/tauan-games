@@ -43,7 +43,7 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
     móveis e sol; `snoise` vendor com licença MIT em `src/vendor/`;
     fps ≥ 20 em `?quality=low` no e2e.
 
-- [ ] T5 - Rio com 2–3 pontes (R-07, WS-4)
+- [x] T5 - Rio com 2–3 pontes (R-07, WS-4)
   - **Owner:** software-engineer
   - **Acceptance:** leito sem estruturas (unit); ≥2 pontes atravessáveis; tráfego e
     pedestres usam as pontes; unit de fluxo sem deadlock; screenshot anotado.

@@ -7,6 +7,7 @@ import { applyImpact, collapseUnsupported } from '../../demolition-ball-opus-5/s
 import { DebrisField } from '../../demolition-ball-opus-5/src/debris.js';
 import { MissionSystem, CONTRACTS } from '../../demolition-ball-opus-5/src/missions.js';
 import { Rig, safeBallPos } from '../../demolition-ball-opus-5/src/rig.js';
+import { Traffic } from '../../demolition-ball-opus-5/src/traffic.js';
 import { MODES } from '../../demolition-ball-opus-5/src/modes.js';
 import { v3, sphereVsBox, qIntegrate, mulberry32, vlen } from '../../demolition-ball-opus-5/src/math.js';
 
@@ -313,6 +314,47 @@ test('spawn: safeBallPos never leaves the ball inside a structure or underground
   // without a world only the ground clamp applies
   const q = safeBallPos(v3(5, -10, 5), 1.75);
   assert.equal(q.y, 1.75);
+});
+
+// ---------------------------------------------------------- v0.9.0 (R-07)
+
+test('rio: leito sem estruturas e com pelo menos 2 pontes (R-07)', () => {
+  const city = buildCity();
+  const rv = city.river;
+  assert.ok(rv, 'buildCity must expose river metadata');
+  assert.ok(rv.bridges.length >= 2 && rv.bridges.length <= 3);
+  for (const s of city.structures) {
+    const sx0 = s.center.x - s.size.x / 2;
+    const sx1 = s.center.x + s.size.x / 2;
+    assert.ok(sx1 < rv.x - rv.half || sx0 > rv.x + rv.half,
+      `${s.name} intersects the riverbed`);
+  }
+});
+
+test('rio: tráfego só cruza a água nas pontes e nunca trava (R-07)', () => {
+  const city = buildCity();
+  const rv = city.river;
+  const traffic = new Traffic(34, 77, rv);
+  const rigStub = { pos: v3(4000, 0, 4000), ball: { pos: v3(4000, 0, 4000), vel: v3(), radius: 2.6 } };
+  const debrisStub = { spawnChunk() {}, spawnSparks() {}, spawnDust() {} };
+  const dt = 0.05;
+  let travelled = 0;
+  for (let t = 0; t < 60; t += dt) {
+    traffic.update(dt, rigStub, debrisStub);
+    for (const car of traffic.cars) {
+      if (!car.alive) continue;
+      travelled += car.speed * dt;
+      assert.ok(!traffic.isBlocked(car.from, car.to),
+        `car drives a severed edge ${JSON.stringify(car.from)}->${JSON.stringify(car.to)}`);
+      const inWater = Math.abs(car.pos.x - rv.x) < rv.half;
+      if (inWater) {
+        assert.ok(rv.onBridge(car.pos.z),
+          `car swims at x=${car.pos.x.toFixed(1)} z=${car.pos.z.toFixed(1)}`);
+      }
+    }
+  }
+  // 34 cars over 60 s must actually go places — a gridlocked graph stays near 0.
+  assert.ok(travelled > 5000, `fleet only travelled ${travelled.toFixed(0)} m in 60 s`);
 });
 
 console.log(`\n${passed} testes ok${process.exitCode ? ' — COM FALHAS' : ''}`);

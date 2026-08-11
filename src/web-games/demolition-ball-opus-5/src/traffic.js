@@ -16,15 +16,38 @@ const CAR_COLORS = [
 
 function roadCoord(i) { return -CITY_HALF + i * SPAN; }
 
+function edgeKey(a, b) {
+  return a.i + a.j * 16 <= b.i + b.j * 16
+    ? `${a.i},${a.j}-${b.i},${b.j}`
+    : `${b.i},${b.j}-${a.i},${a.j}`;
+}
+
 export class Traffic {
-  constructor(count = 34, seed = 77) {
+  /** @param {object|null} river city.river — severs off-bridge crossings (R-07). */
+  constructor(count = 34, seed = 77, river = null) {
     this.rand = mulberry32(seed);
     this.cars = [];
     this.nodes = [];
     for (let i = 0; i <= GRID; i++) {
       for (let j = 0; j <= GRID; j++) this.nodes.push({ i, j, x: roadCoord(i), z: roadCoord(j) });
     }
+    // Permanently severed edges (the river without a bridge) plus temporarily
+    // closed ones (the cone crew, R-11) — both consulted the same way.
+    this.severedEdges = new Set();
+    this.closedEdges = new Set();
+    if (river) {
+      for (let j = 0; j <= GRID; j++) {
+        if (!river.bridges.includes(j)) {
+          this.severedEdges.add(edgeKey({ i: river.leftRoad, j }, { i: river.rightRoad, j }));
+        }
+      }
+    }
     for (let n = 0; n < count; n++) this.cars.push(this.spawnCar());
+  }
+
+  isBlocked(a, b) {
+    const k = edgeKey(a, b);
+    return this.severedEdges.has(k) || this.closedEdges.has(k);
   }
 
   spawnCar() {
@@ -34,10 +57,14 @@ export class Traffic {
     const horizontal = r() < 0.5;
     const dir = r() < 0.5 ? 1 : -1;
     const from = { i, j };
-    const to = horizontal
+    let to = horizontal
       ? { i: clamp(i + dir, 0, GRID), j }
       : { i, j: clamp(j + dir, 0, GRID) };
     if (from.i === to.i && from.j === to.j) { to.i = clamp(i + 1, 0, GRID); }
+    // Never spawn onto a severed/closed edge; north-south roads are always open.
+    if (this.isBlocked(from, to)) {
+      to = { i, j: clamp(j + (j < GRID ? 1 : -1), 0, GRID) };
+    }
     return {
       from, to,
       t: r(),
@@ -109,13 +136,16 @@ export class Traffic {
   }
 
   pickNext(node, avoid) {
-    const opts = [];
-    if (node.i > 0) opts.push({ i: node.i - 1, j: node.j });
-    if (node.i < GRID) opts.push({ i: node.i + 1, j: node.j });
-    if (node.j > 0) opts.push({ i: node.i, j: node.j - 1 });
-    if (node.j < GRID) opts.push({ i: node.i, j: node.j + 1 });
+    const all = [];
+    if (node.i > 0) all.push({ i: node.i - 1, j: node.j });
+    if (node.i < GRID) all.push({ i: node.i + 1, j: node.j });
+    if (node.j > 0) all.push({ i: node.i, j: node.j - 1 });
+    if (node.j < GRID) all.push({ i: node.i, j: node.j + 1 });
+    // A blocked edge is simply not a road; every node keeps at least one open
+    // neighbour (north-south roads are never severed).
+    const opts = all.filter((o) => !this.isBlocked(node, o));
     const forward = opts.filter((o) => !(o.i === avoid.i && o.j === avoid.j));
-    const pool = forward.length ? forward : opts;
+    const pool = forward.length ? forward : (opts.length ? opts : all);
     return pool[Math.floor(this.rand() * pool.length)];
   }
 

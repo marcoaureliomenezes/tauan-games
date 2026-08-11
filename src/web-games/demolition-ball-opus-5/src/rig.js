@@ -160,6 +160,17 @@ export class Rig {
       }
     }
 
+    // River barrier (R-07): the carrier can only cross the water on a bridge.
+    if (world && world.river && !world.river.onBridge(nz)) {
+      const rv = world.river;
+      const hx = rv.half + 3.0;
+      const dx = nx - rv.x;
+      if (Math.abs(dx) < hx) {
+        nx = rv.x + Math.sign(dx || 1) * hx;
+        this.speed *= 0.35;
+      }
+    }
+
     const limit = world && world.bounds ? world.bounds.half + 120 : 1e9;
     this.pos.x = clamp(nx, -limit, limit);
     this.pos.z = clamp(nz, -limit, limit);
