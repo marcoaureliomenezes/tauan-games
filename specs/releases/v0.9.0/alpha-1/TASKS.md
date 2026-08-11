@@ -53,7 +53,7 @@ Marks: `[ ]` OPEN, `[-]` IN PROGRESS, `[x]` DONE.
   - **Acceptance:** walkers com pernas alternadas em rotas de calçada/praça/ponte;
     fogem de impactos próximos; bola nunca os fere (unit); visíveis em screenshot.
 
-- [ ] T7 - Carros melhorados (R-10, WS-5)
+- [x] T7 - Carros melhorados (R-10, WS-5)
   - **Owner:** software-engineer
   - **Acceptance:** ≥3 modelos (carro, caminhonete, van/ônibus) com vidros, faróis e
     lanternas; fila/freio atuais preservados (unit de tráfego verde); screenshot.

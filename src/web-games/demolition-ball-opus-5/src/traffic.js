@@ -65,11 +65,15 @@ export class Traffic {
     if (this.isBlocked(from, to)) {
       to = { i, j: clamp(j + (j < GRID ? 1 : -1), 0, GRID) };
     }
+    // Vehicle variety (R-10): sedan / pickup / van-bus, same driving brain.
+    const roll = r();
+    const model = roll < 0.55 ? 'sedan' : roll < 0.8 ? 'pickup' : 'van';
     return {
       from, to,
       t: r(),
       speed: 8 + r() * 6,
       cruise: 8 + r() * 6,
+      model,
       color: CAR_COLORS[Math.floor(r() * CAR_COLORS.length)],
       pos: v3(),
       yaw: 0,
@@ -165,18 +169,45 @@ export class Traffic {
   }
 
   render(renderer) {
+    const GLASS = [0.15, 0.19, 0.24];
+    const HEAD = [1.0, 0.96, 0.72];
+    const TAIL = [0.72, 0.10, 0.08];
     for (const car of this.cars) {
       if (!car.alive) continue;
       const q = qFromEuler(0, car.yaw, 0);
-      renderer.pushBox(v3(car.pos.x, 0.85, car.pos.z), v3(0.95, 0.42, 2.15), q, car.color, 0.25);
-      renderer.pushBox(v3(car.pos.x, 1.45, car.pos.z), v3(0.82, 0.36, 1.15), q, [0.15, 0.19, 0.24], 0.12);
       const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
+      // Local (lx=right, lz=forward) -> world.
+      const at = (lx, ly, lz) => v3(car.pos.x + lx * cy + lz * sy, ly, car.pos.z - lx * sy + lz * cy);
       const wheelQ = qmul(q, qFromAxisAngle(v3(0, 0, 1), Math.PI / 2));
-      for (const [lx, lz] of [[-0.95, 1.4], [0.95, 1.4], [-0.95, -1.4], [0.95, -1.4]]) {
-        renderer.pushCylinder(
-          v3(car.pos.x + lx * cy + lz * sy, 0.42, car.pos.z - lx * sy + lz * cy),
-          0.42, 0.16, wheelQ, [0.08, 0.08, 0.09], 0.85,
-        );
+      const wheels = (positions, radius = 0.42) => {
+        for (const [lx, lz] of positions) {
+          renderer.pushCylinder(at(lx, radius, lz), radius, 0.16, wheelQ, [0.08, 0.08, 0.09], 0.85);
+        }
+      };
+      const lights = (halfW, y, front, rear) => {
+        for (const s of [-1, 1]) {
+          renderer.pushBox(at(s * halfW, y, front), v3(0.14, 0.08, 0.05), q, HEAD, 0.15);
+          renderer.pushBox(at(s * halfW, y, rear), v3(0.14, 0.08, 0.05), q, TAIL, 0.3);
+        }
+      };
+
+      if (car.model === 'pickup') {
+        renderer.pushBox(at(0, 0.85, 0), v3(0.98, 0.40, 2.45), q, car.color, 0.3);
+        renderer.pushBox(at(0, 1.48, 0.95), v3(0.90, 0.38, 0.75), q, car.color, 0.3);
+        renderer.pushBox(at(0, 1.52, 1.05), v3(0.78, 0.26, 0.55), q, GLASS, 0.12);
+        renderer.pushBox(at(0, 1.28, -1.15), v3(0.82, 0.10, 1.05), q, [0.16, 0.16, 0.18], 0.7);
+        wheels([[-0.98, 1.55], [0.98, 1.55], [-0.98, -1.55], [0.98, -1.55]], 0.46);
+        lights(0.62, 0.92, 2.44, -2.44);
+      } else if (car.model === 'van') {
+        renderer.pushBox(at(0, 1.05, 0), v3(1.04, 0.72, 2.85), q, car.color, 0.35);
+        renderer.pushBox(at(0, 1.62, 0.4), v3(1.06, 0.24, 2.1), q, GLASS, 0.12);
+        wheels([[-1.02, 1.9], [1.02, 1.9], [-1.02, -1.9], [1.02, -1.9]], 0.44);
+        lights(0.66, 0.78, 2.84, -2.84);
+      } else {
+        renderer.pushBox(at(0, 0.85, 0), v3(0.95, 0.42, 2.15), q, car.color, 0.25);
+        renderer.pushBox(at(0, 1.45, 0), v3(0.82, 0.36, 1.15), q, GLASS, 0.12);
+        wheels([[-0.95, 1.4], [0.95, 1.4], [-0.95, -1.4], [0.95, -1.4]]);
+        lights(0.60, 0.85, 2.14, -2.14);
       }
     }
   }

@@ -358,6 +358,37 @@ test('rio: tráfego só cruza a água nas pontes e nunca trava (R-07)', () => {
   assert.ok(travelled > 5000, `fleet only travelled ${travelled.toFixed(0)} m in 60 s`);
 });
 
+// ---------------------------------------------------------- v0.9.0 (R-10)
+
+test('carros: frota tem pelo menos 3 modelos e todos dirigem (R-10)', () => {
+  const city = buildCity();
+  const traffic = new Traffic(34, 77, city.river);
+  const models = new Set(traffic.cars.map((c) => c.model));
+  assert.ok(models.size >= 3, `only ${[...models]} models in the fleet`);
+});
+
+test('carros: freiam atrás do trator como antes (R-10 preserva fila/freio)', () => {
+  const city = buildCity();
+  const traffic = new Traffic(34, 77, city.river);
+  const debrisStub = { spawnChunk() {}, spawnSparks() {}, spawnDust() {} };
+  const farRig = { pos: v3(4000, 0, 4000), ball: { pos: v3(4000, 0, 4000), vel: v3(), radius: 2.6 } };
+  // Let the fleet settle, then park the rig right in front of one car.
+  for (let t = 0; t < 3; t += 0.05) traffic.update(0.05, farRig, debrisStub);
+  const car = traffic.cars.find((c) => c.alive && c.speed > 5);
+  const fwdX = Math.sin(car.yaw), fwdZ = Math.cos(car.yaw);
+  const rig = {
+    pos: v3(car.pos.x + fwdX * 10, 0, car.pos.z + fwdZ * 10),
+    ball: { pos: v3(4000, 0, 4000), vel: v3(), radius: 2.6 },
+  };
+  for (let t = 0; t < 1.2; t += 0.05) {
+    rig.pos.x = car.pos.x + fwdX * 10;   // keep blocking its lane
+    rig.pos.z = car.pos.z + fwdZ * 10;
+    traffic.update(0.05, rig, debrisStub);
+  }
+  assert.ok(car.speed < car.cruise * 0.6,
+    `car should brake behind the rig (speed ${car.speed.toFixed(1)} vs cruise ${car.cruise.toFixed(1)})`);
+});
+
 // ---------------------------------------------------------- v0.9.0 (R-09)
 
 test('pedestres: a bola nunca os fere — eles fogem e todos sobrevivem (R-09)', () => {
