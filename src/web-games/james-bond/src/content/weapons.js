@@ -26,18 +26,23 @@ export const WEAPONS = Object.freeze({
     // sem isso o raycast hardcoded de 90 m (ver combat.js fireRay) cortava o
     // tiro no meio da rua principal antes de alcançar a outra ponta (F2).
     spread: 0.006, recoil: 0.048, noise: 28, color: 0xd7d9d5, adsFov: 58, knock: 1.5, range: 170,
+    // `sound` escolhe a assinatura em engine/audio.js: pistola = estalo agudo
+    // + boom grave curto e seco.
+    sound: 'pistol',
     muzzle: [0, 0.03, -0.92], kick: 0.17, pitch: 150,
   },
   ak47: {
     name: 'AK-47', slot: 3, kind: 'hitscan', mag: 30, reserve: Infinity, damage: 50, cadence: 0.1, reload: 3.0,
     spread: 0.009, recoil: 0.023, noise: 32, auto: true, color: 0x283128, adsFov: 50, penetration: 1, knock: 0.85, range: 170,
+    // rifle = soco médio + clack mecânico do ferrolho (ver engine/audio.js).
+    sound: 'rifle',
     muzzle: [0, 0.05, -1.42], kick: 0.1, pitch: 180,
   },
   rpg: {
-    // Munição infinita: a cadência de 5 s é o único limite. O projétil é
+    // Munição infinita: a cadência de 2 s é o único limite. O projétil é
     // visível em voo e detona com o mesmo raio da granada de mão.
     name: 'LANÇA-GRANADAS', slot: 4, kind: 'launcher', mag: Infinity, reserve: Infinity,
-    damage: 0, cadence: 5.0, reload: 0, spread: 0.002, recoil: 0.075, noise: 46,
+    damage: 0, cadence: 2.0, reload: 0, spread: 0.002, recoil: 0.075, noise: 46,
     color: 0x3d4238, adsFov: 60, knock: 0, blastRadius: 6.5, muzzleSpeed: 34,
     // Apoiado no ombro: mais alto e deslocado para a direita da tela.
     hip: [0.3, -0.2, -0.42],

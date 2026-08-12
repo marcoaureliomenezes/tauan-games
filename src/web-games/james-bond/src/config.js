@@ -26,8 +26,14 @@ export const CONFIG = Object.freeze({
   playerSpeed: 4.8,
   sprintSpeed: 7.2,
   crouchSpeed: 2.6,
-  jumpSpeed: 4.6,
-  gravity: 14,
+  // Pulo com altura REAL para vencer obstáculos baixos: o ápice (~1,21 m)
+  // passa o parapeito de 1,05 m (precisa de ~0,97 m de pé livre — ver o teste
+  // de coluna em physics.collides) com folga, então engradados, tambores,
+  // guarda-corpos de mezanino/telhado e o parapeito da torre deixam de ser
+  // jaula: pula-se por cima deles. A gravidade sobe junto para o pulo
+  // continuar seco (0,73 s no ar), não um flutuar de lua.
+  jumpSpeed: 6.6,
+  gravity: 18,
   maxHealth: 100,
   startingArmor: 50,
   interactRange: 2.45,

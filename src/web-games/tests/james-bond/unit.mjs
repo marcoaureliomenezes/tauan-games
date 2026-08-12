@@ -136,10 +136,45 @@ for (const [id, weapon] of Object.entries(WEAPONS)) {
     assert.ok(weapon.damage > 0, `${id} must deal direct damage`);
   }
 }
-// O lança-granadas é limitado só pela cadência de 5 s.
-assert.equal(WEAPONS.rpg.cadence, 5, 'launcher fires once every 5s');
+// O lança-granadas é limitado só pela cadência de 2 s.
+assert.equal(WEAPONS.rpg.cadence, 2, 'launcher fires once every 2s');
 assert.equal(WEAPONS.knife.kind, 'melee', 'knife is a melee weapon');
 assert.ok(WEAPONS.knife.range > 0 && WEAPONS.knife.range < 4, 'knife is short range');
+
+// Assinatura sonora por classe (engine/audio.js): pistola e rifle têm timbres
+// distintos — estalo agudo + boom seco vs. soco médio + clack de ferrolho.
+assert.equal(WEAPONS.deagle.sound, 'pistol', 'Desert Eagle usa o perfil de pistola');
+assert.equal(WEAPONS.ak47.sound, 'rifle', 'AK-47 usa o perfil de rifle');
+
+// --- Pulo vence obstáculo baixo (relatado do operador) ----------------------
+// O parapeito de 1,05 m (mezanino/telhado/torre) e engradados baixos viravam
+// jaula — na torre não havia como descer. O ápice do pulo tem de cobrir a
+// folga que o teste de coluna de physics.collides exige (pés >= topo - 0,08).
+const JUMP_APEX = CONFIG.jumpSpeed ** 2 / (2 * CONFIG.gravity);
+assert.ok(JUMP_APEX >= 1.05 + 0.1, `pulo tem de vencer o parapeito de 1,05 m (ápice ${JUMP_APEX.toFixed(2)} m)`);
+// E a física tem de deixar a coluna do obstáculo ser atravessada no ápice:
+const jumpPhysics = await createPhysics();
+jumpPhysics.addBox(0, 0.525, 0, 0.09, 0.525, 1.8); // parapeito de 1,05 m
+jumpPhysics.addPlatform(0, 0, 6, 6, 0); // chão
+jumpPhysics.createPlayer({ x: -0.9, y: 1, z: 0 });
+for (let i = 0; i < 40; i += 1) jumpPhysics.movePlayer({ x: 0.05, y: -0.12, z: 0 });
+assert.ok(jumpPhysics.position().x < -0.3, 'sem pulo o parapeito segura o jogador');
+jumpPhysics.createPlayer({ x: -0.9, y: 2.1, z: 0 }); // pés a 1,1 m = dentro do ápice
+for (let i = 0; i < 60; i += 1) jumpPhysics.movePlayer({ x: 0.05, y: -0.005, z: 0 });
+assert.ok(jumpPhysics.position().x > 0.3, 'no ápice do pulo o jogador cruza o parapeito');
+
+// --- Reforço de asa-delta (F3 visual) ---------------------------------------
+const { buildHangGlider, GLIDER_DURATION } = await import('../../james-bond/src/ai/hang-glider.js');
+const glider = buildHangGlider();
+let gliderMeshes = 0;
+glider.traverse((part) => {
+  if (!part.isMesh) return;
+  gliderMeshes += 1;
+  assert.ok(part.userData.noRay, 'pedaço da asa-delta fora do raycast de tiro');
+});
+assert.ok(gliderMeshes >= 6, 'asa-delta tem vela + armação');
+// A chegada não pode se sobrepor à próxima: pousa antes do intervalo de spawn.
+assert.ok(GLIDER_DURATION < spawnIntervalSeconds(DEFAULT_SPAWN_RATE), 'asa pousa antes do próximo reforço');
 
 // F2 — alcance de mapa inteiro: o raycast do tiro (combat.js fireRay) usa
 // `weapon.range`, não mais um corte fixo de 90 m que truncava a rua principal

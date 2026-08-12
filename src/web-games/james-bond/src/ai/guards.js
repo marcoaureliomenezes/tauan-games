@@ -8,6 +8,9 @@ import { buildNavGraph, nearestWalkableCell } from './nav-graph.js';
 import { fireWeapon, meleeAttack } from './engage.js';
 import { spawnEnemyModel, buildHitBoxes, hasEnemyModel } from './enemy-assets.js';
 import {
+  GLIDER_ALTITUDE, GLIDER_INSET, GLIDER_DURATION, createGliderPool,
+} from './hang-glider.js';
+import {
   DEFAULT_SPAWN_RATE, DEFAULT_MAX_ALIVE, CORPSE_LINGER, groundPoolSize,
   createSpawnScheduler, pickSpawnCell,
 } from '../gameplay/spawner.js';
@@ -205,6 +208,10 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
       facing: new THREE.Vector3(0, 0, 1), alive: spawned, revealedUntil: 0, sightTime: 0,
       flinch: 0, deathT: -1, flashT: 0, attackT: 0, moving: false, knockVel: new THREE.Vector3(),
       clip: null, voiceT: 1 + Math.random() * 4, stepClock: 0,
+      // Chegada de asa-delta (F3): enquanto `arriving` existe o inimigo está
+      // voando para o ponto de pouso — não patrulha, não atira, mas JÁ está
+      // vivo e alvejável (derrubar o piloto deixa o corpo planando até o chão).
+      arriving: null,
       // F3 — pool/reciclagem: `spawned` marca um slot já ativado ALGUMA vez
       // (elegível a virar cadáver-reciclável); `corpseTimer`/`reclaimable`
       // controlam o tempo de assentamento de um cadáver de verdade (ver
@@ -239,6 +246,9 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
     }
   }
   const scheduler = createSpawnScheduler(spawnRate);
+  // Pool de asas-delta (ver ai/hang-glider.js): criado UMA vez por deploy,
+  // tamanho fixo, nunca aloca mesh/material no meio da partida.
+  const gliderPool = createGliderPool(scene);
 
   /** Slot elegível para reciclagem: reserva virgem primeiro, cadáver de térreo
    * mais antigo (já assentado) como próximo recurso. */
@@ -283,6 +293,7 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
     enemy.corpseTimer = 0;
     enemy.reclaimable = false;
     enemy.spawned = true;
+    enemy.arriving = null;
     enemy.ring.material.opacity = 0;
     if (enemy.flash) enemy.flash.material.opacity = 0;
     if (enemy.auraLight) enemy.auraLight.intensity = enemy.stats.aura?.intensity ?? 0;
@@ -307,8 +318,66 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
     const chosen = pickSpawnCell(candidates, Math.random);
     if (!chosen) return false;
     resetToAlive(slot, chosen.worldPosition);
+    beginGlideArrival(slot, chosen.worldPosition);
     game.telemetry.spawns = (game.telemetry.spawns || 0) + 1;
     return true;
+  }
+
+  /**
+   * Chegada de asa-delta: o reforço entra no mapa VOANDO, vindo da direção da
+   * borda mais próxima (vetor centro-do-mapa → pouso), ~17 m acima, e plana
+   * até a célula escolhida. Sem asa livre no pool (raríssimo — a cadência
+   * padrão nunca junta 2 no ar), cai no comportamento antigo: nasce no chão.
+   */
+  function beginGlideArrival(enemy, landing) {
+    const glider = gliderPool.acquire();
+    if (!glider) return;
+    const center = world.toWorld({ x: Math.floor(world.width / 2), z: Math.floor(world.height / 2) });
+    tempA.set(landing.x - center.x, 0, landing.z - center.z);
+    if (tempA.lengthSq() < 1) tempA.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+    tempA.normalize();
+    const from = landing.clone().addScaledVector(tempA, GLIDER_INSET);
+    from.y = landing.y + GLIDER_ALTITUDE;
+    enemy.arriving = { t: 0, duration: GLIDER_DURATION, from, to: landing.clone(), glider };
+    enemy.state = 'arriving';
+    enemy.root.position.copy(from);
+    enemy.facing.copy(tempA);
+    enemy.root.rotation.y = Math.atan2(tempA.x, tempA.z);
+    audio.gliderPass(from);
+    playClip(enemy, ['flying_idle', 'idle'], { fade: 0 });
+  }
+
+  /**
+   * Um passo de voo da asa-delta. Roda para vivo E morto (um tiro certeiro no
+   * piloto não congela a asa no ar — o corpo termina o planeio e assenta no
+   * ponto de pouso, aí vira cadáver comum). O voo é no relógio fixo do jogo,
+   * então `fastForward` dos testes completa chegadas normalmente.
+   */
+  function updateArrival(enemy, dt) {
+    const arrival = enemy.arriving;
+    arrival.t += dt;
+    const k = Math.min(1, arrival.t / arrival.duration);
+    // Smoothstep: saída suave da entrada e FLARE de pouso (desacelera no fim),
+    // o perfil vertical que uma asa de verdade faz.
+    const eased = k * k * (3 - 2 * k);
+    enemy.root.position.lerpVectors(arrival.from, arrival.to, eased);
+    const gliderGroup = arrival.glider.group;
+    gliderGroup.position.copy(enemy.root.position);
+    gliderGroup.position.y += enemy.stats.height + 1.55;
+    gliderGroup.rotation.y = enemy.root.rotation.y;
+    // Nariz um pouco baixo + balanço de asa no vento.
+    gliderGroup.rotation.x = 0.1;
+    gliderGroup.rotation.z = Math.sin(arrival.t * 1.9 + enemy.id) * 0.11;
+    if (enemy.rig) enemy.rig.mixer.update(dt);
+    syncAuraLight(enemy);
+    if (k < 1) return;
+    gliderPool.release(arrival.glider);
+    enemy.arriving = null;
+    if (!enemy.alive) return; // cadáver pousou: updateCorpse assume no próximo passo
+    enemy.state = 'patrol';
+    enemy.stateTime = 0;
+    audio.gliderLand(enemy.root.position);
+    playClip(enemy, ['idle', 'flying_idle'], { fade: 0.15 });
   }
 
   /** Monta o visual: GLB animado quando disponível, senão procedural. */
@@ -404,6 +473,9 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
       enemy.repath = enemy.path.length ? 0.8 : 1.2 + Math.random() * 0.6;
     };
     enemies.forEach((enemy) => {
+      // Asa-delta em voo: o inimigo existe, é alvejável e conta no radar,
+      // mas ainda não pensa — só plana até o ponto de pouso.
+      if (enemy.arriving) { updateArrival(enemy, dt); return; }
       if (!enemy.alive) { updateCorpse(enemy, dt); return; }
       enemy.stateTime += dt;
       enemy.fireCooldown -= dt;
@@ -680,12 +752,16 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
       spawnRate,
       poolSize: enemies.length,
       spawns: game.telemetry.spawns || 0,
+      // Asas-delta no ar agora mesmo (reforços a caminho, ainda não pousados).
+      arriving: enemies.reduce((total, enemy) => total + (enemy.arriving ? 1 : 0), 0),
       // Estado interno exposto para diagnóstico de cadência nos specs.
       reclaimable: enemies.reduce((total, enemy) => total + (!enemy.alive && enemy.reclaimable && enemy.level === 'ground' ? 1 : 0), 0),
       virgin: enemies.reduce((total, enemy) => total + (enemy.level === 'ground' && !enemy.spawned ? 1 : 0), 0),
       schedulerRemaining: scheduler.remaining,
     }),
-    dispose: () => enemies.forEach((enemy) => {
+    dispose: () => {
+      gliderPool.dispose();
+      enemies.forEach((enemy) => {
       // Devolve a luz de aura ao pool fixo ANTES de qualquer outra coisa —
       // nunca é removida da cena, só apagada e liberada para o próximo deploy.
       if (enemy.auraLight) fx.releaseAuraLight(enemy.auraLight);
@@ -697,7 +773,8 @@ export function createGuards(scene, game, world, audio, damagePlayer, fx) {
         return;
       }
       enemy.root.traverse((part) => { part.geometry?.dispose(); part.material?.dispose(); });
-    }),
+      });
+    },
   };
 }
 

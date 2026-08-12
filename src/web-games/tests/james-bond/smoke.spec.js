@@ -765,3 +765,92 @@ test('reinforcement spawner backfills kills up to the mission cap without leakin
   expect(after.programs).toBe(before.programs);
   expect(errors).toEqual([]);
 });
+
+// BUG (relatado do operador): subiu na torre, ficou preso — o parapeito de
+// 1,05 m cercava a plataforma dos 4 lados e a escada de mão não alcançava o
+// topo. O pulo agora tem ápice real para vencer obstáculos baixos (parapeito,
+// engradado, tambor): da torre se sai pulando o guarda-corpo.
+test('watchtower parapet is jumpable: no way up without a way down', async ({ page }) => {
+  test.setTimeout(600000);
+  const errors = [];
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/src/web-games/james-bond/');
+  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
+  await page.evaluate(() => window.game.api.deploy(0));
+  await page.waitForFunction(() => window.game.phase === 'playing');
+
+  // Teleporta para o topo da torre e olha para fora (qualquer lado serve: o
+  // parapeito tem a mesma altura nos 4 lados).
+  await page.evaluate(() => {
+    const top = window.game.world.tower.top;
+    window.game.api.teleport(top.x, top.z, top.y + 1);
+    window.game.camera.lookAt(top.x + 30, top.y + 1, top.z);
+  });
+  // Assenta na plataforma no relógio fixo antes de medir.
+  await page.evaluate(() => window.game.api.fastForward(0.5));
+  const before = await page.evaluate(() => window.game.api.floors().playerY);
+  expect(before, 'o jogador tem de estar EM CIMA da torre (10,2 m)').toBeGreaterThan(10);
+
+  // Anda para a borda e pula. 150 ms é pulso de tecla atuada (mesma convenção
+  // dos pulsos de gatilho deste arquivo), não sleep preguiçoso.
+  await page.keyboard.down('KeyW');
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(150);
+  await page.keyboard.up('Space');
+  // A prova é o RESULTADO (caiu da torre e assentou na rua), com orçamento
+  // folgado para o headless lento — nunca um tempo cravado.
+  await page.waitForFunction(
+    () => window.game.api.floors().playerY < 1.6 && window.game.player.grounded,
+    undefined,
+    { timeout: 60000 },
+  );
+  await page.keyboard.up('KeyW');
+  expect(errors).toEqual([]);
+});
+
+// F3 (visual) — o reforço não APARECE mais numa célula escondida: ele entra
+// no mapa VOANDO de asa-delta e pousa. O teste flagra a chegada em voo pelo
+// contador `arriving` (o voo dura 5 s e as fatias de avanço são de 2 s, então
+// a janela nunca passa despercebida) e depois prova o pouso.
+test('reinforcements fly in on hang gliders before joining the fight', async ({ page }) => {
+  test.setTimeout(600000);
+  const errors = [];
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/src/web-games/james-bond/');
+  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
+  await page.evaluate(() => window.game.api.deploy(0));
+  await page.waitForFunction(() => window.game.phase === 'playing');
+
+  // Abre duas vagas na guarnição do térreo pela mesma rota da granada real.
+  await page.evaluate(() => {
+    const groundAlive = window.game.enemies.filter((enemy) => enemy.alive && enemy.level === 'ground');
+    for (let i = 0; i < 2; i += 1) {
+      const enemy = groundAlive[i];
+      window.game.api.explode(enemy.root.position.x, enemy.root.position.z, 8, enemy.root.position.y + 0.5);
+    }
+  });
+
+  // Avança o relógio fixo em fatias até o spawner disparar (cadência 5/min =
+  // primeiro reforço aos ~12 s simulados). Quando o spawn registra, a asa
+  // TEM de estar no ar: o voo dura mais que o dobro da fatia.
+  let stats = null;
+  for (let i = 0; i < 12; i += 1) {
+    await page.evaluate(() => window.game.api.fastForward(2));
+    await page.waitForTimeout(120); // pacing de loop (mesma convenção T-07)
+    stats = await page.evaluate(() => window.game.api.spawnerStats());
+    if (stats.spawns > 0) break;
+  }
+  expect(stats.spawns, 'o spawner tem de ter produzido um reforço').toBeGreaterThan(0);
+  expect(stats.arriving, 'o reforço tem de CHEGAR VOANDO de asa-delta, não aparecer no chão').toBeGreaterThan(0);
+
+  // Depois do planeio, pousa: nenhuma asa no ar e a contagem de vivos reposta
+  // sem estourar o teto.
+  await page.evaluate(() => window.game.api.fastForward(8));
+  const landed = await page.evaluate(() => window.game.api.spawnerStats());
+  expect(landed.arriving).toBe(0);
+  expect(landed.alive).toBeGreaterThan(0);
+  expect(landed.alive).toBeLessThanOrEqual(landed.maxAlive);
+  expect(errors).toEqual([]);
+});

@@ -89,23 +89,36 @@ export function createAudio() {
     };
   }
 
+  // Assinatura sonora por CLASSE de arma (campo `sound` em content/weapons.js).
+  // Estampido real tem 4 camadas: transient supersônico (crack seco e curto),
+  // corpo da queima de pólvora (médio-grave, ~150 ms), onda de pressão sub
+  // (sine caindo) e cauda de ambiente. Pistola .50 é crack agudo + boom curto
+  // e seco; rifle de assalto é soco médio com clack mecânico do ferrolho.
   function gunshot(weapon, position, distant) {
     ensure();
     const suppressed = Boolean(weapon?.suppressed) || (weapon?.noise ?? 20) < 10;
-    const pitch = weapon?.pitch ?? 220;
     if (suppressed) {
       burst({ duration: 0.07, gain: distant ? 0.06 : 0.1, cutoff: 750, position });
       tone({ frequency: 120, duration: 0.05, gain: 0.06, type: 'sine', slide: -55, position });
       return;
     }
-    // crack — the supersonic snap
-    burst({ duration: 0.05, gain: distant ? 0.16 : 0.36, type: 'highpass', cutoff: 1400 + pitch, position });
-    // body — powder burn
-    burst({ duration: 0.17, gain: distant ? 0.14 : 0.29, cutoff: 480 + pitch, position });
-    // thump — pressure wave
-    tone({ frequency: 68 + pitch * 0.12, duration: 0.15, gain: distant ? 0.12 : 0.24, type: 'sine', slide: -42, position });
-    // tail — brief room echo
-    burst({ duration: 0.32, gain: distant ? 0.05 : 0.08, cutoff: 300, when: 0.03, position, decay: false });
+    const profile = weapon?.sound || 'rifle';
+    const far = distant ? 0.45 : 1;
+    if (profile === 'pistol') {
+      // Desert Eagle .50: estalo agudo violento + boom grave curto e seco.
+      burst({ duration: 0.03, gain: 0.5 * far, type: 'highpass', cutoff: 2600, position });
+      burst({ duration: 0.08, gain: 0.3 * far, type: 'bandpass', cutoff: 1150, q: 1.1, when: 0.008, position });
+      burst({ duration: 0.2, gain: 0.34 * far, cutoff: 520, position });
+      tone({ frequency: 62, duration: 0.22, gain: 0.3 * far, type: 'sine', slide: -34, position });
+      burst({ duration: 0.38, gain: 0.09 * far, cutoff: 240, when: 0.04, position, decay: false });
+      return;
+    }
+    // AK-47 (e padrão): soco médio + clack do ferrolho logo após o estalo.
+    burst({ duration: 0.045, gain: 0.44 * far, type: 'highpass', cutoff: 1900, position });
+    burst({ duration: 0.15, gain: 0.33 * far, cutoff: 880, position });
+    burst({ duration: 0.028, gain: 0.13 * far, type: 'bandpass', cutoff: 1500, q: 2.4, when: 0.05, position });
+    tone({ frequency: 76, duration: 0.15, gain: 0.26 * far, type: 'sine', slide: -40, position });
+    burst({ duration: 0.34, gain: 0.07 * far, cutoff: 300, when: 0.03, position, decay: false });
   }
 
   return {
@@ -183,6 +196,18 @@ export function createAudio() {
       burst({ duration: 0.12, gain: 0.34, cutoff: 620, position });
       tone({ frequency: 96, duration: 0.22, gain: 0.3, type: 'sine', slide: -54, position });
       burst({ duration: 0.42, gain: 0.14, type: 'highpass', cutoff: 1500, when: 0.04, position, decay: false });
+    },
+    // Asa-delta dos reforços (F3): rajada de vento na entrada no mapa e o
+    // baque macio do pouso.
+    gliderPass(position) {
+      ensure();
+      burst({ duration: 1.3, gain: 0.12, type: 'bandpass', cutoff: 640, q: 0.8, position, decay: false });
+      burst({ duration: 0.8, gain: 0.05, type: 'highpass', cutoff: 1900, when: 0.12, position, decay: false });
+    },
+    gliderLand(position) {
+      ensure();
+      burst({ duration: 0.12, gain: 0.13, cutoff: 320, position });
+      tone({ frequency: 70, duration: 0.12, gain: 0.09, type: 'sine', slide: -28, position });
     },
     // Trilha de suspense procedural: drone menor (D2+F2) com filtro respirando + batimento.
     startMusic() {

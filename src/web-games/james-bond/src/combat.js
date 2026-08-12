@@ -175,7 +175,15 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
   function shoot() {
     const weapon = WEAPONS[game.currentWeapon];
     const ammo = game.ammo[game.currentWeapon];
-    if (ammo.mag <= 0) { audio.dry(); cooldown = 0.24; return; }
+    // Pente zerado recarrega SOZINHO — nada de exigir tecla para voltar a
+    // atirar. Só resta o clique seco quando nem a recarga pode começar
+    // (reserva esgotada).
+    if (ammo.mag <= 0) {
+      reload();
+      if (reloadTimer <= 0) audio.dry();
+      cooldown = 0.24;
+      return;
+    }
     // F2: decide ANTES de zerar o relógio — é o tempo até ESTE tiro que
     // importa, não o próximo. Calculado para toda arma (mesmo faca/lança-
     // -granadas), mas só o `hitscan` de fireRay consome o resultado.
@@ -187,6 +195,9 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
     ammo.mag -= 1;
     cooldown = weapon.cadence;
     game.shots += 1;
+    // O tiro que ZERA o pente já engata a recarga automaticamente — o jogador
+    // não precisa soltar o gatilho nem apertar E/R para voltar ao combate.
+    if (ammo.mag === 0) reload();
     audio.gun(weapon, camera.position);
     viewModel.onShoot();
     fx.muzzle(camera, Boolean(weapon.suppressed));
@@ -241,7 +252,7 @@ export function createCombat(scene, camera, game, input, audio, fx, world, guard
     audio.impact(hit.point, true);
   }
 
-  // Lança-granadas: munição infinita, uma saída a cada 5 s. O projétil é
+  // Lança-granadas: munição infinita, uma saída a cada 2 s. O projétil é
   // visível em voo e detona com o mesmo raio da granada de mão.
   function fireLauncher(weapon) {
     cooldown = weapon.cadence;

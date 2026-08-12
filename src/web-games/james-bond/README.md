@@ -32,9 +32,9 @@ geometria visível e opaca — nada sólido é invisível, nada invisível é s�
 | Mover | WASD |
 | Olhar / atirar / mirar | Mouse / botão esquerdo / botão direito |
 | Selecionar arma | 1-5, Q ou roda do mouse |
-| Recarregar (3s) | E |
+| Recarregar (3s) | E ou R — **automático quando o pente zera** |
 | Interagir com objetivos | F |
-| Pular / agachar | Espaço / Shift |
+| Pular / agachar | Espaço / Shift — o pulo vence parapeitos e obstáculos baixos (é a saída da torre) |
 | Subir/descer | Andar pela escadaria (degraus vencidos automaticamente) |
 | Granada rápida (infinita) | G |
 | Mapa tático (inimigos no radar, canto inferior direito) | M |
@@ -52,9 +52,9 @@ mesmo o coice da AK-47 tira a mira do cone. A preferência fica salva.
 | Slot | Arma | Munição | Notas |
 |---|---|---|---|
 | 1 | **Faca** | infinita | Golpe de curto alcance (2,4 m), quase silencioso. |
-| 2 | **Desert Eagle** | 7 por pente, reserva infinita | Recarga 3s, dano pesado. |
-| 3 | **AK-47** | 30 por pente, reserva infinita | Recarga 3s, automática. |
-| 4 | **Lança-granadas** | infinita | 1 tiro a cada 5s; o foguete é visível em voo e detona no impacto. |
+| 2 | **Desert Eagle** | 7 por pente, reserva infinita | Recarga 3s (automática ao zerar), dano pesado. |
+| 3 | **AK-47** | 30 por pente, reserva infinita | Recarga 3s (automática ao zerar), automática. |
+| 4 | **Lança-granadas** | infinita | 1 tiro a cada 2s; o foguete é visível em voo e detona no impacto. |
 | 5 | **Granada de mão** | infinita | Arremesso com pavio de ~2s. |
 
 Lança-granadas e granada compartilham a mesma explosão em camadas: clarão, bola de
@@ -76,6 +76,14 @@ vocalização própria por espécie sintetizados em Web Audio.
 Tiros empurram o inimigo para trás com impulso acumulativo — três tiros de AK-47 ou
 Desert Eagle projetam o corpo, com sangue direcional e poça no chão ao cair. Bichos
 grandes resistem mais ao empurrão; o chefe quase não recua.
+
+## Reforços de asa-delta
+
+Cada operação repõe as perdas a uma taxa de 5 inimigos por minuto (até o teto de
+16 vivos). O reforço não aparece do nada: **entra no mapa voando de asa-delta**,
+vindo da direção da borda, e pousa depois de ~5 s de planeio. Em voo ele já está
+vivo e pode ser alvejado — um tiro certeiro no piloto deixa o corpo planando até
+o chão.
 
 Trilha de suspense procedural (drone menor + batimento) toca durante a operação.
 
