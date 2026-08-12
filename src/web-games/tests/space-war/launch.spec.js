@@ -9,13 +9,18 @@ const { test, expect } = require('@playwright/test');
 // O headless roda a ~1 fps (SwiftShader): o tempo de jogo avança via
 // __swDebug.launchWarp(s) — simulação síncrona determinística a 1/60 s,
 // mesmo padrão do journeyWarp.
+//
+// T-07 (v0.10.0, batch L2): 1 waitForTimeout convertido em polling (transição
+// menu→briefing vira waitForFunction sobre phase, mesmo padrão das outras
+// suítes); nenhum sleep fixo mantido neste spec.
 
 async function startFlight(page) {
   await page.goto('/src/web-games/space-war/index.html');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
   await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 60000 });
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  // T-07: era sleep fixo de 150 ms — espera a fase sair do menu (estado real).
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', undefined, { timeout: 30000 });
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }

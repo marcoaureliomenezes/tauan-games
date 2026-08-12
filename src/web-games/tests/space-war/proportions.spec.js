@@ -4,6 +4,18 @@ const { test, expect } = require('@playwright/test');
 // fake-apparent-proportions, cross-system-visibility, blackhole/neutron-star
 // look-not-approved). Asserts por LEI (θ = 2R/d) e por diagnóstico — nunca por
 // número mágico de escala.
+//
+// T-07 (v0.10.0, batch L2): 2 waits convertidos (frames pós-goTo → ticks de
+// sim; janela de empuxo do AC-06 → polling do grão do rastro + ticks); nenhum
+// sleep fixo mantido neste spec.
+
+// T-07: polling sobre o relógio de SIMULAÇÃO em vez de sleep de parede.
+// game.time avança a cada frame (dt clampado a 0,05 s): time >= t0 + n·0,05
+// garante ≥ n frames renderizados — robusto ao slow-mo do headless.
+async function waitSimTicks(page, n = 2, timeout = 30000) {
+  const t0 = await page.evaluate(() => window.__spaceWar.time);
+  await page.waitForFunction(([t, d]) => window.__spaceWar.time >= t + d, [t0, n * 0.05 - 1e-9], { timeout });
+}
 
 async function startFlight(page) {
   await page.goto('/src/web-games/space-war/index.html');
@@ -112,7 +124,7 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     test.setTimeout(120000);
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('neutron', 400));
-    await page.waitForTimeout(250);
+    await waitSimTicks(page, 3);        // T-07: era sleep fixo de 250 ms — frames p/ strobe/fx rodarem pós-teleporte
     const ns = await page.evaluate(() => {
       const sw = window.__spaceWar;
       const b = sw.bodies.find((x) => x.def.kind === 'neutron');
@@ -166,9 +178,12 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     await startFlight(page);
     const report = await page.evaluate(() => window.__swDebug.shipReport());
     expect(report.rimIntensity).toBeLessThanOrEqual(0.6);      // sem retângulo branco
-    // throttle a fundo por ~1.2s: grão do rastro nunca vira bola (era 5–9u)
+    // throttle a fundo: grão do rastro nunca vira bola (era 5–9u).
+    // T-07: era sleep fixo de 1200 ms — espera a CONDIÇÃO (grão emitido sob
+    // empuxo pleno) + alguns ticks de empuxo sustentado, não o relógio.
     await page.keyboard.down('KeyW');
-    await page.waitForTimeout(1200);
+    await page.waitForFunction(() => (window.__spaceWar.thrusterGrain ?? 0) > 0, undefined, { timeout: 45000 });
+    await waitSimTicks(page, 3);
     await page.keyboard.up('KeyW');
     const grain = await page.evaluate(() => window.__spaceWar.thrusterGrain ?? 0);
     expect(grain).toBeGreaterThan(0);

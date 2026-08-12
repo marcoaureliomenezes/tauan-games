@@ -4,6 +4,18 @@ const { test, expect } = require('@playwright/test');
 // AC-01 pulsar BRILHA · AC-02 massas físicas · AC-05 arsenal gravitacional
 // (traçadora [G] + bomba de Higgs [H] + poço em computeGravity + supernova)
 // · AC-06 escala de parede.
+//
+// T-07 (v0.10.0, batch L2): 2 waits convertidos (frames pós-goTo → ticks de
+// sim; settle do teleporte rasante → polling do corpo dominante); nenhum
+// sleep fixo mantido neste spec.
+
+// T-07: polling sobre o relógio de SIMULAÇÃO em vez de sleep de parede.
+// game.time avança a cada frame (dt clampado a 0,05 s): time >= t0 + n·0,05
+// garante ≥ n frames renderizados — robusto ao slow-mo do headless.
+async function waitSimTicks(page, n = 2, timeout = 30000) {
+  const t0 = await page.evaluate(() => window.__spaceWar.time);
+  await page.waitForFunction(([t, d]) => window.__spaceWar.time >= t + d, [t0, n * 0.05 - 1e-9], { timeout });
+}
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
@@ -30,7 +42,7 @@ test.describe('Space War — Fidelidade Física', () => {
     test.setTimeout(120000);
     await startFlight(page);
     await page.evaluate(() => window.__swDebug.goTo('neutron', 400));
-    await page.waitForTimeout(200);       // 2-3 frames: strobe/fx rodam; queda ainda ínfima
+    await waitSimTicks(page, 3);        // T-07: era sleep fixo de 200 ms — 2-3 frames: strobe/fx rodam; queda ainda ínfima
     const probe = await page.evaluate(() => {
       const sw = window.__spaceWar;
       const ns = sw.bodies.find((b) => b.def.kind === 'neutron');
@@ -160,7 +172,9 @@ test.describe('Space War — Fidelidade Física', () => {
     }
     // voo rasante: a 0.15·R de altitude o corpo é PAREDE (dominante = Terra)
     await page.evaluate(() => window.__swDebug.goTo('terra', 1.15));
-    await page.waitForTimeout(200);
+    // T-07: era sleep fixo de 200 ms — espera o campo recomputar pós-teleporte
+    // (a condição aferida: a Terra é o corpo dominante no voo rasante).
+    await page.waitForFunction(() => window.__spaceWar.ship.dominant?.def?.key === 'earth', undefined, { timeout: 45000 });
     const low = await page.evaluate(() => ({
       dom: window.__spaceWar.ship.dominant?.def?.name || '',
       alt: window.__spaceWar.ship.altitude,

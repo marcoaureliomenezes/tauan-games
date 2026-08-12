@@ -5,6 +5,11 @@ const path = require('path');
 // Playwright specs run in a browser context via page.evaluate(); they cannot import
 // Node/ES-module source files directly. The canonical definition lives in
 // src/web-games/aero-fighters/src/sortie-state.js — keep both in sync if states ever change.
+//
+// T-07 (v0.10.0): único waitForTimeout mantido de propósito — o waitForTimeout(SAMPLE_MS)
+// do loop de takeoff é uma janela de MEDIÇÃO a cadência fixa (100 ms): as invariantes
+// A/B são deltas amostra-a-amostra, com saída antecipada em AIRBORNE. Justificativa
+// inline no loop.
 const GROUND_STATES = new Set(['TAXI_OUT', 'TAKEOFF_ROLL', 'LANDING_ROLL', 'TAXI_IN']);
 const AIRPORT_ELEVATION = 0; // desertAirport.elevation
 
@@ -55,6 +60,9 @@ test('E2E takeoff: y stays above airport elevation and liftoff delta <= 1m', asy
   let prevState = null;
 
   for (let i = 0; i < TOTAL_SAMPLES; i++) {
+    // T-07 KEPT: janela de medição a cadência fixa — as invariantes A (y >= elevação
+    // em estados de solo) e B (Δy <= 1 m no liftoff) são computadas ENTRE amostras
+    // consecutivas de 100 ms; a cadência é o instrumento, não espera por estado.
     await page.waitForTimeout(SAMPLE_MS);
 
     const snap = await page.evaluate(() => ({

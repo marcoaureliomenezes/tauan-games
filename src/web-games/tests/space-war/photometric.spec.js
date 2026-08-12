@@ -5,6 +5,10 @@ const { test, expect } = require('@playwright/test');
 // flare honestos · AC-04 pulsar visível (operador) · AC-05 glows de sistema.
 // Asserts por DIAGNÓSTICO (game.starLod/sysGlow — R-4 do PLAN): imunes ao
 // rasterizador por CPU do headless.
+//
+// T-07 (v0.10.0, batch L2): 1 wait convertido (settle do boot → polling dos
+// diagnósticos aferidos: glow do binário visível + membros em modo cluster);
+// nenhum sleep fixo mantido neste spec.
 
 async function startFlight(page) {
   await page.goto('/src/web-games/space-war/index.html');
@@ -133,7 +137,10 @@ test.describe('Space War — Estrelas Fotométricas', () => {
   test('AC-04/05: glows de sistema fotométricos + handoff cluster→membros', async ({ page }) => {
     test.setTimeout(120000);
     await startFlight(page);
-    await page.waitForTimeout(250);
+    // T-07: era sleep fixo de 250 ms — espera os diagnósticos assentarem (as
+    // condições aferidas abaixo: glow do binário aceso, membros em cluster).
+    await page.waitForFunction(() => window.__spaceWar.sysGlow.binary?.visible === true
+      && window.__spaceWar.starLod.s1?.mode === 'cluster', undefined, { timeout: 45000 });
     const fromSolar = await page.evaluate(() => ({
       glows: window.__spaceWar.sysGlow,
       ns: window.__spaceWar.starLod.neutron,

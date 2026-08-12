@@ -4,6 +4,18 @@ const { test, expect } = require('@playwright/test');
 // dispararam pelo TECLADO — o mapa de listeners engolia handlers em silêncio e
 // os testes/verificações usavam __swDebug.* (chamada direta). LIÇÃO: cobertura
 // por debug-call NÃO é cobertura de input. Esta suíte usa TECLAS REAIS.
+//
+// T-07 (v0.10.0, batch L2): 1 waitForTimeout convertido em polling (settle
+// pós-goTo → ticks de sim); nenhum sleep fixo mantido neste spec.
+
+// T-07: polling sobre o relógio de SIMULAÇÃO em vez de sleep de parede.
+// game.time avança a cada frame (dt clampado a 0,05 s): time >= t0 + n·0,05
+// garante ≥ n frames renderizados — robusto ao slow-mo do headless, finito
+// o bastante p/ falha de verdade estourar.
+async function waitSimTicks(page, n = 2, timeout = 30000) {
+  const t0 = await page.evaluate(() => window.__spaceWar.time);
+  await page.waitForFunction(([t, d]) => window.__spaceWar.time >= t + d, [t0, n * 0.05 - 1e-9], { timeout });
+}
 
 async function startAirborne(page) {
   await page.goto('/src/web-games/space-war/index.html');
@@ -14,7 +26,7 @@ async function startAirborne(page) {
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
   await page.evaluate(() => window.__swDebug.goTo('terra', 4));   // no ar (landed=false)
-  await page.waitForTimeout(200);
+  await waitSimTicks(page, 2);   // T-07: era sleep fixo de 200 ms — 2 ticks bastam p/ o estado pós-teleporte assentar
 }
 
 test.describe('Space War — Arsenal por TECLAS REAIS', () => {

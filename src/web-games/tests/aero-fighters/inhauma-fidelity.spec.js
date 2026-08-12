@@ -9,6 +9,15 @@ const { test, expect } = require('@playwright/test');
 
 test.setTimeout(180000); // boot da cena Inhaúma passa de 60 s sob load alto (2026-07-21)
 
+// T-07 (v0.10.0): os 2 waitForTimeout deste spec foram MANTIDOS de propósito
+// (justificativa inline em cada um):
+//   traffic 4×450ms   — timeline de MEDIÇÃO: cada snapshot é assertado e o
+//                       deslocamento dos carros é medido sobre o intervalo fixo
+//   visual smoke 1000ms — ponto de amostragem CALIBRADO: o orçamento de draw calls
+//                       (<450) foi medido neste instante (meio da transição de
+//                       câmera, pior caso); amostrar "depois de estabilizar"
+//                       mudaria o significado da asserção
+
 async function openInhauma(page, seed = 'inhauma-fidelity') {
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -177,6 +186,9 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     await openInhauma(page, 'inhauma-traffic-grounded');
     const timeline = [];
     for (let i = 0; i < 4; i++) {
+      // T-07 KEPT: janela de medição — cada um dos 4 snapshots é assertado
+      // individualmente e o deslocamento dos carros é medido sobre o intervalo
+      // fixo de 450 ms; a cadência é o instrumento, não espera por estado.
       await page.waitForTimeout(450);
       timeline.push(await page.evaluate(() => window.__aeroDebug.getMapDiagnostics().traffic));
     }
@@ -356,6 +368,11 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
 
   test('visual smoke shows a non-empty varied Inhauma scene within renderer budget', async ({ page }) => {
     const errors = await openInhauma(page, 'inhauma-visual-smoke');
+    // T-07 KEPT: ponto de amostragem CALIBRADO — o orçamento de draw calls (<450)
+    // foi medido neste instante (~1 s, meio da transição de câmera, pior caso com
+    // o mapa inteiro no frustum; ~385 calls aos 2.5 s, ~247 com a câmera assentada).
+    // Trocar por polling de "estabilizou" amostraria uma cena mais leve e mudaria
+    // o significado da asserção.
     await page.waitForTimeout(1000);
     const stats = await page.evaluate(() => {
       const snapshot = window.__aeroDebug.getSnapshot();

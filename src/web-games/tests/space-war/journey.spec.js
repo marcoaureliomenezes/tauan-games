@@ -3,6 +3,18 @@ const { test, expect } = require('@playwright/test');
 // Suite da release v0.2.6.
 // AC-01 fluxo T/O/Z + abort · AC-03 corredor galáctico · AC-04 relatividade
 // · AC-05 bulbo galáctico · AC-06 nave visível. (AC-02 perfil = unit node.)
+//
+// T-07 (v0.10.0, batch L2): 4 waits convertidos (settle pós-goTo/warp → ticks
+// de sim; toggle do Z contextual e gauge do cruzeiro → polling das condições
+// aferidas); nenhum sleep fixo mantido neste spec.
+
+// T-07: polling sobre o relógio de SIMULAÇÃO em vez de sleep de parede.
+// game.time avança a cada frame (dt clampado a 0,05 s): time >= t0 + n·0,05
+// garante ≥ n frames renderizados — robusto ao slow-mo do headless.
+async function waitSimTicks(page, n = 2, timeout = 30000) {
+  const t0 = await page.evaluate(() => window.__spaceWar.time);
+  await page.waitForFunction(([t, d]) => window.__spaceWar.time >= t + d, [t0, n * 0.05 - 1e-9], { timeout });
+}
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
@@ -21,7 +33,7 @@ async function startFlight(page) {
 // decola e mira Betelgeuse (outro sistema) — o pré-requisito do fluxo T/O/Z
 async function airborneWithCrossTarget(page) {
   await page.evaluate(() => window.__swDebug.goTo('terra', 4));
-  await page.waitForTimeout(120);
+  await waitSimTicks(page, 2);   // T-07: era sleep fixo de 120 ms — settle pós-teleporte
   const ok = await page.evaluate(() => window.__swDebug.target('betelgeuse'));
   expect(ok).toBe(true);
 }
@@ -57,7 +69,9 @@ test.describe('Space War — Viagem Interestelar', () => {
     await page.evaluate(() => window.__swDebug.target('lua'));      // mesmo sistema
     const before = await page.evaluate(() => window.__spaceWar.ship.flightAssist);
     await page.keyboard.press('KeyZ');
-    await page.waitForTimeout(300);
+    // T-07: era sleep fixo de 300 ms — espera o toggle processar (a própria
+    // condição aferida: flightAssist inverte).
+    await page.waitForFunction((b) => window.__spaceWar.ship.flightAssist !== b, before, { timeout: 30000 });
     const after = await page.evaluate(() => ({
       assist: window.__spaceWar.ship.flightAssist,
       journey: !!(window.__spaceWar.journey && window.__spaceWar.journey.active),
@@ -82,7 +96,11 @@ test.describe('Space War — Viagem Interestelar', () => {
     await page.waitForFunction(() => window.__spaceWar.journey.active, { timeout: 45000 });
     // meio da viagem = CRUZEIRO: β máximo (~0.995) e corredor pleno
     await page.evaluate(() => window.__swDebug.journeyWarp(0.5));
-    await page.waitForTimeout(500);
+    // T-07: era sleep fixo de 500 ms — espera o gauge do cruzeiro assentar
+    // (fase/β/fade aferidos abaixo) após o warp.
+    await page.waitForFunction(() => window.__spaceWar.journey.phase === 'coast'
+      && window.__spaceWar.starfieldBeta > 0.9
+      && window.__spaceWar.starfieldFade >= 0.8, undefined, { timeout: 45000 });
     const mid = await page.evaluate(() => ({
       beta: window.__spaceWar.starfieldBeta, fade: window.__spaceWar.starfieldFade,
       s: window.__spaceWar.journey.s, phase: window.__spaceWar.journey.phase,
@@ -92,7 +110,8 @@ test.describe('Space War — Viagem Interestelar', () => {
     expect(mid.fade).toBeGreaterThanOrEqual(0.8);
     // 90% do caminho: FREANDO fundo — β caiu p/ ~⅓ do cruzeiro
     await page.evaluate(() => window.__swDebug.journeyWarp(0.9));
-    await page.waitForTimeout(400);
+    // T-07: era sleep fixo de 400 ms — 2 ticks bastam p/ starfieldBeta refletir o warp
+    await waitSimTicks(page, 2);
     const late = await page.evaluate(() => window.__spaceWar.starfieldBeta);
     expect(late).toBeLessThan(mid.beta * 0.6);
     // chegada: queima desliga, velocidade residual, perto do sistema alvo

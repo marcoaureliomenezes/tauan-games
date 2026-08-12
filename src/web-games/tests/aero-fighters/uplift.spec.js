@@ -12,24 +12,46 @@ const MAP_BUTTONS = {
   inhauma: 'INHAUMA',
 };
 
+// T-07 (v0.10.0) — sleeps fixos convertidos em waitForFunction sobre estado real do
+// jogo. Mantidos de propósito (justificativa inline em cada um):
+//   takeOff 400ms        — duração deliberada: mantém nariz para cima através da transição de liftoff
+//   U-AC-3 1600/1500ms   — duração deliberada da manobra de mergulho de volta à pista
+//   U-AC-3 2200ms        — janela de estabilidade s1→s2: prova que o estado degenerado (frozen) NÃO ocorre
+//   U-AC-4 3200/2800ms   — durações deliberadas de voo/mergulho até o corredor de mar aberto e o impacto
+//                          (o resultado já é gated pelos waitForFunction de sinking/overlay logo abaixo)
+
+// Init real dos módulos ES (mesmo contrato do smoke.spec.js AC-2): substitui sleeps de load.
+function modulesLoaded(page, timeout = 15000) {
+  return page.waitForFunction(
+    () => typeof window.game !== 'undefined'
+       && typeof window.game.flags?.rollTimer === 'number'
+       && typeof window.game.running === 'boolean',
+    { timeout },
+  );
+}
+
 async function bootViaButton(page, mapKey) {
   await page.goto('/src/web-games/aero-fighters/index.html');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
-  await page.waitForTimeout(600);
+  await modulesLoaded(page);
   await page.click(`text=${MAP_BUTTONS[mapKey]}`);
-  await page.waitForTimeout(500);
+  // T-07: polling da seleção real do mapa em vez de janela fixa pós-clique
+  await page.waitForFunction((m) => window.game.activeMap === m, mapKey, { timeout: 5000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game && window.game.running === true, { timeout: 3000 });
 }
 
 async function takeOff(page) {
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(4200);
+  // T-07: polling da velocidade de rotação (ROTATION_SPEED=38, ground-physics.js)
+  await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 17000 });
   await page.keyboard.down('ArrowDown');
   await page.waitForFunction(
     () => window.game.missionRealism.sortie.state === 'AIRBORNE',
     { timeout: 8000 },
   ).catch(() => {});
+  // T-07 KEPT: duração deliberada da ação — mantém a entrada de nariz para cima
+  // através da transição de liftoff (parte da manobra, não espera por estado).
   await page.waitForTimeout(400);
   await page.keyboard.up('ArrowDown');
   await page.keyboard.up('KeyW');
@@ -55,7 +77,8 @@ test.describe('Uplift — decolagem nos 4 mapas via botão (ADR-U2, CRIT-1/2b)',
 test('U-AC-2: verdade de superfície — terra no desert, água no mar aberto (HIGH-3)', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
-  await page.waitForTimeout(600);
+  // T-07: polling do init real dos módulos (window.game) em vez de sleep fixo
+  await modulesLoaded(page);
   const kinds = await page.evaluate(async () => {
     const w = await import('/src/web-games/aero-fighters/src/world.js');
     const out = {};
@@ -78,11 +101,16 @@ test('U-AC-3: floor-glue morto — tocar a pista em voo nunca congela (CRIT-2)',
   await bootViaButton(page, 'desert');
   await takeOff(page);
   // Mergulha de volta na pista
+  // T-07 KEPT (1600ms + 1500ms): durações deliberadas da manobra — o mergulho até
+  // a pista leva tempo de voo real; o que se testa é o que acontece AO tocar a
+  // pista em voo (CRIT-2), não um estado observável discreto para polling.
   await page.keyboard.down('ArrowUp');
   await page.waitForTimeout(1600);
   await page.keyboard.up('ArrowUp');
   await page.waitForTimeout(1500);
   const s1 = await page.evaluate(() => ({ st: window.game.missionRealism.sortie.state, y: window.game.player.y, z: window.game.player.pz, hp: window.game.player.hp, running: window.game.running, mayday: window.game.flags.mayday }));
+  // T-07 KEPT (2200ms): janela de estabilidade — a prova é NEGATIVA: o estado
+  // degenerado (AIRBORNE, y≈0.9, z congelado) NÃO pode persistir entre s1 e s2.
   await page.waitForTimeout(2200);
   const s2 = await page.evaluate(() => ({ st: window.game.missionRealism.sortie.state, y: window.game.player.y, z: window.game.player.pz, hp: window.game.player.hp, running: window.game.running, mayday: window.game.flags.mayday }));
   // O estado degenerado era: AIRBORNE, y≈0.9, z congelado, hp intacto, sem evento.
@@ -95,6 +123,10 @@ test('U-AC-4: impacto na água afunda e reporta AFUNDOU NO MAR (WS-5)', async ({
   await takeOff(page);
   // Voa reto além do fim da pista (corredor z<-260 é mar aberto) e então mergulha.
   // (Bancar antes de mergulhar não funciona: com a asa rolada, pitch local vira curva.)
+  // T-07 KEPT (3200ms + 2800ms): durações deliberadas de voo/mergulho — cobrir o
+  // corredor de mar aberto e descer até o impacto leva tempo de voo real (a posição
+  // exata depende do heading pós-decolagem); o desfecho já é gated pelos
+  // waitForFunction de sinking/overlay logo abaixo.
   await page.keyboard.down('KeyW');
   await page.waitForTimeout(3200);
   await page.keyboard.up('KeyW');
@@ -117,11 +149,14 @@ test('U-AC-4: impacto na água afunda e reporta AFUNDOU NO MAR (WS-5)', async ({
 test('U-AC-5: nuke percorre stages e a câmera permanece NORMAL (sem cinematic — operador 2026-07-01)', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?map=desert&testMode=1');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
-  await page.waitForTimeout(600);
+  // T-07: polling do init real dos módulos (window.game) em vez de sleep fixo
+  await modulesLoaded(page);
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game && window.game.running === true, { timeout: 3000 });
   await takeOff(page);
   await page.keyboard.press('KeyT'); // nuke sem lock — atinge o solo à frente
+  // T-07 KEPT: amostragem in-page da progressão de stages até 'mushroom' (sai no
+  // break assim que o estágio final aparece; o teto de 15 s é o detector de falha).
   const sawStages = await page.evaluate(async () => {
     const m = await import('/src/web-games/aero-fighters/src/nuclear-fx.js');
     const seen = new Set();

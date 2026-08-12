@@ -12,6 +12,10 @@ const { test, expect } = require('@playwright/test');
 //   4. JOURNEY — [Z] para Betelgeuse (outro sistema estelar), cruzeiro β~0.99
 //   5. JOURNEY→CRUISE→ORBIT — chegada e acoplamento em Brasa (Betelgeuse):
 //      sistema planetário alienígena com luas (Tição/Fagulha) + estação
+//
+// T-07 (v0.10.0, batch L2): 3 waits convertidos (settle pós-goTo → polling do
+// modo/sistema; freio de acoplamento → polling da velocidade relativa; fx do
+// cruzeiro → polling de β/fade); nenhum sleep fixo mantido neste spec.
 
 async function startFlight(page) {
   await page.goto('/src/web-games/space-war/index.html');
@@ -38,7 +42,9 @@ test.describe('Space War — O voo completo pelos 3 estados', () => {
     await page.keyboard.up('KeyW');
     // visão orbital: a Lua está DENTRO do mesmo sistema planetário
     await page.evaluate(() => window.__swDebug.goTo('lua', 3));
-    await page.waitForTimeout(400);
+    // T-07: era sleep fixo de 400 ms — espera a máquina confirmar o acoplamento
+    // no sistema Terra pós-teleporte (a condição aferida logo abaixo).
+    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit' && window.__spaceWar.planetary?.key === 'earth', undefined, { timeout: 45000 });
     const earthSystem = await page.evaluate(() => ({
       mode: window.__spaceWar.mode, planetary: window.__spaceWar.planetary?.key,
       cruise: window.__spaceWar.planetary?.radius / 20,
@@ -63,8 +69,15 @@ test.describe('Space War — O voo completo pelos 3 estados', () => {
       () => window.__spaceWar.mode === 'orbit' && window.__spaceWar.planetary?.key === 'mars',
       { timeout: 30000 },
     );
-    // após o blend, a velocidade relativa a Marte caiu ao regime orbital
-    await page.waitForTimeout(3500);
+    // após o blend, a velocidade relativa a Marte caiu ao regime orbital.
+    // T-07: era sleep fixo de 3500 ms — espera o FREIO cumprir seu papel (a
+    // própria condição aferida), robusto ao slow-mo do headless.
+    await page.waitForFunction(() => {
+      const g = window.__spaceWar;
+      const mars = g.bodies.find((b) => b.def.key === 'mars');
+      const v = g.ship.vel.clone(); if (mars.worldVel) v.sub(mars.worldVel);
+      return v.length() < (g.planetary.radius / 20) * 3;
+    }, undefined, { timeout: 60000 });
     const rel = await page.evaluate(() => {
       const g = window.__spaceWar;
       const mars = g.bodies.find((b) => b.def.key === 'mars');
@@ -79,7 +92,9 @@ test.describe('Space War — O voo completo pelos 3 estados', () => {
     await page.waitForFunction(() => window.__spaceWar.journey?.active, { timeout: 45000 });
     await page.waitForFunction(() => window.__spaceWar.mode === 'journey', { timeout: 45000 });
     await page.evaluate(() => window.__swDebug.journeyWarp(0.5));
-    await page.waitForTimeout(300);
+    // T-07: era sleep fixo de 300 ms — espera β/fade do cruzeiro assentarem
+    // (as condições aferidas abaixo) após o warp.
+    await page.waitForFunction(() => window.__spaceWar.journey.beta > 0.9 && window.__spaceWar.starfieldFade > 0.5, undefined, { timeout: 45000 });
     const cruiseFx = await page.evaluate(() => ({
       beta: window.__spaceWar.journey.beta,
       fade: window.__spaceWar.starfieldFade,

@@ -6,6 +6,10 @@ test.setTimeout(120000); // teto de wall clock p/ game time lento sob load alto 
 // SÓ heavy/nuke/rod — o míssil leve é infinito (T-C-08): não é consumido nem
 // reposto (service-scene.js#updateService). player.missiles fica no valor fixo de
 // exibição que tinha (o ∞ é do HUD).
+//
+// T-07 (v0.10.0): único waitForTimeout mantido de propósito (justificativa inline):
+//   1200ms no teste 'keeps aircraft grounded' — janela de estabilidade: prova que
+//   o estado/y NÃO muda após NEXT_SORTIE_READY (o before/after É a asserção).
 
 test('MR service scene debug path refills heavy/nuke/rod — NOT light (infinite)', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-service');
@@ -47,6 +51,9 @@ test('MR service complete keeps aircraft grounded and tells player how to restar
     mission: document.getElementById('mission')?.textContent || '',
     guide: document.getElementById('approach')?.textContent || '',
   }));
+  // T-07 KEPT: janela de estabilidade — prova que, completo o serviço, o estado
+  // (NEXT_SORTIE_READY) e o y NÃO mudam: o par before/after sobre a janela fixa
+  // é o dado da asserção (condição negativa, não espera por estado).
   await page.waitForTimeout(1200);
   const after = await page.evaluate(() => ({
     y: window.game.player.y,

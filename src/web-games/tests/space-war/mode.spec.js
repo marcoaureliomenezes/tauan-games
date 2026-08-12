@@ -6,6 +6,18 @@ const { test, expect } = require('@playwright/test');
 // histerese · AC-03 mapas planetários (estações/luas novas) · AC-04 JOURNEY
 // espelha a queima · AC-05 corredor de estrelas APAGADO dentro do sistema
 // planetário (regressão da aberração "estrelas antes de Júpiter").
+//
+// T-07 (v0.10.0, batch L2): 2 waits convertidos (frames de starfield → ticks
+// de sim; settle do assistente de órbita → polling do frameReport); nenhum
+// sleep fixo mantido neste spec.
+
+// T-07: polling sobre o relógio de SIMULAÇÃO em vez de sleep de parede.
+// game.time avança a cada frame (dt clampado a 0,05 s): time >= t0 + n·0,05
+// garante ≥ n frames renderizados — robusto ao slow-mo do headless.
+async function waitSimTicks(page, n = 2, timeout = 30000) {
+  const t0 = await page.evaluate(() => window.__spaceWar.time);
+  await page.waitForFunction(([t, d]) => window.__spaceWar.time >= t + d, [t0, n * 0.05 - 1e-9], { timeout });
+}
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
@@ -108,7 +120,7 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
   test('AC-05: corredor de estrelas apagado dentro do sistema planetário', async ({ page }) => {
     await startFlight(page);
     await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 45000 });
-    await page.waitForTimeout(400);   // alguns frames de starfield
+    await waitSimTicks(page, 3);      // T-07: era sleep fixo de 400 ms — alguns frames de starfield
     const fade = await page.evaluate(() => window.__spaceWar.starfieldFade);
     expect(fade).toBeLessThan(0.2);
   });
@@ -126,7 +138,12 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
     await page.keyboard.up('KeyW');
     await page.keyboard.press('KeyO');
     await page.waitForFunction(() => window.__spaceWar.ship.inOrbit === true, { timeout: 40000 });
-    await page.waitForTimeout(1500);
+    // T-07: era sleep fixo de 1500 ms — espera o assistente NIVELAR de fato
+    // (a condição que o teste afere), não um relógio de parede.
+    await page.waitForFunction(() => {
+      const fr = window.__swDebug.frameReport();
+      return fr && fr.body === 'earth' && fr.shipUpDot > 0.8 && fr.camUpDot > 0.8;
+    }, undefined, { timeout: 45000 });
     const fr = await page.evaluate(() => window.__swDebug.frameReport());
     expect(fr).not.toBe(null);
     expect(fr.body).toBe('earth');

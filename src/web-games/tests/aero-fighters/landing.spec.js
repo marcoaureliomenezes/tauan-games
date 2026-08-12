@@ -1,11 +1,18 @@
 const { test, expect } = require('@playwright/test');
 
+// T-07 (v0.10.0) — todos os sleeps fixos deste spec viraram waitForFunction sobre
+// estado real (jogo rodando + velocidade, velocidade de rotação, liftoff).
+
 test('MR landing diagnostics expose envelope and surface classification', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-landing');
   await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
   await page.keyboard.press('Space');
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(1200);
+  // T-07: polling do estado real (jogo rodando + acelerando) em vez de janela fixa
+  await page.waitForFunction(
+    () => window.game.running === true && window.game.player.speed > 10,
+    { timeout: 8000 },
+  );
   await page.keyboard.up('KeyW');
   const s = await page.evaluate(() => window.__aeroDebug.getSnapshot());
   expect(s.groundContact).toHaveProperty('type');
@@ -51,9 +58,18 @@ test('E2E landing contract: debug fields present + takeoff reaches AIRBORNE', as
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(3500);
+  // T-07: polling da velocidade de rotação (ROTATION_SPEED=38, ground-physics.js)
+  await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 14000 });
   await page.keyboard.down('ArrowDown');
-  await page.waitForTimeout(2500);
+  // T-07: polling do liftoff real — segura ↓ até AIRBORNE em vez de tempo fixo
+  // (o waitForFunction abaixo, preservado, confirma o estado e passa imediato).
+  await page.waitForFunction(
+    () => {
+      const state = window.game.missionRealism?.sortie?.state;
+      return state === 'AIRBORNE' || state === 'MISSION_ACTIVE' || state === 'RETURN_TO_BASE';
+    },
+    { timeout: 12000 }
+  );
   await page.keyboard.up('ArrowDown');
   await page.keyboard.up('KeyW');
 

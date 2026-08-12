@@ -27,13 +27,42 @@ const { test, expect } = require('@playwright/test');
 
 test.setTimeout(120000); // teto de wall clock p/ game time lento sob load alto (2026-07-21)
 
+// T-07 (v0.10.0) — todos os sleeps fixos deste spec viraram waitForFunction sobre
+// estado real (init de módulos, surtida, velocidade de rotação, throttle, lock-on,
+// spawn de míssil, varredura do filtro de áudio). Os loops de amostragem in-page
+// (AC-01 8 s, AC-04 6 s, AC-05 3 s) permanecem: são janelas de medição/janelas de
+// estabilidade instrumentadas (deltas por amostra, ordem de estados), não sleeps
+// ociosos — justificativa inline em cada um.
+
+// Init real dos módulos ES (mesmo contrato do smoke.spec.js AC-2).
+function modulesLoaded(page, timeout = 15000) {
+  return page.waitForFunction(
+    () => typeof window.game !== 'undefined'
+       && typeof window.game.flags?.rollTimer === 'number'
+       && typeof window.game.running === 'boolean',
+    { timeout },
+  );
+}
+
+// Lock-on real (crosshair.js#missileLockedTarget, 0.35 s no cone).
+function waitLockOn(page, timeout = 3000) {
+  return page.waitForFunction(async () => {
+    const { missileLockedTarget } = await import('/src/web-games/aero-fighters/src/crosshair.js');
+    return !!missileLockedTarget();
+  }, { timeout });
+}
+
 async function startGame(page) {
   await page.goto('/src/web-games/aero-fighters/index.html');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
-  await page.waitForTimeout(800);
+  await modulesLoaded(page);
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game && window.game.running === true, { timeout: 3000 });
-  await page.waitForTimeout(400);
+  // Polling da máquina de surtida engatada (MENU -> TAXI_OUT, missions.js#startMission)
+  await page.waitForFunction(
+    () => window.game.missionRealism && window.game.missionRealism.sortie.state !== 'MENU',
+    { timeout: 4000 },
+  );
 }
 
 // ─── AC-01 (D-4): roll-out keeps the player in control and on pavement; guided
@@ -64,6 +93,9 @@ test('T-10/AC-01: roll-out stays on pavement; guided taxi arms only at handoff s
 
   const result = await page.evaluate(async () => {
     const { airportSurface } = await import('/src/web-games/aero-fighters/src/landing-zones.js');
+    // T-07 KEPT: janela de medição/estabilidade in-page — amostra surface/speed/autoTaxi
+    // a cada 80 ms até o handoff (ou 8 s) para provar que o auto-taxi NUNCA arma acima
+    // da velocidade de handoff (condição negativa sobre a série, não espera por estado).
     const samples = [];
     let handoffSpeed = null;
     const t0 = performance.now();
@@ -109,7 +141,8 @@ test('T-10/AC-02: afterburner plume is hidden at idle, visible+scaled-up at full
 
   // Ramp throttle to afterburner (>0.80) via sustained W.
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(3200);
+  // T-07: polling do detent real de afterburner (throttle > 0.80) em vez de janela fixa
+  await page.waitForFunction(() => window.game.player.throttle > 0.80, { timeout: 13000 });
   await page.keyboard.up('KeyW');
 
   const full = await page.evaluate(async () => {
@@ -156,10 +189,16 @@ test('T-10/AC-03: turbine engine audio graph builds with core+whine composition,
   // T-08 finding: setEngineRPM is only reached from the AIRBORNE branch — take off
   // before asserting the sweep follows throttle/speed.
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(3600);
+  // T-07: polling da velocidade de rotação (ROTATION_SPEED=38, ground-physics.js)
+  await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 15000 });
   await page.keyboard.down('ArrowDown');
   await page.waitForFunction(() => window.game.missionRealism.sortie.state === 'AIRBORNE', { timeout: 8000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  // T-07: polling da varredura real do bandpass (sobe com RPM/throttle no ramo AIRBORNE).
+  // .catch preserva a asserção abaixo como ponto de falha (mesmo contrato anterior).
+  await page.waitForFunction(async (f0) => {
+    const { audio } = await import('/src/web-games/aero-fighters/src/audio.js');
+    return (audio.engineCoreFilter?.frequency.value ?? 0) > f0;
+  }, graph.coreFreq0, { timeout: 6000 }).catch(() => {});
   await page.keyboard.up('ArrowDown');
   await page.keyboard.up('KeyW');
 
@@ -176,6 +215,9 @@ test('T-10/AC-04: takeoff roll->rotation->liftoff has no single-sample position/
   await startGame(page);
 
   // Sample every ~100ms while driving a real takeoff (mirrors smoke.spec.js AC-4/AC-6).
+  // T-07 KEPT: janela de medição in-page — os asserts são deltas entre amostras
+  // consecutivas (Δy por ~100 ms) e a ORDEM da máquina de surtida; a cadência fixa
+  // de amostragem é o instrumento, não uma espera por estado.
   const samplePromise = page.evaluate(async () => {
     const samples = [];
     const t0 = performance.now();
@@ -193,9 +235,11 @@ test('T-10/AC-04: takeoff roll->rotation->liftoff has no single-sample position/
     return samples;
   });
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(3600);
+  // T-07: polling da velocidade de rotação (ROTATION_SPEED=38, ground-physics.js)
+  await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 15000 });
   await page.keyboard.down('ArrowDown');
-  await page.waitForTimeout(2200);
+  // T-07: polling do liftoff real — segura ↓ até AIRBORNE em vez de tempo fixo
+  await page.waitForFunction(() => window.game.missionRealism.sortie.state === 'AIRBORNE', { timeout: 9000 });
   await page.keyboard.up('ArrowDown');
   await page.keyboard.up('KeyW');
   const samples = await samplePromise;
@@ -252,15 +296,19 @@ test('T-10/AC-05: guided missile (forced HIT) persists, curves via homing, and g
     t.dead = false;
     t.hp = 1; // one confirmed hit (MISSILES_LIGHT.DAMAGE=4) must kill it — proves "damages" (D-1), not just "hits"
   });
-  await page.waitForTimeout(550); // lock-on window (0.35s + margin)
+  await waitLockOn(page); // T-07: polling do lock-on real (0.35 s no cone)
 
   const before = await page.evaluate(async () => {
     const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
     return scene.children.length;
   });
   await page.keyboard.press('KeyX');
-  await page.waitForTimeout(80);
-  const idx = await page.evaluate(async (beforeCount) => beforeCount, before);
+  // T-07: polling do spawn real do míssil (novo child na cena) em vez de janela fixa
+  await page.waitForFunction(async (beforeCount) => {
+    const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
+    return scene.children.length > beforeCount;
+  }, before, { timeout: 2000 });
+  const idx = before;
 
   const samples = await page.evaluate(async (idx) => {
     const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
@@ -314,7 +362,7 @@ test('T-10/AC-06: firing the nuke on a locked target within BLAST_RADIUS destroy
     t.dead = false;
     t.hp = t.maxHp ?? 10;
   });
-  await page.waitForTimeout(550); // lock-on
+  await waitLockOn(page); // T-07: polling do lock-on real (0.35 s no cone)
   await page.keyboard.press('KeyT');
   const dead = await page.waitForFunction(() => window.__qaStatic[0]?.dead === true, { timeout: 10000 })
     .then(() => true).catch(() => false);

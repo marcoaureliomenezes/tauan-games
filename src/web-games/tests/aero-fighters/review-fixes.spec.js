@@ -1,6 +1,13 @@
 // review-fixes.spec.js — Regression suite for the 2026-05 multi-agent game review fixes.
 // Covers: runway obstacle exclusion, MOUNTAIN_BUFFER reduction, MAYDAY min duration,
 //         nuclear camera dual-framing, world-space lift (no trembling), landing sink gate.
+//
+// T-07 (v0.10.0) — sleeps fixos convertidos em waitForFunction sobre estado real.
+// Mantidos de propósito (justificativa inline):
+//   T-FIX-03 1000ms — janela de estabilidade: prova que o crash NÃO dispara antes
+//                     dos 2 s mínimos de MAYDAY (metade negativa do contrato)
+//   T-FIX-05 loop in-page 30×100ms — janela de medição: max Δy entre amostras
+//                     consecutivas em cruzeiro (a cadência fixa é o instrumento)
 
 const { test, expect } = require('@playwright/test');
 
@@ -10,8 +17,8 @@ test('No spawned target lands on airport surface (runway / taxiway / service)', 
   await page.waitForFunction(() => window.__aeroDebug && Array.isArray(window.game?.targets), { timeout: 15000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.game.running, { timeout: 5000 });
-  // Allow one tick for targets to spawn
-  await page.waitForTimeout(500);
+  // T-07: polling do spawn real de alvos (a própria condição assertada abaixo)
+  await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 4000 });
 
   const result = await page.evaluate(() => {
     const diag = window.__aeroDebug.getTargetDiagnostics?.() ?? [];
@@ -91,12 +98,19 @@ test('MAYDAY state persists at least 2 s before _ejectAndRespawn fires', async (
   });
 
   // Wait 1 s — lives should NOT have changed yet (timer < 2 s)
+  // T-07 KEPT: janela de estabilidade — metade NEGATIVA do contrato T-FIX-03:
+  // o crash NÃO pode disparar antes dos 2 s mínimos de MAYDAY; o ponto de checagem
+  // em t=1 s só faz sentido em relógio fixo.
   await page.waitForTimeout(1000);
   const livesMid = await page.evaluate(() => window.game.player.lives);
   expect(livesMid).toBe(2); // still alive at t=1s
 
-  // Wait another 1.5 s — by now timer >= 2 s and terrain collision should have fired
-  await page.waitForTimeout(1500);
+  // T-07: polling do timer real de MAYDAY (>= 2 s, player.js) — ou do crash que
+  // ele destrava — em vez de segunda janela fixa de relógio.
+  await page.waitForFunction(
+    () => (window.game.flags.maydayTimer || 0) >= 2 || window.game.player.lives < 2,
+    { timeout: 8000 },
+  );
   // Lives may or may not have dropped depending on jet position — just assert game didn't freeze
   const snap = await page.evaluate(() => window.__aeroDebug.getSnapshot());
   expect(snap).not.toBeNull();
@@ -118,6 +132,8 @@ test('Level cruise flight is stable: per-frame Δy < 0.5 m over 3 s', async ({ p
   });
 
   // Sample y position over 3 s and compute max Δy between consecutive samples
+  // T-07 KEPT: janela de medição in-page — a métrica sob teste é o max Δy ENTRE
+  // amostras consecutivas a cadência fixa (100 ms); não é espera por estado.
   const samples = await page.evaluate(async () => {
     const ys = [];
     for (let i = 0; i < 30; i++) {

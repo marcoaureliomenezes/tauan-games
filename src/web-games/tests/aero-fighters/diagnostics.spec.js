@@ -2,6 +2,11 @@ const { test, expect } = require('@playwright/test');
 
 test.setTimeout(60000);
 
+// T-07 (v0.10.0) — sleeps fixos convertidos em waitForFunction sobre estado real.
+// Mantido de propósito (justificativa inline):
+//   'no console errors' 15000ms — janela de soak: prova que NÃO há erros durante
+//   15 s de voo contínuo sob W (condição negativa sobre duração fixa de relógio).
+
 async function openAero(page, map = 'rio', seed = 'qa-001') {
   await page.goto(`/src/web-games/aero-fighters/index.html?testMode=1&map=${map}&seed=${seed}`);
   await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
@@ -73,7 +78,8 @@ test.describe('Aero Fighters — QA Diagnostics', () => {
   test('renderer and frame metrics are finite', async ({ page }) => {
     await openAero(page, 'desert', 'metrics-seed');
     await startGame(page);
-    await page.waitForTimeout(1000);
+    // T-07: polling do primeiro frame renderizado (stats acumuladas) em vez de sleep fixo
+    await page.waitForFunction(() => window.__aeroDebug.getSnapshot().renderer.calls > 0, { timeout: 4000 });
     const snapshot = await page.evaluate(() => window.__aeroDebug.getSnapshot());
     expect(Number.isFinite(snapshot.renderer.calls)).toBe(true);
     expect(Number.isFinite(snapshot.renderer.triangles)).toBe(true);
@@ -88,6 +94,8 @@ test.describe('Aero Fighters — QA Diagnostics', () => {
     await openAero(page, 'rio', 'quiet-seed');
     await startGame(page);
     await page.keyboard.down('KeyW');
+    // T-07 KEPT: janela de soak — a asserção é NEGATIVA (zero erros de console
+    // durante 15 s de voo contínuo sob W); a duração fixa é o próprio cenário.
     await page.waitForTimeout(15000);
     await page.keyboard.up('KeyW');
     expect(errors).toEqual([]);

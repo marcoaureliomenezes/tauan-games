@@ -5,6 +5,11 @@ const { test, expect } = require('@playwright/test');
 // inimiga sob gravidade (AC-04), recarga de nuke (AC-05), teto de pegada de base
 // (AC-08) e a regressão do flare solar (AC-10 — bug
 // space-war-solar-flare-universe-overlay).
+//
+// T-07 (v0.10.0, batch L2): 2 waits convertidos (settle pós-goTo → polling do
+// corpo dominante; aceleração da bomba → polling do Δv aferido). 1 MANTIDO:
+// AC-06 (2500 ms) — janela de observação deliberada da co-movimentação da
+// patrulha (justificativa no próprio teste).
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
@@ -114,7 +119,9 @@ test.describe('Space War — Campanha', () => {
     // caiu ×10 — mais perto + janela maior mantêm o sinal mensurável, ainda sem
     // risco de contato (queda de ~10 u em 1.5 s vs altitude ~20k)
     await page.evaluate(() => window.__swDebug.goTo('jupiter', 1.3));
-    await page.waitForTimeout(150);
+    // T-07: era sleep fixo de 150 ms — espera o campo recomputar pós-teleporte
+    // (Júpiter dominante) antes de soltar a bomba.
+    await page.waitForFunction(() => window.__spaceWar.ship.dominant?.def?.key === 'jupiter', undefined, { timeout: 45000 });
     const n = await page.evaluate(() => window.__swDebug.dropBomb());
     expect(n).toBeGreaterThan(0);
     const v0 = await page.evaluate(() => {
@@ -122,8 +129,12 @@ test.describe('Space War — Campanha', () => {
       return Math.hypot(b.vel.x, b.vel.y, b.vel.z);
     });
     // headless slow-mo: dt de sim é clampado — 1 s de parede ≈ 0.3 s de sim.
-    // Janela larga + limiar por Δv de SIM (~0.75 s → +5.8 a g=7.8).
-    await page.waitForTimeout(2500);
+    // T-07: era sleep fixo de 2500 ms — espera a CONDIÇÃO aferida (a gravidade
+    // acumulou Δv > 3 na bomba), com teto largo p/ runners lentos.
+    await page.waitForFunction((v) => {
+      const b = window.__spaceWar.projectiles.find((p) => p.isBomb);
+      return b ? Math.hypot(b.vel.x, b.vel.y, b.vel.z) > v + 3 : false;
+    }, v0, { timeout: 30000 });
     const v1 = await page.evaluate(() => {
       const b = window.__spaceWar.projectiles.find((p) => p.isBomb);
       return b ? Math.hypot(b.vel.x, b.vel.y, b.vel.z) : -1;
@@ -184,6 +195,10 @@ test.describe('Space War — Campanha', () => {
       return e ? e.group.position.distanceTo(e.anchor.worldPos) / e.anchor.def.radius : -1;
     });
     expect(d0).toBeGreaterThan(0);
+    // T-07 MANTIDO de propósito: janela de OBSERVAÇÃO deliberada — o AC exige
+    // que o inimigo PERMANEÇA na casca de patrulha enquanto o corpo-âncora
+    // orbita e gira; é a persistência ao longo de ~2,5 s que se testa, não a
+    // chegada de uma condição (não há predicado de polling equivalente).
     await page.waitForTimeout(2500);
     const d1 = await page.evaluate(() => {
       const e = window.__spaceWar.enemies.find((x) => !x.dead && x.role === 'fighter');
