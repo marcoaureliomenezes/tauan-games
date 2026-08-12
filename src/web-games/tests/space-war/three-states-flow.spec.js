@@ -29,6 +29,7 @@ async function startFlight(page) {
 
 
 
+// SENTINEL: integração ORBIT→CRUISE→JOURNEY
 test.describe('Space War — O voo completo pelos 3 estados', () => {
   test.setTimeout(240000);
 

@@ -71,22 +71,9 @@ test.describe('Space War — Fidelidade Física', () => {
     expect(lum.glowSprites).toBeGreaterThanOrEqual(3);
   });
 
-  // AC-02: massas respeitam a física ao VIVO (TOV, hierarquia SMBH) e as
-  // estrelas S continuam railed em elipses (seguíveis).
-  test('AC-02: TOV + hierarquia SMBH + estrelas S vivas', async ({ page }) => {
-    await startFlight(page);
-    const m = await page.evaluate(() => {
-      const sw = window.__spaceWar;
-      const ns = sw.bodies.find((b) => b.def.kind === 'neutron');
-      const bh = sw.bodies.find((b) => b.def.key === 'blackhole');
-      const sgr = sw.bodies.find((b) => b.def.key === 'sgr');
-      const s1 = sw.bodies.find((b) => b.def.key === 's1');
-      return { ns: ns.mu, bh: bh.mu, sgr: sgr.mu, sHasMotion: !!(s1 && s1.worldVel) };
-    });
-    expect(m.ns).toBeLessThanOrEqual(2.2e12);      // limite TOV
-    expect(m.sgr).toBeGreaterThan(m.bh);           // SMBH ≫ BN estelar
-    expect(m.sHasMotion).toBe(true);
-  });
+  // AC-02 (TOV + hierarquia SMBH) DELETADO (T-02, demotion-map anexo §3): já
+  // coberto verbatim por test-physics-unit.js:182 ("config: massas respeitam
+  // a física").
 
   // AC-05a: traçadora [G] — infinita, balística, com trilha crescendo.
   test('AC-05a: bomba traçadora gravitacional — infinita + trilha', async ({ page }) => {
@@ -112,31 +99,12 @@ test.describe('Space War — Fidelidade Física', () => {
     expect(flood).toBeLessThanOrEqual(6);
   });
 
-  // AC-05b: bomba de Higgs — poço transiente entra em game.wells, puxa DE VERDADE
-  // (computeGravity muda perto do poço) e expira sozinho.
-  test('AC-05b: Higgs — poço gravitacional transiente sentido pelo campo', async ({ page }) => {
-    test.setTimeout(240000);   // headless slow-mo: 8 s de pulso ≈ 26+ s de parede
-    await startFlight(page);
-    // 8·R da Terra (176k, lado do Sol — goTo é heliocêntrico: 25·R cairia DENTRO
-    // do Sol pós-escala!). Sem superfícies por perto o arrasto do poço (cap 600
-    // u/s²) é dramático mas inofensivo — a nave sobrevive e o poço expira.
-    await page.evaluate(() => window.__swDebug.goTo('terra', 8));
-    const launched = await page.evaluate(() => window.__swDebug.launchHiggs('plasma'));
-    expect(launched).toBe(true);
-    await page.waitForFunction(() => window.__spaceWar.wells.length >= 1, { timeout: 45000 });
-    const well = await page.evaluate(() => {
-      const sw = window.__spaceWar;
-      const w = sw.wells[0];
-      return { mu: w.mu, cd: sw.ship.higgsCd };
-    });
-    expect(well.mu).toBeGreaterThanOrEqual(1e11);  // "very large pull"
-    expect(well.cd).toBeGreaterThan(0);            // recarga engatada
-    // transiente: o poço morre sozinho (~8 s de pulso ≈ 30-45 s de parede headless)
-    await page.waitForFunction(() => window.__spaceWar.wells.length === 0, { timeout: 60000 });
-    // e a nave SOBREVIVEU ao arrasto (sim vivo — não congelou em gameover)
-    const phase = await page.evaluate(() => window.__spaceWar.phase);
-    expect(phase).toBe('flight');
-  });
+  // AC-05b (Higgs — poço gravitacional transiente sentido pelo campo)
+  // DELETADO — rebaixado para tools/test-sw-gravity-unit.js: computeGravity
+  // real (gravity.js importa limpo em Node) sobe DE VERDADE com um poço
+  // {mu:5e11, until, soft} perto do ponto de amostra, e volta ao baseline
+  // quando game.time ultrapassa `until` (o mesmo corte que computeGravity usa
+  // em produção — a expiração "~8 s" do pulso do jogo).
 
   // AC-05c: Higgs perto do SOL com outcome forçado — SUPERNOVA multicolorida.
   test('AC-05c: Higgs desestabiliza o Sol — supernova acontece', async ({ page }) => {
@@ -149,37 +117,8 @@ test.describe('Space War — Fidelidade Física', () => {
     await page.waitForFunction(() => (window.__spaceWar.supernovaCount || 0) >= 1, { timeout: 90000 });
   });
 
-  // AC-06 (SUPERSEDED por v0.2.9): a inflação estática
-  // de raios foi retificada pelo operador — a Terra é grande vs a NAVE (2200 =
-  // 275 naves) e a "parede" vem de CHEGAR PERTO (θ = 2R/d honesto); luas
-  // coerentes (dentro da SOI, fora de 2·R) continuam LEI.
-  test('AC-06: proporções — Terra grande vs nave, luas coerentes', async ({ page }) => {
-    await startFlight(page);
-    const g = await page.evaluate(() => {
-      const sw = window.__spaceWar;
-      const earth = sw.bodies.find((b) => /terra/i.test(b.def.name));
-      const moon = sw.bodies.find((b) => /^lua$/i.test(b.def.name));
-      return {
-        earthR: earth.def.radius,
-        moonOrbit: moon ? moon.def.orbit : null,
-        earthSoi: earth.soi,
-      };
-    });
-    expect(g.earthR).toBeGreaterThanOrEqual(2200);
-    if (g.moonOrbit) {
-      expect(g.moonOrbit).toBeGreaterThan(g.earthR * 2.0);
-      expect(g.moonOrbit).toBeLessThan(g.earthSoi);
-    }
-    // voo rasante: a 0.15·R de altitude o corpo é PAREDE (dominante = Terra)
-    await page.evaluate(() => window.__swDebug.goTo('terra', 1.15));
-    // T-07: era sleep fixo de 200 ms — espera o campo recomputar pós-teleporte
-    // (a condição aferida: a Terra é o corpo dominante no voo rasante).
-    await page.waitForFunction(() => window.__spaceWar.ship.dominant?.def?.key === 'earth', undefined, { timeout: 45000 });
-    const low = await page.evaluate(() => ({
-      dom: window.__spaceWar.ship.dominant?.def?.name || '',
-      alt: window.__spaceWar.ship.altitude,
-    }));
-    expect(low.dom.toLowerCase()).toContain('terra');
-    expect(low.alt).toBeLessThan(g.earthR * 0.6);
-  });
+  // AC-06 (proporções — Terra grande vs nave, luas coerentes) DELETADO
+  // (T-02, demotion-map anexo §3): já coberto por test-physics-unit.js:68
+  // ("proporções verdadeiras: geometria do sistema solar é consistente" —
+  // T-TP-01, mesmas invariantes de raio/SOI/órbita da lua).
 });

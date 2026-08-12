@@ -80,51 +80,10 @@ test.describe('Space War — Viagem Interestelar', () => {
     expect(after.assist).toBe(!before);
   });
 
-  // AC-03/AC-04 (adaptado ao TRAPEZOIDE 30/40/30 da experience-v1): corredor
-  // vivo no meio — fade alto, β≈0.995 no CRUZEIRO, caindo na frenagem (s>0.7);
-  // chegada desliga a queima.
-  test('AC-03/04: starfield + relatividade sobem até o meio e desfazem na chegada', async ({ page }) => {
-    test.setTimeout(240000);
-    await startFlight(page);
-    const field = await page.evaluate(() => window.__spaceWar.starfield);
-    expect(field.stars).toBeGreaterThanOrEqual(2000);
-    expect(field.layers).toBe(2);
-    await airborneWithCrossTarget(page);
-    const fadeHome = await page.evaluate(() => window.__spaceWar.starfieldFade);
-    expect(fadeHome).toBeLessThanOrEqual(0.05);          // dentro do sistema: céu limpo
-    await page.evaluate(() => window.__swDebug.journeyToggle());
-    await page.waitForFunction(() => window.__spaceWar.journey.active, { timeout: 45000 });
-    // meio da viagem = CRUZEIRO: β máximo (~0.995) e corredor pleno
-    await page.evaluate(() => window.__swDebug.journeyWarp(0.5));
-    // T-07: era sleep fixo de 500 ms — espera o gauge do cruzeiro assentar
-    // (fase/β/fade aferidos abaixo) após o warp.
-    await page.waitForFunction(() => window.__spaceWar.journey.phase === 'coast'
-      && window.__spaceWar.starfieldBeta > 0.9
-      && window.__spaceWar.starfieldFade >= 0.8, undefined, { timeout: 45000 });
-    const mid = await page.evaluate(() => ({
-      beta: window.__spaceWar.starfieldBeta, fade: window.__spaceWar.starfieldFade,
-      s: window.__spaceWar.journey.s, phase: window.__spaceWar.journey.phase,
-    }));
-    expect(mid.phase).toBe('coast');
-    expect(mid.beta).toBeGreaterThan(0.9);
-    expect(mid.fade).toBeGreaterThanOrEqual(0.8);
-    // 90% do caminho: FREANDO fundo — β caiu p/ ~⅓ do cruzeiro
-    await page.evaluate(() => window.__swDebug.journeyWarp(0.9));
-    // T-07: era sleep fixo de 400 ms — 2 ticks bastam p/ starfieldBeta refletir o warp
-    await waitSimTicks(page, 2);
-    const late = await page.evaluate(() => window.__spaceWar.starfieldBeta);
-    expect(late).toBeLessThan(mid.beta * 0.6);
-    // chegada: queima desliga, velocidade residual, perto do sistema alvo
-    await page.evaluate(() => window.__swDebug.journeyWarp(0.999));
-    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 45000 });
-    const arrive = await page.evaluate(() => {
-      const sw = window.__spaceWar;
-      const bet = sw.bodies.find((b) => b.def.key === 'betelgeuse');
-      return { d: sw.ship.pos.distanceTo(bet.worldPos), speed: sw.ship.speed };
-    });
-    expect(arrive.d).toBeLessThan(2_000_000);            // chegou à vizinhança
-    expect(arrive.speed).toBeLessThanOrEqual(1600);      // residual de chegada
-  });
+  // AC-03/04 (rampa de relatividade — β sobe no cruzeiro, cai na frenagem,
+  // chegada desliga a queima) DELETADO (T-02, demotion-map anexo §3): já
+  // coberto por test-physics-unit.js:146 (brachistochrone flip-and-burn) e
+  // :168 (aberração/Doppler — AC-04).
 
   // AC-05: bulbo galáctico pintado na direção do core — pixels QUENTES (r>b).
   test('AC-05: bulbo galáctico quente pintado na direção de Sagitário A✦', async ({ page }) => {

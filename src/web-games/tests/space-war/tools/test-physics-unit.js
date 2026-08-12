@@ -274,3 +274,78 @@ test('viagem trapezoidal 30/40/30: cruzeiro plano em v_max = D/(0.7T) (AC-01 exp
   const x2 = journeyProfileTrapezoid(D, T, (0.3 + eps) * T).x;
   assert.ok(x2 > x1 && (x2 - x1) < vMax * T * 1e-3, 'x contínua em s=0.3');
 });
+
+// ═══════════ T-02 (demotion-map anexo §3) — 3 rebaixamentos DN ═════════════
+// missions.js, celestial/system.js e celestial/stars.js estão todos
+// envenenados transitivamente por scene.js (câmera/renderer em escopo de
+// módulo) — nenhum importa limpo em Node. As LEIS que eles embutem são puras
+// (aritmética sobre dados de config), então são reproduzidas aqui com os
+// mesmos limiares/fórmulas da fonte real e varridas sobre dados que IMPORTAM
+// limpo (config.js, vendor THREE) — o mesmo padrão já usado acima para as
+// leis de fotometria/relatividade/PW.
+
+test('campanha: pegada da base ≤ 3% da área do corpo, para toda a config real (AC-08)', async () => {
+  // mirror de missions.js#baseFootprintFraction/baseScale — a fonte real
+  // documenta o invariante em uma linha (missions.js:21-22): "pegada (raio ≈
+  // 8·scale, a plataforma) ≤ 3% da área ⇒ scale ≤ ~0.042·R".
+  const baseScale = (R) => Math.min(Math.max(14, Math.min(70, R * 0.028)), R * 0.042);
+  const baseFootprintFraction = (R) => {
+    const rf = 8 * baseScale(R);
+    return (rf * rf) / (4 * R * R);
+  };
+  const { PLANETS, BETELGEUSE } = await import('../../../space-war/src/config.js');
+  const radii = [...PLANETS, ...BETELGEUSE.planets].map((p) => p.radius);
+  assert.ok(radii.length > 0);
+  for (const R of radii) {
+    const f = baseFootprintFraction(R);
+    assert.ok(f <= 0.03, `pegada da base em R=${R} excede 3%: ${(f * 100).toFixed(2)}%`);
+  }
+  // a cláusula scale ≤ 0.042·R é o que GARANTE o teto acima — prova direta.
+  for (const R of radii) {
+    assert.ok(baseScale(R) <= R * 0.042 + 1e-9, `scale de R=${R} viola o piso de 0.042·R`);
+  }
+});
+
+test('flare solar: LOCAL — visível dentro de FLARE_CUTOFF, cortado além dele (AC-10)', () => {
+  // mirror de celestial/stars.js#Star — `vis = d < FLARE_CUTOFF`,
+  // `fFlux = min(1, (FLARE_FULL/max(d,1))²)` (mesmos limiares da fonte real).
+  const FLARE_FULL = 700_000, FLARE_CUTOFF = 4_200_000;
+  const flarePolicy = (d) => {
+    const vis = d < FLARE_CUTOFF;
+    const fFlux = Math.min(1, (FLARE_FULL / Math.max(d, 1)) ** 2);
+    return { vis, factor: vis ? fFlux : 0 };
+  };
+  // perto da Terra (comentário do antigo E2E: d(Sol) ≈ 440k): visível, pleno
+  const home = flarePolicy(440_000);
+  assert.equal(home.vis, true);
+  assert.equal(home.factor, 1);
+  // no binário (≈9.6k·raio, bem além do cutoff): invisível, fator zero
+  const far = flarePolicy(20_000_000);
+  assert.equal(far.vis, false);
+  assert.equal(far.factor, 0);
+  // fronteira: logo abaixo do cutoff ainda é visível; logo acima, não
+  assert.equal(flarePolicy(FLARE_CUTOFF - 1).vis, true);
+  assert.equal(flarePolicy(FLARE_CUTOFF + 1).vis, false);
+});
+
+test('remanescente de supernova: curva de fade por distância, monótona (mirror de celestial/system.js)', async () => {
+  // mirror de celestial/system.js#supernovaRemnant —
+  // fade = 1 - THREE.MathUtils.smoothstep(d, REMNANT_FULL, REMNANT_FAR).
+  const THREE = await import('../../../vendor/three.module.min.js');
+  const REMNANT_FULL = 1_200_000, REMNANT_FAR = 3_500_000;
+  const fadeAt = (d) => 1 - THREE.MathUtils.smoothstep(d, REMNANT_FULL, REMNANT_FAR);
+  // longe (sistema solar): abaixo do piso de visibilidade do antigo E2E (<0.05)
+  assert.ok(fadeAt(20_000_000) < 0.05, 'longe do remanescente deve ficar quase invisível');
+  // dentro do limiar pleno: opacidade total
+  assert.equal(fadeAt(500_000), 1, 'dentro de REMNANT_FULL a rampa é plena');
+  assert.ok(fadeAt(800_000) > 0.9, 'perto o bastante (dentro do sistema): quase plena');
+  // no meio da rampa: parcial (nem 0 nem 1) — a "rampa PARCIAL" do E2E original
+  const midD = (REMNANT_FULL + REMNANT_FAR) / 2;
+  const mid = fadeAt(midD);
+  assert.ok(mid > 0.05 && mid < 0.95, `meio da rampa devia ser parcial: ${mid}`);
+  // monotonia: o fade nunca SOBE com o aumento da distância
+  const samples = [0, REMNANT_FULL * 0.5, REMNANT_FULL, midD, REMNANT_FAR, REMNANT_FAR * 2].map(fadeAt);
+  for (let i = 1; i < samples.length; i++) {
+    assert.ok(samples[i] <= samples[i - 1] + 1e-9, `fade subiu com a distância: ${samples[i - 1]} → ${samples[i]}`);
+  }
+});

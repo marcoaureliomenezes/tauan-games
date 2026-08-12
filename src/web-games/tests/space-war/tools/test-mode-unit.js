@@ -161,3 +161,29 @@ test('freio de acoplamento: passo único é GRADUAL (sem chicote)', () => {
   const drop = 10000 - out.x;
   assert.ok(out.x < 10000 && out.x > 9000, `um frame freia ~3% (drop=${drop.toFixed(0)})`);
 });
+
+// T-02 (demotion-map anexo §3): rebaixa mode.spec.js AC-03 ("estações
+// orbitais e luas de Betelgeuse existem como corpos"). Os CORPOS
+// materializados exigem scene.js (bloqueado em Node); mas quem os alimenta —
+// PLANETS/BETELGEUSE.planets em config.js — é dado declarativo puro.
+// Planet.register() (celestial/planets.js) cria 1 Station por entrada de
+// `stations[]` com kind implícito 'station' e parent = o próprio planeta;
+// aqui a checagem prova a MATÉRIA-PRIMA existe e está no planeta certo.
+test('inventário de config: 6 estações orbitais + 4 luas de Betelgeuse', async () => {
+  const { PLANETS, BETELGEUSE } = await import('../../../space-war/src/config.js');
+  const expected = [
+    ['iss', 'earth'], ['sat1', 'earth'], ['marsstation', 'mars'],
+    ['jupstation', 'jupiter'], ['satstation', 'saturn'], ['brasastation', 'brasa'],
+  ];
+  const allPlanets = [...PLANETS, ...BETELGEUSE.planets];
+  for (const [stationKey, parentKey] of expected) {
+    const parent = allPlanets.find((p) => p.key === parentKey);
+    assert.ok(parent, `planeta pai ${parentKey} existe na config`);
+    const station = (parent.stations || []).find((s) => s.key === stationKey);
+    assert.ok(station, `estação ${stationKey} declarada em ${parentKey}.stations`);
+  }
+  const moonNames = BETELGEUSE.planets.flatMap((p) => (p.moons || []).map((m) => m.name));
+  for (const n of ['Bruxa', 'Tição', 'Fagulha', 'Carvão']) {
+    assert.ok(moonNames.includes(n), `lua ${n} existe em BETELGEUSE.planets`);
+  }
+});

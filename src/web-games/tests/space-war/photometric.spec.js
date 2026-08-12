@@ -22,113 +22,11 @@ async function startFlight(page) {
 
 test.describe('Space War — Estrelas Fotométricas', () => {
 
-  // AC-01: starfield em quads instanciados com parâmetros fotométricos; o
-  // contrato da journey (contagem/fade/β) segue vivo.
-  test('AC-01: starfield fotométrico — quads instanciados + gauge', async ({ page }) => {
-    await startFlight(page);
-    const field = await page.evaluate(() => ({
-      ...window.__spaceWar.starfield,
-      photo: window.__spaceWar.starfieldPhoto,
-    }));
-    expect(field.mode).toBe('instanced-quads');
-    expect(field.stars).toBeGreaterThanOrEqual(2000);
-    expect(field.layers).toBe(2);
-    expect(field.photo.d0).toBeGreaterThan(0);
-    expect(field.photo.corePx).toBeGreaterThan(0.5);
-    expect(field.photo.corePx).toBeLessThan(5);       // núcleo FIXO pequeno — não 7px de disco
-    expect(field.photo.maxPx).toBeLessThanOrEqual(16); // teto do glare de campo
-  });
-
-  // AC-02: LOD ponto↔disco ao VIVO — a NS (R=90) é sub-pixel a 1500·R (135k,
-  // dentro de 0.9·raio do binário) e vira PONTO fotométrico saturado; a 400·R
-  // resolve o DISCO com a anatomia viva.
-  test('AC-02/04: pulsar — ponto fotométrico ofuscante no sistema, disco de perto', async ({ page }) => {
-    test.setTimeout(120000);
-    await startFlight(page);
-    // dentro do sistema binário, longe da NS: modo PONTO, brilho saturado no teto
-    await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
-    await page.waitForFunction(
-      () => window.__spaceWar.starLod.neutron && window.__spaceWar.starLod.neutron.mode === 'point',
-      undefined, { timeout: 45000 },
-    );
-    const far = await page.evaluate(() => window.__spaceWar.starLod.neutron);
-    expect(far.discPx).toBeLessThan(1);
-    expect(far.I).toBeGreaterThan(1);                  // saturado (glare)
-    expect(far.px).toBeGreaterThanOrEqual(4);
-    expect(far.visible).toBe(true);
-    // strobe 30 Hz MODULA o ponto: α = pointAlpha(I)·strobe; com I saturado
-    // (α_base=1), o α do ponto SEGUE o strobe frame a frame. (Asserção de
-    // acoplamento, não de variação: o dt clampado do headless — 0.05 s = 1.5
-    // ciclos exatos de 30 Hz — alia o seno num valor constante.)
-    const tie = await page.evaluate(() => ({
-      alpha: window.__spaceWar.starLod.neutron.alpha,
-      strobe: window.__spaceWar.pulsarStrobe,
-    }));
-    expect(tie.strobe).toBeGreaterThan(0.5);
-    expect(Math.abs(tie.alpha - tie.strobe)).toBeLessThan(0.02);
-    // de perto o disco resolve (histerese sobe em 2px) e o near-viz volta
-    await page.evaluate(() => window.__swDebug.goTo('neutron', 400));
-    await page.waitForFunction(
-      () => window.__spaceWar.starLod.neutron.mode === 'disc',
-      undefined, { timeout: 45000 },
-    );
-    const near = await page.evaluate(() => window.__spaceWar.starLod.neutron);
-    expect(near.discPx).toBeGreaterThanOrEqual(2);
-  });
-
-  // AC-03: corona com TETO de pixels (≤ ~1.15× o disco na distância) e flare
-  // ∝ fluxo — sem piso: a 4.8M u o flare do Sol é ZERO (além do cutoff) e perto
-  // da Terra é pleno.
-  test('AC-03: corona/flare honestos à distância', async ({ page }) => {
-    test.setTimeout(120000);
-    await startFlight(page);
-    // perto da Terra: d(Sol) ≈ 440k < FLARE_FULL → flare pleno. Espera a
-    // CONDIÇÃO assentar (LOD/flare atualizam por frame — 250 ms de relógio
-    // podiam ser 0 frames num runner lento).
-    await page.waitForFunction(
-      () => window.__spaceWar.sunFlareVisible === true
-        && window.__spaceWar.sunFlareFactor === 1
-        && window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.mode === 'disc',
-      undefined, { timeout: 90000 },
-    );
-    const home = await page.evaluate(() => ({
-      flareVis: window.__spaceWar.sunFlareVisible,
-      flareF: window.__spaceWar.sunFlareFactor,
-      sun: window.__spaceWar.starLod.sun,
-    }));
-    expect(home.flareVis).toBe(true);
-    expect(home.flareF).toBe(1);
-    expect(home.sun.mode).toBe('disc');
-    // em Netuno (d(Sol) ≈ 3.8M, ainda no solar): flare ∝ fluxo (mínimo), disco
-    // do Sol pequeno com corona COLADA (teto 1.15×disco além de CORONA_FAR).
-    await page.evaluate(() => window.__swDebug.goTo('neptune', 8));
-    await page.waitForFunction(
-      () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.discPx < 30,
-      undefined, { timeout: 45000 },
-    );
-    const away = await page.evaluate(() => ({
-      flareF: window.__spaceWar.sunFlareFactor,
-      sun: window.__spaceWar.starLod.sun,
-    }));
-    expect(away.flareF).toBeLessThan(0.1);             // fluxo (0.7/3.8)² ≈ 0.03 — sem piso
-    expect(away.sun.mode).toBe('disc');
-    expect(away.sun.coronaPx).toBeLessThanOrEqual(away.sun.discPx * 1.3);
-    // no binário (d(Sol) ≈ 22M — "anos-luz"): flare CORTADO e o Sol nem é disco:
-    // vira o glow do sistema (cluster) — proporções verdadeiras.
-    await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
-    await page.waitForFunction(
-      () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.mode === 'cluster',
-      undefined, { timeout: 45000 },
-    );
-    const veryFar = await page.evaluate(() => ({
-      flareVis: window.__spaceWar.sunFlareVisible,
-      flareF: window.__spaceWar.sunFlareFactor,
-      solarGlow: window.__spaceWar.sysGlow.solar,
-    }));
-    expect(veryFar.flareVis).toBe(false);
-    expect(veryFar.flareF).toBe(0);
-    expect(veryFar.solarGlow.visible).toBe(true);
-  });
+  // AC-01 (starfield fotométrico + gauge), AC-02/04 (pulsar — LOD ponto↔disco)
+  // e AC-03 (corona/flare honestos) DELETADOS (T-02, demotion-map anexo §3):
+  // já cobertos por test-physics-unit.js:211 (fotometria PSF/gauge), :224
+  // (LOD ponto↔disco com histerese, verbatim "2px↑/1px↓") e :199/:237
+  // (fluxo inverso-quadrado + gauge do flare).
 
   // AC-04 (metade interestelar) + AC-05: de OUTRO sistema, o farol do binário
   // (fluxo somado dominado pela NS) é visível e estroboscópico; o ponto

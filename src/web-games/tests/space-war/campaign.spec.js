@@ -83,65 +83,14 @@ test.describe('Space War — Campanha', () => {
     expect(body1).not.toBe(body0);
   });
 
-  // SOLUÇÃO BALÍSTICA (AC-01/02 da ballistic-war): C alinha à direção de tiro.
-  // Setup DETERMINÍSTICO via goToObjective: o antigo goTo('lua') dependia da
-  // fase orbital aleatória de boot + posição aleatória da base na superfície —
-  // ~1/3 dos boots deixava o alvo fora do alcance balístico (flake pré-existente,
-  // 4/6 falhas medidas na base journey; corrigido na photometric-stars rc-1).
-  test('solução balística: solver acha arco e C alinha o nariz à direção de tiro', async ({ page }) => {
-    test.setTimeout(120000);
-    await startFlight(page);
-    await page.evaluate(() => window.__swDebug.goToObjective(7000));
-    // NB: options são o 3º parâmetro de waitForFunction — passar {timeout} no 2º
-    // (o slot de ARG) silenciosamente vira argumento da função e o op-timeout
-    // NUNCA vale (era por isso que cada falha queimava os 60s do teste).
-    await page.waitForFunction(() => {
-      const sw = window.__spaceWar;
-      return sw.nav.solution && sw.nav.solution.ok === true;
-    }, undefined, { timeout: 45000 });
-    await page.keyboard.press('KeyC');
-    await page.waitForFunction(() => {
-      const sw = window.__spaceWar;
-      const sol = sw.nav.solution;
-      if (!sol || !sol.ok) return false;
-      const q = sw.ship.quat;
-      const fx = -(2 * (q.x * q.z + q.w * q.y));
-      const fy = -(2 * (q.y * q.z - q.w * q.x));
-      const fz = -(1 - 2 * (q.x * q.x + q.y * q.y));
-      return fx * sol.dir.x + fy * sol.dir.y + fz * sol.dir.z > 0.95;
-    }, undefined, { timeout: 45000 });
-  });
-
-  // AC-04: bomba inimiga é BALÍSTICA — a gravidade muda a velocidade dela.
-  test('AC-04: bomba inimiga acelera sob gravidade', async ({ page }) => {
-    await startFlight(page);
-    // baixo sobre Júpiter (1.3·R): com a escala de parede (μ ∝ f) o g relativo
-    // caiu ×10 — mais perto + janela maior mantêm o sinal mensurável, ainda sem
-    // risco de contato (queda de ~10 u em 1.5 s vs altitude ~20k)
-    await page.evaluate(() => window.__swDebug.goTo('jupiter', 1.3));
-    // T-07: era sleep fixo de 150 ms — espera o campo recomputar pós-teleporte
-    // (Júpiter dominante) antes de soltar a bomba.
-    await page.waitForFunction(() => window.__spaceWar.ship.dominant?.def?.key === 'jupiter', undefined, { timeout: 45000 });
-    const n = await page.evaluate(() => window.__swDebug.dropBomb());
-    expect(n).toBeGreaterThan(0);
-    const v0 = await page.evaluate(() => {
-      const b = window.__spaceWar.projectiles.find((p) => p.isBomb);
-      return Math.hypot(b.vel.x, b.vel.y, b.vel.z);
-    });
-    // headless slow-mo: dt de sim é clampado — 1 s de parede ≈ 0.3 s de sim.
-    // T-07: era sleep fixo de 2500 ms — espera a CONDIÇÃO aferida (a gravidade
-    // acumulou Δv > 3 na bomba), com teto largo p/ runners lentos.
-    await page.waitForFunction((v) => {
-      const b = window.__spaceWar.projectiles.find((p) => p.isBomb);
-      return b ? Math.hypot(b.vel.x, b.vel.y, b.vel.z) > v + 3 : false;
-    }, v0, { timeout: 30000 });
-    const v1 = await page.evaluate(() => {
-      const b = window.__spaceWar.projectiles.find((p) => p.isBomb);
-      return b ? Math.hypot(b.vel.x, b.vel.y, b.vel.z) : -1;
-    });
-    // solta em repouso → só a gravidade pode tê-la acelerado
-    expect(v1).toBeGreaterThan(v0 + 3);
-  });
+  // "solução balística: solver acha arco e C alinha o nariz à direção de tiro"
+  // DELETADO (T-02, demotion-map anexo §3): o solver em si já é coberto por
+  // test-ballistics-unit.js (solveBallistic — alvo fixo/móvel/herança de
+  // velocidade).
+  //
+  // AC-04 (bomba inimiga acelera sob gravidade) DELETADO: já coberto por
+  // test-physics-unit.js:43 (integração da gravidade real do jogo — a mesma
+  // lei que acelera a bomba acelera qualquer corpo em queda livre no campo).
 
   // AC-05: nukes efetivamente ilimitadas — a reserva RECARREGA após disparo.
   test('AC-05: recarga de nuke repõe a reserva', async ({ page }) => {
@@ -157,43 +106,16 @@ test.describe('Space War — Campanha', () => {
     await page.waitForFunction((n) => window.__spaceWar.ship.nukes === n, nk0, { timeout: 45000 });
   });
 
-  // AC-08: TODA base de missão respeita o teto de 3% da área de superfície.
-  test('AC-08: pegada da base ≤ 3% da área do corpo', async ({ page }) => {
-    await startFlight(page);
-    const fracs = await page.evaluate(() => {
-      const m = window.__spaceWar.mission;
-      return (m.targets || []).map((t) => {
-        const s = t.obj.scale.x;
-        const rf = 8 * s;                         // raio da pegada (plataforma v2)
-        const R = t.body.def.radius;
-        return (rf * rf) / (4 * R * R);           // πrf² / 4πR²
-      });
-    });
-    expect(fracs.length).toBeGreaterThan(0);
-    for (const f of fracs) expect(f).toBeLessThanOrEqual(0.03);
-  });
-
-  // AC-10 (bug space-war-solar-flare-universe-overlay): flare do Sol é LOCAL —
-  // visível na vizinhança solar, invisível de outro sistema.
-  test('AC-10: flare solar local (regressão do bug)', async ({ page }) => {
-    await startFlight(page);
-    // perto da Terra (região solar): política de flare = visível
-    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 45000 });
-    // teleporta para o binário (≈2.7M u do Sol): flare precisa SUMIR.
-    // distMul 20 (=9,6k u do centro): o default 3,2 (1,5k u) caía DENTRO da
-    // zona de maré do BN (tideKillR 7800, ship.js P2-8) — a nave MORRIA de
-    // espaguetificação em segundos de sim, phase virava gameover, o loop
-    // congelava a política do flare e a perna seguinte lia um valor STALE
-    // (diagnosticado no probe do run 31585773105: phase gameover, vis
-    // travado). A 20 radii o dano de maré é zero e a distância ao Sol segue
-    // ≫ FLARE_CUTOFF (4,2M) — flare off determinístico, nave viva.
-    await page.evaluate(() => window.__swDebug.goTo('blackhole', 20));
-    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === false, { timeout: 45000 });
-    // e voltar perto do Sol religa (geometria clássica da perna, provada
-    // desde o AC — o flake recente era a morte no BN acima, não a Terra)
-    await page.evaluate(() => window.__swDebug.goTo('earth'));
-    await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 45000 });
-  });
+  // AC-08 (pegada da base ≤ 3% da área do corpo) DELETADO — rebaixado para
+  // test-physics-unit.js: a lei (raio da pegada = 8·scale, scale clampado a
+  // [14,70]∩[0,0.042·R]) é reproduzida de missions.js#baseFootprintFraction
+  // (missions.js em si está envenenado por scene.js) e varrida sobre os
+  // raios reais de PLANETS/BETELGEUSE (config.js, importa limpo).
+  //
+  // AC-10 (flare solar local, regressão space-war-solar-flare-universe-overlay)
+  // DELETADO — rebaixado para test-physics-unit.js: a política
+  // (vis = d < FLARE_CUTOFF) é reproduzida de celestial/stars.js (envenenado
+  // por scene.js) com o mesmo limiar FLARE_CUTOFF=4.2M, testada perto/longe.
 
   // AC-06 (amostra): inimigos co-movem com o corpo-âncora (frame body-relativo).
   test('AC-06: patrulha inimiga acompanha o corpo-âncora', async ({ page }) => {

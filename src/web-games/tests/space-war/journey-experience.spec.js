@@ -36,31 +36,9 @@ async function engageJourney(page) {
 
 test.describe('Space War — Experiência Interestelar', () => {
 
-  // AC-01: perfil 30/40/30 AO VIVO — fases nos pontos certos, cruzeiro em v_max.
-  test('AC-01: 30% acelera, 40% em v_max (CRUZEIRO), 30% freia', async ({ page }) => {
-    test.setTimeout(180000);
-    await startFlight(page);
-    await engageJourney(page);
-    const probe = async (sNorm) => {
-      await page.evaluate((sn) => window.__swDebug.journeyWarp(sn), sNorm);
-      await waitSimTicks(page, 2);   // T-07: era sleep fixo de 350 ms — 2 ticks p/ o estado pós-warp assentar
-      return page.evaluate(() => {
-        const j = window.__spaceWar.journey;
-        return { phase: j.phase, v: j.v, vMax: j.vMax, beta: j.beta };
-      });
-    };
-    const accel = await probe(0.15);
-    expect(accel.phase).toBe('accel');
-    expect(accel.v).toBeLessThan(accel.vMax * 0.75);
-    const coast = await probe(0.5);
-    expect(coast.phase).toBe('coast');
-    expect(Math.abs(coast.v - coast.vMax) / coast.vMax).toBeLessThan(0.01);
-    // AC-03: headlight FORTE no cruzeiro — β ≥ 0.98 (a 90° o céu cai p/ ~5.7°)
-    expect(coast.beta).toBeGreaterThanOrEqual(0.98);
-    const decel = await probe(0.85);
-    expect(decel.phase).toBe('decel');
-    expect(decel.v).toBeLessThan(decel.vMax * 0.75);
-  });
+  // AC-01 (perfil 30/40/30 AO VIVO) DELETADO (T-02, demotion-map anexo §3):
+  // já coberto verbatim por test-physics-unit.js:251 ("viagem trapezoidal
+  // 30/40/30: cruzeiro plano em v_max").
 
   // AC-02/04: os mecanismos de passagem existem e estão armados — crescimento
   // rasante (teto ~48px) e riscos tangenciais (ganho > 0) no diag do starfield.
@@ -84,30 +62,12 @@ test.describe('Space War — Experiência Interestelar', () => {
     expect(fx.beta).toBeGreaterThanOrEqual(0.98);          // relatividade plena no cruzeiro
   });
 
-  // AC-05: IMUNIDADE — a queima atravessa o corredor inteiro sem abortar
-  // (reverte o abort-por-impacto do rc-1 por ordem do operador).
-  test('AC-05: sem colisão durante a viagem — queima nunca aborta no corredor', async ({ page }) => {
-    test.setTimeout(240000);
-    await startFlight(page);
-    await engageJourney(page);
-    const immune = await page.evaluate(() => window.__spaceWar.journey.immune);
-    expect(immune).toBe(true);
-    // varre o corredor inteiro: a queima segue ativa em todos os pontos
-    for (const sn of [0.1, 0.3, 0.5, 0.7, 0.9, 0.97]) {
-      await page.evaluate((x) => window.__swDebug.journeyWarp(x), sn);
-      // T-07: era sleep fixo de 250 ms — 2 ticks de sim p/ o frame pós-warp rodar
-      await waitSimTicks(page, 2);
-      const alive = await page.evaluate(() => ({
-        active: window.__spaceWar.journey.active,
-        hp: window.__spaceWar.ship.hp,
-      }));
-      expect(alive.active).toBe(true);
-      expect(alive.hp).toBeGreaterThan(0);
-    }
-    // e a CHEGADA continua normal
-    await page.evaluate(() => window.__swDebug.journeyWarp(0.999));
-    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 45000 });
-    const speed = await page.evaluate(() => window.__spaceWar.ship.speed);
-    expect(speed).toBeLessThanOrEqual(1600);
-  });
+  // AC-05 (sem colisão durante a viagem — imunidade) DELETADO — rebaixado
+  // para tools/test-sw-journey-unit.js: journey.js está transitivamente
+  // envenenado por scene.js (via nav.js/hud.js), então o invariante
+  // `immune: true` é conferido por leitura literal da fonte, e o "nunca
+  // aborta no corredor" vira a varredura do perfil trapezoidal puro
+  // (celestial/physics.js, importa limpo) — cada ponto da queima (0.1..0.97)
+  // produz uma fase/velocidade VÁLIDA, sem lacuna onde a colisão poderia
+  // interromper o autopilot.
 });

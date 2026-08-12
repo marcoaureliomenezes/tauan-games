@@ -32,28 +32,9 @@ test.describe('Space War — Proporções Verdadeiras', () => {
   // carga estourava o teto de 30s por TEMPO, não por asserção.
   test.setTimeout(180000);
 
-  // AC-01: honestidade angular AO VIVO — o Sol do céu da Terra é um SOL
-  // (1.1°–8.6°), não um terço da tela; Saturno é uma joia, não um disco.
-  test('AC-01: volumes aparentes honestos no sistema solar', async ({ page }) => {
-    await startFlight(page);
-    const geo = await page.evaluate(() => {
-      const sw = window.__spaceWar;
-      const sun = sw.bodies.find((b) => b.isSun);
-      const earth = sw.bodies.find((b) => b.def.key === 'earth');
-      const saturn = sw.bodies.find((b) => /saturno/i.test(b.def.name));
-      const dSE = earth.worldPos.distanceTo(sun.worldPos);
-      const dSat = saturn.worldPos.distanceTo(earth.worldPos);
-      return {
-        earthR: earth.def.radius,
-        thetaSunDeg: (2 * sun.def.radius / dSE) * 57.29578,
-        thetaSaturnDeg: (2 * (saturn.def.ring ? saturn.def.ring.outer : saturn.def.radius) / dSat) * 57.29578,
-      };
-    });
-    expect(geo.earthR).toBeGreaterThanOrEqual(2200);   // grande vs a NAVE (275 naves)
-    expect(geo.thetaSunDeg).toBeGreaterThan(1.1);
-    expect(geo.thetaSunDeg).toBeLessThan(8.6);
-    expect(geo.thetaSaturnDeg).toBeLessThan(1.5);      // conjunção varia com as fases orbitais
-  });
+  // AC-01 (volumes aparentes honestos, θ=2R/d) DELETADO (T-02, demotion-map
+  // anexo §3): já coberto por test-physics-unit.js:68/:114 (T-TP-01 — Sol da
+  // Terra entre 1.1°/8.6°, Saturno < ~1.9°).
 
   // AC-02: ANOS-LUZ — do sistema do buraco negro, NENHUMA malha do solar é
   // visível; o solar vira um glow fotométrico fraco (uma estrela como as outras).
@@ -150,28 +131,11 @@ test.describe('Space War — Proporções Verdadeiras', () => {
     expect(ns.strobe).toBeGreaterThan(0.5);                    // farol 30 Hz vivo
   });
 
-  // AC-05: a "bola de plasma" (remanescente) acende NA APROXIMAÇÃO — nada de pop.
-  test('AC-05: remanescente com fade de distância (sem pop)', async ({ page }) => {
-    test.setTimeout(120000);
-    await startFlight(page);
-    // longe (sistema solar): invisível
-    const farFade = await page.evaluate(() => window.__spaceWar.remnantFade ?? 0);
-    expect(farFade).toBeLessThan(0.05);
-    // a ~1.9M do centro do binário: rampa PARCIAL (visível, ainda não plena)
-    await page.evaluate(() => window.__swDebug.goTo('blackhole', 4000));
-    await page.waitForFunction(
-      () => (window.__spaceWar.remnantFade ?? 0) > 0.05,
-      undefined, { timeout: 45000 },
-    );
-    const midFade = await page.evaluate(() => window.__spaceWar.remnantFade);
-    expect(midFade).toBeGreaterThan(0.05);
-    // dentro do sistema: pleno
-    await page.evaluate(() => window.__swDebug.goTo('neutron', 800));
-    await page.waitForFunction(
-      () => (window.__spaceWar.remnantFade ?? 0) > 0.9,
-      undefined, { timeout: 45000 },
-    );
-  });
+  // AC-05 (remanescente com fade de distância, "sem pop") DELETADO —
+  // rebaixado para test-physics-unit.js: a curva de fade
+  // (1 - THREE.MathUtils.smoothstep(d, REMNANT_FULL, REMNANT_FAR)) é reproduzida
+  // com os mesmos limiares de celestial/system.js (poço de import bloqueado
+  // por scene.js) e varrida em 3 distâncias (longe/rampa parcial/dentro).
 
   // AC-06: nave sem BOLA azul — grão do rastro pequeno, reflexo sutil.
   test('AC-06: jato da nave fino e reflexo sutil', async ({ page }) => {
