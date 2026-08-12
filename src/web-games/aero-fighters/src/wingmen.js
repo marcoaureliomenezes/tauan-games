@@ -114,6 +114,21 @@ export function spawnWingmen(scene, jet) {
   }
 }
 
+/** Reforço: amigos abatidos voltam ao serviço na próxima surtida (NEXT_SORTIE). */
+export function respawnDeadWingmen(scene) {
+  let n = 0;
+  for (let i = wingmenList.length - 1; i >= 0; i--) {
+    const wm = wingmenList[i];
+    if (!wm.dead) continue;
+    wingmenList.splice(i, 1);
+    const gi = game.wingmen.indexOf(wm);
+    if (gi >= 0) game.wingmen.splice(gi, 1);
+    _makeWingman(scene, wm.offsetIdx);
+    n++;
+  }
+  return n;
+}
+
 export function clearWingmen(scene) {
   for (const wm of wingmenList) {
     if (wm.mesh.parent) scene.remove(wm.mesh);

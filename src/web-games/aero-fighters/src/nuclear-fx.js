@@ -472,6 +472,29 @@ export function spawnNuclearFx(epicenter, sceneRef) {
   active.push({ group, fire, puffs, ring, wilson, light, t: 0, sceneRef });
   nuclearFxState.active = true;
   nuclearFxState.stage = 'flash';
+  return group;
+}
+
+// PRÉ-AQUECIMENTO (bug operador "lag quando a nuke explode"): os
+// ShaderMaterials do cogumelo (fireball FBM + puffs instanciados) compilavam
+// na PRIMEIRA detonação — congelamento de centenas de ms no clímax. Compila
+// os programas no boot (renderer.compile numa cópia invisível, longe do mapa)
+// — o cache de programas do three reaproveita p/ toda detonação real.
+// Recebe renderer/camera/scene por parâmetro (T-09, ver header do arquivo):
+// este módulo não importa scene.js estaticamente, então não pode assumir uma
+// scene de módulo — o caller (main.js) passa a scene ativa.
+let _prewarmed = false;
+export function prewarmNuclearFx(renderer, camera, sceneRef) {
+  if (_prewarmed || typeof window === 'undefined') return;
+  _prewarmed = true;
+  const group = spawnNuclearFx(new THREE.Vector3(0, -6000, 0), sceneRef);
+  try { renderer.compile(sceneRef, camera); } catch { /* headless sem GL completo */ }
+  // remove a cópia de aquecimento imediatamente (sem frame visível)
+  const i = active.findIndex((fx) => fx.group === group);
+  if (i >= 0) active.splice(i, 1);
+  sceneRef.remove(group);
+  nuclearFxState.active = false;
+  nuclearFxState.stage = 'idle';
 }
 
 export function updateNuclearFx(dt) {

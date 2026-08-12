@@ -27,7 +27,7 @@ import { createCrosshair, updateCrosshair, missileLockedTarget } from './crossha
 import { initMinimap, updateMinimap } from './ui/minimap.js';
 import { INHAUMA_DEM_ATTRIBUTION } from './ui/credits.js';
 import { MAPS, getMapHeightFn } from './maps/index.js';
-import { spawnWingmen, updateWingmen, clearWingmen } from './wingmen.js';
+import { spawnWingmen, updateWingmen, clearWingmen, respawnDeadWingmen } from './wingmen.js';
 import { spawnAllyEnemies, updateAllyWar, clearAllyEnemies } from './ally-war.js';
 import { updateAutoTaxi, isAutoTaxiActive } from './auto-taxi.js';
 import { installDebugApi, recordFrame } from './debug.js';
@@ -39,7 +39,7 @@ import {
   createDefenseMode, updateDefenseMode, updateDefenseCamera,
   startDefenseRun, disposeDefenseMode, defenseAnchor,
 } from './defense/defense-mode.js';
-import { updateNuclearFx } from './nuclear-fx.js';
+import { updateNuclearFx, prewarmNuclearFx } from './nuclear-fx.js';
 import { updateFirestorm, setFirestormHooks } from './firestorm.js';
 import { updateBoss } from './boss.js';
 import { SortieEvent, SortieState, transitionSortie } from './sortie-state.js';
@@ -133,6 +133,8 @@ window.selectMap = function(mapKey) {
   spawnWingmen(scene, jet);
   // Inimigos DOS ALIADOS — a frente de batalha dos amigos (separada da do player)
   spawnAllyEnemies(scene);
+  // Pré-compila os shaders do cogumelo nuclear (bug: freeze na 1ª detonação)
+  prewarmNuclearFx(renderer, camera, scene);
 
   // Mostra o overlay de instruções (início do jogo)
   showOverlay(
@@ -371,6 +373,8 @@ function handleStartOrFire() {
     game.cycle += 1;
     game.flags.missionCompleteShown = false;
     game.missionRealism.service.phase = 'idle';
+    // amigos abatidos são repostos a cada nova surtida (reforço)
+    respawnDeadWingmen(scene);
     spawnMission(game.cycle);
     return;
   }

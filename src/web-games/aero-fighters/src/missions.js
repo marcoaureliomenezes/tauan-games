@@ -167,8 +167,19 @@ export function crashAndDie(where) {
   }
 }
 
+/** Missão cumprida RECUPERA a esquadrilha: os ferimentos do jogador saram e
+ *  os amigos vivos (não abatidos/em queda) voltam ao HP cheio em voo. */
+function healSquadron() {
+  game.player.hp = 3;
+  for (const wm of game.wingmen) {
+    if (wm.dead || wm.falling) continue;
+    wm.hp = 3;
+  }
+}
+
 /** Avança para a próxima missão. */
 export function nextMission() {
+  healSquadron();
   if (game.missionRealism?.enabled) {
     transitionSortie(game.missionRealism.sortie, SortieEvent.ALL_TARGETS_DESTROYED, {}, game.time);
     // Trava o re-disparo: enquanto retornamos à base, o detector de conclusão não

@@ -30,6 +30,7 @@ export function updateService(service, dt, player) {
     player.heavyMissiles = MISSILES_HEAVY.MAX;
     player.nuclearMissiles = MISSILES_NUCLEAR.MAX;
     player.rodMissiles = MISSILES_ROD.MAX;
+    player.hp = 3;              // o serviço também REPARA a fuselagem
     if (player.weaponCooldowns) resetWeaponCooldowns(player.weaponCooldowns);
     service.active = false;
     service.phase = 'complete';
