@@ -186,6 +186,7 @@ test.describe('Space War — Smoke / AC', () => {
 
   // AC-10: piloto automático de mira (C) gira o nariz para o alvo.
   test('AC-10: align autopilot (C) aponta a nave no alvo', async ({ page }) => {
+    test.setTimeout(300000);
     await startFlight(page);
     // entra em voo deterministicamente perto de Júpiter; alvo = Sol (direção oposta)
     // T-07 (keep justificado): o ciclo de alvos com KeyT usa janelas fixas de 40 ms —
@@ -213,11 +214,16 @@ await page.evaluate(() => window.__swDebug.goTo('jupiter'));
     });
     const before = await aim();
     await page.keyboard.press('KeyC');
-    await page.waitForFunction(() => window.__spaceWar.ship.aligning === false, { timeout: 45000 }).catch(() => {});
+    // converge a ~0,225/frame (alignRate 4,5 × dt clamp 0,05): de π (Sol na
+    // direção oposta) leva ~20 frames — ~20-40 s em headless lento. O catch
+    // anterior ENGOLIA o timeout de 45 s e a medição pegava a nave ainda
+    // girando (flake CI: after=0,414 vs 0,4, run 31586617579). Sem catch:
+    // se o autopilot não completar, o teste FALHA ALTO — é bug real.
+    await page.waitForFunction(() => window.__spaceWar.ship.aligning === false, { timeout: 120000 });
     await page.waitForTimeout(300);
     const after = await aim();
     expect(after).toBeLessThan(before);
-    expect(after).toBeLessThan(0.4);             // nariz essencialmente no alvo
+    expect(after).toBeLessThan(0.1);  // o jogo completa a 0,02 rad (ship.js) — 0,4 era frouxo
   });
 
   // AC-11: a nave NÃO morre no início (zona segura da Terra + escudo); decola intacta.
