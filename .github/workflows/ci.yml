@@ -1,10 +1,19 @@
 name: CI
 
 on:
+  # v0.10.0 T-04: a suíte web só roda quando algo testável muda (espelho de
+  # godot-ci.yml:11-25). Fora do filtro: specs/, docs, .dadaia/, raiz —
+  # decisão explícita: nenhum desses altera o comportamento da suíte.
   push:
     branches: [main]
+    paths:
+      - "src/web-games/**"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "src/web-games/**"
+      - ".github/workflows/ci.yml"
   # v0.10.0 T-01: experimento A/B GL/ANGLE — dispara 2 runs na mesma sha,
   # um com gl_args=true e outro false, mesmo test_cmd (subconjunto).
   workflow_dispatch:
@@ -17,6 +26,12 @@ on:
         description: 'Comando de teste do step Run tests'
         type: string
         default: 'npm test'
+
+# v0.10.0 T-04: pushes empilhados cancelam o run anterior (fila de ~19 min
+# do pior caso do baseline morre aqui).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
