@@ -11,7 +11,7 @@
 
 ## 1. Problem and context
 
-Demanda do operador (2026-08-11). O `src/web-games/demolition-ball-opus-5/` foi
+Demanda do operador (2026-08-11). O `src/web-games/demolition-ball/` foi
 construído em 1 shot: o trator-guindaste com a bola de demolição está excelente
 (pêndulo físico, destruição volumétrica — NÃO refazer), mas a cidade é pobre
 (caixas planas, sem pedestres, sem vida), destruir é difícil demais para o filho
@@ -102,11 +102,11 @@ na cabine — sem tocar na física do pêndulo nem na identidade WebGL2-puro.
 
 ### Memória SDD e documentação
 
-- **R-13 — Regularizar memória (P1):** adicionar demolition-ball-opus-5 ao
+- **R-13 — Regularizar memória (P1):** adicionar demolition-ball ao
   `specs/memory/product/games-catalog.md` e criar os atoms do jogo em
-  `specs/memory/product/web-games/demolition-ball-opus-5/` (o jogo, a cidade,
+  `specs/memory/product/web-games/demolition-ball/` (o jogo, a cidade,
   a física/controles, os modos) — hoje o jogo não existe na memória SDD.
-- **R-14 — Docs do jogo (P2):** atualizar `demolition-ball-opus-5/README.md`
+- **R-14 — Docs do jogo (P2):** atualizar `demolition-ball/README.md`
   (controles novos, modos) e a linha do jogo no README raiz se necessário.
 
 ## 4. Decisions (grill-me 2026-08-11)
@@ -154,10 +154,10 @@ na cabine — sem tocar na física do pêndulo nem na identidade WebGL2-puro.
 
 ## 7. Validation plan
 
-- Unit (`tests/demolition-ball-opus-5/unit.mjs`): leis de homing no Rig real
+- Unit (`tests/demolition-ball/unit.mjs`): leis de homing no Rig real
   (espelho do spike), destruição fácil no Modo Tauan, spawn seguro da bola,
   cones bloqueiam tráfego (modelo de grafo), pedestres nunca feridos.
-- E2E Playwright (`tests/demolition-ball-opus-5/`): boot sem erros, AC-2, AC-3,
+- E2E Playwright (`tests/demolition-ball/`): boot sem erros, AC-2, AC-3,
   AC-5, screenshots para AC-4/AC-6. GPU flags do config dedicado (angle-gl).
 - Aceitação final: operador (e filho) jogam localmente.
 

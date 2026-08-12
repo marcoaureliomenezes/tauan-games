@@ -8,12 +8,12 @@ const { test, expect } = require('@playwright/test');
 
 async function startFlight(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 test.describe('Space War — Estrelas Fotométricas', () => {
@@ -39,13 +39,13 @@ test.describe('Space War — Estrelas Fotométricas', () => {
   // dentro de 0.9·raio do binário) e vira PONTO fotométrico saturado; a 400·R
   // resolve o DISCO com a anatomia viva.
   test('AC-02/04: pulsar — ponto fotométrico ofuscante no sistema, disco de perto', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     // dentro do sistema binário, longe da NS: modo PONTO, brilho saturado no teto
     await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
       () => window.__spaceWar.starLod.neutron && window.__spaceWar.starLod.neutron.mode === 'point',
-      undefined, { timeout: 8000 },
+      undefined, { timeout: 45000 },
     );
     const far = await page.evaluate(() => window.__spaceWar.starLod.neutron);
     expect(far.discPx).toBeLessThan(1);
@@ -66,7 +66,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.evaluate(() => window.__swDebug.goTo('neutron', 400));
     await page.waitForFunction(
       () => window.__spaceWar.starLod.neutron.mode === 'disc',
-      undefined, { timeout: 8000 },
+      undefined, { timeout: 45000 },
     );
     const near = await page.evaluate(() => window.__spaceWar.starLod.neutron);
     expect(near.discPx).toBeGreaterThanOrEqual(2);
@@ -76,10 +76,17 @@ test.describe('Space War — Estrelas Fotométricas', () => {
   // ∝ fluxo — sem piso: a 4.8M u o flare do Sol é ZERO (além do cutoff) e perto
   // da Terra é pleno.
   test('AC-03: corona/flare honestos à distância', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
-    // perto da Terra: d(Sol) ≈ 440k < FLARE_FULL → flare pleno
-    await page.waitForTimeout(250);
+    // perto da Terra: d(Sol) ≈ 440k < FLARE_FULL → flare pleno. Espera a
+    // CONDIÇÃO assentar (LOD/flare atualizam por frame — 250 ms de relógio
+    // podiam ser 0 frames num runner lento).
+    await page.waitForFunction(
+      () => window.__spaceWar.sunFlareVisible === true
+        && window.__spaceWar.sunFlareFactor === 1
+        && window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.mode === 'disc',
+      undefined, { timeout: 90000 },
+    );
     const home = await page.evaluate(() => ({
       flareVis: window.__spaceWar.sunFlareVisible,
       flareF: window.__spaceWar.sunFlareFactor,
@@ -93,7 +100,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.evaluate(() => window.__swDebug.goTo('neptune', 8));
     await page.waitForFunction(
       () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.discPx < 30,
-      undefined, { timeout: 8000 },
+      undefined, { timeout: 45000 },
     );
     const away = await page.evaluate(() => ({
       flareF: window.__spaceWar.sunFlareFactor,
@@ -107,7 +114,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
       () => window.__spaceWar.starLod.sun && window.__spaceWar.starLod.sun.mode === 'cluster',
-      undefined, { timeout: 8000 },
+      undefined, { timeout: 45000 },
     );
     const veryFar = await page.evaluate(() => ({
       flareVis: window.__spaceWar.sunFlareVisible,
@@ -124,7 +131,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
   // individual cede ao glow (sem dupla contagem). Ao resolver o sistema
   // (d < 0.9·raio) o glow some e os membros assumem.
   test('AC-04/05: glows de sistema fotométricos + handoff cluster→membros', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await startFlight(page);
     await page.waitForTimeout(250);
     const fromSolar = await page.evaluate(() => ({
@@ -152,7 +159,7 @@ test.describe('Space War — Estrelas Fotométricas', () => {
     await page.evaluate(() => window.__swDebug.goTo('neutron', 1500));
     await page.waitForFunction(
       () => window.__spaceWar.sysGlow.binary.visible === false,
-      undefined, { timeout: 8000 },
+      undefined, { timeout: 45000 },
     );
     const resolved = await page.evaluate(() => ({
       glow: window.__spaceWar.sysGlow.binary,

@@ -98,8 +98,6 @@ Todo jogo do portfólio, em qualquer tecnologia, herda estas obrigações:
 
 | Degrau | Tecnologia | Grupo | Jogos |
 |--------|-----------|-------|-------|
-| 0 | HTML/CSS/JS puro (DOM) | `src/web-games/` | — (memoria-bichos removido em v0.6.0) |
-| 1 | Phaser 3 (vendor) | `src/web-games/` | — (tauan-trex removido em v0.6.0) |
 | 2 | Three.js r165 (vendor, ES modules, sem build) | `src/web-games/` | aero-fighters, james-bond, space-war, speed-run |
 | 4 | Unreal Engine 5 | — | reservado (bloqueado por hardware) |
 

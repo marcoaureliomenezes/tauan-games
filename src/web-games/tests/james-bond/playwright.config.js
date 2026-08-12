@@ -7,10 +7,6 @@ module.exports = defineConfig({
   testDir: __dirname,
   testMatch: 'smoke.spec.js',
   outputDir: path.join(outputRoot, 'results'),
-  // v0.10.0 T-03: auto-suficiente (sobe/derruba o próprio servidor) — antes
-  // dependia de um servidor já de pé em TEST_PORT||3658.
-  globalSetup: './globalSetup.js',
-  globalTeardown: './globalTeardown.js',
   // 300 s: os mapas viraram quarteirões (693 células contra as 375 antigas) e o
   // teste de andares audita as 6 missões em sequência. Em máquina carregada o
   // limite de 180 s não cobria mais a auditoria completa.

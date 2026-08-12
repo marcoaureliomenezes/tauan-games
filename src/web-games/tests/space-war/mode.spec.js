@@ -9,16 +9,16 @@ const { test, expect } = require('@playwright/test');
 
 async function load(page) {
   await page.goto('/src/web-games/space-war/index.html');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 30000 });
-  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 45000 });
+  await page.waitForSelector('canvas', { state: 'attached', timeout: 60000 });
+  await page.waitForFunction(() => window.__spaceWarReady === true, { timeout: 120000 });
 }
 
 async function startFlight(page) {
   await load(page);
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
+  await page.waitForFunction(() => window.__spaceWar.phase !== 'menu', { timeout: 30000 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 10000 });
+  await page.waitForFunction(() => window.__spaceWar.phase === 'flight', { timeout: 45000 });
 }
 
 // Máquina compartilhada com outras suítes (load alto): budgets largos.
@@ -28,7 +28,7 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
   // AC-01: a nave nasce ACOPLADA ao sistema planetário da Terra.
   test('AC-01: boot em modo ORBIT no sistema Terra (regime orbital)', async ({ page }) => {
     await startFlight(page);
-    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 45000 });
     const st = await page.evaluate(() => ({
       planetary: window.__spaceWar.planetary && window.__spaceWar.planetary.key,
       systems: window.__spaceWar.planetarySystems.map((s) => s.key),
@@ -48,10 +48,10 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
   // AC-02: cruza a borda → CRUISE; volta → ORBIT no sistema de Marte.
   test('AC-02: ORBIT→CRUISE ao sair do sistema; re-acopla em Marte', async ({ page }) => {
     await startFlight(page);
-    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 45000 });
     // longe de qualquer sistema planetário → CRUISE
     await page.evaluate(() => window.__swDebug.goTo('mars', 30));
-    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 45000 });
     const cruise = await page.evaluate(() => ({
       planetary: window.__spaceWar.planetary,
       blend: window.__spaceWar.modeBlend,
@@ -62,7 +62,7 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
     await page.evaluate(() => window.__swDebug.goTo('mars', 2.2));
     await page.waitForFunction(
       () => window.__spaceWar.mode === 'orbit' && window.__spaceWar.planetary?.key === 'mars',
-      { timeout: 15000 },
+      { timeout: 45000 },
     );
   });
 
@@ -96,18 +96,18 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
     await page.evaluate(() => window.__swDebug.goTo('terra', 4));
     await page.evaluate(() => window.__swDebug.target('betelgeuse'));
     await page.keyboard.press('KeyZ');
-    await page.waitForFunction(() => window.__spaceWar.journey?.active, { timeout: 20000 });
-    await page.waitForFunction(() => window.__spaceWar.mode === 'journey', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.journey?.active, { timeout: 45000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'journey', { timeout: 45000 });
     await page.evaluate(() => window.__swDebug.journeyWarp(0.995));
-    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 15000 });
-    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 20000 });
+    await page.waitForFunction(() => !window.__spaceWar.journey.active, { timeout: 45000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'cruise', { timeout: 45000 });
   });
 
   // AC-05: regressão da aberração — o corredor de estrelas NÃO acende dentro
   // do sistema planetário (nada de cruzar estrelas antes de Júpiter).
   test('AC-05: corredor de estrelas apagado dentro do sistema planetário', async ({ page }) => {
     await startFlight(page);
-    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 45000 });
     await page.waitForTimeout(400);   // alguns frames de starfield
     const fade = await page.evaluate(() => window.__spaceWar.starfieldFade);
     expect(fade).toBeLessThan(0.2);
@@ -118,11 +118,11 @@ test.describe('Space War — 3 estados de voo (ORBIT/CRUISE/JOURNEY)', () => {
   // fica como arco na metade de baixo da tela.
   test('AC-06: planeta como referencial fixo embaixo (frame aero-fighters)', async ({ page }) => {
     await startFlight(page);
-    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 15000 });
+    await page.waitForFunction(() => window.__spaceWar.mode === 'orbit', { timeout: 45000 });
     // decola e engata o ASSISTENTE DE ÓRBITA ([O]) — circulariza em volta da
     // Terra: é a experiência exata do frame (planeta embaixo, asas niveladas)
     await page.keyboard.down('KeyW');
-    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 20000 });
+    await page.waitForFunction(() => window.__spaceWar.ship.landed === false, { timeout: 45000 });
     await page.keyboard.up('KeyW');
     await page.keyboard.press('KeyO');
     await page.waitForFunction(() => window.__spaceWar.ship.inOrbit === true, { timeout: 40000 });

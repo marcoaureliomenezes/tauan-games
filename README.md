@@ -10,7 +10,7 @@ Jogos web do Tauan — jogáveis direto no navegador, sem build step.
 | ✈️ **Aero Strike** — ataque ao solo com F-35: 4 mapas (incl. Inhaúma realista), decolagem/pouso, canhão, mísseis, NUKE com cogumelo volumétrico e firestorm | Three.js r165 (vendorado) | [/src/web-games/aero-fighters/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/aero-fighters/) |
 | 🕵️ **James Bond: Operações** — FPS de espionagem com 6 operações | Three.js r165 | [/src/web-games/james-bond/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/james-bond/) |
 | 🏁 **Cruis'n Tauan** — corrida arcade estilo Cruis'n World | Three.js r165 | [/src/web-games/speed-run/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/speed-run/) |
-| 🏗️ **Demolition Ball** — trator-guindaste com bola de demolição numa cidade de blocos | WebGL2 puro | [/src/web-games/demolition-ball-opus-5/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/demolition-ball-opus-5/) |
+| 🏗️ **Demolition Ball** — trator-guindaste com bola de demolição numa cidade viva (rio, pontes, pedestres, equipe de cones); Modo Tauan para os pequenos | WebGL2 puro (zero libs) | [/src/web-games/demolition-ball/](https://marcoaureliomenezes.github.io/tauan-games/src/web-games/demolition-ball/) |
 
 O repositório é 100% jogos WEB (decisão do operador, 2026-08-11 — os projetos
 Godot 4 foram removidos; histórico no git).

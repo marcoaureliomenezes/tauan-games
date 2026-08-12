@@ -1,29 +1,35 @@
-name: CI
+# demolition-ball-ci — suíte dedicada do Demolition Ball (config próprio com as
+# 5 flags GL/ANGLE, v0.10.0 T-03). Roda só quando o jogo ou seus testes mudam;
+# em paralelo com o job principal (o config raiz ignora
+# tests/demolition-ball/** desde v0.10.0).
+
+name: Demolition Ball CI
 
 on:
   push:
     branches: [main]
+    paths:
+      - "src/web-games/demolition-ball/**"
+      - "src/web-games/tests/demolition-ball/**"
+      - ".github/workflows/demolition-ball-ci.yml"
   pull_request:
     branches: [main]
-  # v0.10.0 T-01: experimento A/B GL/ANGLE — dispara 2 runs na mesma sha,
-  # um com gl_args=true e outro false, mesmo test_cmd (subconjunto).
+    paths:
+      - "src/web-games/demolition-ball/**"
+      - "src/web-games/tests/demolition-ball/**"
+      - ".github/workflows/demolition-ball-ci.yml"
   workflow_dispatch:
-    inputs:
-      gl_args:
-        description: 'Ativa as 5 flags GL/ANGLE (PW_GL_ARGS=1)'
-        type: boolean
-        default: false
-      test_cmd:
-        description: 'Comando de teste do step Run tests'
-        type: string
-        default: 'npm test'
+
+concurrency:
+  group: demolition-ball-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  playwright-tests:
-    name: Playwright Tests
+  demolition-ball-tests:
+    name: Demolition Ball Tests
     runs-on: ubuntu-latest
 
     defaults:
@@ -62,19 +68,4 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Run tests
-        run: ${{ github.event.inputs.test_cmd || 'npm test' }}
-        env:
-          PW_GL_ARGS: ${{ github.event.inputs.gl_args == 'true' && '1' || '0' }}
-
-      - name: Run demolition-ball tests (dedicated GL config)
         run: npm run test:demolition-ball
-
-      - name: Upload test results on failure
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
-        with:
-          name: test-results
-          path: |
-            src/web-games/test-results/
-            src/web-games/tests/screenshots/
-          retention-days: 7

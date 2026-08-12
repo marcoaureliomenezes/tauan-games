@@ -1,5 +1,5 @@
 # Dependencies
-node_modules/
+node_modules
 
 # Playwright output
 test-results/
@@ -22,3 +22,6 @@ tests/screenshots/
 
 # Godot editor caches
 .godot/
+# e2e output dirs (regenerated every run)
+src/web-games/screenshots/
+src/web-games/tests/screenshots/

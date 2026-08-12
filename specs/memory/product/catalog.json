@@ -65,6 +65,30 @@
       "title": "Space War — o jogo",
       "tldr": "Combate e exploração espacial com física real documentada — 6 sistemas estelares, balística sob gravidade, viagem interestelar relativística, Sgr A*.",
       "path": "specs/memory/product/web-games/space-war/space-war-jogo.md"
+    },
+    {
+      "slug": "demolition-ball-cidade-viva",
+      "title": "Demolition Ball — cidade viva",
+      "tldr": "Grade 7x7 determinística com rio+3 pontes (arestas cortadas do grafo), fachadas por estilo no shader, praças/flores, 56 pedestres imunes, 3 modelos de carro, equipe de cones.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-cidade-viva.md"
+    },
+    {
+      "slug": "demolition-ball-fisica-controles",
+      "title": "Demolition Ball — física e controles",
+      "tldr": "Pêndulo com cabo inextensível em sub-passos de 12,5 ms; destruição E=½mv² em células de 2,5 m com flood-fill de colapso; WASD/QE/RF/ZX/ESPAÇO/C.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-fisica-controles.md"
+    },
+    {
+      "slug": "demolition-ball-jogo",
+      "title": "Demolition Ball — o jogo",
+      "tldr": "Trator-guindaste com bola de demolição de 4,2 t numa cidade procedural viva; contratos de destruição; WebGL2 100% próprio (zero libs, só snoise MIT).",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-jogo.md"
+    },
+    {
+      "slug": "demolition-ball-modos",
+      "title": "Demolition Ball — modos de jogo",
+      "tldr": "Modo Tauan (sem prazo/multa, 1 alvo, threshold 0.5, dano x2.5, homing forte) vs Modo Contratos (jogo original); seleção no overlay, trava ao começar.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-modos.md"
     }
   ]
 }

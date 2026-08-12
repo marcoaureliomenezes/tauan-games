@@ -13,7 +13,7 @@ manter. O que melhorar (todos obrigatórios):
 
 ## 1. Mapa / cidade muito mais trabalhada
 - Prédios com janelas e portas de verdade (hoje: bandas procedurais simples no shader,
-  `src/web-games/demolition-ball-opus-5/src/shaders.js`).
+  `src/web-games/demolition-ball/src/shaders.js`).
 - Pedestres andando nas calçadas.
 - Carros circulando melhorados (visual e comportamento).
 - Praças, árvores, flores, prédios, pontes, casas — cidade viva.
@@ -73,7 +73,7 @@ já é o charme do jogo.
 - Criança consegue derrubar o alvo do contrato 1 sem ler nem cronometrar (Modo Tauan).
 - Botão/tecla no alvo convoca furgão + ajudante + cones; tráfego para no trecho.
 - Operador visível na cabine ao jogar.
-- Baseline verde: unit (`tests/demolition-ball-opus-5/unit.mjs`) + e2e Playwright.
+- Baseline verde: unit (`tests/demolition-ball/unit.mjs`) + e2e Playwright.
 
 ## Estado da descoberta (2026-08-11)
 

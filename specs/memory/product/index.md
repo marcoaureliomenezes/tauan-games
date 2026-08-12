@@ -1,4 +1,4 @@
-# Memory Catalog — tauan-games
+# Memory Catalog — db-worktree
 
 > Generated automatically from `specs/memory/product/<area>/*.md` frontmatter.
 > The catalog section below is refreshed by `dadaia memory catalog generate`; other
@@ -20,6 +20,15 @@
 
 | slug | title | tldr |
 |------|-------|------|
+
+### demolition-ball
+
+| slug | title | tldr |
+|------|-------|------|
+| `demolition-ball-cidade-viva` | Demolition Ball — cidade viva | Grade 7x7 determinística com rio+3 pontes (arestas cortadas do grafo), fachadas por estilo no shader, praças/flores, 56 pedestres imunes, 3 modelos de carro, equipe de cones. |
+| `demolition-ball-fisica-controles` | Demolition Ball — física e controles | Pêndulo com cabo inextensível em sub-passos de 12,5 ms; destruição E=½mv² em células de 2,5 m com flood-fill de colapso; WASD/QE/RF/ZX/ESPAÇO/C. |
+| `demolition-ball-jogo` | Demolition Ball — o jogo | Trator-guindaste com bola de demolição de 4,2 t numa cidade procedural viva; contratos de destruição; WebGL2 100% próprio (zero libs, só snoise MIT). |
+| `demolition-ball-modos` | Demolition Ball — modos de jogo | Modo Tauan (sem prazo/multa, 1 alvo, threshold 0.5, dano x2.5, homing forte) vs Modo Contratos (jogo original); seleção no overlay, trava ao começar. |
 
 
 ### james-bond
