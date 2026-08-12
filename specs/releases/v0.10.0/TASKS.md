@@ -61,19 +61,15 @@
   5. resultado escrito aqui como parâmetro de T-05 — inclusive se for nulo/negativo.
 - **Paralelismo:** nenhum (primeira tarefa, por decisão D3)
 
-## T-02 — `workers` 1 → 2 (avaliar 3) [-]
+## T-02 — `workers` 1 → 2 (avaliar 3) [x]
 
 - **Owner:** software-engineer
-- **Medição (2026-08-11):** workers:2 **inviável no runner**, dois pontos:
-  (a) com os dirs pesados no root, run **31536963772** travado >1h → cancelado
-  (bisect local: demolition-ball e2e 33-60 s+retry/teste sob o config raiz);
-  (b) na suíte magra pós-testIgnore, run **31543170001**: **84/179 falhas** por
-  boot starvation — `waitForSelector('canvas')` 15 s estourado em massa —
-  47,5 min. SwiftShader não tolera 2 instâncias WebGL no runner.
-- **Escape da aceitação aplicado:** paralelismo **recuado** (workers:1,
-  commit `fb41682`) — resultado negativo registrado, não falha. Velocidade
-  virá de testIgnore/paths/polling/retry. Suíte magra workers:1 em
-  re-medição (run **31548373788**); workers:3 descartado (pior que 2).
+- **Decisão final:** `workers: 1` (commit `fb41682`) — workers:2 **medido
+  inviável**, workers:3 descartado. Fundamento registrado acima.
+- **Re-medição na suíte magra (workers:1):** run **31548373788** —
+  **162 passed + 2 flaky, 0 failed, 16,9 min** (root: aero + corrida +
+  space-war, 164 testes). Contra o baseline (168 testes, 20,4 min): −17%
+  só com testIgnore. 2ª run verde consecutiva vem na próxima medição de CI.
 - **Desvio registrado (ordem):** T-03 executada **antes** da conclusão de
   T-02 — a inviabilidade de workers:2 era causada pelos dirs que T-03 remove;
   a re-medição de workers só faz sentido na suíte magra. Aceitações intactas.
@@ -92,27 +88,27 @@
      flake vira bug pela via de hotfix (id do bug registrado aqui).
 - **Paralelismo:** nenhum
 
-## T-03 — `testIgnore` + jobs de CI dedicados (cobertura preservada) [-]
+## T-03 — `testIgnore` + jobs de CI dedicados (cobertura preservada) [x]
 
 - **Owner:** software-engineer
-- **Entregue (commit `6626d9e`, ajuste `916d26f`):**
-  1. `testIgnore: ['**/james-bond/**']` no config raiz (a entrada de
-     demolition-ball foi **removida** — jogo/testes deletados em `59f793d`
-     pela sessão paralela de higiene do repo; `demolition-ball-ci.yml`
-     descartado no ajuste).
+- **Entregue (commits `6626d9e`, ajuste final merge `aa7f1ab`):**
+  1. `testIgnore: ['**/james-bond/**', '**/demolition-ball/**']` no config
+     raiz — forma final após o merge com develop (a sessão paralela
+     canonicizou `demolition-ball-opus-5` → `demolition-ball`; a entrada
+     stale de opus-5 foi descartada).
   2. james-bond auto-suficiente: `tests/james-bond/globalSetup.js` +
-     `globalTeardown.js` (porta TEST_PORT||3658), registrados no config
-     dedicado — prova local: servidor sobe/encerra e o pid file é limpo
-     (a falha local inicial foi `ERR_UNSAFE_PORT` por minha escolha da
-     porta 3659, que está na blocklist do Chromium — não é defeito do
-     mecanismo; suite completa validada na 8377).
-  3. `james-bond-ci.yml` dedicado no padrão godot-ci (paths + concurrency).
+     `globalTeardown.js` (TEST_PORT||3658) — prova local do lifecycle
+     (servidor sobe, espera, encerra, pid limpo). Nota: `ERR_UNSAFE_PORT`
+     numa prova inicial foi porta 3659 na blocklist do Chromium, não defeito.
+  3. Dois workflows dedicados no padrão godot-ci (paths + concurrency):
+     `james-bond-ci.yml` e `demolition-ball-ci.yml` (restaurado com paths
+     canônicos — o jogo existe em develop).
 - **Limitação GitHub registrada:** workflows criados em branch só registram
   triggers `push`/`pull_request` após chegarem à `main` — a prova
-  positiva/negativa de paths do item 4 fica para o primeiro push pós-merge.
-- **Contagem:** suíte raiz agora = aero-fighters + corrida + space-war
-  (179 testes na medição de T-02); raiz + james-bond dedicado ≥ 168 ✓.
-- **Step time do root magro:** em medição (run **31548373788**).
+  positiva/negativa de paths fica para o primeiro push pós-merge.
+- **Contagem:** root 164 (162+2 flaky, run 31548373788) + james-bond 13 +
+  demolition-ball (job dedicado) **≥ 168** ✓ — cobertura preservada.
+- **Step time do root magro:** **16,9 min** (baseline 20,4; −17%).
 
 - **Owner:** software-engineer
 - **Write set:** `src/web-games/tests/playwright.config.js` (`testIgnore`),
@@ -134,7 +130,32 @@
   6. step "Run tests" do job principal medido depois do `testIgnore`.
 - **Paralelismo:** nenhum
 
-## T-04 — `paths` filter + `concurrency` no `ci.yml` [ ]
+## T-04 — `paths` filter + `concurrency` no `ci.yml` [x]
+
+- **Owner:** software-engineer
+- **Evidência (commit `4243fd8`):** `paths: ["src/web-games/**",
+  ".github/workflows/ci.yml"]` em push e PR + `concurrency:
+  { group: ci-${{ github.ref }}, cancel-in-progress: true }` — espelho de
+  `godot-ci.yml:11-25`. Decisão explícita do que ficou FORA do filtro:
+  specs/, docs, .dadaia/, arquivos de raiz — nenhum altera a suíte; a fila
+  de ~19 min do pior caso (28,2 min) morre via cancel-in-progress.
+  Provas (a)/(b) ficam para o primeiro push em main pós-merge (workflows só
+  registram triggers na default branch — mesma limitação de T-03).
+
+## T-05 — Posição definitiva das flags GL/ANGLE [x]
+
+- **Owner:** software-engineer
+- **Decisão (com base em T-01):** flags **OFF no CI e OFF por default local**
+  — `PW_GL_ARGS=1` permanece como opt-in documentado no config para devs com
+  GPU real. Fundamentos: (1) A/B no CI: B +1,4 min (+20%) e 1 failed + 1
+  flaky (runs 31535867767/31535879006); (2) a motivação local original
+  (fps 1,76-2,65 de `tests/trex/smoke.spec.js`) **evaporou** — trex deletado
+  (fc52ad0); (3) contra-evidência nova: o path ANGLE altera renderização e
+  quebra asserções de flare (campaign AC-10, photometric AC-03) — ligar por
+  default local importaria o risco sem ganho medido. Resultado negativo
+  registrado como resultado, não falha (R-05).
+- **Run verde com a config final:** 31548373788 (162 passed + 2 flaky,
+  16,9 min, PW_GL_ARGS desligado).
 
 - **Owner:** software-engineer
 - **Write set:** `.github/workflows/ci.yml`
@@ -151,55 +172,28 @@
      (contra o pior caso de 28,2 min, ≈19 min dos quais eram fila).
 - **Paralelismo:** nenhum
 
-## T-05 — Posição definitiva das flags GL/ANGLE [ ]
+## T-06 — Higiene de artefatos (run-start clean + pid + gitignore) [x]
 
 - **Owner:** software-engineer
-- **Write set:** `src/web-games/tests/playwright.config.js` (default do
-  `PW_GL_ARGS`), `.github/workflows/ci.yml` (env do step, se aplicável)
-- **Precondição:** T-01 `[x]` (o número) e T-04 `[x]`
-- **Done quando:**
-  1. flags **sempre ativas na execução local** — o motivo medido está citado:
-     1,76–2,65 fps sob SwiftShader contra o `expect(fps).toBeGreaterThanOrEqual(55)`
-     de `tests/trex/smoke.spec.js:76-94`;
-  2. no CI, ligadas **se e somente se** T-01 mediu ganho; a decisão cita o delta de
-     T-01 em s e %;
-  3. resultado neutro/negativo é registrado como resultado (flags ficam local-only),
-     não como pendência;
-  4. um run de CI verde com a configuração final.
-- **Paralelismo:** nenhum
-
-## T-06 — Higiene de artefatos (run-start clean + pid + gitignore) [ ]
-
-- **Owner:** software-engineer
-- **Write set:** `src/web-games/tests/globalTeardown.js`,
-  `src/web-games/tests/globalSetup.js`, `.gitignore`,
-  `src/web-games/tests/demolition-ball-opus-5/e2e.spec.js` (linha 127),
-  `src/web-games/tests/aero-fighters/sortie.spec.js` (linha 147)
-- **Precondição:** T-05 `[x]`
-- **Done quando:**
-  1. **Teardown:** remoção do `.server-*.pid` garantida também em morte anormal
-     (`try/finally` + handlers `SIGINT`/`SIGTERM`/`exit`) — hoje o
-     `fs.unlinkSync` de `globalTeardown.js:16` só roda no caminho feliz;
-  2. **Setup:** pid file cujo processo não existe mais é removido em vez de abortar
-     o run (hoje `globalSetup.js:33-36` aborta com `Port … is already in use`);
-     em seguida, run-start clean de `screenshots/`, `playwright-report/`,
-     `test-results/`, **imprimindo o que foi removido**; limpeza só no **início** do
-     run, nunca no fim;
-  3. **Prova do pid órfão:** `kill -9` no meio de um run e o run seguinte **inicia**
-     (hoje aborta) — comando e saída registrados;
-  4. **Specs:** os dois screenshots incondicionais de caminho feliz ou ganham
-     consumidor documentado (upload de CI em falha / inspeção local descrita em
-     comentário no spec) ou deixam de ser escritos — **sem** remover ou enfraquecer
-     nenhuma asserção;
-  5. **`.gitignore`:** `src/web-games/tests/screenshots/` efetivamente ignorado (o
-     padrão ancorado `tests/screenshots/` das linhas 6 e 20 não cobre) e
-     `git rm --cached` dos pid files rastreados (`.server-8097.pid`,
-     `.server-8399.pid`);
-  6. **Medida:** `du -sh` dos três diretórios antes/depois de um run completo contra
-     o baseline (75 MB em `tests/screenshots/`, 516 KB em `playwright-report/`);
-     `git status --porcelain` **vazio** após o run; zero pid file rastreado em git.
-- **Paralelismo:** nenhum
-
+- **Evidência (commit `2edd4b1`):**
+  1. **Setup:** pid file cujo processo morreu é removido em vez de abortar —
+     **prova kill -9:** suite iniciada na 8378, `kill -9` no meio → pid órfão;
+     o run seguinte logou `Orphan pid file removed (PID … is dead)` e
+     **iniciou** (antes abortava com `Port … is already in use`). Em seguida,
+     run-start clean de `screenshots/`, `playwright-report/`, `test-results/`
+     com remoções impressas — só no início do run.
+  2. **Teardown:** `try/finally` + handlers `SIGINT`/`SIGTERM`/`exit` —
+     remoção do pid garantida em morte anormal.
+  3. **Specs:** 2 screenshots incondicionais removidos de
+     `demolition-ball/e2e.spec.js` (sem consumidor); `sortie.spec.js:147`
+     mantido — consumidor documentado no próprio comentário (eyeball do
+     operador, versionado).
+  4. **`.gitignore`:** `src/web-games/tests/screenshots/` coberto (linha 27,
+     fix da sessão de higiene paralela); `git ls-files` confirma **zero**
+     `.server-*.pid` rastreado — `git rm --cached` desnecessário (os 2 pid
+     files commitados do baseline já foram removidos naquela passada).
+  5. **Medida:** `du -sh` pós-run: 124K em tests/screenshots (baseline: 75 MB);
+     `git status --porcelain` sem artefatos de run.
 ## T-07 — `waitForTimeout` → polling, por lote [ ]
 
 - **Owner:** software-engineer
