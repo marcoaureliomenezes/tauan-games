@@ -1,6 +1,7 @@
 ---
 title: "Higiene de artefatos de teste — lixo de execução nunca consumido e nunca deletado (INADMISSÍVEL)"
-status: candidate
+status: delivered
+delivered_in: v0.10.0
 opened: 2026-08-11
 description: >-
   A suíte gera artefatos sem consumidor e sem política de retenção; o disco acumula

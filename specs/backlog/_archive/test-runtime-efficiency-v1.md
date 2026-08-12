@@ -1,6 +1,7 @@
 ---
 title: "Eficiência de execução da suíte Playwright (CI 20,4 min → alvo ≤ 10 min)"
-status: candidate
+status: delivered
+delivered_in: v0.10.0
 opened: 2026-08-11
 description: >-
   Baseline CI 2026-07-20 = 168 testes em 20,4 min com workers:1; média de sucesso

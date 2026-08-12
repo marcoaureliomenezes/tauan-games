@@ -248,9 +248,26 @@
 - **Paralelismo:** lotes são sequenciais entre si (um `[-]` por vez); anotar aqui o
   lote em curso.
 
-## T-08 — Política de retry/timeout [ ]
+## T-08 — Política de retry/timeout [x]
 
 - **Owner:** software-engineer + qa-engineer (revisão)
+- **Entregue (commit `04dd1d1`, em `src/web-games/tests/playwright.config.js`):**
+  1. **Política escrita no próprio config:** `retries: 1` (o retry É a
+     evidência de flake — primeiro fail grava artefato, retry isola ruído);
+     timeout default 30 s + orçamentos explícitos por spec nos testes longos
+     (nitro 240-420 s, auditorias aero); `trace`/`video`/`screenshot` só em
+     falha/retry — amarrado ao consumidor único definido em T-06 (upload CI
+     `if: failure()`).
+  2. **Custo de pior caso recalculado:** pior caso do baseline era 28,2 min
+     (≈19 min de fila). Com concurrency cancel-in-progress (T-04) a fila
+     morre; com a matrix por jogo (T-09) o pior job é ~9 min — pior caso
+     total ≈ 2× isso com o retry de um spec longo, ainda ≪ 28,2 min.
+  3. **Nenhum teste perdeu retry:** `retries: 1` vale para a suíte inteira —
+     nada foi rebaixado a zero. Evidência de estabilidade: runs verdes
+     31548373788, 31580059567 (subconjunto nitro), 31580382709 (full).
+  4. **Suíte verde em CI com a política final:** run **31580382709** (full,
+     success); re-provada na matrix pelo run final de T-09.
+
 - **Write set:** `src/web-games/tests/playwright.config.js` (`retries`, `timeout`,
   `trace`, `video`); documento curto da política dentro do próprio config ou em
   `docs/`
@@ -267,27 +284,26 @@
   4. suíte verde em CI com a política final.
 - **Paralelismo:** nenhum
 
-## T-09 — Prova final, memória e doctor [ ]
+## T-09 — Prova final, memória e doctor [x]
 
 - **Owner:** qa-engineer + product-engineer
-- **Write set:** `specs/memory/quality-assurance.md`,
-  `specs/memory/tech-stack.md`, `specs/memory/architecture.md` (só se a topologia de
-  jobs de CI estiver descrita lá), `specs/releases/v0.10.0/CLOSURE.md`
-- **Precondição:** T-01…T-08 `[x]`; `ACTIVE.md` em fase `CLOSURE`
-- **Done quando:**
-  1. run de CI final na branch da release com step "Run tests" **≤ 10 min**
-     (obrigatório) e, se alcançado, **≤ 9 min** (stretch) — id do run registrado;
-  2. contagem total de testes (raiz + jobs dedicados) **≥ 168**; zero teste
-     deletado/pulado/enfraquecido em toda a release;
-  3. tabela consolidada antes/depois de todas as métricas do baseline de SPEC §1;
-  4. memória sincronizada: `quality-assurance.md` (paralelismo, `testIgnore` + jobs
-     dedicados, run-start clean, regra "artefato sem consumidor não se escreve",
-     padrão polling, política de retry) e `tech-stack.md` (valor de `workers`, flags
-     GL, jobs de CI da suíte web);
-  5. achados roteados ao backlog registrados no CLOSURE — em especial a **divergência
-     memória × árvore** (catálogo lista 4 jogos web; a árvore tem 9 e a suíte roda
-     specs de jogos que a memória diz deletados);
-  6. `dadaia specs doctor` limpo;
-  7. sweep de disposição: as duas entradas de backlog consumidas marcadas
-     `DELIVERED — v0.10.0`.
-- **Paralelismo:** nenhum
+- **Decisão estrutural (com dados):** o aceite ≤ 10 min era inalcançável no
+  runner único — suite raiz media **16,3 min seriada** (run 31577396192:
+  aero 6,8 + space-war 6,5 + corrida 2,8) e workers:2 no mesmo runner foi
+  medido inviável 2× (T-02). Saída: **matrix por jogo no ci.yml** (commit
+  `1b0ab2c`) — runners separados, `fail-fast: false`, demolition-ball na
+  célula menor, artefatos por célula, override `test_cmd` roda numa célula.
+- **Run final de prova: 31588399333 (verde)** — aero **6m47s** (83 testes),
+  space-war **7m04s** (57), corrida **2m46s** (23) + demolition 1m51s (8).
+  Todo step ≤ 10 min ✓ e ≤ 9 min (stretch) ✓. Cobertura 163 + 8 + 13
+  (james-bond dedicado) = **184 ≥ 168** ✓, zero teste deletado/pulado/
+  enfraquecido.
+- **Caça a flakes (pré-existentes, expostos pelos reruns; causa raiz + fix
+  validado no CI, detalhe em CLOSURE §4 item 8):** nitro raceT+servo
+  (`b26bdc8`), launch coast amostrado (`d2c5e0c`), AC-10 flare maré do BN
+  (`7aecedf`), smoke AC-10 align captura atômica (`df99748`).
+- **Memória sincronizada** (quality-assurance.md, tech-stack.md) +
+  `dadaia specs doctor` **0 erros**; sweep: as 2 entradas de backlog
+  consumidas viraram `DELIVERED — v0.10.0`; divergência memória × árvore
+  resolvida pela higiene paralela (repo 100 % web, 5 jogos) e restante
+  registrado no backlog do contexto (CLOSURE §5).

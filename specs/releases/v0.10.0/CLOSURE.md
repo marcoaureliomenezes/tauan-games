@@ -1,6 +1,6 @@
 # CLOSURE — Release: v0.10.0
 
-> **Status:** Fechada (aguardando run final de prova — T-09 item 1)
+> **Status:** Fechada
 > **Release ID:** v0.10.0
 > **Fechada em:** 2026-08-12
 > **Consumes (sweep):** test-runtime-efficiency-v1, test-artifact-hygiene-v1 → `DELIVERED — v0.10.0`
@@ -26,14 +26,28 @@ screenshots 5,5→75 MB num dia, 6 pid files órfãos (2 commitados).
 | T-05 flags GL definitivas | OFF no CI e OFF local default; opt-in `PW_GL_ARGS=1` documentado | Delta de T-01; motivação trex evaporada (jogo deletado); contra-evidência flare/ANGLE. Run verde com a config final: 31548373788 |
 | T-06 higiene | run-start clean + teardown garantido + screenshots sem consumidor removidos | Commit `2edd4b1`. **Prova kill -9**: órfão criado → próximo run loga `Orphan pid file removed` e INICIA (antes abortava). `du` pós-run: 124 K (baseline 75 MB). Zero pid rastreado em git |
 | T-07 polling | 4 lotes vivos convertidos (trex/bang-bang/far-west evaporaram) | corrida 2 conv. (`dd5f7de`), demolition 2, james-bond 5 (`1ae5343`), space-war 36/39 e aero ~57/61 (`49cddf9`). Sleeps fixos: **216,6 s (legado) → ~60 s** — redução > 70 % |
-| T-08 retry/timeout | política escrita no config: retries:1 (evidência), 30 s default + orçamentos por spec, artefatos só em falha/retry | Commit `04dd1d1`; consumidor único: upload CI `if: failure()` |
+| T-08 retry/timeout | política escrita no config: retries:1 (evidência), 30 s default + orçamentos por spec, artefatos só em falha/retry | Commit `04dd1d1`; consumidor único: upload CI `if: failure()`; verde com a política: run 31580382709 |
+| T-09 prova final | **matrix por jogo no ci.yml** (aero / space-war / corrida+demolition) — a única via medida p/ o ≤ 10 min | Commit `1b0ab2c`. Run final **31588399333** (verde): aero **6m47s** (83), space-war **7m04s** (57), corrida **2m46s** (23) + demolition 1m51s (8) — todo step ≤ 10 min ✓ (stretch ≤ 9 ✓). Baseline serial: 20,4 min |
 
 ## 3. Medição final (T-09)
 
 - Baseline: 168 testes · 20,4 min (run 29710660997) · workers:1.
 - Pós-testIgnore (root magro): **162 passed + 2 flaky, 16,9 min** (run
   31548373788, workers:1) — **−17 %** só com T-03.
-- Run final da release (todos os commits): run **PENDENTE** — ver §5.
+- **Run final da release: 31588399333 (verde), matrix por jogo:**
+  | Job | Step "Run tests" | Testes |
+  |---|---|---|
+  | aero-fighters | **6m47s** | 83 |
+  | space-war | **7m04s** | 57 |
+  | corrida | **2m46s** | 23 |
+  | demolition-ball (célula corrida) | 1m51s | 8 |
+  | james-bond (workflow dedicado) | — | 13 |
+- **Pior step: 7,0 min** — aceite obrigatório ≤ 10 min ✓, stretch ≤ 9 min ✓.
+  Contra o baseline de 20,4 min seriado: **−66 %** no caminho crítico (meta da
+  release: cortar pela metade ✓). Pior caso (fila ~19 min) eliminado por
+  T-04 (concurrency cancel-in-progress).
+- **Cobertura: 163 root + 8 demolition + 13 james-bond = 184 ≥ 168** ✓ —
+  zero teste deletado/pulado/enfraquecido em toda a release.
 
 ## 4. Desvios e resultados-negativos registrados (honestidade de medição)
 
@@ -47,6 +61,30 @@ screenshots 5,5→75 MB num dia, 6 pid files órfãos (2 commitados).
    primeiro push em main pós-merge (workflows só registram na default branch).
 6. **demolition-ball**: canonicizado pela sessão paralela (opus-5 → demolition-ball);
    o workflow dedicado foi restaurado com paths canônicos.
+7. **Matrix por jogo (T-09) em vez de workers no runner** — workers:2 foi medido
+   inviável 2× (T-02); o paralelismo subiu para runners separados (um job por
+   jogo). Não é contradição com T-02: lá a variável era instâncias WebGL no
+   MESMO runner. Decisão tomada com dados (16,3 min seriado medido, run
+   31577396192) para cumprir o aceite obrigatório ≤ 10 min.
+8. **Caça a 4 flakes pré-existentes expostos pelo CI** (não foram criados pela
+   release; a matrix/os reruns os tornaram visíveis — todos com causa raiz
+   encontrada e fix validado no CI, nenhuma asserção enfraquecida):
+   - `nitro.spec.js:80/:123` — janelas por wall-clock com o carro sem servo
+     (saía p/ a terra; sim ≠ parede no CI). Fix: medição por **raceT** com o
+     carro servoado (`b26bdc8`, validado 31580059567 e 31580382709).
+   - `launch.spec.js:45` — piso de altitude no endpoint do coast era fisicamente
+     errado (flyby lunar pode DRENAR a órbita; fase de boot aleatória). Fix:
+     invariante amostrado a cada 1 s do trajeto (`d2c5e0c`, val. 31582865243).
+   - `campaign.spec.js:178` (AC-10 flare) — causa raiz via probe no CI (run
+     31585773105): `goTo('blackhole')` default teleportava a nave PARA DENTRO
+     da zona de maré (tideKillR 7800) — ela morria, o gameover congelava a
+     política do flare e a perna seguinte lia valor stale. Fix:
+     `goTo('blackhole', 20)` (`7aecedf`, val. 31586339569).
+   - `smoke.spec.js:188` (AC-10 align) — dupla causa: `.catch(() => {})`
+     engolia o timeout do wait E a medição 300 ms pós-conclusão pegava o
+     auto-nível orbital girando a nave de volta. Fix: captura atômica do
+     ângulo no frame da conclusão, sem catch, asserção apertada 0,4 → 0,1
+     (`df99748`, val. 31588197696).
 
 ## 5. Achados roteados ao backlog
 
@@ -61,9 +99,18 @@ screenshots 5,5→75 MB num dia, 6 pid files órfãos (2 commitados).
 
 ## 6. Verificação final
 
-- [ ] Run CI final (branch release) com step "Run tests" — id e tempo aqui
-- [x] Contagem total ≥ 168 (root 164 + dedicados)
+- [x] Run CI final (branch release) com step "Run tests" — run **31588399333**,
+  verde; pior step **7,0 min** (space-war) ≤ 10 min ✓ / ≤ 9 min stretch ✓
+- [x] Contagem total ≥ 168 (163 root + 8 demolition + 13 james-bond = 184)
 - [x] Zero teste deletado/pulado/enfraquecido (grep de asserts nos diffs: 0 removidos)
-- [ ] `dadaia specs doctor` limpo
-- [ ] Memória sincronizada (quality-assurance.md, tech-stack.md)
-- [x] Sweep de disposição: 2 entradas de backlog consumidas → `DELIVERED — v0.10.0`
+- [x] `dadaia specs doctor` limpo
+- [x] Memória sincronizada (quality-assurance.md, tech-stack.md)
+- [x] Sweep de disposição: 2 entradas de backlog consumidas → `status: delivered`
+  + `delivered_in: v0.10.0` (cânone BL-SCHEMA), movidas p/ `specs/backlog/_archive/`
+
+## 7. Decisão de archive
+
+**KEEP** — o release dir permanece em `specs/releases/v0.10.0/`, seguindo a
+convenção de-facto do repo: os 30+ releases versionados (incl. v0.8.0, fechada
+nesta mesma linha de trabalho) permanecem em `specs/releases/`; só os releases
+legados pré-versionamento moram em `_archive/`. `ACTIVE.md` → `release: none`.
