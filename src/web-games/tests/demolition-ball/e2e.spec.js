@@ -120,11 +120,14 @@ test('mapa expande e recolhe com M', async ({ page }) => {
   await page.evaluate(() => window.__demolition.begin());
   const small = await page.evaluate(() => document.getElementById('minimap').getBoundingClientRect().width);
   await page.keyboard.press('m');
-  await page.waitForTimeout(300);
+  // polling no estado real (T-07) — era waitForTimeout(300) ×2
+  await page.waitForFunction((s) =>
+    document.getElementById('minimap').getBoundingClientRect().width > s * 1.5, small, { timeout: 3000 });
   const big = await page.evaluate(() => document.getElementById('minimap').getBoundingClientRect().width);
   expect(big).toBeGreaterThan(small * 1.5);
   await page.keyboard.press('m');
-  await page.waitForTimeout(300);
+  await page.waitForFunction((s) =>
+    Math.abs(document.getElementById('minimap').getBoundingClientRect().width - s) < 2, small, { timeout: 3000 });
   const back = await page.evaluate(() => document.getElementById('minimap').getBoundingClientRect().width);
   expect(Math.abs(back - small)).toBeLessThan(2);
 });

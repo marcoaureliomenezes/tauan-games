@@ -2,6 +2,12 @@
 // (33/s), dá boost de aceleração (×1,8) e teto +25%; soltando, regenera 8/s
 // (×2 após 3 s limpo em velocidade); seco = sem boost + flash "SEM NITRO" 1×
 // por apertada. window.__corrida só em ASSERÇÕES/leitura — nunca para dirigir.
+//
+// waitForTimeout restantes (T-07) — legítimos por semântica: as janelas de
+// 1000 ms MEDEM taxa (dv em 1 s, dreno 33/s, regen 8→16/s) — polling mudaria
+// o que está sendo medido; os 250 ms antes de re-apertar Shift são setup de
+// estado de carga; os pulsos de 40-200 ms do servo são largura de atuação.
+// Convertidos a polling: a queima até charge ≤ 20 (era 2500 ms fixos).
 import { test, expect } from '@playwright/test';
 
 const URL = '/src/web-games/speed-run/';
@@ -111,11 +117,12 @@ test.describe('Cruis\'n Tauan — NITRO (v0.8.0)', () => {
     test.setTimeout(300000);
     // Serra do Tauan (pista 3): reta longa p/ ficar limpo de colisões no servo
     await start(page, { trackArrows: 3 });
-    // queima ~2,5 s (→ carga ~17) p/ ter HEADROOM: o regen a 16/s encheria o
-    // tanque antes da dobra ser visível se a queima fosse curta demais
+    // queima até a carga cair sob ~20 p/ ter HEADROOM: o regen a 16/s
+    // encheria o tanque antes da dobra ser visível se a queima fosse curta
+    // demais. polling no estado real (T-07) — era waitForTimeout(2500).
     await holdWUntilV(page, 15);
     await page.keyboard.down('ShiftLeft');
-    await page.waitForTimeout(2500);
+    await page.waitForFunction(() => window.__corrida.nitro.charge <= 20, { timeout: 10000 });
     await page.keyboard.up('ShiftLeft');
     const c0 = (await snap(page)).charge;
     // regen base: 1 s sem nitro já recupera ~8

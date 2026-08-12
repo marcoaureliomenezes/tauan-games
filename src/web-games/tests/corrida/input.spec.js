@@ -2,6 +2,12 @@
 // o smoke dirige o jogador via hook st.ai (isPlayer=false) e nunca exercita o
 // caminho playerInput(). window.__corrida aparece aqui SÓ em asserções/leitura,
 // NUNCA para dirigir. Convenções do harness: globalSetup serve a raiz do repo.
+//
+// waitForTimeout restantes (T-07) — NÃO são sleeps preguiçosos, ficam por
+// semântica de controle/medição: (a) pulsos do servo de direção (40-200 ms)
+// são a LARGURA do toque de A/D, parte do atuador; (b) segurar W 3 s é a
+// AÇÃO testada ("segurar W 3 s"); (c) os 500 ms após toques A/D são janelas
+// de medição de guinada. Waits convertidos a polling: arranque do teste de R.
 import { test, expect } from '@playwright/test';
 
 const URL = '/src/web-games/speed-run/';
@@ -121,7 +127,12 @@ test.describe('Cruis\'n Tauan — input real de teclado', () => {
     await start(page);
     const p0 = await snap(page);
     await page.keyboard.down('KeyW');
-    await page.waitForTimeout(1500);
+    // polling no estado real (T-07): espera o carro SE MOVER de verdade —
+    // não um sleep fixo (era waitForTimeout(1500))
+    await page.waitForFunction((p) => {
+      const G = window.__corrida.player.st;
+      return Math.hypot(G.pos.x - p.x, G.pos.z - p.z) > 5;
+    }, { x: p0.x, z: p0.z }, { timeout: 8000 });
     await page.keyboard.up('KeyW');
     const p1 = await snap(page);
     expect(Math.hypot(p1.x - p0.x, p1.z - p0.z)).toBeGreaterThan(5);   // dirigiu de verdade
