@@ -1,5 +1,13 @@
-// Smoke do Cruis'n Tauan: menu carrega, corrida inicia, carro anda, superfícies
-// e lombadas respondem, os 3 mapas constroem sem erro.
+// Smoke do Cruis'n Tauan: menu carrega, corrida inicia, carro anda.
+//
+// T-03 (2026-08-12, map de rebaixamento 2026-08-12T160030Z §4): 2 dos 3 boots
+// de pista ("pista X constrói e a corrida anda") viraram sampleTrack()
+// finito+len>0 em tools/test-corrida-unit.mjs — só "Centro Urbano" continua
+// como boot de browser real (sentinela: prova que o jogo INTEIRO, não só a
+// amostragem, constrói e o carro se move). O teste de SURFACES (grip por
+// superfície) foi DELETADO — era um import de constante congelada atrás de
+// um boot de browser inteiro (tautologia sem valor E2E); a mesma asserção
+// (asphalt > dirt > offroad) roda em Node em test-corrida-unit.mjs.
 import { test, expect } from '@playwright/test';
 
 const URL = '/src/web-games/speed-run/';
@@ -22,42 +30,29 @@ test.describe('Cruis\'n Tauan — smoke', () => {
     await expect(page.locator('#menuCars')).toContainText('Idea Adventure 2013 Dual Logic');
   });
 
-  for (const [arrows, name] of [[0, 'Centro Urbano'], [1, 'Floresta Temperada'], [2, 'Deserto do Arizona']]) {
-    test(`pista "${name}" constrói e a corrida anda`, async ({ page }) => {
-      test.setTimeout(60000);
-      await start(page, arrows);
-      await expect(page.locator('#trackName')).toHaveText(name);
-      // headless pula a contagem (countdown 0.1s) — IA guia o jogador p/ provar movimento
-      await page.evaluate(() => {
-        const G = window.__corrida;
-        G.player.isPlayer = false;
-        G.player.st.ai = { laneOffset: 0, skill: 0.85, lookAhead: 0.014 };
-      });
-      await page.waitForFunction(() => window.__corrida.player.st.v > 8, { timeout: 15000 });
-      const st = await page.evaluate(() => {
-        const G = window.__corrida;
-        const q = G.world.surfaceAt(G.player.st.pos.x, G.player.st.pos.z, G.player.st.sHint);
-        return {
-          v: G.player.st.v, surface: q.surface,
-          racers: G.cars.filter((c) => !c.isTraffic).length,
-          traffic: G.cars.filter((c) => c.isTraffic).length,
-        };
-      });
-      expect(st.v).toBeGreaterThan(8);
-      expect(st.racers).toBe(6);
-      expect(st.traffic).toBe(4);          // tráfego civil circulando
-      expect(['asphalt', 'dirt', 'offroad']).toContain(st.surface);
+  test('pista "Centro Urbano" constrói e a corrida anda', async ({ page }) => {
+    test.setTimeout(60000);
+    await start(page, 0);
+    await expect(page.locator('#trackName')).toHaveText('Centro Urbano');
+    // headless pula a contagem (countdown 0.1s) — IA guia o jogador p/ provar movimento
+    await page.evaluate(() => {
+      const G = window.__corrida;
+      G.player.isPlayer = false;
+      G.player.st.ai = { laneOffset: 0, skill: 0.85, lookAhead: 0.014 };
     });
-  }
-
-  test('física: atrito por superfície definido para asfalto/terra/fora', async ({ page }) => {
-    await start(page, 1);
-    const surf = await page.evaluate(async () => {
-      const { SURFACES } = await import('/src/web-games/speed-run/src/tracks.js');
-      return SURFACES;
+    await page.waitForFunction(() => window.__corrida.player.st.v > 8, { timeout: 15000 });
+    const st = await page.evaluate(() => {
+      const G = window.__corrida;
+      const q = G.world.surfaceAt(G.player.st.pos.x, G.player.st.pos.z, G.player.st.sHint);
+      return {
+        v: G.player.st.v, surface: q.surface,
+        racers: G.cars.filter((c) => !c.isTraffic).length,
+        traffic: G.cars.filter((c) => c.isTraffic).length,
+      };
     });
-    expect(surf.asphalt.grip).toBeGreaterThan(surf.dirt.grip);
-    expect(surf.dirt.grip).toBeGreaterThan(surf.offroad.grip);
-    expect(surf.dirt.rumble).toBeGreaterThan(0);
+    expect(st.v).toBeGreaterThan(8);
+    expect(st.racers).toBe(6);
+    expect(st.traffic).toBe(4);          // tráfego civil circulando
+    expect(['asphalt', 'dirt', 'offroad']).toContain(st.surface);
   });
 });

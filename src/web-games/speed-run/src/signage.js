@@ -130,9 +130,38 @@ export function planSigns(def, track) {
   return kept;
 }
 
+// ── Clearance de UMA placa (T-03: extraído de dentro de buildSignsWS6 para
+// ser testável em Node sem THREE.Mesh nem canvas — pura função de dados,
+// MESMA fórmula/valores de antes, só reorganizada) ──────────────────────────
+// Recebe a amostra `sm` (S[sg.i]) e o descritor `sg` (item de planSigns) e
+// recalcula os 2 cantos do quad (mesma geometria do laço de construção acima:
+// offset = meia-pista + EDGE_CLEAR, normal horizontal −tangente, eixo r =
+// cross(up, n)) e mede, contra TODA amostra da centerline (passo 3), a MENOR
+// folga canto→centerline − meia-pista local. Positivo = fora do corredor
+// dirigível; negativo = a placa invade o corredor (bug).
+export function measureClearance(track, sm, sg) {
+  const S = track.samples, N = S.length;
+  const off = (sm.width / 2 + EDGE_CLEAR) * sg.sideSign;
+  const cx = sm.pos.x + sm.side.x * off, cz = sm.pos.z + sm.side.z * off;
+  const nx = -sm.tan.x, nz = -sm.tan.z;
+  const nl = Math.hypot(nx, nz) || 1;
+  const rx = nz / nl, rz = -nx / nl;              // cross(up, n) já unitário
+  const hw = sg.w / 2;
+  const corners = [[cx - rx * hw, cz - rz * hw], [cx + rx * hw, cz + rz * hw]];
+  let best = Infinity;
+  for (const [x, z] of corners) {
+    for (let k = 0; k < N; k += 3) {
+      const dx = S[k].pos.x - x, dz = S[k].pos.z - z;
+      const pen = Math.hypot(dx, dz) - S[k].width / 2;
+      if (pen < best) best = pen;
+    }
+  }
+  return +best.toFixed(3);
+}
+
 // ── Construção: 1 BufferGeometry mesclado (atlas) + 1 InstancedMesh (postes)
 export function buildSignsWS6(def, track, scene) {
-  const S = track.samples, N = S.length;
+  const S = track.samples;
   const planned = planSigns(def, track);
   if (!planned.length) return [];
   const atlas = roadSignAtlas();
@@ -163,10 +192,9 @@ export function buildSignsWS6(def, track, scene) {
     uv.push(t.u0, t.v1, t.u1, t.v1, t.u0, t.v0, t.u1, t.v0);
     idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
     postXforms.push([c.x, sm.pos.y, c.z, sg.cy - hh]);   // poste até a borda inferior
-    // clearance real dos 4 cantos p/ auditoria (corredor = borda + 0,5 m)
-    report.push({ kind: sg.kind, s: sm.s, corners: [
-      [c.x - r.x * hw, c.z - r.z * hw], [c.x + r.x * hw, c.z + r.z * hw],
-    ] });
+    // clearance real p/ auditoria (corredor = borda + 0,5 m) — measureClearance
+    // (T-03) recalcula os mesmos 2 cantos a partir de sm/sg; ver Node test.
+    report.push({ kind: sg.kind, s: sm.s, clearance: measureClearance(track, sm, sg) });
   }
 
   const g = new THREE.BufferGeometry();
@@ -189,17 +217,5 @@ export function buildSignsWS6(def, track, scene) {
   });
   scene.add(posts);
 
-  // clearance por placa: menor (distância do canto à centerline − meia-pista)
-  for (const rep of report) {
-    let best = Infinity;
-    for (const [x, z] of rep.corners) {
-      for (let k = 0; k < N; k += 3) {
-        const dx = S[k].pos.x - x, dz = S[k].pos.z - z;
-        const pen = Math.hypot(dx, dz) - S[k].width / 2;
-        if (pen < best) best = pen;
-      }
-    }
-    rep.clearance = +best.toFixed(3);
-  }
   return report;
 }

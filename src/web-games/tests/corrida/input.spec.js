@@ -4,10 +4,9 @@
 // NUNCA para dirigir. Convenções do harness: globalSetup serve a raiz do repo.
 //
 // waitForTimeout restantes (T-07) — NÃO são sleeps preguiçosos, ficam por
-// semântica de controle/medição: (a) pulsos do servo de direção (40-200 ms)
-// são a LARGURA do toque de A/D, parte do atuador; (b) segurar W 3 s é a
-// AÇÃO testada ("segurar W 3 s"); (c) os 500 ms após toques A/D são janelas
-// de medição de guinada. Waits convertidos a polling: arranque do teste de R.
+// semântica de controle/medição: (a) segurar W 3 s é a AÇÃO testada
+// ("segurar W 3 s"); (b) os 500 ms após toques A/D são janelas de medição de
+// guinada. Waits convertidos a polling: arranque do teste de R.
 import { test, expect } from '@playwright/test';
 
 const URL = '/src/web-games/speed-run/';
@@ -31,49 +30,6 @@ const snap = (page) => page.evaluate(() => {
   const G = window.__corrida, p = G.player.st;
   return { phase: G.phase, raceT: G.raceT, v: p.v, heading: p.heading, x: p.pos.x, z: p.pos.z, airborne: p.airborne };
 });
-
-// PILOTO de teclado p/ o salto: segura ArrowUp e corrige a guinada com TOQUES
-// de A/D proporcionais ao erro (heading vs tangente da pista + correção
-// lateral p/ recentralizar). TODA a entrada é teclado real — um humano também
-// esterça; __corrida só LÊ estado (nunca injeta IA/posição). Toques em vez de
-// segurar: a latência do evaluate (200 ms+ em CI lento) torna bang-bang
-// INSTÁVEL — o carro atravessava a pista de cerca em cerca (probe ws-input).
-async function driveArrowUpUntilAirborne(page, timeoutMs) {
-  await page.keyboard.down('ArrowUp');
-  const t0 = Date.now();
-  try {
-    while (Date.now() - t0 < timeoutMs) {
-      const s = await page.evaluate(() => {
-        const G = window.__corrida, p = G.player.st;
-        if (p.airborne) return { airborne: true };
-        if (G.phase === 'finished') return { finished: true };   // cruzou o fim sem voar
-        const tr = G.world.track, N = tr.samples.length;
-        const sm = tr.samples[Math.round(p.sHint * tr.M) % N];
-        const want = Math.atan2(-sm.tan.x, -sm.tan.z);
-        let err = want - p.heading;
-        while (err > Math.PI) err -= 2 * Math.PI;
-        while (err < -Math.PI) err += 2 * Math.PI;
-        // side = up×tan: lat > 0 = ESQUERDA da centerline → precisa D (−heading)
-        const lat = (p.pos.x - sm.pos.x) * sm.side.x + (p.pos.z - sm.pos.z) * sm.side.z;
-        return { airborne: false, s: p.sHint, v: p.v, err: err - Math.max(-0.15, Math.min(0.15, lat * 0.02)) };
-      });
-      if (s.airborne) return { flew: true };
-      if (s.finished) return { flew: false };
-      // err > 0 → precisa +heading → A (sinal travado no teste de guinada)
-      if (Math.abs(s.err) > 0.06) {
-        const key = s.err > 0 ? 'KeyA' : 'KeyD';
-        await page.keyboard.down(key);
-        await page.waitForTimeout(Math.min(200, Math.abs(s.err) * 450));
-        await page.keyboard.up(key);
-      } else {
-        await page.waitForTimeout(40);
-      }
-    }
-    return { flew: false };
-  } finally {
-    await page.keyboard.up('ArrowUp');
-  }
-}
 
 test.describe('Cruis\'n Tauan — input real de teclado', () => {
   test('segurar W 3 s: velocidade > 0 e posição avança', async ({ page }) => {
@@ -109,18 +65,11 @@ test.describe('Cruis\'n Tauan — input real de teclado', () => {
     expect(h2 - h1).toBeLessThan(-0.05);
   });
 
-  test('ArrowUp atravessando crista de salto (Serra do Tauan): episódio AÉREO', async ({ page }) => {
-    test.setTimeout(90000);
-    // Sprint (pista 4): cristas de salto PROJETADAS em s=0.34/0.58/0.78, amp
-    // 6,5·exp(−(d/26)²) — slope 0,21 → decolagem garantida com v > ~42 u/s.
-    // (A lombada da city, amp 1,7, exige > 43,7 u/s logo após a largada —
-    // marginal demais p/ input real; a reta de ~700 m da serra dá margem.)
-    // Velocità GT (carro 3, acel 32/top 76). O servo decola na crista 1 ou 2.
-    await start(page, { trackArrows: 3, carArrows: 2 });
-    await expect(page.locator('#trackName')).toHaveText('Serra do Tauan');
-    const flew = await driveArrowUpUntilAirborne(page, 75000);
-    expect(flew.flew).toBe(true);
-  });
+  // "ArrowUp atravessando crista de salto (Serra do Tauan): episódio AÉREO"
+  // DEMOVIDO (T-03, map 2026-08-12T160030Z §4): a mecânica de decolagem na
+  // crista é 100% de physics.js/world.js (sem UI) — coberta por um laço
+  // stepCar() puro em tools/test-corrida-physics.mjs ("crista de lombada ⇒
+  // decolagem + pouso"). O orçamento de browser eliminado era de até 90 s.
 
   test('R reseta a corrida: carro volta ao grid, v≈0 e raceT≈0', async ({ page }) => {
     test.setTimeout(60000);

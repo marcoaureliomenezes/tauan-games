@@ -1,9 +1,12 @@
-// WS-6 — sinalização de corrida gerada por dados + sol visível:
-//   · chevrons antes de TODA curva com κ ≥ 0,0045 (world.signage);
-//   · LOMBADA antes de cada def.bumps, VADO antes de cada def.fords;
-//   · tábuas 300/200/100 antes da curva mais fechada de cada circuito;
-//   · clearance de TODA placa ≥ 0,5 m fora da borda da estrada (corredor);
+// WS-6 — sol visível sobre a sinalização de corrida gerada por dados:
 //   · sol (sprite) + 3 fantasmas de flare presentes e atualizados no update.
+//
+// T-03 (2026-08-12, map de rebaixamento 2026-08-12T160030Z §4): o laço das 4
+// pistas (chevrons/lombada/vado/tábuas de distância + clearance ≥ 0,5 m) foi
+// DELETADO daqui — signage.js#planSigns é "dados puros — testável sem
+// render" (comentário do próprio arquivo) e measureClearance foi EXTRAÍDO
+// (pure move refactor) para ser chamável fora de buildSignsWS6. A mesma
+// cobertura roda em Node: tools/test-corrida-signage.mjs.
 import { test, expect } from '@playwright/test';
 
 const URL = '/src/web-games/speed-run/';
@@ -16,33 +19,8 @@ async function start(page, trackArrows = 0) {
   await page.waitForFunction(() => ['countdown', 'race'].includes(window.__corrida.phase), { timeout: 30000 });
 }
 
-test.describe('Cruis\'n Tauan — WS-6 sinalização e sol', () => {
+test.describe('Cruis\'n Tauan — WS-6 sol', () => {
   test.setTimeout(120000);
-  // [setas, pista, lombadas esperadas, vados esperados, tábuas de distância]
-  for (const [arrows, key, nLom, nVado, nDist] of [
-    [0, 'city', 3, 0, 3],
-    [1, 'forest', 3, 0, 3],
-    [2, 'arizona', 5, 0, 3],
-    [3, 'serra', 3, 2, 0],          // sprint: sem tábuas de distância
-  ]) {
-    test(`${key}: placas por dados completas e fora do corredor`, async ({ page }) => {
-      await start(page, arrows);
-      const rep = await page.evaluate(() => {
-        const sg = window.__corrida.world.signage;
-        const by = {};
-        for (const s of sg) by[s.kind] = (by[s.kind] || 0) + 1;
-        return {
-          by,
-          minClear: Math.min(...sg.map((x) => x.clearance)),
-        };
-      });
-      expect(rep.by.lombada ?? 0).toBe(nLom);
-      expect(rep.by.vado ?? 0).toBe(nVado);
-      expect(rep.by.dist ?? 0).toBe(nDist);
-      expect(rep.by.chevron ?? 0).toBeGreaterThan(0);       // toda pista tem curva sinalizada
-      expect(rep.minClear).toBeGreaterThanOrEqual(0.5);     // NADA no corredor dirigível
-    });
-  }
 
   test('sol visível + 3 fantasmas de flare seguem a câmera', async ({ page }) => {
     await start(page, 2);                                    // arizona

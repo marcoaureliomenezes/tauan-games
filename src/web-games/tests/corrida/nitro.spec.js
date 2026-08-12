@@ -71,42 +71,12 @@ async function servoDrive(page, doneFn, timeoutMs) {
 }
 
 test.describe('Cruis\'n Tauan — NITRO (v0.8.0)', () => {
-  test('Shift dá boost real de aceleração (dv em 1 s, com vs sem)', async ({ page }) => {
-    test.setTimeout(240000);
-    await start(page);                                   // pista 0 (city), carro 0
-    // dv medido por 1,0 s de raceT (relógio da SIM, não da parede) com o
-    // servo mantendo o carro NA PISTA. No CI o gate de ativação do boost
-    // atrasava e o carro saía p/ a terra (teto offroad ~41) antes/durante
-    // a janela — dvNitro caía p/ metade do esperado; e wall-clock mistura
-    // latência de protocolo com tempo de sim. As duas janelas partem de
-    // v≈15 com o carro servoado, mesma régua nas duas pernas.
-    async function measureDv(nitro) {
-      // acelera servoado até v≈15 (mesmo ponto de partida nas duas janelas)
-      const reached = await servoDrive(page,
-        () => window.__corrida.player.st.v >= 15, 45000);
-      expect(reached).toBe(true);
-      await page.evaluate(() => {
-        const G = window.__corrida;
-        window.__m = { v0: G.player.st.v, t0: G.raceT, dv: 0, done: false };
-      });
-      if (nitro) await page.keyboard.down('ShiftLeft');
-      const done = await servoDrive(page, () => {
-        const G = window.__corrida, m = window.__m;
-        if (!m.done && G.raceT - m.t0 >= 1.0) { m.dv = G.player.st.v - m.v0; m.done = true; }
-        return m.done;
-      }, 20000);
-      if (nitro) await page.keyboard.up('ShiftLeft');
-      expect(done).toBe(true);
-      return page.evaluate(() => window.__m.dv);
-    }
-    const dvBase = await measureDv(false);
-    // R reinicia (carga volta a 100) e repete a janela COM Shift
-    await page.keyboard.press('KeyR');
-    await page.waitForFunction(() => window.__corrida.phase === 'race', { timeout: 25000 });
-    const dvNitro = await measureDv(true);
-    // ×1,8 de acel menos o falloff de velocidade: folga p/ ruído do servo
-    expect(dvNitro).toBeGreaterThan(dvBase * 1.35);
-  });
+  // "Shift dá boost real de aceleração (dv em 1 s, com vs sem)" DEMOVIDO
+  // (T-03, map 2026-08-12T160030Z §4): a lei mecânica (dvNitro > 1,35×dvBase
+  // via stepCar com input.nitro) é 100% de physics.js — coberta em Node por
+  // tools/test-corrida-physics.mjs ("nitro: boost de aceleração..."). A
+  // máquina de carga/regen (Shift liga/desliga, HUD) fica aqui embaixo — ela
+  // sim depende de main.js/DOM. Orçamento de browser eliminado: até 240 s.
 
   test('barra drena segurando Shift (~33/s) e o HUD reflete', async ({ page }) => {
     test.setTimeout(240000);

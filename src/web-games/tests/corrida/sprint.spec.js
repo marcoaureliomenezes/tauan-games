@@ -117,7 +117,12 @@ test.describe('WS-5 — modo Fuga', () => {
     expect(ch.msg).toContain('POLÍCIA');
   });
 
-  test('spike strip: pneu furado (v cai, grip some, dano 12)', async ({ page }) => {
+  // T-03 (2026-08-12, map de rebaixamento §4): SLIM — o decaimento de v/grip
+  // do punctureT (physics.js:57-61) é lei pura, agora coberta em Node por
+  // tools/test-corrida-physics.mjs ("spike strip: punctureT decai velocidade
+  // e reduz grip"). O dano fixo (12, clamp 100→88) depende de G.chase
+  // (main.js, não importável em Node hoje) — fica só esse assert aqui.
+  test('spike strip: pneu furado causa dano (12, clamp 100→88)', async ({ page }) => {
     test.setTimeout(60000);
     await startSprint(page, 'fuga');
     await aiDrive(page, 2.5);                        // meia-pista + (lado da tira)
@@ -134,13 +139,8 @@ test.describe('WS-5 — modo Fuga', () => {
       const G = window.__corrida;
       return G.chase.spikes.some((sp) => sp.hit);
     }, { timeout: 30000 });
-    const after = await page.evaluate(() => ({
-      life: window.__corrida.chase.life,
-      puncture: window.__corrida.player.st.punctureT,
-      msg: window.__corrida.chase.msg,
-    }));
-    expect(after.life).toBeLessThanOrEqual(88);      // 100 − 12
-    expect(after.msg).toContain('PNEU FURADO');
+    const life = await page.evaluate(() => window.__corrida.chase.life);
+    expect(life).toBeLessThanOrEqual(88);      // 100 − 12
   });
 
   test('finais: VOCÊ ESCAPOU na chegada e PEGO com a vida zerada', async ({ page }) => {
