@@ -1,0 +1,45 @@
+# Workspace heading allowlist (LINT-1) — curated tauan-games headings.
+# Extends the lib canon per lint-memory-atoms.py v0.1.49 FR3.
+Auditoria 2026-08-10 (v0.4.0) — STATUS: DEFEITOS GRAVES
+Auditoria 2026-08-10 (v0.4.0) — STATUS: INJOGÁVEL + SPEC DRIFT
+Características
+Carros
+Carros (5 + tráfego)
+Contrato de portabilidade (a fonte da verdade é a web)
+Descartado / não adotado
+Godot games (`src/godot/`)
+Intuito
+Lógica
+Lógica/física
+MACRO 1 — Arquitetura dos web-games (`src/web-games/`)
+MACRO 1 — QA dos web-games
+MACRO 2 — Arquitetura dos jogos Godot (`src/godot/`)
+MACRO 2 — QA dos jogos Godot
+Mapa
+Mapas (6 sistemas + campanha)
+Mapas (operações)
+Níveis e lógica
+Nomenclatura
+O que a versão Godot tinha (perdida em 2026-08-10)
+O que o rebuild deve entregar (priorizado)
+Padrão de deploy
+Pistas (3, declarativas em tracks.js)
+Pista (v1)
+Princípios de stack
+Rastreio de bugs (ambos os grupos)
+Requisitos de desenvolvimento (ambos os grupos)
+Stack comprometida por jogo
+Status: PORT FALHO — código perdido, rebuild do zero pelo contrato
+Testing stack
+Web games (`src/web-games/`)
+Unificação 2026-08-10 (v0.6.0) — aero-fighters ÚNICO na web
+Pistas (4, declarativas em tracks.js)
+Legado (auditoria v0.4.0 → resolvida em v0.7.0)
+Política de execução da suíte (medida no CI, v0.10.0)
+~~MACRO 2 — QA dos jogos Godot~~ (grupo removido)
+Geração (`city.js`, semente fixa 20260725)
+Fachadas e céu (`shaders.js`)
+Tráfego (`traffic.js`)
+Pedestres e equipe
+Jogos (`src/web-games/`) — catálogo completo
+Decisão de escopo (operador, 2026-08-11)

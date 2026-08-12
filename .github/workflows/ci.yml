@@ -1,18 +1,89 @@
 name: CI
 
 on:
+  # v0.10.0 T-04: a suíte web só roda quando algo testável muda (espelho de
+  # godot-ci.yml:11-25). Fora do filtro: specs/, docs, .dadaia/, raiz —
+  # decisão explícita: nenhum desses altera o comportamento da suíte.
   push:
     branches: [main]
+    paths:
+      - "src/web-games/**"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "src/web-games/**"
+      - ".github/workflows/ci.yml"
+  # v0.10.0 T-01: experimento A/B GL/ANGLE — dispara 2 runs na mesma sha,
+  # um com gl_args=true e outro false, mesmo test_cmd (subconjunto).
+  # test_cmd VAZIO (default) = cada célula da matrix roda o próprio dir;
+  # preenchido = override de diagnóstico, executado numa única célula.
+  workflow_dispatch:
+    inputs:
+      gl_args:
+        description: 'Ativa as 5 flags GL/ANGLE (PW_GL_ARGS=1)'
+        type: boolean
+        default: false
+      test_cmd:
+        description: 'Override de diagnóstico do step Run tests (vazio = matrix por jogo)'
+        type: string
+        default: ''
+
+# v0.10.0 T-04: pushes empilhados cancelam o run anterior (fila de ~19 min
+# do pior caso do baseline morre aqui).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  playwright-tests:
-    name: Playwright Tests
+  # v0.11.0 T-05: gate determinístico — TODAS as suítes Node (26 arquivos,
+  # segundos de runtime, zero browser) rodam antes de qualquer célula
+  # Playwright. Antes desta release, 24 desses arquivos não rodavam em CI
+  # nenhum (pirâmide invertida — report 2026-08-12 test-lifecycle-doctrine).
+  node-gate:
+    name: Node suites (unit + sim gate)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/web-games
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/web-games/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run all Node suites
+        run: npm run test:unit
+
+  playwright-tests:
+    name: Playwright Tests (${{ matrix.game }})
+    runs-on: ubuntu-latest
+    needs: node-gate
+
+    # v0.10.0 T-09: split da suíte raiz em um job por jogo. workers:2 no
+    # MESMO runner foi medido inviável (2×: boot starvation do SwiftShader —
+    # runs 31536963772/31543170001), então o paralelismo sobe p/ runners
+    # separados. Medição (run 31577396192): aero 6,8 min + space-war 6,5 +
+    # corrida 2,8 = 16,3 min seriado; na matrix cada step fica ≤ 10 min.
+    strategy:
+      fail-fast: false
+      matrix:
+        game: [aero-fighters, corrida, space-war]
+
+    defaults:
+      run:
+        working-directory: src/web-games
 
     steps:
       - name: Checkout repository
@@ -23,6 +94,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: src/web-games/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -32,7 +104,7 @@ jobs:
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ hashFiles('package-lock.json') }}
+          key: playwright-chromium-${{ hashFiles('src/web-games/package-lock.json') }}
           restore-keys: |
             playwright-chromium-
 
@@ -45,14 +117,32 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Run tests
-        run: npm test
+        run: |
+          if [ -n "$CMD" ]; then
+            # override manual (diagnóstico): uma única célula executa, p/
+            # não triplicar o custo do comando customizado
+            if [ "${{ matrix.game }}" != "aero-fighters" ]; then
+              echo "override manual: executado apenas na célula aero-fighters"
+              exit 0
+            fi
+            eval "$CMD"
+          else
+            npx playwright test tests/${{ matrix.game }} --config=tests/playwright.config.js
+          fi
+        env:
+          PW_GL_ARGS: ${{ github.event.inputs.gl_args == 'true' && '1' || '0' }}
+          CMD: ${{ github.event.inputs.test_cmd }}
+
+      # v0.11.0 T-05: passo demolition-ball REMOVIDO — rodava 2x em cada
+      # mudança de demolition-ball (aqui + demolition-ball-ci.yml, que é o
+      # dono com paths próprios). Unit do demolition-ball roda no node-gate.
 
       - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.game }}
           path: |
-            test-results/
-            tests/screenshots/
+            src/web-games/test-results/
+            src/web-games/tests/screenshots/
           retention-days: 7

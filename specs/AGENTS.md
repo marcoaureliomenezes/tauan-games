@@ -22,6 +22,12 @@ releases/<release-id>/TASKS.md
 Use `_archive/` only for history. Use `backlog/` and `bugs/` for intake and
 triage; they are not approval gates.
 
+Run ordered work by dispatching the owning agent for each stage — backlog-definition,
+release-definition, implementation with its reviews and gates, and audit — against
+these documents; no workflow engine executes the stages for you. Concurrent sessions are
+allowed and surfaced through advisory presence; never wait for or create a workspace
+concurrency lock.
+
 ## Release Gate
 
 Implementation is allowed only when:
@@ -45,7 +51,7 @@ editing production.
 | `releases/<id>/TASKS.md` | `product-engineer`; implementers may change only their task marker |
 | `releases/<id>/CLOSURE.md` | `product-engineer` in `CLOSURE` |
 | `memory/**` | `product-engineer` in `CLOSURE` only |
-| `backlog/**` | `product-engineer` or operator intake |
+| `backlog/**` | `project-manager` only (sole backlog author; `product-engineer` is a read-only consumer) |
 | `bugs/**` | any agent may file; `product-engineer` resolves into release work |
 
 ## Task Markers

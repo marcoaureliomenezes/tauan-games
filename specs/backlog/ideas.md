@@ -17,7 +17,7 @@ público-alvo + critério "Tauan-friendly"), promover para `candidates.md`.
 - Mini-game de paraquedismo após ejeção no Aero Strike (atualmente ejeção = game over).
 - Skins alternativas para o T-Rex (foguete, robô, gato) desbloqueáveis por high score.
 - Modo cooperativo split-screen no T-Rex (Tauan vs operador no mesmo teclado).
-- Versão 3D do Chrome Dino em Three.js como bridge entre tauan-trex (2D) e aero-fighters (3D).
+- Versão 3D de runner estilo Chrome Dino em Three.js como bridge 2D→3D (tauan-trex removido em v0.6.0).
 - Primeiro experimento UE5 standalone (sem migrar Aero Strike) — algo pequeno, ex.: simulador de caminhão de lixo para Tauan.
 
 ## Retornos da CLOSURE space-war (2026-07-03)

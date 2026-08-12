@@ -1,15 +1,68 @@
 {
-  "generated_at": "2026-07-01T14:46:21Z",
+  "generated_at": "2026-08-12T04:49:29Z",
   "context": "tauan-games",
   "features": [
     {
       "rank": 1,
+      "slug": "games-catalog",
+      "title": "Catálogo de jogos",
+      "category": "product",
+      "area": "product",
+      "tldr": "Os 5 jogos web do tauan-games (src/web-games) com pasta, tecnologia e status.",
+      "summary": "Lista canônica dos 5 jogos do portfólio — todos web. Atualizado 2026-08-11: operador definiu foco exclusivo em aero-fighters, james-bond, space-war, speed-run e demolition-ball; removidos tauan-trex, memoria-bichos, far-west, bang-bang e TODOS os projetos Godot (repo é 100% web).",
+      "path": "specs/memory/product/games-catalog.md",
+      "tags": [
+        "product",
+        "catalog",
+        "games"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 2,
+      "slug": "overview",
+      "title": "Identidade do produto",
+      "category": "product",
+      "area": "product",
+      "tldr": "Repositório de jogos web pessoais para o Tauan — imediatamente jogáveis, sem loading, sem erros.",
+      "summary": "Define o que é o tauan-games, para quem existe e o critério de público-alvo que filtra todas as decisões de produto. Portado do HTML legado em 2026-06-12.",
+      "path": "specs/memory/product/overview.md",
+      "tags": [
+        "product",
+        "identity"
+      ],
+      "token_estimate": 0,
+      "depends_on": [
+        "games-catalog",
+        "quality-bar"
+      ]
+    },
+    {
+      "rank": 3,
+      "slug": "quality-bar",
+      "title": "Barra de qualidade",
+      "category": "product",
+      "area": "product",
+      "tldr": "Objetivos de produto e critérios de qualidade não-negociáveis dos jogos.",
+      "summary": "Jogos realmente jogáveis para o Tauan, validados por Playwright antes da revisão do operador, operando offline e sem regressão entre releases. Portado do HTML legado em 2026-06-12.",
+      "path": "specs/memory/product/quality-bar.md",
+      "tags": [
+        "product",
+        "quality"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 4,
       "slug": "aero-strike-combat",
       "title": "Aero Strike — inimigos e armas",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "8 tipos de alvo (estáticos e móveis lentos) + boss kaiju + guerra dos aliados; canhão + 3 classes de míssil + nuke, com lock-on por cone.",
       "summary": "Especifica o catálogo de inimigos do Aero Strike (bases, fábricas, comboios, antiaéreas, helicópteros, navios, alvos lentos móveis) com HP/comportamento, o boss, o front paralelo dos aliados, e o arsenal do jogador (canhão Vulcan, mísseis leve/pesado/nuclear) com o sistema de lock-on. Detalhe suficiente para recriar o combate.",
-      "path": "specs/memory/product/aero-strike-combat.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike-combat.md",
       "tags": [
         "product",
         "aero-strike",
@@ -18,7 +71,6 @@
         "weapons"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "aero-strike",
         "aero-strike-fx",
@@ -26,13 +78,14 @@
       ]
     },
     {
-      "rank": 2,
+      "rank": 5,
       "slug": "aero-strike-flight",
       "title": "Aero Strike — voo e jogabilidade",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "Controles, modelo de energia de voo (com constantes), e a máquina de estados de surtida (aeroporto, decolagem, pouso, auto-taxi).",
       "summary": "Especifica os controles do teclado, o modelo de física de voo do F-35 com as constantes de config.js, e o sistema de surtida do modo realista (FSM sortie, aeroportos por mapa, decolagem por rotação, pouso por flare, auto-taxi e cena de serviço). Detalhe suficiente para recriar a jogabilidade.",
-      "path": "specs/memory/product/aero-strike-flight.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike-flight.md",
       "tags": [
         "product",
         "aero-strike",
@@ -40,7 +93,6 @@
         "controls"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "aero-strike",
         "aero-strike-world",
@@ -48,13 +100,14 @@
       ]
     },
     {
-      "rank": 3,
+      "rank": 6,
       "slug": "aero-strike-fx",
       "title": "Aero Strike — efeitos, nuke, câmera, HUD e áudio",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "Explosões pooladas + mega-explosão; a nuke (flash → fireball → cogumelo ~60s → shockwave → ignição de cenário); câmeras, HUD e áudio sintetizado.",
       "summary": "Especifica o sistema de FX do Aero Strike — explosões pooladas, mega-explosão, e o espetáculo da nuke (flash, fireball, cogumelo persistente, shockwave, ignição de árvores/casas), além dos 5 modos de câmera, do HUD e do motor de áudio Web Audio. Detalhe suficiente para recriar o espetáculo.",
-      "path": "specs/memory/product/aero-strike-fx.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike-fx.md",
       "tags": [
         "product",
         "aero-strike",
@@ -63,7 +116,6 @@
         "audio"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "aero-strike",
         "aero-strike-combat",
@@ -71,13 +123,14 @@
       ]
     },
     {
-      "rank": 4,
+      "rank": 7,
       "slug": "aero-strike-world",
       "title": "Aero Strike — mundo e mapas",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "4 mapas jogáveis, uma verdade de superfície única, terreno por heightfield, água/rio, estradas autorais e cenário (árvores/estruturas).",
       "summary": "Especifica os 4 mapas do Aero Strike, o modelo de superfície surfaceInfoAt, o terreno de cada mapa (ilhas, mesas, morros, heightfield contínuo de Inhauma), água e rio, a rede de estradas por spline e o cenário (árvores instanciadas, estruturas). Detalhe suficiente para recriar o mundo.",
-      "path": "specs/memory/product/aero-strike-world.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike-world.md",
       "tags": [
         "product",
         "aero-strike",
@@ -85,7 +138,6 @@
         "maps"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "aero-strike",
         "aero-strike-flight",
@@ -93,20 +145,20 @@
       ]
     },
     {
-      "rank": 5,
+      "rank": 8,
       "slug": "aero-strike",
       "title": "Aero Strike — o jogo",
       "category": "product",
+      "area": "aero-fighters",
       "tldr": "Ataque ao solo em 3ª pessoa com um F-35 (Three.js) — destrua todos os alvos militares da missão, mate o boss, volte e pouse.",
       "summary": "Especifica a identidade, o loop de jogo, o objetivo, os modos e o modelo de vidas/HP do Aero Strike (pasta aero-fighters/). Atom-raiz para recriar o jogo a partir da memória; aponta para world/flight/combat/fx.",
-      "path": "specs/memory/product/aero-strike.md",
+      "path": "specs/memory/product/web-games/aero-fighters/aero-strike.md",
       "tags": [
         "product",
         "aero-strike",
         "gameplay"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
         "architecture",
         "tech-stack",
@@ -120,55 +172,131 @@
       ]
     },
     {
-      "rank": 6,
-      "slug": "games-catalog",
-      "title": "Catálogo de jogos",
+      "rank": 9,
+      "slug": "demolition-ball-cidade-viva",
+      "title": "Demolition Ball — cidade viva",
       "category": "product",
-      "tldr": "Jogos/experimentos ativos do tauan-games e seus status de release.",
-      "summary": "Lista cada projeto do repo (tauan-trex, aero-fighters/Aero Strike, testing-infra, aero-fighters-v2) com pasta, descrição e status. Inclui a nota de nomenclatura codename vs nome visível. Portado do HTML legado em 2026-06-12.",
-      "path": "specs/memory/product/games-catalog.md",
+      "area": "demolition-ball",
+      "tldr": "Grade 7x7 determinística com rio+3 pontes (arestas cortadas do grafo), fachadas por estilo no shader, praças/flores, 56 pedestres imunes, 3 modelos de carro, equipe de cones.",
+      "summary": "Como a cidade da v0.9.0 é gerada e animada — city.js, traffic.js (severed/closedEdges), pedestrians.js, crew.js, fachadas/céu em shaders.js.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-cidade-viva.md",
       "tags": [
         "product",
-        "catalog",
-        "games"
+        "demolition-ball",
+        "cidade",
+        "trafego",
+        "pedestres"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": []
     },
     {
-      "rank": 7,
-      "slug": "overview",
-      "title": "Identidade do produto",
+      "rank": 10,
+      "slug": "demolition-ball-fisica-controles",
+      "title": "Demolition Ball — física e controles",
       "category": "product",
-      "tldr": "Repositório de jogos web pessoais para o Tauan — imediatamente jogáveis, sem loading, sem erros.",
-      "summary": "Define o que é o tauan-games, para quem existe e o critério de público-alvo que filtra todas as decisões de produto. Portado do HTML legado em 2026-06-12.",
-      "path": "specs/memory/product/overview.md",
+      "area": "demolition-ball",
+      "tldr": "Pêndulo com cabo inextensível em sub-passos de 12,5 ms; destruição E=½mv² em células de 2,5 m com flood-fill de colapso; WASD/QE/RF/ZX/ESPAÇO/C.",
+      "summary": "As leis físicas do rig e da destruição, o spawn seguro da bola e o mapa de teclas — o que NÃO pode ser refeito (identidade do jogo).",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-fisica-controles.md",
       "tags": [
         "product",
-        "identity"
+        "demolition-ball",
+        "fisica",
+        "controles"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
       "depends_on": [
-        "games-catalog",
-        "quality-bar"
+        "demolition-ball-cidade-viva"
       ]
     },
     {
-      "rank": 8,
-      "slug": "quality-bar",
-      "title": "Barra de qualidade",
+      "rank": 11,
+      "slug": "demolition-ball-jogo",
+      "title": "Demolition Ball — o jogo",
       "category": "product",
-      "tldr": "Objetivos de produto e critérios de qualidade não-negociáveis dos jogos.",
-      "summary": "Jogos realmente jogáveis para o Tauan, validados por Playwright antes da revisão do operador, operando offline e sem regressão entre releases. Portado do HTML legado em 2026-06-12.",
-      "path": "specs/memory/product/quality-bar.md",
+      "area": "demolition-ball",
+      "tldr": "Trator-guindaste com bola de demolição de 4,2 t numa cidade procedural viva; contratos de destruição; WebGL2 100% próprio (zero libs, só snoise MIT).",
+      "summary": "Identidade, intuito e leis do demolition-ball (src/web-games/demolition-ball). Construído em 1 shot, memorializado e expandido na v0.9.0.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-jogo.md",
       "tags": [
         "product",
-        "quality"
+        "demolition-ball",
+        "demolicao"
       ],
       "token_estimate": 0,
-      "agent_tier": "self-pull",
+      "depends_on": [
+        "demolition-ball-modos"
+      ]
+    },
+    {
+      "rank": 12,
+      "slug": "demolition-ball-modos",
+      "title": "Demolition Ball — modos de jogo",
+      "category": "product",
+      "area": "demolition-ball",
+      "tldr": "Modo Tauan (sem prazo/multa, 1 alvo, threshold 0.5, dano x2.5, homing forte) vs Modo Contratos (jogo original); seleção no overlay, trava ao começar.",
+      "summary": "Os dois modos da v0.9.0 (ADR-1), como o MissionSystem é parametrizado e o que cada modo muda.",
+      "path": "specs/memory/product/web-games/demolition-ball/demolition-ball-modos.md",
+      "tags": [
+        "product",
+        "demolition-ball",
+        "modos",
+        "acessibilidade"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 13,
+      "slug": "james-bond-jogo",
+      "title": "James Bond Operações — o jogo",
+      "category": "product",
+      "area": "james-bond",
+      "tldr": "FPS de espionagem no browser com 6 operações, IA de guardas com A*, tudo procedural — nenhum asset do GoldenEye.",
+      "summary": "Intuito, mapas (6 operações), lógica e características do james-bond (src/web-games/james-bond, Three.js).",
+      "path": "specs/memory/product/web-games/james-bond/james-bond-jogo.md",
+      "tags": [
+        "product",
+        "james-bond",
+        "fps"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 14,
+      "slug": "space-war-jogo",
+      "title": "Space War — o jogo",
+      "category": "product",
+      "area": "space-war",
+      "tldr": "Combate e exploração espacial com física real documentada — 6 sistemas estelares, balística sob gravidade, viagem interestelar relativística, Sgr A*.",
+      "summary": "Intuito, mapas (sistemas), lógica e características do space-war (Three.js; ainda na raiz, migração p/ src/web-games pendente).",
+      "path": "specs/memory/product/web-games/space-war/space-war-jogo.md",
+      "tags": [
+        "product",
+        "space-war",
+        "espaço",
+        "física"
+      ],
+      "token_estimate": 0,
+      "depends_on": []
+    },
+    {
+      "rank": 15,
+      "slug": "speed-run-web-jogo",
+      "title": "Speed Run (web) — o jogo",
+      "category": "product",
+      "area": "speed-run",
+      "tldr": "Corrida arcade estilo Cruis'n World — 3 circuitos + sprint A→B com Fuga, réplica do Idea Adventure 2013, nitro, música, fixed timestep.",
+      "summary": "Intuito, pistas, lógica e características do speed-run web (src/web-games/speed-run, Three.js). v0.8.0 (2026-08-11): réplica v2 do Idea guiada por fotos reais, nitro (Shift), música procedural 144 BPM, sinalização por dados (chevrons/LOMBADA/VADO/300-200-100) + sol com flare + zebras, full-scan permanente zerado (com guard de estreitamento). v0.7.0: colisões invisíveis zeradas, timestep fixo 120 Hz, sprint + perseguição portados do Godot (encerrado).",
+      "path": "specs/memory/product/web-games/speed-run/speed-run-web-jogo.md",
+      "tags": [
+        "product",
+        "speed-run",
+        "corrida"
+      ],
+      "token_estimate": 0,
       "depends_on": []
     }
   ]

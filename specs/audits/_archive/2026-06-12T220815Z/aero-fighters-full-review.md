@@ -5,7 +5,7 @@
 > aterrissagem, explosões (nuke), colisões — código (6.788 linhas, 35 módulos) lido
 > integralmente + execução ao vivo via Playwright (desert + islands), screenshots em
 > `.dadaia/tmp/claude/20260612/`.
-> **Insumo para:** release `aero-fighters-uplift-v1` (DEFINITION).
+> **Insumo para:** release `v0.1.0` (DEFINITION).
 
 ## 1. Veredito executivo
 
@@ -168,7 +168,7 @@ STALL_SPD 10). Sem teto, sem ar rarefeito.
 - `enemies` alias legado; `desertLandmarks` números fake; `criticalVideoCapture`
   nunca usado.
 
-## 4. Solução proposta — `aero-fighters-uplift-v1`
+## 4. Solução proposta — `v0.1.0`
 
 Seis workstreams, ordenados por dependência. Tudo dentro da stack atual (Three.js,
 ES modules, zero build). Cada WS fecha com AC Playwright.
@@ -278,7 +278,9 @@ WS-7 (mapas) — paralelo após WS-1
   `aero-islands-realism-softlock.md` (CRIT-1), `aero-airborne-floor-glue.md` (CRIT-2),
   `aero-startgame-forces-desert-activemap.md` (CRIT-2b),
   `aero-sea-label-on-land.md` (HIGH-3), `aero-rotate-key-undiscoverable.md` (HIGH-4b).
-- Release alvo: `specs/releases/aero-fighters-uplift-v1/` (SPEC Draft — aguarda grill
+- Release alvo: `specs/releases/v0.1.0/` (SPEC Draft — aguarda grill
   + aprovação do operador antes de PLAN/TASKS).
 - Evidência visual: `.dadaia/tmp/claude/20260612/*.png` (01-33).
 - Servidor de revisão: http://localhost:3640/aero-fighters/ (registrado, TTL 8 h).
+
+disposed_by: v0.1.0

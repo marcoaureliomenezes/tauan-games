@@ -1,3 +1,13 @@
+---
+title: "Backlog — Future (direção estratégica de médio/longo prazo)"
+status: idea
+opened: 2026-08-11
+description: >-
+  Notas de direção estratégica de médio/longo prazo para o repositório
+  tauan-games (ladder das engines, identidade visual, distribuição, qualidade,
+  coordenação multi-agente). Não são features prontas para virar release.
+---
+
 # Backlog — Future
 
 Ideias e direcionamentos de médio/longo prazo para o repositório `tauan-games`. Não são
@@ -16,14 +26,15 @@ como um todo.
 
 O repositório segue uma ladder pedagógica de complexidade crescente:
 
-1. **Phaser.js 2D** (`tauan-trex`) — primeiro contato com game loop, input, física simples.
+1. **Phaser.js 2D** — degrau didático 2D (game loop, input, física simples); sem jogo
+   ativo desde a remoção do `tauan-trex` (v0.6.0, 2026-08-10).
 2. **Three.js 3D** (`aero-fighters`, hoje Aero Strike) — modularização ES module, geometria
    procedural, materiais PBR, sombras, fog, skybox.
-3. **Unreal Engine 5** (`aero-fighters-v2`, futuro) — engine industrial, Blueprints,
-   Niagara, Nanite, Lumen, build pipeline real.
+3. **Unreal Engine 5** — degrau industrial reservado (Blueprints, Niagara, Nanite,
+   Lumen, build pipeline real); bloqueado por hardware.
 
 Cada degrau só faz sentido depois que o anterior está estabilizado. A migração para UE5
-não deve começar enquanto a release `aero-fighters-mission-realism-v1` estiver in-progress.
+não deve começar enquanto a release `v0.0.5` estiver in-progress.
 
 ## Identidade visual do repositório
 
@@ -42,7 +53,7 @@ moderno). Faltam:
 
 ## Qualidade
 
-A release `aero-fighters-qa-hardening-v1` (já arquivada) estabeleceu uma harness Playwright
+A release `v0.0.4` (já arquivada) estabeleceu uma harness Playwright
 robusta para o Aero Strike. Direção futura:
 - Estender a harness para todos os jogos com smoke tests + critério "Tauan-friendly".
 - Capturar regressões visuais (visual regression / screenshot diff) — candidata em
@@ -57,3 +68,9 @@ game-designer, game-tester) per `.claude/rules/game-developer-scope.md`. Direç�
   testes) — não só "game-developer faz tudo".
 - product-engineer é tie-breaker em divergências (matriz em
   `.claude/rules/game-agents-coordination.md`).
+
+## Curadoria (2026-08-11, project-manager)
+
+Normalização BL-SCHEMA: arquivo de notas sem frontmatter falhava o doctor; adicionado
+frontmatter canônico com `status: idea` (notas não-vinculadas, isentas de intents).
+Conteúdo original preservado.
