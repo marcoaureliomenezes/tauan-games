@@ -29,7 +29,11 @@ export const game = {
   camera: null,
   controls: null,
   api: {},
-  telemetry: { fps: 60, drawCalls: 0, physicsReady: false, yukaReady: false, quality: 'high', worldBuilds: 0, staticColliders: 0 },
+  // Contadores de telemetria nascem ZERADOS, não undefined — os specs de
+  // polling (T-07) comparam "> valor anterior" e `n > undefined` é false para
+  // sempre (bug latente encontrado na 1ª execução full da suíte pós-v0.10.0:
+  // o contador de explosões nunca "subia" aos olhos do waitForFunction).
+  telemetry: { fps: 60, drawCalls: 0, physicsReady: false, yukaReady: false, quality: 'high', worldBuilds: 0, staticColliders: 0, explosions: 0, spawns: 0, rockets: 0 },
 };
 
 // Gancho de console/E2E. Guardado para que o estado também seja importável

@@ -524,9 +524,14 @@ test('performance remediation: light count and shader program count stay constan
   for (let i = 0; i < 8; i += 1) {
     await page.evaluate(({ x, z, i: index }) => window.game.api.explode(x + index * 0.6, z + index * 0.35), { ...start, i });
   }
-  // polling (T-07): espera a cadeia de explosões REGISTRAR (contador sobe) —
-  // era waitForTimeout(150)
-  await page.waitForFunction((before) => window.game.telemetry.explosions > before, explBefore, { timeout: 8000 });
+  // Registro da cadeia: explode() é SÍNCRONO (game.api.explode -> combat.
+  // explode -> explosives.explode incrementa o contador antes de qualquer
+  // efeito) — quando o evaluate retorna, o contador JÁ subiu. Asserção direta,
+  // sem waitForFunction: polling de um efeito síncrono não testa nada e ainda
+  // depende de timing do harness (bug latente da conversão T-07, que trocou
+  // um waitForTimeout(150) por polling onde bastava ler o contador).
+  const explDuring = await page.evaluate(() => window.game.telemetry.explosions);
+  expect(explDuring, 'a cadeia de explosões tem de ter registrado no contador').toBeGreaterThan(explBefore);
   const during = await page.evaluate(() => window.game.api.rendererStats());
   expect(during.lights).toBe(before.lights);
   expect(during.programs).toBe(before.programs);
