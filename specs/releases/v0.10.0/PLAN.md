@@ -1,6 +1,6 @@
 # PLAN — Release: v0.10.0
 
-> **Status:** Draft
+> **Status:** Aprovado
 > **Release ID:** v0.10.0
 > **Spec:** `SPEC.md`
 

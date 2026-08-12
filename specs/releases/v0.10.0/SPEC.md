@@ -1,6 +1,6 @@
 # SPEC — Release: v0.10.0
 
-**Status:** Draft
+**Status:** Aprovado
 **Release ID:** v0.10.0
 **Owner:** product-engineer
 **Opened:** 2026-08-11
