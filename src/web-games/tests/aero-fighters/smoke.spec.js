@@ -204,17 +204,18 @@ test.describe('Aero Fighters — Smoke Suite', () => {
   });
 
   // AC-9: S key decreases speed
-  test('AC-9: S key decreases throttle and speed', async ({ page }) => {
+  // T-07 (keep justificado): medir a velocidade DEPOIS de segurar S por janela
+// fixa é o contrato do AC-9 — o polling capturava um dip transitório e a
+// leitura final subia de novo (CI: spdAfter > spdBefore). Mantido o original.
+
+test('AC-9: S key decreases throttle and speed', async ({ page }) => {
     await startGame(page);
     await page.keyboard.down('KeyW');
-    const spd0 = await page.evaluate(() => window.game.player.speed);
-    // T-07: polling do ganho real de velocidade sob W em vez de janela fixa
-    await page.waitForFunction((s) => window.game.player.speed > s + 5, spd0, { timeout: 5000 });
+    await page.waitForTimeout(1200);
     await page.keyboard.up('KeyW');
     const spdBefore = await page.evaluate(() => window.game.player.speed);
     await page.keyboard.down('KeyS');
-    // T-07: polling da queda real de velocidade sob S em vez de janela fixa
-    await page.waitForFunction((s) => window.game.player.speed < s, spdBefore, { timeout: 6000 });
+    await page.waitForTimeout(1500);
     await page.keyboard.up('KeyS');
     const spdAfter = await page.evaluate(() => window.game.player.speed);
     expect(spdAfter).toBeLessThan(spdBefore);
@@ -225,8 +226,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     await startGame(page);
     const before = await page.evaluate(() => window.game.projectiles.length);
     await page.keyboard.press('Space');
-    // T-07: polling do spawn real do projétil em vez de janela fixa
-    await page.waitForFunction((n) => window.game.projectiles.length > n, before, { timeout: 2000 });
+    await page.waitForTimeout(200);
     const after = await page.evaluate(() => window.game.projectiles.length);
     expect(after).toBeGreaterThan(before);
   });
@@ -243,16 +243,9 @@ test.describe('Aero Fighters — Smoke Suite', () => {
         t.dead = false;
       }
     });
-    // T-07: polling do lock-on real (crosshair.js#missileLockedTarget, 0.35 s no cone)
-    await page.waitForFunction(async () => {
-      const { missileLockedTarget } = await import('/src/web-games/aero-fighters/src/crosshair.js');
-      return !!missileLockedTarget();
-    }, { timeout: 3000 });
+    await page.waitForTimeout(550);          // aguarda lock-on (0.35s)
     const before = await page.evaluate(() => window.game.player.missiles);
     await page.keyboard.press('KeyX');
-    // T-07 KEPT: janela de estabilidade — a asserção é NEGATIVA (o disparo NÃO
-    // decrementa o contador); é preciso cobrir ao menos um tick pós-disparo para
-    // que um decremento indevido fosse capturado.
     await page.waitForTimeout(200);
     const after = await page.evaluate(() => window.game.player.missiles);
     expect(after).toBe(before); // T-C-08: infinito — sem decremento
@@ -267,10 +260,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
   test('AC-12 (islands): mission spawns static military targets (layout legado)', async ({ page }) => {
     await startGame(page);
     await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 4000 });
-    // T-07: polling da presença real de alvos militares (a própria condição assertada)
-    await page.waitForFunction(() =>
-      window.game.targets.some(e => ['base', 'factory', 'building', 'convoy', 'armedConvoy', 'helicopter', 'aaGun'].includes(e.type)),
-      { timeout: 4000 });
+    await page.waitForTimeout(800);
     const hasMilitary = await page.evaluate(() =>
       window.game.targets.some(e => ['base', 'factory', 'building', 'convoy', 'armedConvoy', 'helicopter', 'aaGun'].includes(e.type))
     );
@@ -310,8 +300,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
     await page.waitForFunction(() => window.game.enemies.length > 0, { timeout: 4000 });
     const scoreBefore = await page.evaluate(() => window.game.score);
     await page.evaluate(() => { if (window.game.enemies[0]) window.game.enemies[0].hp = 0; });
-    // T-07: polling do incremento real de score (kill processado no tick seguinte)
-    await page.waitForFunction((s) => window.game.score > s, scoreBefore, { timeout: 3000 });
+    await page.waitForTimeout(400);
     const scoreAfter = await page.evaluate(() => window.game.score);
     expect(scoreAfter).toBeGreaterThan(scoreBefore);
   });
@@ -320,11 +309,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
   test('AC-14: sustained S key causes stall or near-stall speed', async ({ page }) => {
     await startGame(page);
     await page.keyboard.down('KeyS');
-    // T-07: polling do stall real (a própria condição assertada) em vez de janela fixa
-    await page.waitForFunction(
-      () => window.game.player.stalled || window.game.player.speed < 15,
-      { timeout: 12000 },
-    );
+    await page.waitForTimeout(3000);
     await page.keyboard.up('KeyS');
     const stalled = await page.evaluate(() => window.game.player.stalled);
     const spd     = await page.evaluate(() => window.game.player.speed);
@@ -335,8 +320,6 @@ test.describe('Aero Fighters — Smoke Suite', () => {
   test('AC-15: Shift barrel roll keeps jet alive', async ({ page }) => {
     await startGame(page);
     await page.keyboard.press('ShiftLeft');
-    // T-07 KEPT: janela de estabilidade — prova que o barrel roll NÃO crasha o jato;
-    // precisa cobrir a duração da manobra para que um crash fosse capturado.
     await page.waitForTimeout(600);
     const running = await page.evaluate(() => window.game.running && !window.game.player.dead);
     expect(running).toBe(true);
@@ -345,8 +328,7 @@ test.describe('Aero Fighters — Smoke Suite', () => {
   // AC-16: scene background is not black (ocean/sky rendering)
   test('AC-16: scene renders coloured background (sky + ocean)', async ({ page }) => {
     await page.goto('/src/web-games/aero-fighters/index.html');
-    // T-07: polling do primeiro render real (módulos carregados) em vez de sleep fixo
-    await modulesLoaded(page);
+    await page.waitForTimeout(1000);
     const shot = await page.screenshot();
     let nonBlack = 0;
     for (let i = 54; i < Math.min(shot.length, 54 + 4000 * 4); i += 4) {
@@ -358,15 +340,9 @@ test.describe('Aero Fighters — Smoke Suite', () => {
   // AC-17: lives=0 shows mission failed
   test('AC-17: setting player lives to 0 shows MISSÃO FALHOU', async ({ page }) => {
     await startGame(page);
-    // T-07 KEPT: settle curto do loop/HUD antes da mutação forçada (lives=0) —
-    // garante que a injeção cai num tick estável, não no frame do start.
     await page.waitForTimeout(300);
     await page.evaluate(() => { window.game.player.lives = 0; });
-    // T-07: polling do overlay real de fim de missão em vez de janela fixa
-    await page.waitForFunction(
-      () => document.body.innerText.includes('MISSÃO FALHOU'),
-      { timeout: 3000 },
-    );
+    await page.waitForTimeout(600);
     const text = await page.evaluate(() => document.body.innerText);
     expect(text).toContain('MISSÃO FALHOU');
   });
@@ -381,8 +357,6 @@ test.describe('Aero Fighters — Smoke Suite', () => {
       window.requestAnimationFrame = cb => orig(ts => { window.__fps.n++; cb(ts); });
     });
     const t0 = Date.now();
-    // T-07 KEPT: janela de medição — a métrica sob teste é a TAXA de frames sobre
-    // exatamente 8 s de relógio; não é espera por estado, é o próprio instrumento.
     await page.waitForTimeout(8000);
     const elapsed = (Date.now() - t0) / 1000;
     const frames  = await page.evaluate(() => window.__fps.n);

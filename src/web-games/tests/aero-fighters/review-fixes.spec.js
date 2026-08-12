@@ -97,20 +97,18 @@ test('MAYDAY state persists at least 2 s before _ejectAndRespawn fires', async (
     if (window.jet) { window.jet.position.y = 5; } // may not be accessible
   });
 
-  // Wait 1 s — lives should NOT have changed yet (timer < 2 s)
-  // T-07 KEPT: janela de estabilidade — metade NEGATIVA do contrato T-FIX-03:
-  // o crash NÃO pode disparar antes dos 2 s mínimos de MAYDAY; o ponto de checagem
-  // em t=1 s só faz sentido em relógio fixo.
+  // T-07 (keep justificado): o contrato T-FIX-03 é sobre RELÓGIO FIXO (mínimo de
+// 2 s de MAYDAY antes do crash) — janela de relógio É a semântica testada; a
+// conversão p/ polling mirou um path de estado inexistente (flags.maydayTimer)
+// e estourava o budget do teste no CI. Mantido o código original.
+
+// Wait 1 s — lives should NOT have changed yet (timer < 2 s)
   await page.waitForTimeout(1000);
   const livesMid = await page.evaluate(() => window.game.player.lives);
   expect(livesMid).toBe(2); // still alive at t=1s
 
-  // T-07: polling do timer real de MAYDAY (>= 2 s, player.js) — ou do crash que
-  // ele destrava — em vez de segunda janela fixa de relógio.
-  await page.waitForFunction(
-    () => (window.game.flags.maydayTimer || 0) >= 2 || window.game.player.lives < 2,
-    { timeout: 8000 },
-  );
+  // Wait another 1.5 s — by now timer >= 2 s and terrain collision should have fired
+  await page.waitForTimeout(1500);
   // Lives may or may not have dropped depending on jet position — just assert game didn't freeze
   const snap = await page.evaluate(() => window.__aeroDebug.getSnapshot());
   expect(snap).not.toBeNull();

@@ -285,6 +285,10 @@ async function pickStaticTargets(page, count) {
 
 // ─── AC-05 (D-1): guided missile visibly persists + curves (homing) and, with a
 // forced-HIT seeded roll, guarantees terminal intercept damage ─────────────────
+// T-07 (keep justificado): o offset fixo de 80 ms e a captura por índice são o
+// código ORIGINAL deste AC — a conversão para polling do spawn mostrou-se
+// frágil no CI (transientes de efeito e o frame lento sob carga corrompem
+// identidade/índice: samples=0). Mantido por decisão registrada na T-07.
 test('T-10/AC-05: guided missile (forced HIT) persists, curves via homing, and guarantees intercept damage', async ({ page }) => {
   await startGame(page);
   await pickStaticTargets(page, 1);
@@ -296,19 +300,15 @@ test('T-10/AC-05: guided missile (forced HIT) persists, curves via homing, and g
     t.dead = false;
     t.hp = 1; // one confirmed hit (MISSILES_LIGHT.DAMAGE=4) must kill it — proves "damages" (D-1), not just "hits"
   });
-  await waitLockOn(page); // T-07: polling do lock-on real (0.35 s no cone)
+  await page.waitForTimeout(550); // lock-on window (0.35s + margin)
 
   const before = await page.evaluate(async () => {
     const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
     return scene.children.length;
   });
   await page.keyboard.press('KeyX');
-  // T-07: polling do spawn real do míssil (novo child na cena) em vez de janela fixa
-  await page.waitForFunction(async (beforeCount) => {
-    const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
-    return scene.children.length > beforeCount;
-  }, before, { timeout: 2000 });
-  const idx = before;
+  await page.waitForTimeout(80);
+  const idx = await page.evaluate(async (beforeCount) => beforeCount, before);
 
   const samples = await page.evaluate(async (idx) => {
     const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
