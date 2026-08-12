@@ -4,9 +4,11 @@
 // por apertada. window.__corrida só em ASSERÇÕES/leitura — nunca para dirigir.
 //
 // waitForTimeout restantes (T-07) — legítimos por semântica: as janelas de
-// 1000 ms MEDEM taxa (dv em 1 s, dreno 33/s, regen 8→16/s) — polling mudaria
-// o que está sendo medido; os 250 ms antes de re-apertar Shift são setup de
-// estado de carga; os pulsos de 40-200 ms do servo são largura de atuação.
+// 1000 ms do teste de dreno MEDEM taxa (33/s) e os 250 ms antes de re-apertar
+// Shift são setup de estado de carga; os pulsos de 40-200 ms do servo são
+// largura de atuação. As janelas de dv (boost) e de regen medem por raceT
+// (relógio da sim, amostrado na página) — wall-clock misturava latência de
+// protocolo e sim mais lenta/rápida que a parede no CI.
 // Convertidos a polling: a queima até charge ≤ 20 (era 2500 ms fixos).
 import { test, expect } from '@playwright/test';
 
@@ -30,14 +32,6 @@ const snap = (page) => page.evaluate(() => {
 async function holdWUntilV(page, vMin, timeout = 45000) {
   await page.keyboard.down('KeyW');
   await page.waitForFunction((v) => window.__corrida.player.st.v >= v, vMin, { timeout });
-}
-
-// dv em 1,0 s de janela (W já está pressionado)
-async function dvOver1s(page) {
-  const v0 = (await snap(page)).v;
-  await page.waitForTimeout(1000);
-  const v1 = (await snap(page)).v;
-  return v1 - v0;
 }
 
 // SERVO de direção (mesmo padrão do input.spec): segura W e corrige a guinada
@@ -80,26 +74,37 @@ test.describe('Cruis\'n Tauan — NITRO (v0.8.0)', () => {
   test('Shift dá boost real de aceleração (dv em 1 s, com vs sem)', async ({ page }) => {
     test.setTimeout(240000);
     await start(page);                                   // pista 0 (city), carro 0
-    // baseline: W puro, janela de 1 s a partir de v≈15
-    await holdWUntilV(page, 15);
-    const dvBase = await dvOver1s(page);
-    await page.keyboard.up('KeyW');
+    // dv medido por 1,0 s de raceT (relógio da SIM, não da parede) com o
+    // servo mantendo o carro NA PISTA. No CI o gate de ativação do boost
+    // atrasava e o carro saía p/ a terra (teto offroad ~41) antes/durante
+    // a janela — dvNitro caía p/ metade do esperado; e wall-clock mistura
+    // latência de protocolo com tempo de sim. As duas janelas partem de
+    // v≈15 com o carro servoado, mesma régua nas duas pernas.
+    async function measureDv(nitro) {
+      // acelera servoado até v≈15 (mesmo ponto de partida nas duas janelas)
+      const reached = await servoDrive(page,
+        () => window.__corrida.player.st.v >= 15, 45000);
+      expect(reached).toBe(true);
+      await page.evaluate(() => {
+        const G = window.__corrida;
+        window.__m = { v0: G.player.st.v, t0: G.raceT, dv: 0, done: false };
+      });
+      if (nitro) await page.keyboard.down('ShiftLeft');
+      const done = await servoDrive(page, () => {
+        const G = window.__corrida, m = window.__m;
+        if (!m.done && G.raceT - m.t0 >= 1.0) { m.dv = G.player.st.v - m.v0; m.done = true; }
+        return m.done;
+      }, 20000);
+      if (nitro) await page.keyboard.up('ShiftLeft');
+      expect(done).toBe(true);
+      return page.evaluate(() => window.__m.dv);
+    }
+    const dvBase = await measureDv(false);
     // R reinicia (carga volta a 100) e repete a janela COM Shift
     await page.keyboard.press('KeyR');
     await page.waitForFunction(() => window.__corrida.phase === 'race', { timeout: 25000 });
-    await holdWUntilV(page, 15);
-    await page.keyboard.down('ShiftLeft');
-    // CI-runner: só mede a janela DEPOIS do boost estar de fato ligado —
-    // a tecla entra num substep e o boost no seguinte; sem este gate a
-    // janela pegava latência de ativação e dvNitro saía < dvBase×1.35.
-    await page.waitForFunction(() => window.__corrida.nitro.active === true, { timeout: 4000 });
-    const __w0 = await page.evaluate(() => ({ v: window.__corrida.player.st.v, raceT: window.__corrida.raceT, active: window.__corrida.nitro.active, charge: window.__corrida.nitro.charge }));
-    const dvNitro = await dvOver1s(page);
-    const __w1 = await page.evaluate(() => ({ v: window.__corrida.player.st.v, raceT: window.__corrida.raceT, charge: window.__corrida.nitro.charge }));
-    console.log('QA-NITRO-WIN', JSON.stringify({ w0: __w0, w1: __w1, dvNitro, dvBase }));
-    await page.keyboard.up('ShiftLeft');
-    await page.keyboard.up('KeyW');
-    // ×1,8 de acel menos o falloff de velocidade: folga p/ latência/ruído
+    const dvNitro = await measureDv(true);
+    // ×1,8 de acel menos o falloff de velocidade: folga p/ ruído do servo
     expect(dvNitro).toBeGreaterThan(dvBase * 1.35);
   });
 
@@ -131,22 +136,39 @@ test.describe('Cruis\'n Tauan — NITRO (v0.8.0)', () => {
     await page.keyboard.down('ShiftLeft');
     await page.waitForFunction(() => window.__corrida.nitro.charge <= 20, { timeout: 10000 });
     await page.keyboard.up('ShiftLeft');
-    const c0 = (await snap(page)).charge;
-    // regen base: 1 s sem nitro já recupera ~8
-    await page.waitForTimeout(1000);
-    const c1 = (await snap(page)).charge;
-    expect(c1).toBeGreaterThan(c0 + 3);
-    expect(c1).toBeLessThan(70);
-    // servo limpo (W segurado, sem bater) até regenT ≥ 3 s → taxa dobra p/ 16/s
-    const got = await servoDrive(page,
-      () => window.__corrida.nitro.regenT >= 3.2, 30000);
+    await page.keyboard.up('KeyW');
+    // regen base: 1,0 s de raceT (relógio da sim — wall-clock no CI mistura
+    // latência de protocolo e sim mais lenta que a parede) já recupera ~8
+    const r1 = await page.evaluate(() => new Promise((resolve) => {
+      const G = window.__corrida;
+      const c0 = G.nitro.charge, t0 = G.raceT;
+      const iv = setInterval(() => {
+        if (G.raceT - t0 >= 1.0) { clearInterval(iv); resolve({ c0, c1: G.nitro.charge }); }
+      }, 8);
+    }));
+    expect(r1.c1).toBeGreaterThan(r1.c0 + 3);
+    expect(r1.c1).toBeLessThan(70);
+    // servo limpo (W segurado, sem bater): regenT ≥ 3,2 s → taxa dobra p/
+    // 16/s; o ganho é medido DENTRO do servo por 1,0 s de raceT — medir
+    // DEPOIS de soltar o servo deixava o carro bater na janela, o regenT
+    // resetava e a taxa caía p/ 8/s (falha intermitente no CI)
+    await page.evaluate(() => {
+      window.__regen = { armed: false, c2: 0, t2: 0, c3: 0, done: false };
+    });
+    const got = await servoDrive(page, () => {
+      const G = window.__corrida, m = window.__regen;
+      if (!m.armed) {
+        if (G.nitro.regenT >= 3.2) { m.armed = true; m.c2 = G.nitro.charge; m.t2 = G.raceT; }
+        return false;
+      }
+      if (G.raceT - m.t2 >= 1.0) { m.c3 = G.nitro.charge; m.done = true; }
+      return m.done;
+    }, 45000);
     expect(got).toBe(true);
-    const c2 = (await snap(page)).charge;
-    await page.waitForTimeout(1000);
-    const c3 = (await snap(page)).charge;
-    // ~16/s (margem p/ jitter); se colisões atrasaram o regenT e o tanque já
-    // encheu (cap 100), o ganho achatado no teto também prova o regen
-    expect(c3 - c2 > 11 || c3 >= 99.5).toBe(true);
+    const m = await page.evaluate(() => window.__regen);
+    // ~16/s (margem p/ jitter); se o tanque encheu (cap 100), o ganho
+    // achatado no teto também prova o regen
+    expect(m.c3 - m.c2 > 11 || m.c3 >= 99.5).toBe(true);
   });
 
   test('seco: SEM boost, flash "SEM NITRO" 1× por apertada', async ({ page }) => {
