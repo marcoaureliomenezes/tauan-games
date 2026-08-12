@@ -214,14 +214,31 @@ await page.evaluate(() => window.__swDebug.goTo('jupiter'));
     });
     const before = await aim();
     await page.keyboard.press('KeyC');
-    // converge a ~0,225/frame (alignRate 4,5 × dt clamp 0,05): de π (Sol na
-    // direção oposta) leva ~20 frames — ~20-40 s em headless lento. O catch
-    // anterior ENGOLIA o timeout de 45 s e a medição pegava a nave ainda
-    // girando (flake CI: after=0,414 vs 0,4, run 31586617579). Sem catch:
-    // se o autopilot não completar, o teste FALHA ALTO — é bug real.
-    await page.waitForFunction(() => window.__spaceWar.ship.aligning === false, { timeout: 120000 });
-    await page.waitForTimeout(300);
-    const after = await aim();
+    // Captura ATÔMICA no frame em que o autopilot conclui (aligning vira
+    // false): o nível automático do frame orbital (ship.js, "nível
+    // automático contínuo") começa a girar a nave de volta p/ o horizonte
+    // JÁ NO FRAME SEGUINTE — medir 300 ms depois era loteria de fps
+    // (deriva medida no CI: 0,29/0,41/0,58 rad, runs 31586617579 e
+    // 31587742065). waitForFunction com polling raf avalia no mesmo frame
+    // da conclusão, antes do auto-nível agir. Sem catch: se o autopilot
+    // não completar (converge a ~0,225/frame, ~20-40 s p/ virar de π),
+    // o teste FALHA ALTO — é bug real.
+    const afterH = await page.waitForFunction(() => {
+      const G = window.__spaceWar;
+      if (G.ship.aligning !== false) return false;
+      const rot = (q, v) => {
+        const ix = q.w * v.x + q.y * v.z - q.z * v.y, iy = q.w * v.y + q.z * v.x - q.x * v.z,
+          iz = q.w * v.z + q.x * v.y - q.y * v.x, iw = -q.x * v.x - q.y * v.y - q.z * v.z;
+        return { x: ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y, y: iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z, z: iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x };
+      };
+      const s = G.ship, t = G.nav.target;
+      if (!t) return false;
+      const n = rot(s.quat, { x: 0, y: 0, z: -1 });
+      const d = { x: t.pos.x - s.pos.x, y: t.pos.y - s.pos.y, z: t.pos.z - s.pos.z };
+      const dl = Math.hypot(d.x, d.y, d.z) || 1;
+      return Math.acos(Math.max(-1, Math.min(1, (n.x * d.x + n.y * d.y + n.z * d.z) / dl)));
+    }, { timeout: 120000 });
+    const after = await afterH.jsonValue();
     expect(after).toBeLessThan(before);
     expect(after).toBeLessThan(0.1);  // o jogo completa a 0,02 rad (ship.js) — 0,4 era frouxo
   });
