@@ -16,6 +16,8 @@ on:
       - ".github/workflows/ci.yml"
   # v0.10.0 T-01: experimento A/B GL/ANGLE — dispara 2 runs na mesma sha,
   # um com gl_args=true e outro false, mesmo test_cmd (subconjunto).
+  # test_cmd VAZIO (default) = cada célula da matrix roda o próprio dir;
+  # preenchido = override de diagnóstico, executado numa única célula.
   workflow_dispatch:
     inputs:
       gl_args:
@@ -23,9 +25,9 @@ on:
         type: boolean
         default: false
       test_cmd:
-        description: 'Comando de teste do step Run tests'
+        description: 'Override de diagnóstico do step Run tests (vazio = matrix por jogo)'
         type: string
-        default: 'npm test'
+        default: ''
 
 # v0.10.0 T-04: pushes empilhados cancelam o run anterior (fila de ~19 min
 # do pior caso do baseline morre aqui).
@@ -38,8 +40,18 @@ permissions:
 
 jobs:
   playwright-tests:
-    name: Playwright Tests
+    name: Playwright Tests (${{ matrix.game }})
     runs-on: ubuntu-latest
+
+    # v0.10.0 T-09: split da suíte raiz em um job por jogo. workers:2 no
+    # MESMO runner foi medido inviável (2×: boot starvation do SwiftShader —
+    # runs 31536963772/31543170001), então o paralelismo sobe p/ runners
+    # separados. Medição (run 31577396192): aero 6,8 min + space-war 6,5 +
+    # corrida 2,8 = 16,3 min seriado; na matrix cada step fica ≤ 10 min.
+    strategy:
+      fail-fast: false
+      matrix:
+        game: [aero-fighters, corrida, space-war]
 
     defaults:
       run:
@@ -77,18 +89,33 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Run tests
-        run: ${{ github.event.inputs.test_cmd || 'npm test' }}
+        run: |
+          if [ -n "$CMD" ]; then
+            # override manual (diagnóstico): uma única célula executa, p/
+            # não triplicar o custo do comando customizado
+            if [ "${{ matrix.game }}" != "aero-fighters" ]; then
+              echo "override manual: executado apenas na célula aero-fighters"
+              exit 0
+            fi
+            eval "$CMD"
+          else
+            npx playwright test tests/${{ matrix.game }} --config=tests/playwright.config.js
+          fi
         env:
           PW_GL_ARGS: ${{ github.event.inputs.gl_args == 'true' && '1' || '0' }}
+          CMD: ${{ github.event.inputs.test_cmd }}
 
+      # demolition-ball roda numa célula só (a menor) — job dedicado com
+      # paths próprios (demolition-ball-ci.yml) assume na main pós-merge
       - name: Run demolition-ball tests (dedicated GL config)
+        if: matrix.game == 'corrida'
         run: npm run test:demolition-ball
 
       - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.game }}
           path: |
             src/web-games/test-results/
             src/web-games/tests/screenshots/

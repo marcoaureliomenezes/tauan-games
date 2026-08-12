@@ -194,7 +194,7 @@
      files commitados do baseline já foram removidos naquela passada).
   5. **Medida:** `du -sh` pós-run: 124K em tests/screenshots (baseline: 75 MB);
      `git status --porcelain` sem artefatos de run.
-## T-07 — `waitForTimeout` → polling, por lote [-]
+## T-07 — `waitForTimeout` → polling, por lote [x]
 
 - **Owner:** software-engineer
 - **Nota de escopo (2026-08-11):** os lotes L3 (trex), L4 (bang-bang) e L5
@@ -204,7 +204,7 @@
   mais james-bond (17 sites, 6,8 s) e demolition-ball (2 sites, 0,6 s) que
   rodam sob configs dedicados. Inventário novo-árvore: 134 sites / 165,9 s
   (baseline legado: 191 sites / 216,6 s).
-- **Feito e validado (commits `dd5f7de`, `1ae5343`):**
+- **Entregue (commits `dd5f7de`, `1ae5343`, `49cddf9`, `8feae55`):**
   - L6 corrida: 2 conversões (arranque do R-reset, queima nitro→≤20) + 13
     justificados (janelas de medição de taxa, pulsos do servo, ação "segurar
     W 3 s"). Verdes: R-reset 40,5 s, regen DOBRA 1,2 m.
@@ -212,8 +212,19 @@
   - james-bond: 5 conversões (movimento, tiro, guarnição, explosões, mortes
     no spawner) + 12 justificados (estabilidade negativa, cadência, settle de
     frame sem contador exposto). Verde: redeploying 1,9 m.
-- **Em curso:** L2 space-war — 36/39 convertidos por subagente (31,45 s →
-  11,5 s restantes; 3 justificados), suite em validação. L1 aero a seguir.
+  - L2 space-war: 36/39 convertidos (31,45 s → ~11,5 s restantes; 3
+    justificados).
+  - L1 aero: ~57/61 convertidos (restante justificado no próprio spec).
+  - **Reversões (`8feae55`):** 4 conversões "espertas" revertidas ao sleep
+    original com justificativa — sem sinal de estado exposto, o polling
+    inventado era mais frágil que o sleep.
+  - **Sleeps fixos: 216,6 s (legado, 191 sites) → ~60 s — redução > 70 %**
+    (aceitação: ≥ 60 % ✓).
+- **Pós-condição CI (hardening de flake, fora do escopo de conversão mas
+  dentro do espírito T-07/T-08):** nitro.spec.js :80/:123 mediam janelas por
+  wall-clock com o carro sem servo — reescritos p/ medir **por raceT** com o
+  carro servoado na pista (`b26bdc8`; diagnóstico nos runs 31578816471 e
+  31580059567 — este verde).
 
 - **Owner:** software-engineer
 - **Write set:** specs por lote —
