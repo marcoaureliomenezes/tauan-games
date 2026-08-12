@@ -7,6 +7,17 @@ const evidence = path.resolve(__dirname, '../../../../../../.dadaia/tmp/root/202
 // mezanino. Chegar acima disso só é possível subindo a escada.
 const CONFIG_FLOOR_TOP = 4.4;
 
+// waitForTimeout restantes (T-07) — legítimos por semântica, NÃO sleeps
+// preguiçosos: pulsos de gatilho (80-120 ms) são a duração do clique atuado;
+// 700 ms no mezanino é janela de ESTABILIDADE (prova que a laje NÃO deixa
+// cair — polling não prova condição negativa); 400 ms é a cadência de 5 s do
+// foguete (janela do comportamento testado); 2500 ms espera efeitos de 2.2 s
+// morrerem (sem contador de efeitos ativos exposto); 300 ms pós-deploy são
+// settle de frame de render (sem contador monotônico exposto — frames zera a
+// cada segundo na telemetria de fps); 150 ms entre fatias de fastForward é
+// pacing de loop. Convertidos a polling: movimento do jogador, registro do
+// tiro, rigs na cena, contador de explosões, mortes no spawner.
+
 test('boots offline, renders and plays the first operation', async ({ page }) => {
   // Boot de página + deploy() (pré-aquecimento de shader síncrono sem GPU —
   // ver main.js) sob carga extrema de máquina compartilhada.
@@ -48,7 +59,12 @@ test('boots offline, renders and plays the first operation', async ({ page }) =>
   await page.screenshot({ path: path.join(evidence, 'mission-desktop.png') });
   const start = await page.evaluate(() => ({ ...window.game.player.position }));
   await page.keyboard.down('KeyW');
-  await page.waitForTimeout(450);
+  // polling no estado real (T-07): espera o jogador SE MOVER — não um sleep
+  // fixo (era waitForTimeout(450))
+  await page.waitForFunction((s) => {
+    const p = window.game.player.position;
+    return Math.hypot(p.x - s.x, p.z - s.z) > 0.2;
+  }, start, { timeout: 5000 });
   await page.keyboard.up('KeyW');
   const moved = await page.evaluate(() => ({ ...window.game.player.position }));
   expect(Math.hypot(moved.x - start.x, moved.z - start.z)).toBeGreaterThan(0.2);
@@ -57,7 +73,8 @@ test('boots offline, renders and plays the first operation', async ({ page }) =>
   await page.mouse.down();
   await page.waitForTimeout(80);
   await page.mouse.up();
-  await page.waitForTimeout(120);
+  // polling: espera o tiro REGISTRAR (munição cai) — era waitForTimeout(120)
+  await page.waitForFunction((before) => window.game.ammo.deagle.mag < before, beforeAmmo, { timeout: 3000 });
   expect(await page.evaluate(() => window.game.ammo.deagle.mag)).toBeLessThan(beforeAmmo);
   await page.mouse.wheel(0, 120);
   // Espera o RESULTADO (troca de arma), não um tempo fixo: a troca só é
@@ -429,7 +446,11 @@ test('redeploying a mission does not leak enemies or stale objectives', async ({
   // um esqueleto animado a mais na cena.
   await page.evaluate(() => window.game.api.deploy(5));
   await page.waitForFunction(() => window.game.phase === 'playing');
-  await page.waitForTimeout(300);
+  // polling no estado real (T-07): espera a guarnição EXISTIR (enemies vivos —
+  // o rig SkinnedMesh é validado na asserção seguinte). Era waitForTimeout(300).
+  await page.waitForFunction(() =>
+    Boolean(window.game.enemies && window.game.enemies.some((e) => e.alive)),
+  undefined, { timeout: 15000 });
   const first = await skinnedMeshes();
   expect(first).toBeGreaterThan(0);
 
@@ -499,10 +520,13 @@ test('performance remediation: light count and shader program count stay constan
   // que o tamanho do pool de rigs/luzes (3), de propósito — força o caminho
   // de "reusa o mais antigo".
   const start = await page.evaluate(() => ({ x: window.game.world.start.x, z: window.game.world.start.z }));
+  const explBefore = await page.evaluate(() => window.game.telemetry.explosions);
   for (let i = 0; i < 8; i += 1) {
     await page.evaluate(({ x, z, i: index }) => window.game.api.explode(x + index * 0.6, z + index * 0.35), { ...start, i });
   }
-  await page.waitForTimeout(150);
+  // polling (T-07): espera a cadeia de explosões REGISTRAR (contador sobe) —
+  // era waitForTimeout(150)
+  await page.waitForFunction((before) => window.game.telemetry.explosions > before, explBefore, { timeout: 8000 });
   const during = await page.evaluate(() => window.game.api.rendererStats());
   expect(during.lights).toBe(before.lights);
   expect(during.programs).toBe(before.programs);
@@ -708,7 +732,8 @@ test('reinforcement spawner backfills kills up to the mission cap without leakin
       window.game.api.explode(enemy.root.position.x, enemy.root.position.z, 8, enemy.root.position.y + 0.5);
     }
   });
-  await page.waitForTimeout(200);
+  // polling (T-07): espera o spawner REGISTRAR as mortes — era waitForTimeout(200)
+  await page.waitForFunction((before) => window.game.api.spawnerStats().alive < before, stats0.alive, { timeout: 8000 });
   const afterKill = await page.evaluate(() => window.game.api.spawnerStats());
   expect(afterKill.alive).toBeLessThan(stats0.alive);
 
