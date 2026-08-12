@@ -72,6 +72,24 @@ Gotchas de método (aprendidos e obrigatórios):
   antes de diagnosticar.
 - `cmd | tail` mascara exit code — validar `PIPESTATUS`/exit real.
 
+### Ciclo de vida de testes (v0.11.0 — doutrina test-stewardship)
+
+- **Pirâmide corrigida em CI**: job `node-gate` no ci.yml roda TODAS as suítes Node
+  (26 arquivos — aero qa/unit/sim, space-war unit, corrida unit, jb unit, db unit,
+  agregadas em `npm run test:unit`) ANTES da matriz Playwright (`needs: node-gate`).
+- **Suíte E2E = 93 casos** (v0.11.0; era 187): aero 30, space-war 31, corrida 14,
+  jb 12, db 6. E2E só para o browser-intrínseco (pixels, input real, DOM, áudio,
+  renderer.info, persistência); lógica/física/constantes = Node.
+- **Rebaixamento é etapa de fechamento**: E2E que validou a feature vira cobertura
+  Node com mapa E2E→substituto no CLOSURE; máx. 1 SENTINEL por costura (marcados
+  in-file: aero diagnostics reload-identity; space-war three-states-flow).
+- **Deleção com evidência**, nunca pelo implementador para ficar verde; 4 deleções
+  do mapa v0.11.0 foram REFUTADAS por inspeção e mantidas (jb :617/:816, db :38/:89
+  — notas in-file) — verificar em árvore antes de deletar é obrigatório.
+- Statements completos: report v2 test-stewardship (workspace,
+  `2026-08-12T175304Z-test-stewardship-statements-v2.html`). Fase 2 pendente:
+  initScene() lazy destrava 19 demoções restantes (backlog test-value-lifecycle-v1).
+
 ### Política de execução da suíte (medida no CI, v0.10.0)
 
 - **workers: 1** — paralelismo medido INVIÁVEL: SwiftShader não tolera 2

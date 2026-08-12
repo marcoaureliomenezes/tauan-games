@@ -10,4 +10,4 @@ Write sets disjuntos declarados no PLAN — execução paralela autorizada.
 ## T-04 — james-bond + demolition-ball: unit.mjs estendido, slim 900s, outputDir [x]
 ## T-05 — CI gate + package.json + gitignore + PNGs rastreados [x]
 ## T-06 — higiene de disco (fora do repo) [x]
-## T-07 — integração: node gate completo local, --list em todos os configs, CLOSURE [ ]
+## T-07 — integração: node gate completo local, --list em todos os configs, CLOSURE [x]
