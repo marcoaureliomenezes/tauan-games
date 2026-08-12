@@ -29,6 +29,7 @@ import { UNIT_TYPES, buildUnitParts, makeUnit, makeUnitInstanced, mergeUnitGeome
 import { game } from '../../../aero-fighters/src/state.js';
 import { spawnWingmen, updateWingmen, wingmanSlotWorld, wingmenList } from '../../../aero-fighters/src/wingmen.js';
 import { WINGMEN } from '../../../aero-fighters/src/config.js';
+import { createCameraRig, cycleCameraMode } from '../../../aero-fighters/src/camera-modes.js';
 
 // Tabela de referência PRÉ-redesign (x, y, z — ver header). Tolerância ±25%.
 const REF_DIMS = {
@@ -156,4 +157,21 @@ test('T-C-13(d): wingman quebra formação p/ hostil aéreo perto do player e re
     const err = wm.mesh.position.distanceTo(_slot);
     assert.ok(err < 5, `wingman ${wm.offsetIdx}: erro ${err.toFixed(2)} m >= 5 m no retorno`);
   }
+});
+
+// ─── T-01 demotion (camera.spec.js, deleted): KeyC cycles the camera mode ─────
+// camera-modes.js imports only THREE (no scene.js/window) — createCameraRig/
+// cycleCameraMode are the exact real functions main.js wires KeyC to, driven
+// directly instead of through a page.keyboard.press('KeyC') round-trip.
+test('camera-modes: cycleCameraMode advances rig.mode to a different mode each press', () => {
+  const rig = createCameraRig();
+  const before = rig.mode;
+  const after = cycleCameraMode(rig);
+  assert.notEqual(after, before);
+  assert.equal(rig.mode, after);
+  // Cycling through the full list returns to the start (no drift, no duplicates skipped).
+  const seen = new Set([before, after]);
+  for (let i = 0; i < 3; i++) seen.add(cycleCameraMode(rig));
+  assert.equal(seen.size, 5, `expected all 5 camera modes to be reachable by cycling, got ${seen.size}`);
+  assert.equal(cycleCameraMode(rig), before, 'cycling all the way around must return to the starting mode');
 });

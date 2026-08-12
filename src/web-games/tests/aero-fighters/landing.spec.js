@@ -2,23 +2,16 @@ const { test, expect } = require('@playwright/test');
 
 // T-07 (v0.10.0) — todos os sleeps fixos deste spec viraram waitForFunction sobre
 // estado real (jogo rodando + velocidade, velocidade de rotação, liftoff).
-
-test('MR landing diagnostics expose envelope and surface classification', async ({ page }) => {
-  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-landing');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
-  await page.keyboard.press('Space');
-  await page.keyboard.down('KeyW');
-  // T-07: polling do estado real (jogo rodando + acelerando) em vez de janela fixa
-  await page.waitForFunction(
-    () => window.game.running === true && window.game.player.speed > 10,
-    { timeout: 8000 },
-  );
-  await page.keyboard.up('KeyW');
-  const s = await page.evaluate(() => window.__aeroDebug.getSnapshot());
-  expect(s.groundContact).toHaveProperty('type');
-  expect(s.takeoffEnvelope).toHaveProperty('canLiftoff');
-  expect(s.landingEnvelope).toHaveProperty('safe');
-});
+//
+// T-01 (v0.11.0, test lifecycle demotion): "MR landing diagnostics expose envelope
+// and surface classification" deleted — the debug-contract field shape it checked
+// is the same semantic tools/test-aero-sortie-sim.js:52 ("takeoff and landing
+// envelopes enforce runway constraints") already exercises against the real
+// evaluateLandingEnvelope/evaluateTakeoffEnvelope. Kept only the :38 real-input
+// BI test below, which the file's own header explains cannot move to Node
+// (jet.position lives in THREE.js, not exposed on window) — and removed its
+// duplicated waitForFunction block (the reachedAirborne re-poll below repeated
+// the same condition the earlier waitForFunction had already confirmed).
 
 // ─── Step 5 E2E: landing contract + flight reachability ──────────────────────
 // The numerical invariants of the landing cycle (single TOUCHDOWN_SAFE, no state
@@ -61,8 +54,7 @@ test('E2E landing contract: debug fields present + takeoff reaches AIRBORNE', as
   // T-07: polling da velocidade de rotação (ROTATION_SPEED=38, ground-physics.js)
   await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 14000 });
   await page.keyboard.down('ArrowDown');
-  // T-07: polling do liftoff real — segura ↓ até AIRBORNE em vez de tempo fixo
-  // (o waitForFunction abaixo, preservado, confirma o estado e passa imediato).
+  // T-07: polling do liftoff real — segura ↓ até AIRBORNE em vez de tempo fixo.
   await page.waitForFunction(
     () => {
       const state = window.game.missionRealism?.sortie?.state;
@@ -72,18 +64,6 @@ test('E2E landing contract: debug fields present + takeoff reaches AIRBORNE', as
   );
   await page.keyboard.up('ArrowDown');
   await page.keyboard.up('KeyW');
-
-  const reachedAirborne = await page.waitForFunction(
-    () => {
-      const state = window.game.missionRealism?.sortie?.state;
-      return state === 'AIRBORNE' || state === 'MISSION_ACTIVE' || state === 'RETURN_TO_BASE';
-    },
-    { timeout: 12000 }
-  ).then(() => true).catch(() => false);
-
-  expect(reachedAirborne).toBe(true,
-    'Takeoff did not reach AIRBORNE under real keyboard input — Step 2 liftoff path is broken in the browser'
-  );
 
   // After AIRBORNE, the snapshot must still expose the landing contract.
   const airborneSnap = await page.evaluate(() => window.__aeroDebug.getSnapshot());

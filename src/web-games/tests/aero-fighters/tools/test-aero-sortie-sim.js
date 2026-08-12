@@ -317,6 +317,54 @@ test('full landing cycle: one TOUCHDOWN_SAFE, stays LANDING_ROLL, y decays monot
     `Post-touchdown bounce of ${bounce.toFixed(3)} m exceeds 0.3 m limit`);
 });
 
+// ─── T-01 demotion (uplift.spec.js U-AC-3, deleted): floor-glue dead — diving
+// back onto the runway always resolves the touchdown gate, never freezes ──────
+// The historical CRIT-2 "floor-glue" bug left the sortie machine stuck in
+// AIRBORNE (y pinned near the ground, no touchdown event) instead of firing
+// TOUCHDOWN_SAFE. This drives the exact same production gate as "full landing
+// cycle" above (evaluateLandingEnvelope + transitionSortie, real functions, not
+// mirrored) through a steep dive back onto the runway and proves the gate
+// always fires within a bounded frame budget — a broken/dead gate would leave
+// the sim stuck in AIRBORNE/RETURN_TO_BASE until the budget runs out and the
+// assertion below fails. (The frozen-position half of the historical bug was a
+// scene/jet.position symptom only observable in the browser — player.js is not
+// Node-importable, poisoned by scene.js — so this covers the state-machine
+// liveness half of the invariant, which is the half pure functions can prove.)
+test('U-AC-3: diving onto the runway from RETURN_TO_BASE always resolves TOUCHDOWN_SAFE — floor-glue is dead', () => {
+  const sortie = createSortieMachine();
+  transitionSortie(sortie, SortieEvent.START, {}, 0);
+  transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, 0.1);
+  transitionSortie(sortie, SortieEvent.LIFTOFF, {}, 1);
+  transitionSortie(sortie, SortieEvent.ALL_TARGETS_DESTROYED, {}, 2); // → RETURN_TO_BASE
+  assert.equal(sortie.state, SortieState.RETURN_TO_BASE);
+
+  const dt = 1 / 60;
+  const contactHeight = airportHeightAt(-160, 120, 0);
+  let y = 30, verticalSpeed = -9; // steep dive back onto the runway
+  const speed = 42;
+  let t = 0;
+  let touchdownFrame = null;
+  const MAX_FRAMES = 60 * 5; // 5 s — generous ceiling for a steep dive from 30 m
+
+  for (let i = 0; i < MAX_FRAMES && touchdownFrame === null; i++) {
+    t += dt;
+    y += verticalSpeed * dt;
+    const altitudeAboveGround = y - contactHeight;
+    const envelope = evaluateLandingEnvelope({
+      speed, verticalSpeed, pitch: 0, roll: 0, surface: 'runway', altitudeAboveGround,
+    });
+    if (sortie.state === SortieState.RETURN_TO_BASE && envelope.touchdownReady) {
+      transitionSortie(sortie, SortieEvent.TOUCHDOWN_SAFE, {}, t);
+      touchdownFrame = i;
+    }
+  }
+
+  assert.ok(touchdownFrame !== null,
+    'dive-to-runway never triggered TOUCHDOWN_SAFE within the frame budget — floor-glue (stuck forever) reproduced');
+  assert.equal(sortie.state, SortieState.LANDING_ROLL);
+  assert.ok(touchdownFrame < MAX_FRAMES - 1, 'touchdown fired right at the frame budget ceiling — too close to call');
+});
+
 // ─── T-06: smooth takeoff — eased pitch RATE spool, no step transitions ─────────
 // Root cause (SPEC point 3): the rotation PITCH RATE snapped from 0 to full rate
 // (PLAYER.PITCH_RATE * 0.35) the instant `speed >= V_ROTATE` first became true — the

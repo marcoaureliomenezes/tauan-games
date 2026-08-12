@@ -10,26 +10,13 @@ test.setTimeout(120000); // teto de wall clock p/ game time lento sob load alto 
 // T-07 (v0.10.0): único waitForTimeout mantido de propósito (justificativa inline):
 //   1200ms no teste 'keeps aircraft grounded' — janela de estabilidade: prova que
 //   o estado/y NÃO muda após NEXT_SORTIE_READY (o before/after É a asserção).
-
-test('MR service scene debug path refills heavy/nuke/rod — NOT light (infinite)', async ({ page }) => {
-  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=desert&seed=mr-service');
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
-  await page.evaluate(() => {
-    window.game.player.missiles = 0;
-    window.game.player.heavyMissiles = 0;
-    window.game.player.nuclearMissiles = 0;
-    window.game.missionRealism.sortie.state = 'SERVICE_SCENE';
-    window.game.running = true;
-  });
-  await page.waitForFunction(() => window.__aeroDebug.getSnapshot().serviceProgress > 0, { timeout: 3000 });
-  // 20 s: sob carga o rAF desacelera e o serviço (duração em dt SIMULADO) leva
-  // mais tempo de parede — flakava sem bug (2026-07-02). Asserções inalteradas.
-  await page.waitForFunction(() => window.__aeroDebug.getSnapshot().serviceState === 'complete', { timeout: 20000 });
-  const inv = await page.evaluate(() => window.__aeroDebug.getSnapshot().weaponInventory);
-  expect(inv.heavyMissiles).toBe(10);
-  expect(inv.nuclearMissiles).toBe(3);
-  expect(inv.missiles).toBe(0); // T-C-08: leve infinito — o serviço NÃO o recarrega
-});
+//
+// T-01 (v0.11.0, test lifecycle demotion): "MR service scene debug path refills
+// heavy/nuke/rod — NOT light" deleted — the real refill behavior is proven by
+// tools/test-aero-sortie-sim.js:66 ("service refills full current armament only
+// at completion") + tools/test-aero-weapons-sim.js:265 ("rod ammo refills to
+// MISSILES_ROD.MAX at service completion"), both driving the real
+// service-scene.js#updateService function this E2E only re-checked indirectly.
 
 test('MR service complete keeps aircraft grounded and tells player how to restart', async ({ page }) => {
   // T-C-14 (campaign-v1 — SPEC §F): em Inhaúma o "completed-gate" da surtida

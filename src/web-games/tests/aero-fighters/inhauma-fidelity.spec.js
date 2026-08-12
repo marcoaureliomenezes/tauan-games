@@ -6,17 +6,22 @@ const { test, expect } = require('@playwright/test');
 // the roads, airport kept clear, mountains present, renderer budget) and would FAIL
 // against the old dump. (The prior spec asserted >500 roads / >10000 nodes — it was
 // the false "confirmation" the operator distrusted; it is intentionally replaced.)
+//
+// T-01 (v0.11.0, test lifecycle demotion): "roads are FEW, continuous splines"
+// deleted — proven by tools/validate-aero-map.js (INHAUMA_ROADS +
+// getRoadGraphDiagnostics, same source the E2E read via getMapDiagnostics().roadGraph).
+// "keeps regional city orientation" and "contains the required Inhauma landmarks"
+// deleted — rebaixados para tools/test-aero-map-constants.mjs. "traffic circulates
+// ON the roads" deleted — proven by tools/test-aero-citywar.mjs:229 (military
+// traffic on-road/off-shelf/off-airport, 300s sim). "terrain samples prove hills,
+// ridge and valley" deleted — proven by tools/test-aero-sim.js:397 ("AC-01:
+// mountain chains reach well above the valley floor"). "airport runway is flat and
+// campaign targets are grounded" deleted — proven by tools/test-aero-sim.js:436
+// ("airport clearing stays operational") + tools/test-aero-formations.mjs:188
+// (exclusion/grounding invariants over 600s sim). The two DEM-attribution tests
+// (:312/:332) were merged into one below.
 
 test.setTimeout(180000); // boot da cena Inhaúma passa de 60 s sob load alto (2026-07-21)
-
-// T-07 (v0.10.0): os 2 waitForTimeout deste spec foram MANTIDOS de propósito
-// (justificativa inline em cada um):
-//   traffic 4×450ms   — timeline de MEDIÇÃO: cada snapshot é assertado e o
-//                       deslocamento dos carros é medido sobre o intervalo fixo
-//   visual smoke 1000ms — ponto de amostragem CALIBRADO: o orçamento de draw calls
-//                       (<450) foi medido neste instante (meio da transição de
-//                       câmera, pior caso); amostrar "depois de estabilizar"
-//                       mudaria o significado da asserção
 
 async function openInhauma(page, seed = 'inhauma-fidelity') {
   const errors = [];
@@ -35,10 +40,6 @@ async function openInhauma(page, seed = 'inhauma-fidelity') {
   return errors;
 }
 
-function byId(items, id) {
-  return items.find((item) => item.id === id);
-}
-
 test.describe('Aero Fighters — Inhauma fidelity', () => {
   test('loads the inhauma map with the required diagnostic contract', async ({ page }) => {
     const errors = await openInhauma(page);
@@ -54,288 +55,31 @@ test.describe('Aero Fighters — Inhauma fidelity', () => {
     expect(diag.airport?.id).toBe('aerodromo-inhauma');
   });
 
-  test('roads are FEW, continuous splines — not the OSM spiderweb', async ({ page }) => {
-    await openInhauma(page, 'inhauma-roads');
-    const diag = await page.evaluate(() => window.__aeroDebug.getMapDiagnostics());
-    const rg = diag.roadGraph;
-
-    // Few continuous roads (course-correction): a small authored set, NOT 500+ OSM ways.
-    expect(diag.roads.length).toBeGreaterThanOrEqual(3);
-    expect(diag.roads.length).toBeLessThanOrEqual(12);
-    expect(rg.source).toBe('inhauma-authored-continuous-v2');
-    expect(rg.edgeCount).toBe(diag.roads.length);
-
-    // Anti-spiderweb guard: the whole network is a few hundred points, not ~18k segments.
-    const totalPoints = diag.roads.reduce((sum, road) => sum + road.points.length, 0);
-    expect(totalPoints).toBeLessThan(2000);
-
-    // Each road is a single CONTINUOUS polyline (dense, no jumps between samples).
-    for (const road of diag.roads) {
-      expect(road.points.length).toBeGreaterThanOrEqual(10);
-      let maxGap = 0;
-      for (let i = 1; i < road.points.length; i++) {
-        maxGap = Math.max(maxGap, Math.hypot(road.points[i].x - road.points[i - 1].x, road.points[i].z - road.points[i - 1].z));
-      }
-      expect(maxGap, `road ${road.id} has a gap`).toBeLessThan(25);
-    }
-
-    // Clean geometry that follows the terrain smoothly (no cliffs / zero-length spikes).
-    expect(rg.renderClasses?.highway).toBeGreaterThanOrEqual(1);
-    expect(rg.renderClasses?.regional).toBeGreaterThanOrEqual(1);
-    expect(rg.renderClasses?.street).toBeGreaterThanOrEqual(1);
-    expect(rg.geometry?.zeroLengthSegments).toBe(0);
-    expect(rg.geometry?.maxSegmentLength).toBeLessThan(30);
-    expect(rg.geometry?.roadBedSmoothness?.sampleCount).toBeGreaterThan(100);
-    expect(rg.geometry?.roadBedSmoothness?.p99AdjacentHeightDelta).toBeLessThan(8);
-    expect(rg.roadBed?.segmentCount).toBeGreaterThan(diag.roads.length);
-    expect(rg.roadBed?.segmentCount).toBeGreaterThan(100);
-    expect(rg.roadBed?.bucketCount).toBeGreaterThan(20);
-
-    // A handful of real intersections — not thousands of OSM junction patches.
-    expect(rg.intersections?.candidateCount).toBeLessThanOrEqual(20);
-    expect(rg.intersections?.renderedCount).toBe(rg.intersections.candidateCount);
-    expect(rg.intersections?.omittedCount).toBe(0);
-
-    // Road furniture + named-route signage still present.
-    expect(rg.renderDetails?.routeLabelSignCount).toBeGreaterThanOrEqual(4);
-    expect(rg.namedRoutes?.['mg-238']?.pointCount).toBeGreaterThan(30);
-
-    // NO road touches the runway, safety area, or approach corridors.
-    const airportConflicts = [];
-    for (const road of diag.roads) {
-      for (const p of road.points) {
-        const zone = rg.airportExclusionZones.find((c) =>
-          Math.abs(p.x - c.cx) <= c.halfW && Math.abs(p.z - c.cz) <= c.halfL);
-        if (zone) airportConflicts.push({ road: road.id, zone: zone.id, ...p });
-      }
-    }
-    expect(airportConflicts).toEqual([]);
-  });
-
-  test('keeps regional city orientation faithful to the reference route', async ({ page }) => {
-    await openInhauma(page, 'inhauma-orientation');
-    const diag = await page.evaluate(() => window.__aeroDebug.getMapDiagnostics());
-    const inhauma = byId(diag.cities, 'inhauma');
-    const cachoeira = byId(diag.cities, 'cachoeira-da-prata');
-    const sete = byId(diag.cities, 'sete-lagoas');
-
-    expect(inhauma).toBeTruthy();
-    expect(cachoeira).toBeTruthy();
-    expect(sete).toBeTruthy();
-    expect(cachoeira.x).toBeLessThan(inhauma.x - 350);
-    expect(cachoeira.z).toBeGreaterThan(inhauma.z + 150);
-    expect(sete.x).toBeGreaterThan(inhauma.x + 600);
-    expect(sete.z).toBeLessThan(inhauma.z - 150);
-  });
-
-  // T-10 (v0.2.11), round 2: this test used to measure each
-  // landmark's distance against the INHAUMA_CITIES 'inhauma' diagnostic circle
-  // (x:0, z:0, radius:260 in inhauma.js). That circle is hand-authored, diagnostics-only
-  // metadata -- grepped for every consumer: it is exposed by debug.js and read only here
-  // and by the "keeps regional city orientation" test above, whose assertions are
-  // relative offsets between OTHER cities and never depend on this circle's exact value.
-  // T-09 (commit a0fc356) relocated the whole terraced downtown onto the valley shelf
-  // near the airport (buildTown's DOWNTOWN_CENTER = {x:-370,z:-20} in
-  // inhauma-scene.js) but this unrelated 'inhauma' city circle was never repositioned to
-  // match, so 2 of the 4 civil landmarks (campo-inhauma measured 414m, praca-central
-  // measured 390m from (0,0)) now fall outside the old radius+120=380m threshold -- a
-  // stale-diagnostic-fixture failure, not a product bug: PLAZA={x:-390,z:0} and
-  // FIELDS=[{x:-410,z:-60},{x:-250,z:-40}] in inhauma-scene.js match INHAUMA_LANDMARKS
-  // exactly, i.e. the landmarks themselves ARE at their real, correct production
-  // positions (confirmed by the same PLAZA/FIELDS constants that gate the paved-ground
-  // material there); only the unrelated 'inhauma' city circle is stale.
-  //
-  // Replaced the city-circle proxy with a direct clustering assertion against the
-  // landmarks' own centroid -- this measures the actual invariant under test ("the civil
-  // landmarks form a real, walkable downtown"), independent of the untracked city-circle
-  // metadata, and is materially STRONGER than the original bound (measured max 95m from
-  // centroid today vs. the old 380m city-circle threshold).
-  test('contains the required Inhauma landmarks inside the central city area', async ({ page }) => {
-    await openInhauma(page, 'inhauma-landmarks');
-    const diag = await page.evaluate(() => window.__aeroDebug.getMapDiagnostics());
-    const required = [
-      'igreja-inhauma',
-      'campo-inhauma',
-      'area-lazer-manga',
-      'praca-central-inhauma',
-      'aerodromo-inhauma',
-    ];
-
-    for (const id of required) {
-      expect(byId(diag.landmarks, id), `${id} missing`).toBeTruthy();
-    }
-
-    const civilIds = ['igreja-inhauma', 'campo-inhauma', 'area-lazer-manga', 'praca-central-inhauma'];
-    const civil = civilIds.map((id) => byId(diag.landmarks, id));
-    const centroid = {
-      x: civil.reduce((sum, l) => sum + l.x, 0) / civil.length,
-      z: civil.reduce((sum, l) => sum + l.z, 0) / civil.length,
-    };
-    for (const landmark of civil) {
-      const d = Math.hypot(landmark.x - centroid.x, landmark.z - centroid.z);
-      expect(d, `${landmark.id} not clustered with the rest of downtown`).toBeLessThan(160);
-    }
-
-    // The airport stays well clear of the civilian downtown cluster (measured ~415m).
-    const airport = byId(diag.landmarks, 'aerodromo-inhauma');
-    const airportDistance = Math.hypot(airport.x - centroid.x, airport.z - centroid.z);
-    expect(airportDistance, 'airport too close to the civilian downtown cluster').toBeGreaterThan(300);
-  });
-
-  test('traffic circulates ON the roads, grounded, never on the airport', async ({ page }) => {
-    await openInhauma(page, 'inhauma-traffic-grounded');
-    const timeline = [];
-    for (let i = 0; i < 4; i++) {
-      // T-07 KEPT: janela de medição — cada um dos 4 snapshots é assertado
-      // individualmente e o deslocamento dos carros é medido sobre o intervalo
-      // fixo de 450 ms; a cadência é o instrumento, não espera por estado.
-      await page.waitForTimeout(450);
-      timeline.push(await page.evaluate(() => window.__aeroDebug.getMapDiagnostics().traffic));
-    }
-    const traffic = timeline[timeline.length - 1];
-    expect(traffic?.routeCount).toBeGreaterThanOrEqual(3);
-    expect(traffic?.carCount).toBeGreaterThanOrEqual(20);
-    expect(traffic?.active?.classSpeedBands?.['3'] || traffic?.active?.classSpeedBands?.['4']).toBeTruthy();
-
-    // Cars actually move (circulate) across the timeline.
-    const firstSamples = timeline.map((t) => t?.active?.samples?.[0]).filter(Boolean);
-    expect(firstSamples.length).toBe(timeline.length);
-    expect(Math.hypot(firstSamples.at(-1).x - firstSamples[0].x, firstSamples.at(-1).z - firstSamples[0].z)).toBeGreaterThan(6);
-
-    for (const snapshot of timeline) {
-      expect(snapshot?.active?.checkedCars).toBeGreaterThanOrEqual(25);
-      expect(snapshot?.active?.samples?.length).toBeGreaterThan(0);
-      expect(snapshot?.active?.airportSurfaceSamples).toBe(0);
-      expect(snapshot?.active?.airportExclusionSamples).toBe(0);
-      expect(snapshot?.active?.offRoadSamples).toBe(0);
-      expect(snapshot?.active?.wheelHeightViolations).toBe(0);
-      expect(snapshot?.active?.maxClearanceError).toBeLessThanOrEqual(0.02);
-      expect(snapshot?.active?.pitchAlignedCars).toBe(snapshot.active.checkedCars);
-      expect(snapshot?.active?.maxBodyPitchDeg).toBeLessThanOrEqual(19);
-    }
-  });
-
-  // T-10 (v0.2.11): this test used to key its sample points off
-  // diag.terrainRegions (serra-sete-lagoas / morros-oeste-inhauma / morro-norte-inhauma /
-  // vale-cachoeira-prata), which are positions from the v0.2.0 FBM-era INHAUMA_FEATURES
-  // list. T-03 replaced the FBM base with the real DEM and explicitly neutralized
-  // INHAUMA_FEATURES's height contribution (see the comment above that export in
-  // inhauma-scene.js: "esses nomes/posições apontavam para morros autorais que já não
-  // existem" — those names/positions no longer correspond to real terrain). This is a
-  // STALE EXPECTATION, not a product bug: terrainRegions is diagnostics-only metadata,
-  // consumed nowhere in gameplay, only by this test. Replaced with coordinates
-  // independently verified against the live DEM (node probe against
-  // inhaumaContinuousHeight, 2026-07-15 — matches the same production height chain this
-  // page reads via getTerrainHeightAt), reusing the exact two points and the +400 m
-  // margin already established by the Node sim test's AC-01 assertion
-  // ('mountain chains reach well above the valley floor', test-aero-sim.js) — an EQUALLY
-  // STRONG invariant against the new terrain, now proven end-to-end through the live
-  // rendered page instead of Node math alone, plus a third chain on a distinct flank and
-  // a genuine second valley-floor sample (the DEM-drainage river's own polyline
-  // midpoint, T-05/AC-03) to keep the "hills, ridge AND valley" breadth of the original
-  // assertion.
-  test('terrain samples prove hills, ridge and Cachoeira valley are represented', async ({ page }) => {
-    await openInhauma(page, 'inhauma-terrain');
-    const samples = await page.evaluate(() => {
-      const h = window.__aeroDebug.getTerrainHeightAt;
-      return {
-        city: h(0, 0),               // low valley/city floor near the airport (measured ~5.7 m)
-        eastChain: h(9000, 0),        // DEM chain east of the valley (measured ~857 m)
-        southMassif: h(0, 8000),      // DEM massif south of the valley (measured ~1168 m)
-        northChain: h(-1500, -9000),  // DEM chain north-west of the valley (measured ~634 m)
-        riverValley: h(800, -1200),   // real DEM-drainage river polyline midpoint (T-05/AC-03) — a
-                                       // second, distinct valley-floor location (measured ~8.8 m)
-      };
-    });
-
-    expect(Object.values(samples).every(Number.isFinite)).toBe(true);
-    // Valley/city floor stays low (same 20 m bound the Node AC-01 sim test uses for its
-    // own valley-floor sample at the origin).
-    expect(samples.city).toBeLessThan(20);
-    expect(samples.riverValley).toBeLessThan(20);
-    // Chains on 3 distinct flanks all rise well above the valley floor — same 400 m
-    // margin as the Node AC-01 sim assertion (real DEM peaks reach ~1281 m; the old FBM
-    // terrain topped out at ~140 m, so 400 m is only meaningful post-T-03).
-    expect(samples.eastChain).toBeGreaterThan(samples.city + 400);
-    expect(samples.southMassif).toBeGreaterThan(samples.city + 400);
-    expect(samples.northChain).toBeGreaterThan(samples.city + 400);
-  });
-
-  // T-C-14 (release v0.3.4 — SPEC §F): "mission targets"
-  // em Inhaúma passaram a ser os alvos da CAMPANHA — unidades da guarnição de
-  // Cachoeira + formações do Ato 1 (tipos 'f*'), spawnadas por formation.js com
-  // exclusões duras (TOWN_SHELF/cidades/aeroporto/rio) e snap de altura sobre a
-  // superfície renderizada. As invariantes (grounded, longe dos marcos civis) valem
-  // igual para esse novo barramento.
-  test('airport runway is flat and campaign targets are grounded away from civil landmarks', async ({ page }) => {
-    await openInhauma(page, 'inhauma-airport-targets');
-    await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 5000 });
-    const result = await page.evaluate(() => {
-      const diag = window.__aeroDebug.getMapDiagnostics();
-      const airport = diag.airport;
-      const runway = airport.runwayBounds;
-      const heights = [];
-      for (let dz = -runway.length / 2; dz <= runway.length / 2; dz += 80) {
-        for (let dx = -runway.width / 2; dx <= runway.width / 2; dx += 12) {
-          heights.push(window.__aeroDebug.getTerrainHeightAt(runway.center.x + dx, runway.center.z + dz));
-        }
-      }
-      const targets = window.__aeroDebug.getTargetDiagnostics();
-      const landmarks = diag.landmarks.filter((l) => ['igreja-inhauma', 'campo-inhauma', 'area-lazer-manga', 'praca-central-inhauma'].includes(l.id));
-      const onCivil = targets.filter((target) => landmarks.some((landmark) =>
-        Math.hypot(target.x - landmark.x, target.z - landmark.z) < landmark.radius + 18,
-      ));
-      // T-C-14: os proxies 'mg060-military' (T-C-11) seguem a DEM contínua da
-      // estrada (ver map.spec.js) — fora do check bilinear de grounded; os alvos
-      // da CAMPANHA (guarnição/formações) assentam na superfície renderizada.
-      const isMil = (target) => window.game.targets[target.id]?.formationId === 'mg060-military';
-      return {
-        flat: heights.every((h) => Math.abs(h - airport.elevation) < 0.001),
-        grounded: targets.filter((target) => !isMil(target) && !target.grounded),
-        onCivil,
-        targetCount: targets.length,
-      };
-    });
-
-    expect(result.flat).toBe(true);
-    expect(result.targetCount).toBeGreaterThan(0);
-    expect(result.grounded).toEqual([]);
-    expect(result.onCivil).toEqual([]);
-  });
-
-  // AC-09 (v0.2.11, T-10): the Tilezen/joerd (AWS Terrain Tiles)
-  // attribution required by the DEM's attribution-only license must be visible in-game,
-  // not just recorded in the vendored asset's JSON metadata. It is shown in the start
-  // overlay (main.js#selectMap -> hud.js#showOverlay) BEFORE the player presses Space —
-  // i.e. before openInhauma()'s helper would dismiss it — so this test intentionally
-  // does NOT reuse openInhauma() and inspects the overlay first.
-  test('DEM attribution credit is visible in-game before takeoff (AC-09)', async ({ page }) => {
+  // AC-09 (v0.2.11, T-10) — merged (T-01, v0.11.0): the Tilezen/joerd (AWS Terrain
+  // Tiles) attribution required by the DEM's attribution-only license must be
+  // visible in-game (start overlay) for the Inhaúma map, AND must not leak into a
+  // non-DEM map's overlay (islands). Both halves of the same AC-09 contract, one test.
+  test('DEM attribution credit is visible for Inhauma, and does not leak into a non-DEM map (islands) (AC-09)', async ({ page }) => {
     const errors = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     page.on('pageerror', (e) => errors.push(e.message));
 
     await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=inhauma-attribution');
-    await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 }); // idem helper (load)
+    await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
     await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
-
-    const overlay = page.locator('#overlay');
-    await expect(overlay).toBeVisible();
-    await expect(overlay).toContainText('Terrain data © Tilezen/joerd — AWS Terrain Tiles');
-
-    // The credit is Inhaúma-specific (the other 3 maps have no DEM asset, no
-    // attribution owed) — assert it does NOT leak into another map's start overlay.
+    const inhaumaOverlay = page.locator('#overlay');
+    await expect(inhaumaOverlay).toBeVisible();
+    await expect(inhaumaOverlay).toContainText('Terrain data © Tilezen/joerd — AWS Terrain Tiles');
     await page.keyboard.press('Space');
     await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
     expect(errors).toEqual([]);
-  });
 
-  test('DEM attribution credit does not leak into a non-DEM map (islands)', async ({ page }) => {
     await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=islands&seed=inhauma-attribution-negative');
     await page.waitForSelector('canvas', { state: 'attached', timeout: 15000 });
     await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 15000 });
-    const overlay = page.locator('#overlay');
-    await expect(overlay).toBeVisible();
-    await expect(overlay).not.toContainText('Tilezen');
+    const islandsOverlay = page.locator('#overlay');
+    await expect(islandsOverlay).toBeVisible();
+    await expect(islandsOverlay).not.toContainText('Tilezen');
   });
 
   test('player can taxi straight from Inhauma aerodrome and take off', async ({ page }) => {

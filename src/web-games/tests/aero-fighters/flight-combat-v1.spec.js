@@ -1,38 +1,23 @@
 // flight-combat-v1.spec.js — six-point acceptance smoke + rod e2e for release
 // v0.2.12 (T-10, qa-engineer final gate).
 //
-// T-C-14 (release v0.3.4 — SPEC §F) re-check: estes ACs
-// rodam no mapa DEFAULT (islands — main.js#selectMap), que segue o loop arcade
-// legado intocado (waves + layout fixo; boss.js continua existindo mas NENHUM AC
-// aqui depende dele). As armas (homing/nuke/rod) operam sobre game.targets —
-// barramento único preservado pela campanha (registerAsTargets coloca unidades
-// 'f*' no mesmo fluxo de dano), então as invariantes de arma deste arquivo valem
-// nos dois mundos; os tipos estáticos manipulados abaixo só existem nos mapas de
-// waves, por isso os testes NÃO são replicados para Inhaúma (cobertura de
-// campanha: test-aero-campaign.mjs / test-aero-formations.mjs / smoke AC-12).
-//
-// Mirrors the existing smoke.spec.js/uplift.spec.js/nuclear-fx.spec.js convention:
-// dynamic `import()` of the real ES modules served by the static dev server to reach
-// module-scope singletons (`jet`, `scene`, `audio`) that are not exposed on `window`,
-// same technique already used by nuclear-fx.spec.js (`import('/src/web-games/aero-fighters/src/nuclear-fx.js')`)
-// and uplift.spec.js (`import('/src/web-games/aero-fighters/src/world.js')`).
+// T-01 (v0.11.0, test lifecycle demotion): AC-01/AC-02/AC-04/AC-05/AC-06 deleted —
+// each is already proven deterministically by tools/*.js (see the demotion map,
+// §2.4): AC-01 -> test-aero-taxi-sim.js:40/:172/:188; AC-02 -> test-aero-unit.js:281
+// + detents; AC-04 -> test-aero-sortie-sim.js:155/:404; AC-05 ->
+// test-aero-weapons-sim.js:49/:64/:78 + test-aero-unit.js:65; AC-06 ->
+// test-aero-sim.js:569. AC-07 keeps only its HUD residual (rod chain kills +
+// cooldown-arm are proven by test-aero-weapons-sim.js:241/:256 + cooldowns.js).
 //
 // Node-level mechanics (80% hit-rule stats, rod-chain selection, nuke radii/timeline,
 // taxi-containment, takeoff-jump bounds, throttle-stage boundaries) are already proven
 // deterministically by tests/aero-fighters/tools/*.js (test:aero:sim + test:aero:unit).
-// This file only smoke-checks the OBSERVABLE behavior in a real browser tick, per the
-// SPEC's own "Test" wording for each AC.
+// AC-03 (WebAudio graph + zero file/network fetch) cannot move to Node — it needs a
+// real AudioContext and network interception, per the SPEC's own "Test" wording.
 
 const { test, expect } = require('@playwright/test');
 
 test.setTimeout(120000); // teto de wall clock p/ game time lento sob load alto (2026-07-21)
-
-// T-07 (v0.10.0) — todos os sleeps fixos deste spec viraram waitForFunction sobre
-// estado real (init de módulos, surtida, velocidade de rotação, throttle, lock-on,
-// spawn de míssil, varredura do filtro de áudio). Os loops de amostragem in-page
-// (AC-01 8 s, AC-04 6 s, AC-05 3 s) permanecem: são janelas de medição/janelas de
-// estabilidade instrumentadas (deltas por amostra, ordem de estados), não sleeps
-// ociosos — justificativa inline em cada um.
 
 // Init real dos módulos ES (mesmo contrato do smoke.spec.js AC-2).
 function modulesLoaded(page, timeout = 15000) {
@@ -42,14 +27,6 @@ function modulesLoaded(page, timeout = 15000) {
        && typeof window.game.running === 'boolean',
     { timeout },
   );
-}
-
-// Lock-on real (crosshair.js#missileLockedTarget, 0.35 s no cone).
-function waitLockOn(page, timeout = 3000) {
-  return page.waitForFunction(async () => {
-    const { missileLockedTarget } = await import('/src/web-games/aero-fighters/src/crosshair.js');
-    return !!missileLockedTarget();
-  }, { timeout });
 }
 
 async function startGame(page) {
@@ -64,99 +41,6 @@ async function startGame(page) {
     { timeout: 4000 },
   );
 }
-
-// ─── AC-01 (D-4): roll-out keeps the player in control and on pavement; guided
-// taxi arms only at/under TAXI_HANDOFF_SPEED on paved surface ──────────────────
-test('T-10/AC-01: roll-out stays on pavement; guided taxi arms only at handoff speed on paved surface', async ({ page }) => {
-  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=qa-rollout');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
-  await page.keyboard.press('Space');
-  await page.waitForFunction(() => window.game.running === true, { timeout: 5000 });
-
-  // Arm the SAME ground-block code path a real touchdown reaches (player.js
-  // updatePlayer, GROUND_STATES.has(LANDING_ROLL)) — fast, low-throttle, positioned
-  // on the Inhaúma touchdown zone (runway center x=-560, touchdown z-range [60,220],
-  // landing direction north->south / increasing z — per T-04 handoff geometry facts).
-  await page.evaluate(async () => {
-    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
-    const mr = window.game.missionRealism;
-    mr.sortie.state = 'LANDING_ROLL';
-    mr.autoTaxi.active = false;
-    mr.autoTaxi.phase = 'idle';
-    mr.ground.groundSpeed = 55;
-    window.game.player.throttle = 0.05; // idle — spools down naturally, no throttle input
-    window.game.player.speed = 55;
-    jet.position.set(-560, 5, 100);
-    jet.quaternion.set(0, 1, 0, 0); // face +z (south) toward taxiway/apron, 180deg from default -z forward
-  });
-
-  const result = await page.evaluate(async () => {
-    const { airportSurface } = await import('/src/web-games/aero-fighters/src/landing-zones.js');
-    // T-07 KEPT: janela de medição/estabilidade in-page — amostra surface/speed/autoTaxi
-    // a cada 80 ms até o handoff (ou 8 s) para provar que o auto-taxi NUNCA arma acima
-    // da velocidade de handoff (condição negativa sobre a série, não espera por estado).
-    const samples = [];
-    let handoffSpeed = null;
-    const t0 = performance.now();
-    while (performance.now() - t0 < 8000) {
-      const p = { x: window.game.player.x, z: window.game.player.pz };
-      const surface = airportSurface(p, 'inhauma');
-      const autoActive = window.game.missionRealism.autoTaxi.active;
-      const speed = window.game.player.speed;
-      samples.push({ surface, autoActive, speed });
-      if (autoActive && handoffSpeed === null) handoffSpeed = speed;
-      if (autoActive) break;
-      await new Promise((r) => setTimeout(r, 80));
-    }
-    return { samples, handoffSpeed };
-  });
-
-  expect(result.samples.length).toBeGreaterThan(3);
-  // Never off-pavement (AC-01: airportSurface is never 'none' at any sample).
-  expect(result.samples.every((s) => s.surface !== 'none')).toBe(true);
-  // Never captured (auto-taxi armed) while still going faster than the handoff speed.
-  const capturedWhileFast = result.samples.filter((s) => s.speed > 34).some((s) => s.autoActive);
-  expect(capturedWhileFast).toBe(false);
-  // Handoff eventually fires, and only at/under the threshold.
-  expect(result.handoffSpeed).not.toBeNull();
-  expect(result.handoffSpeed).toBeLessThanOrEqual(34);
-});
-
-// ─── AC-02 (D-6): throttle detents + afterburner plume gated at military+, largest
-// at afterburner ─────────────────────────────────────────────────────────────
-test('T-10/AC-02: afterburner plume is hidden at idle, visible+scaled-up at full throttle', async ({ page }) => {
-  await startGame(page);
-
-  const idle = await page.evaluate(async () => {
-    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
-    return {
-      throttle: window.game.player.throttle,
-      visible: jet.userData.afterburnerPlume.visible,
-      scaleX: jet.userData.afterburnerPlume.scale.x,
-    };
-  });
-  expect(idle.throttle).toBeLessThanOrEqual(0.10); // idle detent (config.js THROTTLE_IDLE_MAX)
-  expect(idle.visible).toBe(false);
-
-  // Ramp throttle to afterburner (>0.80) via sustained W.
-  await page.keyboard.down('KeyW');
-  // T-07: polling do detent real de afterburner (throttle > 0.80) em vez de janela fixa
-  await page.waitForFunction(() => window.game.player.throttle > 0.80, { timeout: 13000 });
-  await page.keyboard.up('KeyW');
-
-  const full = await page.evaluate(async () => {
-    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
-    return {
-      throttle: window.game.player.throttle,
-      visible: jet.userData.afterburnerPlume.visible,
-      scaleX: jet.userData.afterburnerPlume.scale.x,
-    };
-  });
-  expect(full.throttle).toBeGreaterThan(0.80); // afterburner detent
-  expect(full.visible).toBe(true);
-  expect(full.scaleX).toBeGreaterThan(idle.scaleX); // AC-02: plume scale at afterburner > at idle
-});
 
 // ─── AC-03 (D-7): turbine engine synth — swept-bandpass noise core + detuned
 // whine oscillator layer, 100% synthesized (no file/network fetch) ─────────────
@@ -209,203 +93,11 @@ test('T-10/AC-03: turbine engine audio graph builds with core+whine composition,
   expect(swept).toBeGreaterThan(graph.coreFreq0); // bandpass center swept up with RPM/throttle
 });
 
-// ─── AC-04: smooth takeoff — no instant altitude/position jump; legal sortie-state
-// sequence (no skip/revert) ──────────────────────────────────────────────────
-test('T-10/AC-04: takeoff roll->rotation->liftoff has no single-sample position/altitude jump, sortie state advances in legal order', async ({ page }) => {
+// ─── AC-07 (D-3) residual: HUD ROD count label — the rod-chain-kills/cooldown-arm
+// behavior itself is Node-covered (test-aero-weapons-sim.js:241/:256); this keeps
+// only the observable Node cannot reach: the real HUD text in a running browser. ──
+test('T-10/AC-07: rod HUD displays the R ROD: label', async ({ page }) => {
   await startGame(page);
-
-  // Sample every ~100ms while driving a real takeoff (mirrors smoke.spec.js AC-4/AC-6).
-  // T-07 KEPT: janela de medição in-page — os asserts são deltas entre amostras
-  // consecutivas (Δy por ~100 ms) e a ORDEM da máquina de surtida; a cadência fixa
-  // de amostragem é o instrumento, não uma espera por estado.
-  const samplePromise = page.evaluate(async () => {
-    const samples = [];
-    const t0 = performance.now();
-    while (performance.now() - t0 < 6000) {
-      samples.push({
-        t: performance.now(),
-        y: window.game.player.y,
-        z: window.game.player.pz,
-        pitch: window.game.player.pitch,
-        state: window.game.missionRealism.sortie.state,
-      });
-      if (window.game.missionRealism.sortie.state === 'AIRBORNE' && samples.length > 5) break;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    return samples;
-  });
-  await page.keyboard.down('KeyW');
-  // T-07: polling da velocidade de rotação (ROTATION_SPEED=38, ground-physics.js)
-  await page.waitForFunction(() => window.game.player.speed >= 38, { timeout: 15000 });
-  await page.keyboard.down('ArrowDown');
-  // T-07: polling do liftoff real — segura ↓ até AIRBORNE em vez de tempo fixo
-  await page.waitForFunction(() => window.game.missionRealism.sortie.state === 'AIRBORNE', { timeout: 9000 });
-  await page.keyboard.up('ArrowDown');
-  await page.keyboard.up('KeyW');
-  const samples = await samplePromise;
-
-  expect(samples.length).toBeGreaterThan(5);
-
-  // No single-sample altitude jump (teleport-y hand-off).
-  for (let i = 1; i < samples.length; i++) {
-    const dy = Math.abs(samples[i].y - samples[i - 1].y);
-    expect(dy).toBeLessThan(6); // generous bound for a 100ms sample under headless jitter
-  }
-
-  // Legal, non-reverting sortie-state order: TAXI_OUT/TAKEOFF_ROLL -> AIRBORNE, never backward.
-  const RANK = { MENU: 0, TAXI_OUT: 1, TAKEOFF_ROLL: 2, AIRBORNE: 3, MISSION_ACTIVE: 4 };
-  let maxRank = -1;
-  for (const s of samples) {
-    const r = RANK[s.state] ?? maxRank;
-    expect(r).toBeGreaterThanOrEqual(maxRank); // never reverts to an earlier stage
-    maxRank = Math.max(maxRank, r);
-  }
-  expect(samples[samples.length - 1].state).toBe('AIRBORNE');
-});
-
-// Static (non-patrolling) target types — targets.js only calls a movement updater
-// for 'helicopter'/'tank'/'patrolAir' (updateHelicopter/updateTank/updatePatrolAir in
-// updateTargets); every other type is position-fixed once spawned. Repositioning a
-// moving type is overwritten the very next tick by its own waypoint AI (discovered via
-// a throwaway diagnostic run against game.targets[0], which turned out to be a patrol
-// unit — position snapped to (-360,-10,-580) one frame after being set to the intended
-// spot). Tests that manually place a target MUST pick from this set.
-const STATIC_TARGET_TYPES = ['base', 'factory', 'building', 'convoy', 'armedConvoy', 'aaGun'];
-
-async function pickStaticTargets(page, count) {
-  await page.waitForFunction(
-    ({ types, n }) => window.game.targets.filter((t) => types.includes(t.type)).length >= n,
-    { types: STATIC_TARGET_TYPES, n: count },
-    { timeout: 8000 },
-  );
-  await page.evaluate((types) => {
-    window.__qaStatic = window.game.targets.filter((t) => types.includes(t.type));
-  }, STATIC_TARGET_TYPES);
-}
-
-// ─── AC-05 (D-1): guided missile visibly persists + curves (homing) and, with a
-// forced-HIT seeded roll, guarantees terminal intercept damage ─────────────────
-// T-07 (keep justificado): o offset fixo de 80 ms e a captura por índice são o
-// código ORIGINAL deste AC — a conversão para polling do spawn mostrou-se
-// frágil no CI (transientes de efeito e o frame lento sob carga corrompem
-// identidade/índice: samples=0). Mantido por decisão registrada na T-07.
-test('T-10/AC-05: guided missile (forced HIT) persists, curves via homing, and guarantees intercept damage', async ({ page }) => {
-  await startGame(page);
-  await pickStaticTargets(page, 1);
-  // Deterministic HIT: rollMissileHit does `rng.random() < 0.80` — 0 is always < 0.80.
-  await page.evaluate(() => { window.game.rng = { random: () => 0 }; });
-  await page.evaluate(() => {
-    const t = window.__qaStatic[0];
-    t.mesh.position.set(window.game.player.x + 60, window.game.player.y + 2, window.game.player.pz - 260);
-    t.dead = false;
-    t.hp = 1; // one confirmed hit (MISSILES_LIGHT.DAMAGE=4) must kill it — proves "damages" (D-1), not just "hits"
-  });
-  await page.waitForTimeout(550); // lock-on window (0.35s + margin)
-
-  const before = await page.evaluate(async () => {
-    const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
-    return scene.children.length;
-  });
-  await page.keyboard.press('KeyX');
-  await page.waitForTimeout(80);
-  const idx = await page.evaluate(async (beforeCount) => beforeCount, before);
-
-  const samples = await page.evaluate(async (idx) => {
-    const { scene } = await import('/src/web-games/aero-fighters/src/scene.js');
-    const pts = [];
-    const t0 = performance.now();
-    while (performance.now() - t0 < 3000) {
-      if (window.__qaStatic[0]?.dead) break; // stop before impact removes the mesh (index shift)
-      const m = scene.children[idx];
-      if (!m) break;
-      pts.push({ x: m.position.x, y: m.position.y, z: m.position.z });
-      await new Promise((r) => setTimeout(r, 80));
-    }
-    return pts;
-  }, idx);
-
-  expect(samples.length).toBeGreaterThan(2);
-  const first = samples[0], last = samples[samples.length - 1];
-  const dz = Math.abs(last.z - first.z);
-  expect(dz).toBeGreaterThan(3); // persists and moves across samples (not despawned/frozen)
-  // Curve check (geometric, not orientation-based): a homing pursuit deviates from the
-  // straight line connecting the first and last sampled point; a straight/ballistic shot
-  // would keep every midpoint on that line (perpendicular deviation ~0).
-  const dx = last.x - first.x, ddz = last.z - first.z;
-  const lineLen = Math.hypot(dx, ddz) || 1;
-  let maxDeviation = 0;
-  for (const p of samples) {
-    const t = ((p.x - first.x) * dx + (p.z - first.z) * ddz) / (lineLen * lineLen);
-    const projX = first.x + t * dx, projZ = first.z + t * ddz;
-    maxDeviation = Math.max(maxDeviation, Math.hypot(p.x - projX, p.z - projZ));
-  }
-  // A homing pursuit continuously re-aims (lerp toward the target each frame, D-1/D-2)
-  // and therefore never sits exactly on the straight first->last line, unlike a fixed-
-  // heading ballistic shot (which would measure exactly 0 deviation, module float noise).
-  expect(maxDeviation).toBeGreaterThan(1e-5);
-
-  const dead = await page.waitForFunction(() => window.__qaStatic[0]?.dead === true, { timeout: 8000 })
-    .then(() => true).catch(() => false);
-  expect(dead).toBe(true); // forced-HIT roll guarantees terminal intercept damage
-});
-
-// ─── AC-06 (D-8/D-9): nuke destroys a target within the new BLAST_RADIUS in the
-// real browser (radii/timeline/no-overshoot already covered by nuclear-fx.spec.js
-// and uplift.spec.js U-AC-5; this closes the real-fire destruction-at-range gap) ──
-test('T-10/AC-06: firing the nuke on a locked target within BLAST_RADIUS destroys it', async ({ page }) => {
-  await startGame(page);
-  await pickStaticTargets(page, 1);
-  await page.evaluate(() => {
-    const t = window.__qaStatic[0];
-    // Well inside the new 760m BLAST_RADIUS, on the player's boresight for lock-on.
-    t.mesh.position.set(window.game.player.x, window.game.player.y, window.game.player.pz - 300);
-    t.dead = false;
-    t.hp = t.maxHp ?? 10;
-  });
-  await waitLockOn(page); // T-07: polling do lock-on real (0.35 s no cone)
-  await page.keyboard.press('KeyT');
-  const dead = await page.waitForFunction(() => window.__qaStatic[0]?.dead === true, { timeout: 10000 })
-    .then(() => true).catch(() => false);
-  expect(dead).toBe(true);
-});
-
-// ─── AC-07 (D-3): rod (R) — permanent e2e (flagged gap from the Lane C handoff) —
-// fires without lock, chains kills on clustered targets, ammo decrements once per
-// launch (not per kill), HUD ROD count updates ─────────────────────────────────
-test('T-10/AC-07: rod (R) chains kills on clustered targets, decrements ammo once per launch, updates HUD ROD count', async ({ page }) => {
-  await startGame(page);
-  await pickStaticTargets(page, 3);
-
-  await page.evaluate(() => {
-    const p = window.game.player;
-    const positions = [
-      { x: p.x, y: p.y, z: p.pz - 80 },
-      { x: p.x + 12, y: p.y, z: p.pz - 95 },
-      { x: p.x - 12, y: p.y, z: p.pz - 105 },
-    ];
-    for (let i = 0; i < 3; i++) {
-      const t = window.__qaStatic[i];
-      t.mesh.position.set(positions[i].x, positions[i].y, positions[i].z);
-      t.dead = false;
-      t.hp = t.maxHp ?? 10;
-    }
-  });
-
-  // 2026-08-11: rod sem munição — o disparo arma o cooldown de 5 s UMA vez por
-  // lançamento (não por kill), e o HUD mostra a recarga em vez de contagem.
-  const cdBefore = await page.evaluate(() => window.game.player.weaponCooldowns.rod);
-  expect(cdBefore).toBe(0);
-  await page.keyboard.press('KeyR');
-
-  await page.waitForFunction(
-    () => window.__qaStatic.slice(0, 3).every((t) => t.dead === true),
-    { timeout: 8000 },
-  );
-
-  const cdAfter = await page.evaluate(() => window.game.player.weaponCooldowns.rod);
-  expect(cdAfter).toBeGreaterThan(0); // cooldown armado no lançamento
-  expect(cdAfter).toBeLessThanOrEqual(5.0); // 1 tiro por lançamento → 1 recarga
-
   const hud = await page.evaluate(() => document.getElementById('rod-missiles').textContent);
   expect(hud).toContain('R ROD:');
 });

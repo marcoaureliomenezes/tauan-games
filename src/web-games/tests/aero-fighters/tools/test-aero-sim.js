@@ -49,7 +49,8 @@ import {
 import { INHAUMA_ROAD_CORRIDORS, sampleCorridor } from '../../../aero-fighters/src/maps/inhauma-road-defs.js';
 import { nearAnyRoad } from '../../../aero-fighters/src/maps/inhauma-roads.js';
 
-function runSimpleFlight(seconds, inputAt) {
+function runSimpleFlight(seconds, inputAt, opts = {}) {
+  const { clampPitch = false } = opts;
   const dt = 1 / 60;
   const state = {
     t: 0,
@@ -70,6 +71,11 @@ function runSimpleFlight(seconds, inputAt) {
     state.stalled = isStalled(state.speed, PLAYER);
     if (input.pitchUp) state.pitch += PLAYER.PITCH_RATE * step;
     if (input.pitchDown) state.pitch -= PLAYER.PITCH_RATE * step;
+    // Mirrors player.js#clampPitchAttitude: while pitch input is held, the
+    // attitude is clamped every frame to [PITCH_DOWN_LIMIT, PITCH_UP_LIMIT].
+    if (clampPitch && (input.pitchUp || input.pitchDown)) {
+      state.pitch = Math.max(PLAYER.PITCH_DOWN_LIMIT, Math.min(PLAYER.PITCH_UP_LIMIT, state.pitch));
+    }
     state.y += Math.sin(state.pitch) * state.speed * step;
     state.y -= PLAYER.GRAVITY * step * (state.stalled ? 1 : 0.15);
     state.z -= Math.cos(state.pitch) * state.speed * step;
@@ -99,6 +105,37 @@ test('climb, dive, and recover stays coherent', () => {
 
 test('deliberate terrain crash predicate fires', () => {
   assert.equal(terrainCollision(4, 20, PLAYER), 'MOUNTAIN');
+});
+
+// ─── T-01 demotion (smoke.spec.js AC-6b, deleted): sustained climb input stays
+// inside a playable pitch envelope ────────────────────────────────────────────
+// Mirrors player.js#clampPitchAttitude (poisoned by scene.js/THREE.Quaternion,
+// not Node-importable): every frame with pitch input held, the attitude is
+// clamped to [PLAYER.PITCH_DOWN_LIMIT, PLAYER.PITCH_UP_LIMIT] (player.js:393-397,
+// 663-665) — the REAL config constants imported above, not duplicated numbers.
+// Reuses runSimpleFlight's existing pitchUp convention (nose-up/climb).
+test('AC-6b: 5.2s of sustained climb input stays inside the pitch envelope, never flips into a vertical dive', () => {
+  const result = runSimpleFlight(5.2, () => ({ throttleUp: true, pitchUp: true }), { clampPitch: true });
+  assert.ok(result.state.y > 3);
+  assert.ok(result.state.pitch < 1.0);
+  assert.ok(result.state.pitch > -0.95);
+});
+
+// ─── T-01 demotion (review-fixes.spec.js T-FIX-05, deleted): level cruise has no
+// per-sample trembling ────────────────────────────────────────────────────────
+// Mirrors the E2E's own measurement window exactly: 30 samples at a 100 ms
+// cadence over 3 s (not per-physics-frame) — subsamples the real physics-step
+// trace every 6th internal step (dt=1/60 * 6 = 100 ms) the same way the deleted
+// E2E polled window.game.player.y every 100 ms.
+test('T-FIX-05: level cruise flight is stable — max Δy across 30 samples (100 ms cadence) stays < 0.5 m', () => {
+  const { samples } = runSimpleFlight(3, () => ({ throttleUp: true }));
+  const coarse = samples.filter((_, i) => i % 6 === 0).slice(0, 30);
+  assert.equal(coarse.length, 30);
+  let maxDelta = 0;
+  for (let i = 1; i < coarse.length; i++) {
+    maxDelta = Math.max(maxDelta, Math.abs(coarse[i].y - coarse[i - 1].y));
+  }
+  assert.ok(maxDelta < 0.5, `max per-100ms Δy ${maxDelta.toFixed(3)} m exceeds the 0.5 m stability bound`);
 });
 
 test('current map layouts validate across required maps', () => {

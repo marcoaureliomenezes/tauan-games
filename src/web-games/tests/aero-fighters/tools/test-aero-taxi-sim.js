@@ -13,10 +13,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PLAYER } from '../../../aero-fighters/src/config.js';
+import { MISSILES_HEAVY, PLAYER } from '../../../aero-fighters/src/config.js';
 import { airportSurface } from '../../../aero-fighters/src/landing-zones.js';
 import { desertAirport, inhaumaAirport } from '../../../aero-fighters/src/airport.js';
 import { createSortieMachine, SortieEvent, SortieState, transitionSortie } from '../../../aero-fighters/src/sortie-state.js';
+import { createGroundPhysicsState, updateGroundRoll } from '../../../aero-fighters/src/ground-physics.js';
+import { createServiceState, startService, updateService } from '../../../aero-fighters/src/service-scene.js';
 import {
   advancePathIndex,
   buildTaxiPathIn,
@@ -217,4 +219,101 @@ test('taxi containment: guided-taxi speed never exceeds TAXI_HANDOFF_SPEED post-
   assert.ok(speeds.length > 0);
   const maxTaxiSpeed = Math.max(...speeds);
   assert.ok(maxTaxiSpeed <= HANDOFF_SPEED + 1e-6, `guided taxi exceeded cruise speed: ${maxTaxiSpeed}`);
+});
+
+// ─── T-01 demotion (auto-sortie.spec.js, deleted): unattended ground loop —
+// LANDING_ROLL → SERVICE_SCENE → AIRBORNE with heavy==10, no player input ─────
+// auto-taxi.js itself is poisoned (imports player.js's jet/scene) and cannot be
+// imported in Node, so this drives the SAME pure primitives auto-taxi.js calls
+// (this file's own stepTowardWaypoint/buildTaxiPathIn/advancePathIndex,
+// service-scene.js's real refill path, ground-physics.js's real accel model, and
+// sortie-state.js's real transition table) through the full solo loop — entirely
+// unattended (no manual throttle/pitch input), proving it resolves to AIRBORNE
+// with the armament refilled, matching the deleted E2E's final assertions.
+test('auto-sortie: unattended ground loop resolves LANDING_ROLL -> SERVICE_SCENE -> AIRBORNE with heavy==10', () => {
+  const airport = inhaumaAirport;
+  const sortie = createSortieMachine();
+  transitionSortie(sortie, SortieEvent.START, {}, 0);
+  transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, 0.1);
+  transitionSortie(sortie, SortieEvent.LIFTOFF, {}, 1);
+  transitionSortie(sortie, SortieEvent.ALL_TARGETS_DESTROYED, {}, 2);
+  transitionSortie(sortie, SortieEvent.TOUCHDOWN_SAFE, {}, 3); // → LANDING_ROLL
+  assert.equal(sortie.state, SortieState.LANDING_ROLL);
+
+  const dt = 1 / 60;
+  const MAX_TAXI_FRAMES = 60 * 30;
+  let state = { x: airport.touchdownZone.center.x, z: airport.touchdownZone.center.z, yaw: Math.PI, speed: 34 };
+
+  // Unattended taxi-in, through the taxiway waypoint, to the service zone.
+  const inPath = buildTaxiPathIn(airport);
+  let wpIndex = 0;
+  let frames = 0;
+  const lastIn = inPath[inPath.length - 1];
+  while (wpIndex < inPath.length - 1 || Math.hypot(state.x - lastIn.x, state.z - lastIn.z) > 5) {
+    const target = inPath[wpIndex];
+    const step = stepTowardWaypoint(state, target, dt, { maxSpeed: 34, accel: 8, brake: 12, turnRate: 1.5, arriveRadius: 0.5 });
+    state = { x: step.x, z: step.z, yaw: step.yaw, speed: step.speed };
+    wpIndex = advancePathIndex(wpIndex, step.distance, inPath, 10);
+    frames++;
+    assert.ok(frames < MAX_TAXI_FRAMES, 'unattended taxi-in never reached the service zone');
+  }
+  transitionSortie(sortie, SortieEvent.SERVICE_ZONE_REACHED, {}, 3 + frames * dt); // → TAXI_IN
+  transitionSortie(sortie, SortieEvent.SERVICE_ZONE_REACHED, {}, 3 + frames * dt + 0.1); // → SERVICE_SCENE
+  assert.equal(sortie.state, SortieState.SERVICE_SCENE);
+
+  // Unattended refuel — the real service-scene.js refill path (T-C-08: light stays
+  // infinite and is never touched by the service).
+  const player = { missiles: 0, heavyMissiles: 0, nuclearMissiles: 0, rodMissiles: 0 };
+  const service = createServiceState(true); // testMode fast service
+  startService(service);
+  let serviceT = 0;
+  while (player.heavyMissiles < MISSILES_HEAVY.MAX && serviceT < 30) {
+    updateService(service, dt, player);
+    serviceT += dt;
+  }
+  assert.equal(player.heavyMissiles, MISSILES_HEAVY.MAX, 'unattended service never refilled heavy to MAX');
+  assert.equal(player.missiles, 0, 'T-C-08: light missile is infinite — service must never refill it');
+
+  // Real sortie-state.js transition chain out of SERVICE_SCENE:
+  // SERVICE_SCENE -[SERVICE_COMPLETE]-> NEXT_SORTIE_READY -[NEXT_SORTIE]-> TAXI_OUT.
+  transitionSortie(sortie, SortieEvent.SERVICE_COMPLETE, {}, 3 + frames * dt + 5);
+  assert.equal(sortie.state, SortieState.NEXT_SORTIE_READY);
+  transitionSortie(sortie, SortieEvent.NEXT_SORTIE, {}, 3 + frames * dt + 5.1);
+  assert.equal(sortie.state, SortieState.TAXI_OUT);
+
+  // Unattended taxi back out to the runway threshold.
+  const threshold = { x: airport.runway.center.x, z: airport.runway.center.z - airport.runway.length / 2 + 20 };
+  frames = 0;
+  while (Math.hypot(state.x - threshold.x, state.z - threshold.z) > 5) {
+    const step = stepTowardWaypoint(state, threshold, dt, { maxSpeed: 34, accel: 8, brake: 12, turnRate: 1.5, arriveRadius: 0.5 });
+    state = { x: step.x, z: step.z, yaw: step.yaw, speed: step.speed };
+    frames++;
+    assert.ok(frames < MAX_TAXI_FRAMES, 'unattended taxi-out never reached the runway threshold');
+  }
+  transitionSortie(sortie, SortieEvent.TAXI_TO_RUNWAY, {}, 100); // → TAKEOFF_ROLL
+  assert.equal(sortie.state, SortieState.TAKEOFF_ROLL);
+
+  // Automated ground roll + rotation — no manual W/pitch, same shared accel/lift
+  // model as "auto takeoff (auto-taxi.js takeoff phase model)" above.
+  const ground = createGroundPhysicsState();
+  let throttle = 0.05;
+  let liftoffVsp = 0;
+  let y = airport.elevation + 0.9;
+  let airborne = false;
+  frames = 0;
+  while (!airborne && frames < 60 * 20) {
+    throttle = Math.min(1, throttle + dt * 1.4);
+    updateGroundRoll(ground, { throttleDown: false }, dt, 'runway', throttle);
+    if (ground.groundSpeed >= PLAYER.V_ROTATE) {
+      liftoffVsp += PLAYER.ROTATE_LIFT * dt;
+      y += liftoffVsp * dt;
+      if (y - airport.elevation > 4 && liftoffVsp > 0) airborne = true;
+    }
+    frames++;
+  }
+  assert.ok(airborne, 'automated takeoff roll never reached liftoff altitude');
+  transitionSortie(sortie, SortieEvent.LIFTOFF, {}, 200);
+
+  assert.equal(sortie.state, SortieState.AIRBORNE, 'ground loop never resolved to AIRBORNE');
+  assert.equal(player.heavyMissiles, MISSILES_HEAVY.MAX);
 });

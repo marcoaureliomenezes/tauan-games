@@ -36,6 +36,7 @@ test.describe('Aero Fighters — QA Diagnostics', () => {
   // a ser: mesma seed ⇒ mesma guarnição, bit-a-bit, entre reloads. (Filtra por
   // formationId 'cachoeira-*' para não depender do relógio de parede — os spawns
   // do Ato 1 são escalonados por tempo de campanha e variam com o wall-clock.)
+  // SENTINEL: reload-identity
   test('seeded campaign garrison is stable across reloads (inhauma)', async ({ page }) => {
     const garrisonSnapshot = () =>
       window.game.targets
@@ -56,24 +57,12 @@ test.describe('Aero Fighters — QA Diagnostics', () => {
     expect(second).toEqual(first);
   });
 
-  // O determinismo do layout LEGADO continua valendo nos mapas de waves
-  // (islands/deserto/rio) — spawnMission/targets.js intactos fora de Inhaúma.
-  test('seeded target layout is stable across reloads (legacy map)', async ({ page }) => {
-    await openAero(page, 'rio', 'stable-seed');
-    await startGame(page);
-    await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 4000 });
-    const first = await page.evaluate(() =>
-      window.__aeroDebug.getTargetDiagnostics().map((t) => [t.type, t.spawnX, t.spawnY, t.spawnZ, Number(t.heightError.toFixed(3))])
-    );
-    await page.reload();
-    await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 5000 });
-    await startGame(page);
-    await page.waitForFunction(() => window.game.targets.length > 0, { timeout: 4000 });
-    const second = await page.evaluate(() =>
-      window.__aeroDebug.getTargetDiagnostics().map((t) => [t.type, t.spawnX, t.spawnY, t.spawnZ, Number(t.heightError.toFixed(3))])
-    );
-    expect(second).toEqual(first);
-  });
+  // T-01 (v0.11.0, test lifecycle demotion): "seeded target layout is stable
+  // across reloads (legacy map)" deleted — determinism for the legacy layout
+  // (rio/desert/islands) is proven by tools/test-aero-cachoeira.mjs:196 (seed
+  // determinism pattern) + tools/test-aero-sim.js:111 ("mission spawn validation
+  // across deterministic seeds remains stable"). The reload-identity SENTINEL
+  // above stays as the one browser-boot check for this class.
 
   test('renderer and frame metrics are finite', async ({ page }) => {
     await openAero(page, 'desert', 'metrics-seed');

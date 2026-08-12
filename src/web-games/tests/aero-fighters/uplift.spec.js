@@ -1,7 +1,17 @@
 // uplift.spec.js — ACs da release v0.1.0 (WS-1..WS-6).
-// Cobre: liftoff nos 4 mapas VIA BOTÃO (CRIT-1/CRIT-2b), fim do floor-glue (CRIT-2),
-// verdade de superfície terra/água (HIGH-3), afundamento na água (WS-5),
-// nuke stages + cinematic (WS-6) e altímetro honesto (WS-3).
+// Cobre: liftoff nos mapas VIA BOTÃO (CRIT-1/CRIT-2b), verdade de superfície
+// terra/água (HIGH-3), afundamento na água (WS-5), nuke stages (WS-6) e
+// altímetro honesto (WS-3).
+//
+// T-01 (v0.11.0, test lifecycle demotion): U-AC-1 reduced from 4 maps to 2
+// (desert + inhauma — one legacy-layout map, one campaign map; islands/rio
+// dropped as redundant boots of the same button->takeoff path). U-AC-3
+// ("floor-glue morto") deleted — the state-machine-liveness half of the
+// invariant is proven by tools/test-aero-sortie-sim.js's new U-AC-3 test
+// (diving onto the runway from RETURN_TO_BASE always resolves TOUCHDOWN_SAFE).
+// U-AC-5 reduced to its camera-state residual — the nuke stage timeline itself
+// is proven by tools/test-aero-sim.js:582. U-AC-8 deleted — proven verbatim by
+// tools/test-aero-visual.mjs:133 ("wingman quebra formação p/ hostil aéreo...").
 
 const { test, expect } = require('@playwright/test');
 
@@ -12,11 +22,15 @@ const MAP_BUTTONS = {
   inhauma: 'INHAUMA',
 };
 
+// T-01 (v0.11.0): U-AC-1 only exercises 2 of the 4 buttons (desert — legacy
+// layout map — and inhauma — campaign map) since every button drives the exact
+// same click->takeoff path; islands/rio would be redundant boots. U-AC-4/U-AC-6
+// below still use the full MAP_BUTTONS map via bootViaButton (islands, desert).
+const UPLIFT_MAP_KEYS = ['desert', 'inhauma'];
+
 // T-07 (v0.10.0) — sleeps fixos convertidos em waitForFunction sobre estado real do
 // jogo. Mantidos de propósito (justificativa inline em cada um):
 //   takeOff 400ms        — duração deliberada: mantém nariz para cima através da transição de liftoff
-//   U-AC-3 1600/1500ms   — duração deliberada da manobra de mergulho de volta à pista
-//   U-AC-3 2200ms        — janela de estabilidade s1→s2: prova que o estado degenerado (frozen) NÃO ocorre
 //   U-AC-4 3200/2800ms   — durações deliberadas de voo/mergulho até o corredor de mar aberto e o impacto
 //                          (o resultado já é gated pelos waitForFunction de sinking/overlay logo abaixo)
 
@@ -57,8 +71,8 @@ async function takeOff(page) {
   await page.keyboard.up('KeyW');
 }
 
-test.describe('Uplift — decolagem nos 4 mapas via botão (ADR-U2, CRIT-1/2b)', () => {
-  for (const mapKey of Object.keys(MAP_BUTTONS)) {
+test.describe('Uplift — decolagem via botão (ADR-U2, CRIT-1/2b)', () => {
+  for (const mapKey of UPLIFT_MAP_KEYS) {
     test(`U-AC-1 (${mapKey}): seleção por botão decola e mantém o mapa ativo`, async ({ page }) => {
       await bootViaButton(page, mapKey);
       const before = await page.evaluate(() => ({ map: window.game.activeMap, y: window.game.player.y }));
@@ -97,26 +111,11 @@ test('U-AC-2: verdade de superfície — terra no desert, água no mar aberto (H
   expect(kinds.seaCrash).toBe('WATER');
 });
 
-test('U-AC-3: floor-glue morto — tocar a pista em voo nunca congela (CRIT-2)', async ({ page }) => {
-  await bootViaButton(page, 'desert');
-  await takeOff(page);
-  // Mergulha de volta na pista
-  // T-07 KEPT (1600ms + 1500ms): durações deliberadas da manobra — o mergulho até
-  // a pista leva tempo de voo real; o que se testa é o que acontece AO tocar a
-  // pista em voo (CRIT-2), não um estado observável discreto para polling.
-  await page.keyboard.down('ArrowUp');
-  await page.waitForTimeout(1600);
-  await page.keyboard.up('ArrowUp');
-  await page.waitForTimeout(1500);
-  const s1 = await page.evaluate(() => ({ st: window.game.missionRealism.sortie.state, y: window.game.player.y, z: window.game.player.pz, hp: window.game.player.hp, running: window.game.running, mayday: window.game.flags.mayday }));
-  // T-07 KEPT (2200ms): janela de estabilidade — a prova é NEGATIVA: o estado
-  // degenerado (AIRBORNE, y≈0.9, z congelado) NÃO pode persistir entre s1 e s2.
-  await page.waitForTimeout(2200);
-  const s2 = await page.evaluate(() => ({ st: window.game.missionRealism.sortie.state, y: window.game.player.y, z: window.game.player.pz, hp: window.game.player.hp, running: window.game.running, mayday: window.game.flags.mayday }));
-  // O estado degenerado era: AIRBORNE, y≈0.9, z congelado, hp intacto, sem evento.
-  const frozen = s2.st === 'AIRBORNE' && s2.y < 2 && Math.abs(s2.z - s1.z) < 2 && s2.hp === 3 && s2.running && !s2.mayday;
-  expect(frozen).toBe(false);
-});
+// T-01 (v0.11.0, test lifecycle demotion): U-AC-3 ("floor-glue morto") deleted —
+// the state-machine-liveness half of the invariant (dive onto the runway always
+// resolves the touchdown gate, never gets stuck in AIRBORNE) is now proven by
+// tools/test-aero-sortie-sim.js's new U-AC-3 test, driving the exact same
+// production evaluateLandingEnvelope/transitionSortie functions.
 
 test('U-AC-4: impacto na água afunda e reporta AFUNDOU NO MAR (WS-5)', async ({ page }) => {
   await bootViaButton(page, 'islands');
@@ -146,7 +145,12 @@ test('U-AC-4: impacto na água afunda e reporta AFUNDOU NO MAR (WS-5)', async ({
   expect(overlay).toContain('AFUNDOU NO MAR');
 });
 
-test('U-AC-5: nuke percorre stages e a câmera permanece NORMAL (sem cinematic — operador 2026-07-01)', async ({ page }) => {
+// U-AC-5 (T-01 demotion): the stage-progression timeline (flash->fireball->
+// mushroom, bounded fireball radius, monotonic plume) is proven Node-side by
+// tools/test-aero-sim.js:582. This residual keeps only the observable Node
+// cannot reach: that a REAL in-browser nuke detonation never engages the
+// cinematic camera (operator decision 2026-07-01).
+test('U-AC-5: nuke detonation never engages the cinematic camera (operator decision 2026-07-01)', async ({ page }) => {
   await page.goto('/src/web-games/aero-fighters/index.html?map=desert&testMode=1');
   await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
   // T-07: polling do init real dos módulos (window.game) em vez de sleep fixo
@@ -155,21 +159,12 @@ test('U-AC-5: nuke percorre stages e a câmera permanece NORMAL (sem cinematic �
   await page.waitForFunction(() => window.game && window.game.running === true, { timeout: 3000 });
   await takeOff(page);
   await page.keyboard.press('KeyT'); // nuke sem lock — atinge o solo à frente
-  // T-07 KEPT: amostragem in-page da progressão de stages até 'mushroom' (sai no
-  // break assim que o estágio final aparece; o teto de 15 s é o detector de falha).
-  const sawStages = await page.evaluate(async () => {
+  // Aguarda a detonação realmente começar (sai de 'idle') antes de checar a
+  // câmera — a progressão de stages em si é Node-covered (test-aero-sim.js:582).
+  await page.waitForFunction(async () => {
     const m = await import('/src/web-games/aero-fighters/src/nuclear-fx.js');
-    const seen = new Set();
-    const t0 = performance.now();
-    while (performance.now() - t0 < 15000) {
-      seen.add(m.nuclearFxState.stage);
-      if (seen.has('mushroom')) break;
-      await new Promise(r => setTimeout(r, 120));
-    }
-    return [...seen];
-  });
-  expect(sawStages).toContain('fireball');
-  expect(sawStages).toContain('mushroom');
+    return m.nuclearFxState.stage !== 'idle';
+  }, { timeout: 5000 });
   const cine = await page.evaluate(() => ({
     engaged: window.game.missionRealism.camera.cinematic?.active === true,
     slowmo: window.game.flags.nukeSlowmo, // guarda ADR-U4: nunca em testMode/webdriver
@@ -223,67 +218,7 @@ test('U-AC-7: Inhauma tem chão amplo e estruturas sólidas', async ({ page }) =
   expect(checks.mountainCrash).toBe('MOUNTAIN');
 });
 
-// U-AC-8 (T-C-14, release v0.3.4 — SPEC §E): a Onda 5
-// (T-C-13) MUDOU DELIBERADAMENTE o contrato dos aliados. Antes: os wingmen só
-// combatiam os caças da ally-war (frente própria, separada do jogador). Agora:
-// engajamento GENÉRICO por proximidade do PLAYER (wingmen.js header) — qualquer
-// hostil AÉREO de game.targets (helicópteros/zepelins da guarnição de Cachoeira,
-// airborneAltitude > 0) a menos de WINGMEN.ENGAGE_RADIUS (420 m) do jogador vira
-// alvo; morto ou além de RETURN_RADIUS (560 m — histerese), o wingman volta à
-// formação. Mísseis aliados (flags.supportMissilesFired via ally-war.js#spawnAllyMissile)
-// continuam contando os disparos.
-test('U-AC-8: wingmen engajam hostis aéreos da campanha próximos do player (420 m; histerese 560 m)', async ({ page }) => {
-  test.setTimeout(60000);
-  await page.goto('/src/web-games/aero-fighters/index.html?testMode=1&map=inhauma&seed=wingmen-campaign');
-  await page.waitForSelector('canvas', { state: 'attached', timeout: 120000 });
-  await page.waitForFunction(() => window.__aeroDebug && window.game, { timeout: 120000 });
-  await page.keyboard.press('Space');
-  await page.waitForFunction(() => window.game.running === true && window.game.targets.length > 0, { timeout: 5000 });
-
-  const initial = await page.evaluate(() => ({
-    wingmen: window.game.wingmen.length,
-    supportMissiles: window.game.flags.supportMissilesFired || 0,
-    airborneHostiles: window.game.targets.filter((t) => !t.dead && (t.airborneAltitude || 0) > 0).length,
-  }));
-  expect(initial.wingmen).toBeGreaterThanOrEqual(2);
-  // A guarnição de Cachoeira (T-C-05) mantém zepelim + helicópteros de patrulha —
-  // hostis aéreos no barramento game.targets (o contrato novo os torna engajáveis).
-  expect(initial.airborneHostiles).toBeGreaterThanOrEqual(1);
-
-  // Força voo (mesmo padrão de review-fixes T-FIX-05) e teletransporta o jato para
-  // perto de um hostil aéreo da guarnição — dentro do ENGAGE_RADIUS (420 m).
-  await page.evaluate(async () => {
-    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
-    const mr = window.game.missionRealism;
-    mr.sortie.state = 'AIRBORNE';
-    window.game.player.speed = 60;
-    window.game.player.throttle = 0.7;
-    window.game.player.stalled = false;
-    const foe = window.game.targets.find((t) => !t.dead && (t.airborneAltitude || 0) > 0);
-    const p = foe.mesh.position;
-    jet.position.set(p.x + 250, p.y + 30, p.z + 250); // ~355 m — dentro dos 420 m
-  });
-
-  // O wingman escolhe o hostil aéreo de game.targets (não um caça da ally-war)…
-  await page.waitForFunction(
-    () => window.game.wingmen.some((wm) => wm.attackTarget && window.game.targets.includes(wm.attackTarget)),
-    { timeout: 8000 },
-  );
-  // …e os mísseis de suporte aliado disparam contra ele (contrato SPEC §E).
-  await page.waitForFunction(
-    (before) => (window.game.flags.supportMissilesFired || 0) > before,
-    initial.supportMissiles,
-    { timeout: 12000 },
-  );
-
-  // Histerese: afastando o player além de RETURN_RADIUS (560 m) de TODO hostil
-  // aéreo, o wingman larga o alvo e volta à formação (attackTarget → null).
-  await page.evaluate(async () => {
-    const { jet } = await import('/src/web-games/aero-fighters/src/player.js');
-    jet.position.set(1500, 160, -400); // Sete Lagoas — >2 km da guarnição de Cachoeira
-  });
-  await page.waitForFunction(
-    () => window.game.wingmen.every((wm) => wm.dead || wm.attackTarget === null),
-    { timeout: 8000 },
-  );
-});
+// T-01 (v0.11.0, test lifecycle demotion): U-AC-8 deleted — proven verbatim by
+// tools/test-aero-visual.mjs:133 ("T-C-13(d): wingman quebra formação p/ hostil
+// aéreo perto do player e retorna após o kill"), which drives the exact same
+// wingmen.js#updateWingmen engage/hysteresis/return logic this E2E re-checked.
