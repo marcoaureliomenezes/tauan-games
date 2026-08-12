@@ -1,27 +1,27 @@
 # Dependencies
 node_modules
 
-# Playwright output
+# Playwright output (regenerated every run — never tracked)
 test-results/
+playwright-report/
 tests/screenshots/
+src/web-games/screenshots/
+src/web-games/tests/screenshots/
+# v0.11.0 T-05: per-game screenshot dirs (tests/<game>/screenshots) — runs
+# overwrite them; goldens/evidence with a real consumer live outside tests/
+src/web-games/tests/*/screenshots/
 
 # Runtime artifacts
 .server.pid
+.server-*.pid
+tests/.server-*.pid
 
 # Environment secrets (never commit)
 .env
 *.env.local
-tests/.server-*.pid
 
 # prints de referência do operador (material de estudo, não asset do jogo)
 img/
-playwright-report/
-test-results/
-tests/screenshots/
-.server-*.pid
 
 # Godot editor caches
 .godot/
-# e2e output dirs (regenerated every run)
-src/web-games/screenshots/
-src/web-games/tests/screenshots/
