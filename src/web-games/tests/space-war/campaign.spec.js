@@ -182,8 +182,15 @@ test.describe('Space War — Campanha', () => {
     // teleporta para o binário (≈2.7M u do Sol): flare precisa SUMIR
     await page.evaluate(() => window.__swDebug.goTo('blackhole'));
     await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === false, { timeout: 45000 });
-    // e voltar perto do Sol religa
-    await page.evaluate(() => window.__swDebug.goTo('earth'));
+    // e voltar perto do Sol religa. goTo('sol'): segmento câmera→Sol CURTO
+    // (3,2 R☉) — a oclusão manual (stars.js) varre TODOS os corpos no
+    // segmento e o goTo('earth') anterior era loteria orbital: a Lua (ou
+    // Vênus/Mercúrio alinhados) cruzava o segmento Terra→Sol e o flare
+    // ficava occluded=false→true nunca (flake medido no CI, run
+    // 31583082276, 2 tentativas no timeout). Perto do Sol nenhum corpo
+    // orbita dentro do segmento — determinístico, e casa com a lei do AC
+    // ("visível na VIZINHANÇA solar").
+    await page.evaluate(() => window.__swDebug.goTo('sol'));
     await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 45000 });
   });
 
