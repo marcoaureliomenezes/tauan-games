@@ -134,7 +134,6 @@ test('HUD mostra contrato, alvos e caixa', async ({ page }) => {
   await expect(page.locator('#mission-title')).toContainText('Contrato');
   await expect(page.locator('#target-list li')).not.toHaveCount(0);
   await expect(page.locator('#money')).toContainText('$');
-  await page.screenshot({ path: 'screenshots/demolition-ball.png' });
 });
 
 // ---------------------------------------------------------------- v0.9.0 (R-05..R-08)
@@ -187,7 +186,6 @@ test('equipe de isolamento: botão a ≤30m, cones cercam o quarteirão, tráfeg
   expect(placed.state).toBe('holding');
   expect(placed.cones).toBe(28);
   expect(placed.closed).toBe(4);
-  await page.screenshot({ path: 'screenshots/demolition-ball-crew.png' });
 
   // Finish the target: the crew collects the cones and reopens the block.
   const done = await page.evaluate(() => {

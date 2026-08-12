@@ -30,9 +30,33 @@ function waitForServer(retries = 10) {
 }
 
 module.exports = async function globalSetup() {
+  // v0.10.0 T-06 (2): pid file cujo processo MORREU é removido em vez de
+  // abortar o run — órfão de crash anterior não pode mais quebrar execução.
+  if (fs.existsSync(PID_FILE)) {
+    const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+    let alive = false;
+    try { process.kill(oldPid, 0); alive = true; } catch (e) { /* morto */ }
+    if (!alive) {
+      fs.unlinkSync(PID_FILE);
+      console.log(`\n  Orphan pid file removed (PID ${oldPid} is dead).\n`);
+    }
+  }
+
   const alreadyUp = await checkPort();
   if (alreadyUp) {
     throw new Error(`Port ${PORT} is already in use. Stop whatever is running on it before running tests.`);
+  }
+
+  // v0.10.0 T-06 (1): run-start clean — artefatos da execução anterior não
+  // sobrevivem ao início do run seguinte. Só no INÍCIO, nunca no fim.
+  const outputDir = path.join(__dirname, 'screenshots');
+  const reportDir = path.join(__dirname, '..', 'playwright-report');
+  const resultsDir = path.join(__dirname, '..', 'test-results');
+  for (const dir of [outputDir, reportDir, resultsDir]) {
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      console.log(`  run-start clean: removed ${path.relative(process.cwd(), dir)}`);
+    }
   }
 
   const server = spawn('python3', ['-m', 'http.server', String(PORT)], {
