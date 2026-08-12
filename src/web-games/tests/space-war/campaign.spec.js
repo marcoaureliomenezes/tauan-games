@@ -179,18 +179,19 @@ test.describe('Space War — Campanha', () => {
     await startFlight(page);
     // perto da Terra (região solar): política de flare = visível
     await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 45000 });
-    // teleporta para o binário (≈2.7M u do Sol): flare precisa SUMIR
-    await page.evaluate(() => window.__swDebug.goTo('blackhole'));
+    // teleporta para o binário (≈2.7M u do Sol): flare precisa SUMIR.
+    // distMul 20 (=9,6k u do centro): o default 3,2 (1,5k u) caía DENTRO da
+    // zona de maré do BN (tideKillR 7800, ship.js P2-8) — a nave MORRIA de
+    // espaguetificação em segundos de sim, phase virava gameover, o loop
+    // congelava a política do flare e a perna seguinte lia um valor STALE
+    // (diagnosticado no probe do run 31585773105: phase gameover, vis
+    // travado). A 20 radii o dano de maré é zero e a distância ao Sol segue
+    // ≫ FLARE_CUTOFF (4,2M) — flare off determinístico, nave viva.
+    await page.evaluate(() => window.__swDebug.goTo('blackhole', 20));
     await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === false, { timeout: 45000 });
-    // e voltar perto do Sol religa. goTo('sol'): segmento câmera→Sol CURTO
-    // (3,2 R☉) — a oclusão manual (stars.js) varre TODOS os corpos no
-    // segmento e o goTo('earth') anterior era loteria orbital: a Lua (ou
-    // Vênus/Mercúrio alinhados) cruzava o segmento Terra→Sol e o flare
-    // ficava occluded=false→true nunca (flake medido no CI, run
-    // 31583082276, 2 tentativas no timeout). Perto do Sol nenhum corpo
-    // orbita dentro do segmento — determinístico, e casa com a lei do AC
-    // ("visível na VIZINHANÇA solar").
-    await page.evaluate(() => window.__swDebug.goTo('sol'));
+    // e voltar perto do Sol religa (geometria clássica da perna, provada
+    // desde o AC — o flake recente era a morte no BN acima, não a Terra)
+    await page.evaluate(() => window.__swDebug.goTo('earth'));
     await page.waitForFunction(() => window.__spaceWar.sunFlareVisible === true, { timeout: 45000 });
   });
 
