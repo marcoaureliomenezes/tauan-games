@@ -87,15 +87,24 @@ test.describe('Space War — decolagem pilotada (backport Godot)', () => {
     expect(snap.t).toBeGreaterThanOrEqual(18);               // nunca instantâneo
     expect(r.mode).toBe('orbit');                            // segue acoplada à Terra
 
-    // ── a órbita se sustenta: 30 s de coast (~1/9 de volta). A Lua do jogo
-    // perturba DE VERDADE (SOI 7200 varre a órbita de entrada; um flyby pode
-    // bombear a altitude) — o invariante honesto é: continua PRESA ao sistema
-    // Terra (modo orbit), sem reentrar na atmosfera e sem pousar ──
-    const after = await page.evaluate(() => window.__swDebug.launchWarp(30));
-    expect(after.stage).toBe('INSERTED');
-    expect(after.landed).toBe(false);
-    expect(after.mode).toBe('orbit');                        // não escapou do sistema
-    expect(after.altitude).toBeGreaterThan(altT * 0.3);      // não reentrou
+    // ── a órbita se sustenta: 30 s de coast (~1/9 de volta), amostrado a
+    // cada 1 s. A Lua do jogo perturba DE VERDADE (SOI 7200 varre a órbita
+    // de entrada; um flyby pode bombear OU drenar a altitude — medido no
+    // CI: mergulhos a 19-50 u com a nave seguindo PRESA e no ar, run
+    // 31581880160). A geometria do flyby nasce da fase orbital aleatória de
+    // boot — uma loteria, portanto o invariante honesto do coast é o
+    // trajeto INTEIRO preso ao sistema Terra (modo orbit), no ar (sem
+    // pousar) e sem se espatifar; piso de altitude no endpoint era física
+    // errada. A QUALIDADE da órbita de entrada já foi assertada no snapshot
+    // de inserção acima (banda de alt e vTan≈vCirc a 2%) ──
+    let after = null;
+    for (let i = 0; i < 30; i++) {
+      after = await page.evaluate(() => window.__swDebug.launchWarp(1));
+      expect(after.stage).toBe('INSERTED');
+      expect(after.landed).toBe(false);
+      expect(after.mode).toBe('orbit');                        // não escapou do sistema
+      expect(after.altitude).toBeGreaterThan(0);               // não se espatifou
+    }
   });
 
   test('W solto cedo aborta: a nave volta à plataforma e pode relançar', async ({ page }) => {
