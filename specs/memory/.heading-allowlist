@@ -35,3 +35,11 @@ Web games (`src/web-games/`)
 Unificação 2026-08-10 (v0.6.0) — aero-fighters ÚNICO na web
 Pistas (4, declarativas em tracks.js)
 Legado (auditoria v0.4.0 → resolvida em v0.7.0)
+Política de execução da suíte (medida no CI, v0.10.0)
+~~MACRO 2 — QA dos jogos Godot~~ (grupo removido)
+Geração (`city.js`, semente fixa 20260725)
+Fachadas e céu (`shaders.js`)
+Tráfego (`traffic.js`)
+Pedestres e equipe
+Jogos (`src/web-games/`) — catálogo completo
+Decisão de escopo (operador, 2026-08-11)

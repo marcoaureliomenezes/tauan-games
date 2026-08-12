@@ -16,11 +16,6 @@
 | `aero-strike-world` | Aero Strike — mundo e mapas | 4 mapas jogáveis, uma verdade de superfície única, terreno por heightfield, água/rio, estradas autorais e cenário (árvores/estruturas). |
 | `aero-strike` | Aero Strike — o jogo | Ataque ao solo em 3ª pessoa com um F-35 (Three.js) — destrua todos os alvos militares da missão, mate o boss, volte e pouse. |
 
-### aero-fighters-v2
-
-| slug | title | tldr |
-|------|-------|------|
-
 ### demolition-ball
 
 | slug | title | tldr |
@@ -30,18 +25,17 @@
 | `demolition-ball-jogo` | Demolition Ball — o jogo | Trator-guindaste com bola de demolição de 4,2 t numa cidade procedural viva; contratos de destruição; WebGL2 100% próprio (zero libs, só snoise MIT). |
 | `demolition-ball-modos` | Demolition Ball — modos de jogo | Modo Tauan (sem prazo/multa, 1 alvo, threshold 0.5, dano x2.5, homing forte) vs Modo Contratos (jogo original); seleção no overlay, trava ao começar. |
 
-
 ### james-bond
 
 | slug | title | tldr |
 |------|-------|------|
 | `james-bond-jogo` | James Bond Operações — o jogo | FPS de espionagem no browser com 6 operações, IA de guardas com A*, tudo procedural — nenhum asset do GoldenEye. |
 
-
 ### product
 
 | slug | title | tldr |
 |------|-------|------|
+| `games-catalog` | Catálogo de jogos | Os 5 jogos web do tauan-games (src/web-games) com pasta, tecnologia e status. |
 | `overview` | Identidade do produto | Repositório de jogos web pessoais para o Tauan — imediatamente jogáveis, sem loading, sem erros. |
 | `quality-bar` | Barra de qualidade | Objetivos de produto e critérios de qualidade não-negociáveis dos jogos. |
 
@@ -55,5 +49,5 @@
 
 | slug | title | tldr |
 |------|-------|------|
-| `speed-run-web-jogo` | Speed Run (web) — o jogo | Corrida arcade estilo Cruis'n World no browser — 3 circuitos + pista sprint A→B com modo Fuga, réplica do Idea Adventure 2013, nitro, música Top Gear, fixed timestep. |
+| `speed-run-web-jogo` | Speed Run (web) — o jogo | Corrida arcade estilo Cruis'n World — 3 circuitos + sprint A→B com Fuga, réplica do Idea Adventure 2013, nitro, música, fixed timestep. |
 

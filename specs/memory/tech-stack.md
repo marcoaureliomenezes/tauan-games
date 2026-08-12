@@ -3,13 +3,14 @@ slug: tech-stack
 title: Tech Stack
 category: core
 tldr: Stack comprometida por jogo — 5 jogos web em src/web-games (Three.js r165 / WebGL2 puro), assets CC0 vendorizados.
+summary: "Engine comprometida de cada jogo web, princípios de stack (sem build, vendor local, zero TS), stack de testes com a política medida no CI (v0.10.0: workers:1, testIgnore + jobs dedicados, run-start clean, polling) e padrão de deploy."
 tags:
   - tech-stack
   - engines
   - testing
 token_estimate: 0
-last_updated: "2026-08-10"
-release_origin: v0.4.0
+last_updated: "2026-08-12"
+release_origin: v0.10.0
 ---
 
 ## Stack comprometida por jogo
@@ -41,7 +42,14 @@ release_origin: v0.4.0
 |------------|-----|
 | Playwright ^1.44 | Smokes + ACs de todos os jogos web (`tests/<jogo>/`, `TEST_PORT` p/ sessões concorrentes) |
 | `npx serve` / `python3 -m http.server` | Servidor estático dos testes |
-| `tests/probe.gd` (padrão sonda) | Medição empírica de convenções físicas da engine |
+
+**Suíte e CI (v0.10.0, medido):** workers:1 (workers:2 inviável no runner —
+SwiftShader); config raiz com `testIgnore` de james-bond/demolition-ball, que
+rodam em workflows dedicados com `paths` filter (`james-bond-ci.yml`,
+`demolition-ball-ci.yml`); `ci.yml` com `paths` + `concurrency:
+cancel-in-progress`; run-start clean + teardown de pid garantido; polling
+(`waitForFunction`) no lugar de sleeps fixos; `PW_GL_ARGS=1` opt-in (default
+OFF — A/B negativo no CI).
 
 ## Padrão de deploy
 

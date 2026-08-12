@@ -2,7 +2,7 @@
 slug: demolition-ball-cidade-viva
 title: Demolition Ball — cidade viva
 category: product
-tldr: Grade 7x7 determinística com rio+3 pontes (arestas cortadas do grafo), fachadas por estilo no shader, praças/flores, 56 pedestres imunes, 3 modelos de carro, equipe de cones.
+tldr: Cidade 7x7 determinística com rio+3 pontes, fachadas em shader, pedestres imunes, tráfego e equipe de cones.
 summary: Como a cidade da v0.9.0 é gerada e animada — city.js, traffic.js (severed/closedEdges), pedestrians.js, crew.js, fachadas/céu em shaders.js.
 tags: [product, demolition-ball, cidade, trafego, pedestres]
 token_estimate: 0

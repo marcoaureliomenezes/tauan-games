@@ -2,22 +2,22 @@
 slug: quality-assurance
 title: Quality Assurance
 category: core
-tldr: QA em dois trilhos — Playwright para web-games, headless CLI + sondas empíricas para Godot — com ledger de bugs JSONL e doutrina hotfix.
-summary: Processos de QA por grupo de tecnologia (web-games e godot), sub-seção por jogo, estratégia de testes, rastreio de bugs e leis anti-slop. Reescrito 2026-07-18 na reestruturação src/.
+tldr: QA da suíte web — Playwright com política medida em CI (workers:1, testIgnore + jobs dedicados, run-start clean, polling > sleeps) e doutrina hotfix.
+summary: Processos de QA dos 5 jogos web (repo 100% web desde 2026-08-11), política de execução da suíte Playwright medida no CI (v0.10.0), estratégia por jogo, rastreio de bugs e leis anti-slop.
 tags:
   - quality-assurance
   - testing
   - anti-slop
-  - godot
   - web-games
 token_estimate: 0
-last_updated: "2026-07-18"
-release_origin: repo-restructure-src-20260718
+last_updated: "2026-08-12"
+release_origin: v0.10.0
 ---
 
 ## Visão geral
 
-Dois trilhos de QA, um por grupo de tecnologia, com leis comuns:
+QA de um único grupo de tecnologia (web-games — Godot removido do repo em
+2026-08-11), com leis comuns:
 
 - **Anti-slop**: sem teste fabricado que só espelha a implementação; todo teste
   valida comportamento observável (AC do SPEC). Métrica de teste deve ser
@@ -72,6 +72,30 @@ Gotchas de método (aprendidos e obrigatórios):
   antes de diagnosticar.
 - `cmd | tail` mascara exit code — validar `PIPESTATUS`/exit real.
 
+### Política de execução da suíte (medida no CI, v0.10.0)
+
+- **workers: 1** — paralelismo medido INVIÁVEL: SwiftShader não tolera 2
+  instâncias WebGL no runner (boot starvation de `canvas`, 84/179 falhas).
+  Decisão por medição, não preferência; revisitar se a suíte ficar leve.
+- **testIgnore + jobs dedicados**: james-bond e demolition-ball rodam fora do
+  run raiz, em workflows próprios com `paths` filter (padrão godot-ci); o
+  config dedicado do james-bond é auto-suficiente (sobe/derruba o servidor).
+  Cobertura exigida: raiz + dedicados ≥ baseline.
+- **Run-start clean**: globalSetup remove artefatos do run anterior
+  (screenshots/, playwright-report/, test-results/) e pid file de processo
+  morto (antes: abortava o run). Teardown garante o pid também em morte
+  anormal (try/finally + SIGINT/SIGTERM/exit).
+- **Artefato sem consumidor não se escreve**: consumidor válido = upload do
+  CI em `if: failure()` ou inspeção local documentada no próprio spec.
+- **Polling > sleep**: `waitForTimeout` vira `waitForFunction` sobre estado
+  real do jogo; janelas de medição/estabilidade/pulso ficam com justificativa
+  escrita no spec (regra da T-07).
+- **Retry/timeout**: retries:1 (flake de relógio de parede passa no retry,
+  evidência nas runs); timeout 30 s default + orçamento declarado por spec;
+  trace+video só no retry.
+- **GL/ANGLE**: `PW_GL_ARGS=1` opt-in documentado; default OFF (A/B no CI:
+  +20 % de tempo e flare quebrado).
+
 ### Por jogo (web)
 
 - **aero-fighters** — `tests/aero-fighters/`: smokes + QA de missão
@@ -87,27 +111,10 @@ Gotchas de método (aprendidos e obrigatórios):
 
 ---
 
-## MACRO 2 — QA dos jogos Godot
+## ~~MACRO 2 — QA dos jogos Godot~~ (grupo removido)
 
-**Estratégia**: três camadas.
-
-1. **Sonda empírica** (`tests/probe.gd` + `probe.tscn`): NUNCA confiar em
-   convenção documentada — medir (ex.: sinal do `engine_force` do
-   `VehicleBody3D`: positivo = ré neste rig, o oposto do doc). Toda convenção
-   física usada em produção referencia a sonda que a mediu.
-2. **Smoke headless com exit code**: `CORRIDA_TEST=1 godot4 --headless --path .`
-   — IA dirige o jogador; PASS exige avanço real > 80 m no sentido da corrida E
-   velocidade à frente > 3 m/s aos 12 s; qualquer falha = exit 1.
-3. **Validação visual por screenshot de viewport**: `CORRIDA_SHOT=<dir>` salva
-   PNGs em marcos de tempo (Wayland não tem ferramenta CLI de screenshot —
-   o próprio jogo captura `get_viewport().get_texture().get_image()`).
-
-CI (GitHub Actions): `godot-ci.yml` — gdlint, import headless e (quando presente)
-gdUnit4, com descoberta dinâmica dos projetos em `src/godot/`.
-
-### Por jogo (Godot)
-
-- **space-war (godot)** — único projeto Godot ativo (2026-08-10); smoke via
-  `godot-ci.yml` (import headless + gdUnit4 quando presente).
-- (speed-run Godot removido em v0.7.0 — padrões de sonda empírica acima ficam
-  como lição registrada para futuros projetos Godot.)
+Os projetos Godot foram todos removidos do repositório (2026-08-11 — repo
+100% web). Fica a lição registrada para um eventual retorno: **sonda
+empírica antes de confiar em convenção documentada** (ex.: sinal do
+`engine_force` media-se em probe, nunca assumia-se do doc) e smoke headless
+com exit code exigindo avanço real no sentido do movimento.
