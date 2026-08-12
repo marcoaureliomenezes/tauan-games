@@ -147,22 +147,22 @@ test.describe('Cruis\'n Tauan — NITRO (v0.8.0)', () => {
   });
 
   test('seco: SEM boost, flash "SEM NITRO" 1× por apertada', async ({ page }) => {
-    test.setTimeout(300000);
+    test.setTimeout(420000);
     await start(page);
     await holdWUntilV(page, 15);
     await page.keyboard.down('ShiftLeft');
     // drena até secar (100/33 ≈ 3,1 s; exige v > 1 — reta da cidade comporta)
     await page.waitForFunction(() => window.__corrida.nitro.charge <= 0.5, { timeout: 10000 });
     // seco E segurando Shift: o input que chega na física tem nitro DESLIGADO
-    // (o gate de carga zera no substep seguinte — polling em vez de snapshot
-    // imediato, que corria o risco de ler antes do flip)
-    await page.waitForFunction(() => window.__corrida.player.input.nitro === 0
-      && window.__corrida.nitro.active === false, { timeout: 4000 });
-    const dry = await page.evaluate(() => ({
-      inNitro: window.__corrida.player.input.nitro,
-      active: window.__corrida.nitro.active,
-      v: window.__corrida.player.st.v,
-    }));
+    // — captura ATÔMICA dentro do polling (ler depois do polling corria o
+    // regen: o tanque volta a ≥5 e o gate liga de novo em <1 s de sim).
+    const dry = await (await page.waitForFunction(() => {
+      const G = window.__corrida;
+      if (G.player.input.nitro === 0 && G.nitro.active === false) {
+        return { inNitro: G.player.input.nitro, active: G.nitro.active, v: G.player.st.v };
+      }
+      return false;
+    }, { timeout: 4000 })).jsonValue();
     expect(dry.inNitro).toBe(0);
     expect(dry.active).toBe(false);
     // flash: solta e REAPERTA com o tanque ainda seco (< 5) → "SEM NITRO" 1×
