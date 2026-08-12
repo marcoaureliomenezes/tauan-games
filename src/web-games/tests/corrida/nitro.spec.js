@@ -89,6 +89,10 @@ test.describe('Cruis\'n Tauan — NITRO (v0.8.0)', () => {
     await page.waitForFunction(() => window.__corrida.phase === 'race', { timeout: 25000 });
     await holdWUntilV(page, 15);
     await page.keyboard.down('ShiftLeft');
+    // CI-runner: só mede a janela DEPOIS do boost estar de fato ligado —
+    // a tecla entra num substep e o boost no seguinte; sem este gate a
+    // janela pegava latência de ativação e dvNitro saía < dvBase×1.35.
+    await page.waitForFunction(() => window.__corrida.nitro.active === true, { timeout: 4000 });
     const dvNitro = await dvOver1s(page);
     await page.keyboard.up('ShiftLeft');
     await page.keyboard.up('KeyW');
@@ -150,6 +154,10 @@ test.describe('Cruis\'n Tauan — NITRO (v0.8.0)', () => {
     // drena até secar (100/33 ≈ 3,1 s; exige v > 1 — reta da cidade comporta)
     await page.waitForFunction(() => window.__corrida.nitro.charge <= 0.5, { timeout: 10000 });
     // seco E segurando Shift: o input que chega na física tem nitro DESLIGADO
+    // (o gate de carga zera no substep seguinte — polling em vez de snapshot
+    // imediato, que corria o risco de ler antes do flip)
+    await page.waitForFunction(() => window.__corrida.player.input.nitro === 0
+      && window.__corrida.nitro.active === false, { timeout: 4000 });
     const dry = await page.evaluate(() => ({
       inNitro: window.__corrida.player.input.nitro,
       active: window.__corrida.nitro.active,
