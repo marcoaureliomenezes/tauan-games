@@ -3,98 +3,180 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tauan Games — Space War · Aero Strike · James Bond</title>
+  <title>Tauan Games — 5 jogos web para jogar no navegador</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E%F0%9F%8E%AE%3C/text%3E%3C/svg%3E">
   <style>
+    /* Paleta inspirada em Super Mario Bros */
+    :root {
+      --sky:        #5C94FC;  /* céu SMB */
+      --sky-deep:   #3D6FE0;
+      --mario-red:  #E52521;
+      --coin-yellow:#FBD000;
+      --pipe-green: #43B047;
+      --ocean-blue: #049CD8;
+      --brick:      #C84C0C;
+      --ink:        #1B1B2F;
+      --paper:      #FFFDF5;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #090e18;
-      color: #fff;
-      font-family: monospace;
+      background: linear-gradient(180deg, var(--sky) 0%, var(--sky-deep) 100%);
+      background-attachment: fixed;
+      color: var(--ink);
+      font-family: "Trebuchet MS", Verdana, sans-serif;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
+      padding: 48px 20px 32px;
     }
-    h1 { font-size: 32px; letter-spacing: 4px; color: #7df; margin-bottom: 8px; }
-    .sub { color: #889; font-size: 13px; margin-bottom: 48px; letter-spacing: 2px; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 20px;
-      max-width: 900px;
-      width: 100%;
+
+    header { text-align: center; margin-bottom: 40px; }
+    h1 {
+      font-size: 44px;
+      letter-spacing: 3px;
+      color: var(--paper);
+      text-shadow:
+        3px 3px 0 var(--mario-red),
+        6px 6px 0 rgba(0,0,0,.25);
+      margin-bottom: 10px;
     }
-    .card {
-      border: 1px solid #2a3a4a;
-      border-radius: 6px;
-      padding: 28px 24px;
-      background: #0d1520;
-      text-decoration: none;
-      color: inherit;
-      transition: border-color .2s, background .2s;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .card:hover { border-color: #5af; background: #111d2e; }
-    .card .engine { font-size: 11px; color: #56a; letter-spacing: 2px; text-transform: uppercase; }
-    .card .name { font-size: 20px; color: #cef; font-weight: bold; }
-    .card .desc { font-size: 12px; color: #778; line-height: 1.6; }
-    .card .badge {
+    .sub {
       display: inline-block;
-      margin-top: 6px;
-      padding: 3px 10px;
-      border-radius: 3px;
-      font-size: 11px;
+      background: var(--coin-yellow);
+      color: var(--ink);
+      font-size: 14px;
       font-weight: bold;
       letter-spacing: 1px;
+      padding: 6px 18px;
+      border-radius: 999px;
+      border: 3px solid var(--ink);
+      box-shadow: 0 4px 0 rgba(0,0,0,.25);
     }
-    .badge.playable { background: #1a3a1a; color: #4f4; border: 1px solid #2a5a2a; }
-    .badge.source { background: #1a1a3a; color: #77f; border: 1px solid #2a2a5a; }
-    footer { margin-top: 48px; color: #445; font-size: 11px; letter-spacing: 1px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1000px;
+      width: 100%;
+      align-items: stretch;
+    }
+
+    /* Todos os cards com o MESMO tamanho de texto e mesma estrutura */
+    .card {
+      --accent: var(--ocean-blue);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--paper);
+      border: 4px solid var(--ink);
+      border-top: 14px solid var(--accent);
+      border-radius: 16px;
+      padding: 20px 22px 22px;
+      text-decoration: none;
+      color: var(--ink);
+      box-shadow: 0 6px 0 rgba(0,0,0,.3);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 0 rgba(0,0,0,.3);
+    }
+    .card:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 rgba(0,0,0,.3);
+    }
+
+    .card .engine {
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent-text, var(--accent));
+    }
+    .card .name {
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 1.15;
+      color: var(--ink);
+    }
+    .card .desc {
+      font-size: 14px;
+      line-height: 1.55;
+      color: #3a3a4d;
+      flex: 1; /* descrições de tamanhos diferentes não quebram o alinhamento */
+    }
+    .card .badge {
+      align-self: flex-start;
+      margin-top: 4px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      border: 3px solid var(--ink);
+      background: var(--pipe-green);
+      color: var(--paper);
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      box-shadow: 0 3px 0 rgba(0,0,0,.25);
+    }
+
+    /* Acento por jogo — uma cor viva por card, tudo o resto padronizado */
+    .card.james-bond      { --accent: var(--ink); }
+    .card.space-war       { --accent: var(--ocean-blue); }
+    .card.aero-fighters   { --accent: var(--mario-red); }
+    .card.speed-run       { --accent: var(--brick); }
+    .card.demolition-ball { --accent: var(--coin-yellow); --accent-text: #A06A00; }
+
+    footer {
+      margin-top: 44px;
+      color: rgba(255,255,255,.85);
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-shadow: 1px 1px 0 rgba(0,0,0,.3);
+    }
   </style>
 </head>
 <body>
-  <h1>TAUAN GAMES</h1>
-  <div class="sub">jogos web — jogue direto no navegador</div>
+  <header>
+    <h1>TAUAN GAMES</h1>
+    <div class="sub">&#11088; 5 jogos web — jogue direto no navegador &#11088;</div>
+  </header>
 
   <div class="grid">
-    <a class="card" href="src/web-games/james-bond/" style="border-color:#50e29a;background:#0c110e">
-      <span class="engine" style="color:#50e29a">Three.js + Rapier + Yuka · FPS 3D</span>
-      <span class="name" style="color:#f1bc58">James Bond: Operações</span>
-      <span class="desc" style="color:#a9b4ac">FPS de espionagem com seis operações, WASD + mouse, armas, furtividade por som, guardas com percepção, explosões, radar e mapa tático.</span>
-      <span class="badge playable">&#9654; PLAY NOW</span>
+    <a class="card james-bond" href="src/web-games/james-bond/">
+      <span class="engine">FPS 3D · Three.js</span>
+      <span class="name">&#128373; James Bond: Operações</span>
+      <span class="desc">FPS de espionagem com seis operações, armas, furtividade por som, guardas com percepção, radar e mapa tático.</span>
+      <span class="badge">&#9654; JOGAR</span>
     </a>
 
-    <a class="card" href="src/web-games/space-war/" style="border-color:#5a3a8a;background:linear-gradient(160deg,#120d28,#0d1530)">
-      <span class="engine">Three.js + WebGL · 3D</span>
-      <span class="name" style="color:#cdbcff">&#127756; Space War</span>
-      <span class="desc">Simulador de universo com 5 SISTEMAS ESTELARES: Sistema Solar, Betelgeuse (supergigante vermelha + companheira Siwarha), binário buraco negro + pulsar dentro do remanescente de supernova, binário caótico e o Núcleo da Galáxia com 12 estrelas orbitando um buraco negro supermassivo. Física orbital real: entre em órbita de qualquer corpo ([O]), corte o motor e ela fecha. Motor interestelar, câmera de observação, combate e bombardeio nuclear.</span>
-      <span class="badge playable">&#9654; PLAY NOW</span>
+    <a class="card space-war" href="src/web-games/space-war/">
+      <span class="engine">Simulador espacial · Three.js</span>
+      <span class="name">&#127756; Space War</span>
+      <span class="desc">Universo com física orbital real: entre em órbita de qualquer planeta, viaje entre sistemas estelares e pilote até o buraco negro do centro da galáxia.</span>
+      <span class="badge">&#9654; JOGAR</span>
     </a>
 
-    <a class="card" href="src/web-games/aero-fighters/">
-      <span class="engine">Three.js + WebGL</span>
+    <a class="card aero-fighters" href="src/web-games/aero-fighters/">
+      <span class="engine">Combate aéreo · Three.js</span>
       <span class="name">&#9992; Aero Strike</span>
-      <span class="desc">Ataque ao solo com um F-35: 4 mapas (incluindo Inhauma realista com rio, represa e usina nuclear), decolagem e pouso suaves, canhão + mísseis + NUKE com cogumelo atômico volumétrico de 60 s, boss kaiju, ciclo dia/noite e água reflexiva.</span>
-      <span class="badge playable">&#9654; PLAY NOW</span>
+      <span class="desc">Ataque ao solo com um F-35 em 4 mapas: decolagem e pouso, canhão, mísseis e nuke com cogumelo atômico, boss kaiju e ciclo dia/noite.</span>
+      <span class="badge">&#9654; JOGAR</span>
     </a>
 
-    <a class="card" href="src/web-games/speed-run/" style="border-color:#8a5a1a;background:linear-gradient(160deg,#241a0d,#0d1a30)">
-      <span class="engine">Three.js + WebGL · 3D</span>
-      <span class="name" style="color:#ffd24a">&#127950; Cruis'n Tauan</span>
-      <span class="desc">Corrida arcade inspirada no Cruis'n World (N64): 3 pistas (Centro Urbano, Floresta Temperada e Deserto do Arizona) com paisagens texturizadas, montanhas em parallax, cercas e placas, trechos de terra com atrito e tremulação, lombadas que lançam o carro e 5 carros — incluindo o Fiat Idea Adventure 2013 Dual Logic.</span>
-      <span class="badge playable">&#9654; PLAY NOW</span>
+    <a class="card speed-run" href="src/web-games/speed-run/">
+      <span class="engine">Corrida arcade · Three.js</span>
+      <span class="name">&#127950; Cruis'n Tauan</span>
+      <span class="desc">Corrida estilo Cruis'n World: 3 pistas, lombadas que lançam o carro, trechos de terra e 5 carros — incluindo o Fiat Idea Adventure 2013.</span>
+      <span class="badge">&#9654; JOGAR</span>
     </a>
 
-    <a class="card" href="src/web-games/demolition-ball/" style="border-color:#e08a2a;background:linear-gradient(160deg,#241505,#101820)">
-      <span class="engine">WebGL2 puro &middot; zero libs</span>
-      <span class="name" style="color:#ffb04a">&#127959; Demolition Ball</span>
-      <span class="desc">Opere um trator-guindaste com bola de demolição de 4,2 t numa cidade viva: rio com pontes, pedestres, praças e equipe de cones. Modo Tauan (a bola busca o alvo sozinha — só demolir!) ou Modo Contratos com prazo e multa. Renderer, física e áudio escritos do zero.</span>
-      <span class="badge playable">&#9654; PLAY NOW</span>
+    <a class="card demolition-ball" href="src/web-games/demolition-ball/">
+      <span class="engine">Demolição · WebGL2 puro</span>
+      <span class="name">&#127959; Demolition Ball</span>
+      <span class="desc">Trator-guindaste com bola de demolição de 4,2 t numa cidade viva. Modo Tauan (a bola busca o alvo sozinha) ou Modo Contratos com prazo e multa.</span>
+      <span class="badge">&#9654; JOGAR</span>
     </a>
   </div>
 
