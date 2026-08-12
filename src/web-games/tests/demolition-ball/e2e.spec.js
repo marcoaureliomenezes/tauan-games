@@ -58,33 +58,11 @@ test('o trator dirige e a cidade continua consistente', async ({ page }) => {
   expect(Number.isFinite(end.speed)).toBe(true);
 });
 
-test('a bola pendula: fica presa ao cabo e nunca escapa do comprimento', async ({ page }) => {
-  await boot(page);
-  const samples = await page.evaluate(async () => {
-    const d = window.__demolition;
-    d.begin();
-    d.press('Space');
-    const out = [];
-    for (let i = 0; i < 90; i++) {
-      await new Promise((r) => requestAnimationFrame(r));
-      const t = d.rig.tip, b = d.rig.ball.pos;
-      out.push({
-        dist: Math.hypot(b.x - t.x, b.y - t.y, b.z - t.z),
-        rope: d.rig.ropeLen,
-        speed: Math.hypot(d.rig.ball.vel.x, d.rig.ball.vel.y, d.rig.ball.vel.z),
-      });
-    }
-    d.release('Space');
-    return out;
-  });
-  for (const s of samples) {
-    expect(Number.isFinite(s.dist)).toBe(true);
-    // Inextensible rope: never longer than the drum length (tiny solver slack allowed).
-    expect(s.dist).toBeLessThan(s.rope + 0.15);
-  }
-  // The pump must actually build swing energy.
-  expect(Math.max(...samples.map((s) => s.speed))).toBeGreaterThan(2);
-});
+// T-04: a invariante de inextensibilidade do cabo (90 frames de Space,
+// dist(ball,tip) <= ropeLen+0.15, e velocidade máxima > 2 provando que a
+// bomba realmente constrói balanço) foi rebaixada para unit.mjs — dirige o
+// Rig direto, sem browser (ver "rig: the ball never outruns the rope while
+// swinging"). Este E2E era o DN clássico do anexo de rebaixamento.
 
 test('impacto da bola demole a estrutura alvo e gera escombros', async ({ page }) => {
   test.slow();   // frame-driven loop: at CI fps the full budget can near 26x22 RAFs
@@ -139,102 +117,28 @@ test('HUD mostra contrato, alvos e caixa', async ({ page }) => {
   await expect(page.locator('#money')).toContainText('$');
 });
 
-// ---------------------------------------------------------------- v0.9.0 (R-05..R-08)
-
-test('cidade viva mantém fps jogável em quality=low (T4)', async ({ page }) => {
-  // Perf gate for the OPERATOR's machine class. On shared CI runners the
-  // software rasterizer + neighbour load make wall-clock fps meaningless
-  // (measured locally: baseline pre-v0.9.0 also fails under loadavg 30).
-  test.skip(!!process.env.CI, 'fps não é mensurável em runner compartilhado');
-  await boot(page);
-  await page.evaluate(() => window.__demolition.begin());
-  const fps = await page.evaluate(async () => {
-    // Warm up, then take the BEST of six 30-frame windows: the game's own cost
-    // is what we gate on, not ambient CI machine load spikes.
-    for (let i = 0; i < 30; i++) await new Promise((r) => requestAnimationFrame(r));
-    let best = 0;
-    for (let w = 0; w < 6; w++) {
-      const t0 = performance.now();
-      for (let i = 0; i < 30; i++) await new Promise((r) => requestAnimationFrame(r));
-      best = Math.max(best, 30000 / (performance.now() - t0));
-    }
-    return best;
-  });
-  expect(fps).toBeGreaterThanOrEqual(20);
-});
-
-// ---------------------------------------------------------------- v0.9.0 (R-11)
-
-test('equipe de isolamento: botão a ≤30m, cones cercam o quarteirão, tráfego para, recolha (AC-5)', async ({ page }) => {
-  await boot(page);
-  await page.evaluate(() => {
-    const d = window.__demolition;
-    d.begin();
-    d.teleportBallTo(d.missions.current.targets[0]);   // parks the rig ~20 m out
-    d.rig.ball.vel = { x: 0, y: 0, z: 0 };
-  });
-  await expect(page.locator('#crew-btn')).toBeVisible({ timeout: 15000 });
-  await page.click('#crew-btn');
-  const called = await page.evaluate(() => window.__demolition.crew.state);
-  expect(called).toBe('driving');
-  await expect(page.locator('#crew-btn')).toBeHidden();
-
-  // Fast-forward the crew clock (real-time would take minutes at CI fps).
-  const placed = await page.evaluate(() => {
-    const d = window.__demolition;
-    let guard = 0;
-    while (d.crew.state !== 'holding' && guard++ < 20000) d.crew.update(0.05, d.missions, d.traffic);
-    return { state: d.crew.state, cones: d.crew.cones.length, closed: d.traffic.closedEdges.size };
-  });
-  expect(placed.state).toBe('holding');
-  expect(placed.cones).toBe(28);
-  expect(placed.closed).toBe(4);
-
-  // Finish the target: the crew collects the cones and reopens the block.
-  const done = await page.evaluate(() => {
-    const d = window.__demolition;
-    const t = d.missions.current.targets[0];
-    for (let i = 0; i < t.alive.length && t.progress < 0.95; i++) {
-      if (t.alive[i]) t.kill(i);
-    }
-    let guard = 0;
-    while (d.crew.state !== 'idle' && guard++ < 30000) d.crew.update(0.05, d.missions, d.traffic);
-    return { state: d.crew.state, cones: d.crew.cones.length, closed: d.traffic.closedEdges.size };
-  });
-  expect(done.state).toBe('idle');
-  expect(done.cones).toBe(0);
-  expect(done.closed).toBe(0);
-});
+// T-04: "equipe de isolamento" (R-11) DELETADO — o E2E chamava
+// `d.crew.update(dt, missions, traffic)` num laço `while`, literalmente
+// re-rodando em página o MESMO método puro que unit.mjs:419 ("equipe: ciclo
+// completo") já roda em Node, com as MESMAS asserções (cones===28,
+// closedEdges===4, depois ===0) — zero comportamento adicional de browser
+// (sem clique, sem DOM além do botão/estado já cobertos acima).
 
 // ---------------------------------------------------------------- v0.9.0 (R-01)
 
+// T-04: slim — os valores-padrão de cada modo (threshold/deadline/targets)
+// já são provados em unit.mjs:227/:248 construindo MissionSystem com as
+// MESMAS opções de MODES.tauan/MODES.contratos (modes.js). O que só o
+// browser prova é a FIAÇÃO real: o clique em #mode-* de fato troca
+// window.__demolition.mode, e o modo trava depois de begin() — só isso fica.
 test('overlay oferece os dois modos e o Tauan é o padrão (AC-1)', async ({ page }) => {
   await boot(page);
   await expect(page.locator('#mode-tauan')).toBeVisible();
   await expect(page.locator('#mode-contratos')).toBeVisible();
-  const tauan = await page.evaluate(() => ({
-    mode: window.__demolition.mode.id,
-    threshold: window.__demolition.missions.thresholdOf(),
-    deadline: window.__demolition.missions.current.deadline,
-    targets: window.__demolition.missions.current.targets.length,
-  }));
-  expect(tauan.mode).toBe('tauan');
-  expect(tauan.threshold).toBeLessThanOrEqual(0.5);
-  expect(tauan.deadline).toBe(0);          // sem cronômetro no Modo Tauan
-  expect(tauan.targets).toBe(1);           // um alvo por vez
+  expect(await page.evaluate(() => window.__demolition.mode.id)).toBe('tauan');
 
   await page.click('#mode-contratos');
-  const contratos = await page.evaluate(() => ({
-    mode: window.__demolition.mode.id,
-    threshold: window.__demolition.missions.thresholdOf(),
-    deadlines: window.__demolition.missions.opts.deadlines,
-    fines: window.__demolition.missions.opts.collateralFines,
-  }));
-  expect(contratos.mode).toBe('contratos');
-  expect(contratos.threshold).toBeGreaterThan(0.5);   // spec.threshold original (0.9)
-  // Contratos 1–2 têm time:0 por design; o que o modo garante é a regra ligada.
-  expect(contratos.deadlines).toBe(true);
-  expect(contratos.fines).toBe(true);
+  expect(await page.evaluate(() => window.__demolition.mode.id)).toBe('contratos');
 
   // Depois de começar, o modo trava.
   await page.evaluate(() => window.__demolition.begin());

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import * as THREE from '../../vendor/three.module.min.js';
 import { MISSIONS } from '../../james-bond/src/content/missions.js';
 import { WEAPONS, freshAmmo } from '../../james-bond/src/content/weapons.js';
 import { createRandom, hashSeed } from '../../james-bond/src/random.js';
 import { createPhysics } from '../../james-bond/src/engine/physics.js';
-import { CONFIG, SENSITIVITY, clampSensitivity } from '../../james-bond/src/config.js';
-import { slabCells, stairDirection, STAIR_STEPS } from '../../james-bond/src/upper-floor.js';
+import { CONFIG, SENSITIVITY, clampSensitivity, KIDS, LOOK } from '../../james-bond/src/config.js';
+import { slabCells, stairDirection, addUpperFloor, STAIR_STEPS } from '../../james-bond/src/upper-floor.js';
+import { addTower } from '../../james-bond/src/tower.js';
 import { isSolid, SOLID_TILES, GROUND_TILES, MARKERS } from '../../james-bond/src/content/tiles.js';
 import { stepProjectile } from '../../james-bond/src/gameplay/ballistics.js';
 import { isPrecisionShot, computeSpread } from '../../james-bond/src/gameplay/spread.js';
@@ -13,6 +15,26 @@ import {
   DEFAULT_SPAWN_RATE, DEFAULT_MAX_ALIVE, SPAWN_MIN_DISTANCE,
 } from '../../james-bond/src/gameplay/spawner.js';
 import { game, resetRun, STARTING_WEAPON } from '../../james-bond/src/state.js';
+
+/** Fabrica um `world` mínimo para chamar addUpperFloor()/addTower() em Node:
+ * ambas as funções só precisam de `chars` (grade de tiles) e `toWorld` (célula
+ * -> posição), nunca de cena THREE de verdade — a mesma razão pela qual são
+ * DEMOTABLE-NEW no anexo de rebaixamento (upper-floor.js e tower.js importam
+ * só THREE + config + tiles, zero DOM). THREE em si roda em Node sem GPU:
+ * Group/Mesh/InstancedMesh/Material são dados puros até um WebGLRenderer
+ * entrar em cena (ver a asa-delta importada acima). */
+function buildFloorWorld(mission) {
+  const height = mission.grid.length;
+  const width = mission.grid[0].length;
+  const chars = mission.grid.map((row) => row.split(''));
+  const toWorld = ({ x, z }) => new THREE.Vector3((x - width / 2) * CONFIG.cellSize, 0, (z - height / 2) * CONFIG.cellSize);
+  return { chars, toWorld };
+}
+const floorMaterials = () => ({
+  floor: new THREE.MeshStandardMaterial(),
+  trim: new THREE.MeshStandardMaterial(),
+  wall: new THREE.MeshStandardMaterial(),
+});
 
 assert.equal(MISSIONS.length, 6, 'campaign must have six missions');
 for (const mission of MISSIONS) {
@@ -48,6 +70,10 @@ for (const mission of MISSIONS) {
     assert.ok(reachable.has(findMarker(mission.grid, marker).join(',')), `${mission.code} cannot reach ${marker}`);
   }
   assert.equal(Object.keys(mission.objectives).length, 3, `${mission.code} objectives`);
+  // Orçamento de inimigos da missão: o teto de vivos simultâneos é o que
+  // efetivamente "orça" quantos inimigos existem em cena — sem ele nenhuma
+  // guarnição/reforço nasce.
+  assert.ok(mission.maxAlive > 0, `${mission.code} enemyBudget (maxAlive) must be positive`);
 
   // --- F3: config de reforço contínuo ---------------------------------------
   assert.deepEqual(validateSpawnConfig(mission), [], `${mission.code} spawner config`);
@@ -111,6 +137,83 @@ for (const mission of MISSIONS) {
     assert.ok(cells.has(`${x},${z}`) && !isSolid(chars[z][x]),
       `${mission.code} upper guard (${x},${z}) must spawn on a slab cell`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// FLOOR-AUDIT (rebaixado do E2E "every operation has a second floor", 900s):
+// para cada missão, constrói a física REAL do mezanino (addUpperFloor — a
+// mesma função que o jogo chama) e prova, com a MESMA sonda de auditoria do
+// jogo (physics.probe), que nenhuma célula do mezanino é ilha (orphanUpper)
+// e nenhuma deixa o jogador sem saída (trapped). upper-floor.js e
+// engine/physics.js já estão importados acima; nenhum módulo novo entra.
+// ---------------------------------------------------------------------------
+for (const mission of MISSIONS) {
+  const world = buildFloorWorld(mission);
+  const materials = floorMaterials();
+  const floorPhysics = await createPhysics();
+  const group = new THREE.Group();
+  const upper = addUpperFloor(group, floorPhysics, mission, world, materials);
+  assert.ok(upper.cells.size > 8, `${mission.code} slab cells > 8`);
+
+  const feetY = CONFIG.floorHeight;
+  const passable = (from, to) => {
+    const a = world.toWorld(from);
+    const b = world.toWorld(to);
+    for (let i = 0; i <= 8; i += 1) {
+      const t = i / 8;
+      const x = a.x + (b.x - a.x) * t;
+      const z = a.z + (b.z - a.z) * t;
+      const y = floorPhysics.supportHeight(x, z, feetY) + 1;
+      if (floorPhysics.probe(x, y, z)) return false;
+    }
+    return true;
+  };
+  const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const reach = (start) => {
+    const seen = new Set([`${start.x},${start.z}`]);
+    const queue = [start];
+    while (queue.length) {
+      const current = queue.shift();
+      for (const [dx, dz] of NEIGHBOURS) {
+        const next = { x: current.x + dx, z: current.z + dz };
+        const key = `${next.x},${next.z}`;
+        if (seen.has(key) || !upper.cells.has(key) || isSolid(world.chars[next.z]?.[next.x])) continue;
+        if (!passable(current, next)) continue;
+        seen.add(key);
+        queue.push(next);
+      }
+    }
+    return seen;
+  };
+
+  const upperSeen = new Set();
+  for (const stair of upper.stairs) {
+    const [dx, dz] = stair.direction;
+    const landing = { x: stair.cell.x + dx, z: stair.cell.z + dz };
+    assert.ok(upper.cells.has(`${landing.x},${landing.z}`),
+      `${mission.code}: stair ${stair.cell.x},${stair.cell.z} must land on a slab cell`);
+    for (const key of reach(landing)) upperSeen.add(key);
+  }
+  const walkableUpper = [...upper.cells].filter((key) => {
+    const [x, z] = key.split(',').map(Number);
+    return !isSolid(world.chars[z]?.[x]);
+  });
+  const orphanUpper = walkableUpper.filter((key) => !upperSeen.has(key));
+  assert.deepEqual(orphanUpper, [], `${mission.code}: mezzanine cells unreachable from any stair`);
+
+  // "Parado aqui, o jogador consegue sair em alguma das 8 direções?" — a
+  // mesma sonda que flagrou o bug que prendeu o operador.
+  const ESCAPES = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
+  const trapped = [];
+  for (const key of upperSeen) {
+    const [x, z] = key.split(',').map(Number);
+    const point = world.toWorld({ x, z });
+    const y = floorPhysics.supportHeight(point.x, point.z, feetY) + 1;
+    if (!ESCAPES.some(([ex, ez]) => !floorPhysics.probe(point.x + ex * 0.4, y, point.z + ez * 0.4))) {
+      trapped.push(`${x},${z}`);
+    }
+  }
+  assert.deepEqual(trapped, [], `${mission.code}: mezzanine cell with no escape direction (player trap)`);
 }
 
 // O degrau da escadaria tem de ser vencível pelo passo automático do jogador.
@@ -359,6 +462,21 @@ assert.ok(SENSITIVITY.default >= SENSITIVITY.min && SENSITIVITY.default <= SENSI
   'o padrão tem de estar dentro da própria faixa');
 
 // ---------------------------------------------------------------------------
+// MODO CRIANÇA — cone de mira (rebaixado do E2E "kids mode locks the aim
+// into a narrow forward cone"). A fórmula é a mesma de engine/input.js
+// setKidsMode(), reproduzida aqui sobre as constantes puras de config.js
+// (KIDS/LOOK) — input.js não entra porque abre PointerLockControls sobre
+// `document` no próprio construtor.
+// ---------------------------------------------------------------------------
+const kidsMin = Math.PI / 2 - (KIDS.pitchUpDeg * Math.PI) / 180;
+const kidsMax = Math.PI / 2 + (KIDS.pitchDownDeg * Math.PI) / 180;
+const kidsSpan = kidsMax - kidsMin;
+const normalSpan = LOOK.maxPolarAngle - LOOK.minPolarAngle;
+assert.ok(kidsSpan < normalSpan, 'kids cone must be narrower than the normal look range');
+assert.ok(kidsSpan < Math.PI / 2, 'kids cone must stay under a quarter turn total');
+assert.ok(kidsMin < Math.PI / 2 && kidsMax > Math.PI / 2, 'kids cone stays centered on the horizon');
+
+// ---------------------------------------------------------------------------
 // F2 — PRECISÃO DE PRIMEIRO TIRO (modelo de espalhamento)
 // ---------------------------------------------------------------------------
 const gun = { spread: 0.01 };
@@ -429,6 +547,68 @@ assert.ok(validateSpawnConfig({ spawnRate: 5, maxAlive: 0 }).length > 0, 'teto z
 assert.ok(validateSpawnConfig({ spawnRate: 5, maxAlive: 3.5 }).length > 0, 'teto tem de ser inteiro');
 assert.ok(validateSpawnConfig({ spawnRate: -1, maxAlive: 16 }).length > 0, 'taxa negativa é inválida');
 assert.ok(DEFAULT_SPAWN_RATE > 0 && DEFAULT_MAX_ALIVE > 0, 'os padrões (usados quando a missão omite o campo) são válidos');
+
+// ---------------------------------------------------------------------------
+// F3 — INVARIANTES DO POOL DO SPAWNER (rebaixado do E2E "reinforcement
+// spawner backfills kills up to the mission cap without leaking rigs"):
+// mata metade da guarnição, avança o relógio de reforço e prova que o teto
+// nunca é furado e que o pool (guarnição + margem) nunca CRESCE — apenas os
+// primitivos puros de gameplay/spawner.js entram, sem ai/guards.js (que
+// depende da cena THREE dos rigs).
+// ---------------------------------------------------------------------------
+{
+  const mission = MISSIONS[0];
+  const groundGuardCount = mission.grid.join('').split('').filter((char) => char === 'G').length;
+  const initialGroundCount = groundGuardCount; // reforço só nasce no térreo (ai/guards.js)
+  const poolSize = groundPoolSize(initialGroundCount, mission.maxAlive);
+  let alive = Math.min(mission.maxAlive, groundGuardCount + (mission.upper.guards || []).length);
+  let spawns = 0;
+  const scheduler = createSpawnScheduler(mission.spawnRate);
+
+  // Mata metade da guarnição: abre espaço para o spawner repor.
+  const killed = Math.floor(alive / 2);
+  alive -= killed;
+
+  const step = spawnIntervalSeconds(mission.spawnRate) / 4;
+  for (let i = 0; i < 400; i += 1) {
+    if (scheduler.tick(step)) {
+      if (alive < mission.maxAlive) { alive += 1; spawns += 1; scheduler.schedule(mission.spawnRate); } else scheduler.retry();
+    }
+    assert.ok(alive <= mission.maxAlive, `${mission.code}: alive must never exceed maxAlive while stepping`);
+  }
+  assert.ok(spawns > 0, `${mission.code}: the spawner must have produced at least one reinforcement`);
+  assert.equal(groundPoolSize(initialGroundCount, mission.maxAlive), poolSize,
+    `${mission.code}: pool size is a fixed function of garrison+cap — it never grows with spawns`);
+}
+
+// ---------------------------------------------------------------------------
+// M2 — TORRE DE VIGIA: queda do parapeito (rebaixado do E2E "watchtower
+// parapet is jumpable"). O pulo por cima de um obstáculo de 1,05 m (mesma
+// altura do parapeito — PARAPET_HEIGHT em upper-floor.js) já foi provado
+// genericamente acima (JUMP_APEX); este teste isola o que resta puramente
+// físico: caindo do alto da torre, a gravidade tem de assentar o jogador no
+// térreo — nunca preso a meio caminho por uma superfície fantasma.
+// ---------------------------------------------------------------------------
+{
+  const mission = MISSIONS[0];
+  const world = buildFloorWorld(mission);
+  const materials = floorMaterials();
+  const towerPhysics = await createPhysics();
+  towerPhysics.addPlatform(0, 0, 400, 400, 0); // térreo — o piso que buildGroundFloor cobriria
+  const group = new THREE.Group();
+  const tower = addTower(group, towerPhysics, mission, world, materials);
+  assert.ok(tower, `${mission.code} must declare a watchtower`);
+
+  // Posição já além do parapeito (o "depois de pular"), na altura do topo.
+  towerPhysics.createPlayer({ x: tower.top.x + CONFIG.cellSize, y: tower.top.y + 1, z: tower.top.z });
+  for (let i = 0; i < 300; i += 1) towerPhysics.movePlayer({ x: 0, y: -0.12, z: 0 });
+  const landed = towerPhysics.position();
+  assert.ok(Math.abs(landed.y - 1) < 0.01, `player must land at street level, got y=${landed.y}`);
+  // "Grounded" na física deste jogo é repousar EXATAMENTE sobre o suporte
+  // calculado, não flutuar em queda ainda não resolvida.
+  assert.equal(towerPhysics.supportHeight(landed.x, landed.z, landed.y - 1) + 1, landed.y,
+    'landed position must rest exactly on the computed ground support');
+}
 
 console.log(`James Bond unit checks passed: ${MISSIONS.length} missions, ${Object.keys(WEAPONS).length} weapons`);
 

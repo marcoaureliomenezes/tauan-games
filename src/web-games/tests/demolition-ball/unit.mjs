@@ -304,6 +304,27 @@ test('homing: without a target SPACE stays the classic boom pump', () => {
   assert.ok(maxSpeed > 2, `pump did not build a swing (max ${maxSpeed.toFixed(1)} m/s)`);
 });
 
+// Rebaixado do E2E "a bola pendula: fica presa ao cabo e nunca escapa do
+// comprimento" (90 rAF frames com Space seguro): a mesma rotina de swing por
+// pump, dirigida direto no Rig — sem browser, sem THREE, sem canvas.
+test('rig: the ball never outruns the rope while swinging (rope inextensibility)', () => {
+  const { world, rig } = homingScenario();   // classic boom pump, no homing target
+  const dt = 1 / 60;
+  let maxSpeed = 0;
+  for (let i = 0; i < 90; i++) {
+    rig.update(dt, { ...NO_DRIVE, pump: 1 }, world);
+    const dist = Math.hypot(rig.ball.pos.x - rig.tip.x, rig.ball.pos.y - rig.tip.y, rig.ball.pos.z - rig.tip.z);
+    assert.ok(Number.isFinite(dist), `distance must be finite at step ${i}`);
+    // Inextensible rope: never longer than the drum length (tiny solver slack allowed).
+    assert.ok(dist <= rig.ropeLen + 0.15, `step ${i}: ball escaped the rope (dist=${dist.toFixed(3)}, rope=${rig.ropeLen})`);
+    const speed = vlen(rig.ball.vel);
+    if (speed > maxSpeed) maxSpeed = speed;
+  }
+  // The pump must actually build swing energy — a rope constraint alone would
+  // trivially pass with a ball parked motionless at the tip.
+  assert.ok(maxSpeed > 2, `pump did not build a swing (max ${maxSpeed.toFixed(1)} m/s)`);
+});
+
 test('spawn: safeBallPos never leaves the ball inside a structure or underground (R-04)', () => {
   const s = new Structure({ x: 0, z: 0, w: 14, d: 14, h: 10, type: 'warehouse', name: 'W', color: [1, 1, 1] });
   const world = { structures: [s], index: new StructureIndex([s]) };

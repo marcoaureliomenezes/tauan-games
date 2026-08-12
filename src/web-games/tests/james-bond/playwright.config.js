@@ -1,12 +1,13 @@
 const path = require('path');
 const { defineConfig } = require('@playwright/test');
 
-const outputRoot = path.resolve(__dirname, '../../../../../../.dadaia/tmp/root/20260718/james-bond-qa');
-
 module.exports = defineConfig({
   testDir: __dirname,
   testMatch: 'smoke.spec.js',
-  outputDir: path.join(outputRoot, 'results'),
+  // T-04: era um caminho relativo de 6 níveis que escapava do repo para um
+  // scratch datado fora de controle — gitignorado pelo padrão raiz
+  // `test-results/` (qualquer profundidade), então nem precisa de exceção.
+  outputDir: path.join(__dirname, 'test-results'),
   // v0.10.0 T-03: auto-suficiente (sobe/derruba o próprio servidor) — antes
   // dependia de um servidor já de pé em TEST_PORT||3658.
   globalSetup: './globalSetup.js',

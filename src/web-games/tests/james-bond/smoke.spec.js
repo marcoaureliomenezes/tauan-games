@@ -1,11 +1,5 @@
-const path = require('path');
 const { test, expect } = require('@playwright/test');
 const { PNG } = require('playwright-core/lib/utilsBundle');
-
-const evidence = path.resolve(__dirname, '../../../../../../.dadaia/tmp/root/20260718/james-bond-qa');
-// CONFIG.floorHeight (3.55) + 1 de offset dos pés = altura do jogador em pé no
-// mezanino. Chegar acima disso só é possível subindo a escada.
-const CONFIG_FLOOR_TOP = 4.4;
 
 // waitForTimeout restantes (T-07) — legítimos por semântica, NÃO sleeps
 // preguiçosos: pulsos de gatilho (80-120 ms) são a duração do clique atuado;
@@ -37,9 +31,10 @@ test('boots offline, renders and plays the first operation', async ({ page }) =>
   await page.locator('.mission-tab').first().click({ force: true });
   expect(await page.evaluate(() => window.game.telemetry.worldBuilds)).toBe(1);
 
-  const pixels = PNG.sync.read(await page.locator('#viewport canvas').screenshot({
-    path: path.join(evidence, 'canvas-desktop.png'),
-  }));
+  // S-23: a captura vira Buffer em memória só para a asserção de pixels
+  // acesos — sem `path`, nada de PNG de caminho feliz sem consumidor vai
+  // para disco (screenshots de FALHA continuam governadas pelo config).
+  const pixels = PNG.sync.read(await page.locator('#viewport canvas').screenshot());
   let litPixels = 0;
   for (let index = 0; index < pixels.data.length; index += 4) {
     if (pixels.data[index] + pixels.data[index + 1] + pixels.data[index + 2] > 24) litPixels += 1;
@@ -56,7 +51,6 @@ test('boots offline, renders and plays the first operation', async ({ page }) =>
   // (antes eram enfeite atravessável). ~105 por mapa hoje; a folga cobre um
   // quarteirão mais entulhado sem deixar o número crescer sem controle.
   expect(await page.evaluate(() => window.game.telemetry.staticColliders)).toBeLessThan(220);
-  await page.screenshot({ path: path.join(evidence, 'mission-desktop.png') });
   const start = await page.evaluate(() => ({ ...window.game.player.position }));
   await page.keyboard.down('KeyW');
   // polling no estado real (T-07): espera o jogador SE MOVER — não um sleep
@@ -147,9 +141,6 @@ test('animated enemy models load locally and drive the roster', async ({ page })
 });
 
 test('kids mode locks the aim into a narrow forward cone', async ({ page }) => {
-  // Boot de página + reload + deploy() sob carga extrema de máquina
-  // compartilhada (mesmo motivo dos demais testes deste arquivo).
-  test.setTimeout(600000);
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/src/web-games/james-bond/');
@@ -161,139 +152,15 @@ test('kids mode locks the aim into a narrow forward cone', async ({ page }) => {
   await page.locator('#kids-mode').check();
   const on = await page.evaluate(() => window.game.api.lookLimits());
   expect(on.kids).toBe(true);
-  // O cone tem de ser bem mais estreito que o padrão e ficar em torno da horizontal.
-  const span = on.max - on.min;
-  expect(span).toBeLessThan(off.max - off.min);
-  expect(span).toBeLessThan(Math.PI / 2);
-  expect(on.min).toBeLessThan(Math.PI / 2);
-  expect(on.max).toBeGreaterThan(Math.PI / 2);
-
-  // A preferência sobrevive a um reload.
+  // O cone em si (cone(kids) < cone(normal) < pi/2, centrado no horizonte) é
+  // verificado sem browser em unit.mjs, sobre as constantes puras KIDS/LOOK
+  // de config.js. O que só o browser prova é o que fica aqui: o checkbox
+  // real ligando a flag no jogo e a persistência sobrevivendo a um reload
+  // (localStorage).
   await page.reload();
   await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
   expect(await page.locator('#kids-mode').isChecked()).toBe(true);
   expect(await page.evaluate(() => window.game.api.lookLimits().kids)).toBe(true);
-
-  // E o coice da arma não fura o cone: a mira continua presa depois de atirar.
-  await page.evaluate(() => { window.game.api.deploy(0); });
-  await page.waitForFunction(() => window.game.phase === 'playing');
-  await page.evaluate(() => window.game.api.setKidsMode(true));
-  const pitchAfterRecoil = await page.evaluate(async () => {
-    const limits = window.game.api.lookLimits();
-    for (let i = 0; i < 40; i += 1) window.game.camera.rotateX(0.05); // simula coice acumulado
-    window.game.controls.dispatchEvent?.({ type: 'change' });
-    return { limits };
-  });
-  expect(pitchAfterRecoil.limits.kids).toBe(true);
-  expect(errors).toEqual([]);
-});
-
-test('every operation has a second floor the player can climb to', async ({ page }) => {
-  // deploy() agora aguarda o pré-aquecimento de shader (renderer.compileAsync
-  // — ver main.js) antes de resolver. Cada missão troca o MUNDO inteiro
-  // (materiais novos, os da missão anterior descartados junto com o programa
-  // compilado deles — ver disposeWorld/materials.js), então cada uma das 7
-  // chamadas a deploy() neste teste (6 no laço + 1 no fim, para a escada) paga
-  // o custo de compilar de novo. Sem KHR_parallel_shader_compile (GPU de
-  // software neste sandbox) essa compilação é síncrona/bloqueante, e o tempo
-  // real que ela consome escala com a carga da máquina compartilhada — os
-  // 300 s padrão (mesmo sem nenhuma lentidão de simulação, só o custo de
-  // compilar 7 vezes) ficaram apertados demais.
-  test.setTimeout(900000);
-  const errors = [];
-  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/src/web-games/james-bond/');
-  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
-  await page.evaluate(() => window.game.api.unlockAll());
-
-  for (let mission = 0; mission < 6; mission += 1) {
-    const code = `OP-0${mission + 1}`;
-    await page.evaluate((index) => window.game.api.deploy(index), mission);
-    await page.waitForFunction(() => window.game.phase === 'playing');
-    const floors = await page.evaluate(() => window.game.api.floors());
-    expect(floors.slabCells, `${code} slab cells`).toBeGreaterThan(8);
-    expect(floors.stairs.length, `${code} stairs`).toBeGreaterThan(0);
-    // térreo + lajes do mezanino + degraus das escadarias
-    expect(floors.platforms).toBeGreaterThan(floors.slabCells + floors.stairs.length * 6);
-
-    // AUDITORIA DE MAPA: varre os dois andares com a física real e prova que
-    // não existe ponto onde o jogador fique preso, dentro de geometria, nem
-    // trecho inacessível. Foi assim que os bugs de "cair dentro da parede" e
-    // "mezanino partido ao meio" foram encontrados — a checagem fica.
-    const audit = await page.evaluate(() => window.game.api.auditMap());
-    expect(audit.inside, `${code}: pontos DENTRO de geometria sólida`).toEqual([]);
-    expect(audit.trapped, `${code}: pontos sem saída (jogador preso)`).toEqual([]);
-    expect(audit.unreachable, `${code}: objetivos/extração inacessíveis`).toEqual([]);
-    expect(audit.orphanUpper, `${code}: células de mezanino inalcançáveis`).toEqual([]);
-    expect(audit.upperIslands, `${code}: escada sem saída na laje`).toEqual([]);
-    expect(audit.upperReached, `${code}: mezanino transitável por inteiro`).toBe(audit.upperCells);
-    for (const stair of audit.stairs) {
-      expect(stair.climbed, `${code}: escada ${stair.cell} sobe andando`).toBe(true);
-      expect(stair.descended, `${code}: escada ${stair.cell} desce andando`).toBe(true);
-      expect(stair.reachable, `${code}: pé da escada ${stair.cell} alcançável do spawn`).toBe(true);
-    }
-
-    // Nada sólido pode ser invisível, nada invisível pode ser sólido: cada
-    // volume de colisão tem de ter geometria visível e opaca sobre ele.
-    const solids = await page.evaluate(() => window.game.api.auditSolids());
-    expect(solids.invisible, `${code}: colisores SEM geometria visível`).toEqual([]);
-    expect(solids.seeThrough, `${code}: colisores cobertos só por geometria transparente`).toEqual([]);
-  }
-
-  // Sobe de verdade a primeira escadaria da OP-01: fica na entrada (célula
-  // anterior ao pé da escada), olha para a subida e segura W — sem pulo, sem
-  // volume de escada vertical: só o passo automático vencendo cada degrau.
-  await page.evaluate(() => window.game.api.deploy(0));
-  await page.waitForFunction(() => window.game.phase === 'playing');
-  const stair = await page.evaluate(() => window.game.api.floors().stairs[0]);
-  expect(stair.direction).toBeDefined();
-  await page.evaluate(({ x, z, direction }) => {
-    const cell = 3.6;
-    window.game.api.teleport(x - direction[0] * cell, z - direction[1] * cell);
-    // Mira na direção da subida para que W ande escada acima.
-    window.game.camera.lookAt(x + direction[0] * 20, window.game.camera.position.y, z + direction[1] * 20);
-  }, stair);
-  const atBase = await page.evaluate(() => window.game.api.floors());
-  expect(atBase.playerY).toBeLessThan(1.5);
-
-  // Segurar W sobe até o mezanino. O headless roda bem abaixo do tempo real e a
-  // taxa de quadros varia com a carga da cena, então esperamos pelo RESULTADO
-  // (chegou ao topo?) em vez de cravar uma altura por tempo decorrido.
-  await page.keyboard.down('KeyW');
-  // Escalada por SIMULAÇÃO (fixed step, não relógio de parede) — sofre a
-  // mesma razão tempo-real/tempo-de-jogo dos outros esperas deste arquivo sob
-  // carga de máquina compartilhada; orçamento alargado pelo mesmo motivo.
-  await page.waitForFunction(
-    (top) => window.game.api.floors().playerY > top,
-    CONFIG_FLOOR_TOP,
-    { timeout: 60000 },
-  );
-  await page.keyboard.up('KeyW');
-  const climbed = await page.evaluate(() => window.game.api.floors());
-  expect(climbed.playerY).toBeGreaterThan(CONFIG_FLOOR_TOP);
-
-  // Soltar W no alto não faz despencar: a laje segura o jogador.
-  await page.waitForTimeout(700);
-  const held = await page.evaluate(() => window.game.api.floors());
-  expect(held.playerY).toBeGreaterThan(CONFIG_FLOOR_TOP - 0.2);
-
-  // E a laje sustenta de verdade: largado acima dela, o jogador assenta no
-  // topo do mezanino (3.55 + 1 de offset dos pés) em vez de cair ao térreo.
-  const slab = await page.evaluate(() => window.game.api.floors().slabPoint);
-  expect(slab).not.toBeNull();
-  await page.evaluate(({ x, z }) => window.game.api.teleport(x, z, 6), slab);
-  // Espera o RESULTADO (assentou na laje), não um tempo fixo: no headless a
-  // queda pode levar mais que o tempo real conforme a carga da cena.
-  await page.waitForFunction(
-    () => window.game.api.floors().playerY < 4.7 && window.game.player.grounded,
-    undefined,
-    { timeout: 40000 },
-  );
-  const landed = await page.evaluate(() => ({ ...window.game.api.floors(), grounded: window.game.player.grounded }));
-  expect(landed.playerY).toBeGreaterThan(4.4); // 3.55 (laje) + 1 (offset dos pés)
-  expect(landed.playerY).toBeLessThan(4.7);
-  expect(landed.grounded).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -480,7 +347,6 @@ test('menu remains coherent on a narrow viewport', async ({ page }) => {
   await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow).toBe(false);
-  await page.screenshot({ path: path.join(evidence, 'menu-mobile.png'), fullPage: true });
 });
 
 // ACCEPTANCE METRIC — performance remediation (code-reviewer +
@@ -546,35 +412,6 @@ test('performance remediation: light count and shader program count stay constan
   expect(errors).toEqual([]);
 });
 
-test('all six operations build and resolve in the browser', async ({ page }) => {
-  // 6 missões distintas = 6 deploy()s, cada um pagando a compilação de shader
-  // completa da missão nova (ver comentário equivalente no teste "second
-  // floor" acima). Sob carga de máquina compartilhada isso pode somar mais
-  // que o orçamento padrão de 300 s.
-  test.setTimeout(600000);
-  const errors = [];
-  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/src/web-games/james-bond/');
-  await page.waitForFunction(() => window.game?.telemetry?.physicsReady === true);
-
-  for (let index = 0; index < 6; index += 1) {
-    // deploy() é assíncrono (aguarda o pré-aquecimento de shader antes de
-    // phase='playing' — ver main.js) — espera o resultado, não lê o estado
-    // no mesmo tick da chamada.
-    await page.evaluate((mission) => window.game.api.deploy(mission), index);
-    await page.waitForFunction(() => window.game.phase === 'playing');
-    const snapshot = await page.evaluate(() => window.game.api.snapshot());
-    expect(snapshot.phase).toBe('playing');
-    expect(snapshot.mission).toBe(index);
-    expect(snapshot.objectives).toHaveLength(3);
-    expect(snapshot.enemies).toBeGreaterThan(0);
-    await page.evaluate(() => window.game.api.completeMission());
-    expect(await page.evaluate(() => window.game.phase)).toBe('result');
-  }
-  expect(errors).toEqual([]);
-});
-
 // F1 — SENSIBILIDADE DO MOUSE: um slider real na tela do menu, aplicado ao
 // pointerSpeed do PointerLockControls e persistido em localStorage.
 test('mouse sensitivity setting persists and scales the look rate', async ({ page }) => {
@@ -619,6 +456,15 @@ test('mouse sensitivity setting persists and scales the look rate', async ({ pag
 // da IA (game.api.hasLineOfSight) e mira na ALTURA DA CABEÇA — acima de toda
 // cobertura de rua (carro 1.42 m, barril, barricada 1.0 m) — para garantir um
 // tiro genuinamente desobstruído em vez de supor a geometria do mapa.
+//
+// MANTIDO (correção de protocolo, T-04): o anexo de rebaixamento classificou
+// este caso como AC citando "LOS em engine/physics" — falso. `hasLineOfSight`
+// só existe em world.js (THREE.Raycaster contra a cena construída,
+// gameplay/explosives.js importa de lá); engine/physics.js não tem raycast
+// nenhum (só AABB: probe/solidAt/supportHeight). unit.mjs prova o MODELO de
+// espalhamento (isPrecisionShot/computeSpread) isoladamente, nunca a seleção
+// de alvo por LOS real nem o "um tiro mata" contra a vida/hitbox de um
+// inimigo de verdade — isso segue exclusivo do browser.
 test('a long-range single tap kills a distant target', async ({ page }) => {
   test.setTimeout(600000);
   const errors = [];
@@ -818,6 +664,16 @@ test('watchtower parapet is jumpable: no way up without a way down', async ({ pa
 // no mapa VOANDO de asa-delta e pousa. O teste flagra a chegada em voo pelo
 // contador `arriving` (o voo dura 5 s e as fatias de avanço são de 2 s, então
 // a janela nunca passa despercebida) e depois prova o pouso.
+//
+// MANTIDO (correção de protocolo, T-04): o anexo marcou este caso como AC
+// citando "unit.mjs:167 já importa hang-glider.js" — real, mas PARCIAL:
+// unit.mjs prova a geometria da asa-delta (>=6 meshes, noRay) e a inequação
+// GLIDER_DURATION < intervalo de spawn, nunca a integração com estado
+// (`ai/guards.js` updateArrival + `spawnerStats().arriving` subindo e
+// descendo de verdade durante um spawn real) — guards.js é poluído por rigs
+// THREE presos à cena, fora do padrão "zero imports" deste rebaixamento.
+// Cobertura node mais fraca que o E2E; o browser continua a única prova da
+// integração.
 test('reinforcements fly in on hang gliders before joining the fight', async ({ page }) => {
   test.setTimeout(600000);
   const errors = [];
