@@ -93,7 +93,10 @@ test.describe('Cruis\'n Tauan — NITRO (v0.8.0)', () => {
     // a tecla entra num substep e o boost no seguinte; sem este gate a
     // janela pegava latência de ativação e dvNitro saía < dvBase×1.35.
     await page.waitForFunction(() => window.__corrida.nitro.active === true, { timeout: 4000 });
+    const __w0 = await page.evaluate(() => ({ v: window.__corrida.player.st.v, raceT: window.__corrida.raceT, active: window.__corrida.nitro.active, charge: window.__corrida.nitro.charge }));
     const dvNitro = await dvOver1s(page);
+    const __w1 = await page.evaluate(() => ({ v: window.__corrida.player.st.v, raceT: window.__corrida.raceT, charge: window.__corrida.nitro.charge }));
+    console.log('QA-NITRO-WIN', JSON.stringify({ w0: __w0, w1: __w1, dvNitro, dvBase }));
     await page.keyboard.up('ShiftLeft');
     await page.keyboard.up('KeyW');
     // ×1,8 de acel menos o falloff de velocidade: folga p/ latência/ruído
