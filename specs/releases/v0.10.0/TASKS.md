@@ -61,7 +61,22 @@
   5. resultado escrito aqui como parâmetro de T-05 — inclusive se for nulo/negativo.
 - **Paralelismo:** nenhum (primeira tarefa, por decisão D3)
 
-## T-02 — `workers` 1 → 2 (avaliar 3) [ ]
+## T-02 — `workers` 1 → 2 (avaliar 3) [-]
+
+- **Owner:** software-engineer
+- **Medição (2026-08-11):** workers:2 **inviável no runner**, dois pontos:
+  (a) com os dirs pesados no root, run **31536963772** travado >1h → cancelado
+  (bisect local: demolition-ball e2e 33-60 s+retry/teste sob o config raiz);
+  (b) na suíte magra pós-testIgnore, run **31543170001**: **84/179 falhas** por
+  boot starvation — `waitForSelector('canvas')` 15 s estourado em massa —
+  47,5 min. SwiftShader não tolera 2 instâncias WebGL no runner.
+- **Escape da aceitação aplicado:** paralelismo **recuado** (workers:1,
+  commit `fb41682`) — resultado negativo registrado, não falha. Velocidade
+  virá de testIgnore/paths/polling/retry. Suíte magra workers:1 em
+  re-medição (run **31548373788**); workers:3 descartado (pior que 2).
+- **Desvio registrado (ordem):** T-03 executada **antes** da conclusão de
+  T-02 — a inviabilidade de workers:2 era causada pelos dirs que T-03 remove;
+  a re-medição de workers só faz sentido na suíte magra. Aceitações intactas.
 
 - **Owner:** software-engineer
 - **Write set:** `src/web-games/tests/playwright.config.js` (linha 8)
@@ -77,7 +92,27 @@
      flake vira bug pela via de hotfix (id do bug registrado aqui).
 - **Paralelismo:** nenhum
 
-## T-03 — `testIgnore` + jobs de CI dedicados (cobertura preservada) [ ]
+## T-03 — `testIgnore` + jobs de CI dedicados (cobertura preservada) [-]
+
+- **Owner:** software-engineer
+- **Entregue (commit `6626d9e`, ajuste `916d26f`):**
+  1. `testIgnore: ['**/james-bond/**']` no config raiz (a entrada de
+     demolition-ball foi **removida** — jogo/testes deletados em `59f793d`
+     pela sessão paralela de higiene do repo; `demolition-ball-ci.yml`
+     descartado no ajuste).
+  2. james-bond auto-suficiente: `tests/james-bond/globalSetup.js` +
+     `globalTeardown.js` (porta TEST_PORT||3658), registrados no config
+     dedicado — prova local: servidor sobe/encerra e o pid file é limpo
+     (a falha local inicial foi `ERR_UNSAFE_PORT` por minha escolha da
+     porta 3659, que está na blocklist do Chromium — não é defeito do
+     mecanismo; suite completa validada na 8377).
+  3. `james-bond-ci.yml` dedicado no padrão godot-ci (paths + concurrency).
+- **Limitação GitHub registrada:** workflows criados em branch só registram
+  triggers `push`/`pull_request` após chegarem à `main` — a prova
+  positiva/negativa de paths do item 4 fica para o primeiro push pós-merge.
+- **Contagem:** suíte raiz agora = aero-fighters + corrida + space-war
+  (179 testes na medição de T-02); raiz + james-bond dedicado ≥ 168 ✓.
+- **Step time do root magro:** em medição (run **31548373788**).
 
 - **Owner:** software-engineer
 - **Write set:** `src/web-games/tests/playwright.config.js` (`testIgnore`),
