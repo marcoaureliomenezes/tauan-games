@@ -194,7 +194,26 @@
      files commitados do baseline já foram removidos naquela passada).
   5. **Medida:** `du -sh` pós-run: 124K em tests/screenshots (baseline: 75 MB);
      `git status --porcelain` sem artefatos de run.
-## T-07 — `waitForTimeout` → polling, por lote [ ]
+## T-07 — `waitForTimeout` → polling, por lote [-]
+
+- **Owner:** software-engineer
+- **Nota de escopo (2026-08-11):** os lotes L3 (trex), L4 (bang-bang) e L5
+  (far-west) **evaporaram** — jogos/testes deletados pela sessão paralela de
+  higiene do repo (dadd7d7, fc52ad0). Lotes vivos: L1 aero (61 sites,
+  113,6 s), L2 space-war (39 sites, 31,5 s), L6 corrida (15 sites, 13,3 s) —
+  mais james-bond (17 sites, 6,8 s) e demolition-ball (2 sites, 0,6 s) que
+  rodam sob configs dedicados. Inventário novo-árvore: 134 sites / 165,9 s
+  (baseline legado: 191 sites / 216,6 s).
+- **Feito e validado (commits `dd5f7de`, `1ae5343`):**
+  - L6 corrida: 2 conversões (arranque do R-reset, queima nitro→≤20) + 13
+    justificados (janelas de medição de taxa, pulsos do servo, ação "segurar
+    W 3 s"). Verdes: R-reset 40,5 s, regen DOBRA 1,2 m.
+  - demolition-ball: 2 conversões (minimap M). Verde: 9,1 s.
+  - james-bond: 5 conversões (movimento, tiro, guarnição, explosões, mortes
+    no spawner) + 12 justificados (estabilidade negativa, cadência, settle de
+    frame sem contador exposto). Verde: redeploying 1,9 m.
+- **Em curso:** L2 space-war — 36/39 convertidos por subagente (31,45 s →
+  11,5 s restantes; 3 justificados), suite em validação. L1 aero a seguir.
 
 - **Owner:** software-engineer
 - **Write set:** specs por lote —
